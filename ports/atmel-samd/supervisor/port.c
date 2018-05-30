@@ -58,6 +58,7 @@
 #include "peripherals/cache.h"
 #include "peripherals/clocks.h"
 #include "peripherals/events.h"
+#include "peripherals/external_interrupts.h"
 #include "peripherals/dma.h"
 #include "shared-bindings/rtc/__init__.h"
 #include "tick.h"
@@ -185,6 +186,7 @@ safe_mode_t port_init(void) {
 #endif
 #ifdef SAMD51
     init_mcu();
+    init_dynamic_clocks();
 #endif
     board_init();
 
@@ -243,7 +245,7 @@ void reset_port(void) {
 #ifdef SAMD21
     touchin_reset();
 #endif
-    pulsein_reset();
+    eic_reset();
     pulseout_reset();
     pwmout_reset();
 
