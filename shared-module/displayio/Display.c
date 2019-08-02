@@ -40,8 +40,6 @@
 
 #include "tick.h"
 
-#define DELAY 0x80
-
 void common_hal_displayio_display_construct(displayio_display_obj_t* self,
         mp_obj_t bus, uint16_t width, uint16_t height, int16_t colstart, int16_t rowstart, uint16_t rotation,
         uint16_t color_depth, bool grayscale, bool pixels_in_byte_share_row, uint8_t bytes_per_cell, bool reverse_pixels_in_byte,
@@ -99,10 +97,10 @@ void common_hal_displayio_display_construct(displayio_display_obj_t* self,
             uint8_t full_command[data_size + 1];
             full_command[0] = cmd[0];
             memcpy(full_command + 1, data, data_size);
-            self->send(self->bus, true, full_command, data_size + 1);
+            self->send(self->bus, true, true, full_command, data_size + 1);
         } else {
-            self->send(self->bus, true, cmd, 1);
-            self->send(self->bus, false, data, data_size);
+            self->send(self->bus, true, true, cmd, 1);
+            self->send(self->bus, false, false, data, data_size);
         }
         uint16_t delay_length_ms = 10;
         if (delay) {
@@ -198,13 +196,19 @@ void common_hal_displayio_display_construct(displayio_display_obj_t* self,
 }
 
 bool common_hal_displayio_display_show(displayio_display_obj_t* self, displayio_group_t* root_group) {
-    if (root_group == NULL) {
+    if (root_group == NULL && !circuitpython_splash.in_group) {
         root_group = &circuitpython_splash;
     }
     if (root_group == self->current_group) {
         return true;
     }
     if (root_group->in_group) {
+        if (root_group == &circuitpython_splash) {
+            self->current_group = NULL;
+            self->full_refresh = true;
+            return true;
+        }
+
         return false;
     }
     if (self->current_group != NULL) {
@@ -227,6 +231,9 @@ const displayio_area_t* displayio_display_get_refresh_areas(displayio_display_ob
         self->area.next = NULL;
         return &self->area;
     } else {
+        if (self->current_group == NULL || self->current_group->base.type != &displayio_group_type) {
+            asm("bkpt");
+        }
         return displayio_group_get_refresh_areas(self->current_group, NULL);
     }
 }
@@ -274,12 +281,12 @@ bool common_hal_displayio_display_set_brightness(displayio_display_obj_t* self, 
         if (ok) {
             if (self->data_as_commands) {
                 uint8_t set_brightness[2] = {self->brightness_command, (uint8_t) (0xff * brightness)};
-                self->send(self->bus, true, set_brightness, 2);
+                self->send(self->bus, true, true, set_brightness, 2);
             } else {
                 uint8_t command = self->brightness_command;
                 uint8_t hex_brightness = 0xff * brightness;
-                self->send(self->bus, true, &command, 1);
-                self->send(self->bus, false, &hex_brightness, 1);
+                self->send(self->bus, true, true, &command, 1);
+                self->send(self->bus, false, false, &hex_brightness, 1);
             }
             self->end_transaction(self->bus);
         }
@@ -322,7 +329,7 @@ void displayio_display_set_region_to_update(displayio_display_obj_t* self, displ
     data[0] = self->set_column_command;
     uint8_t data_length = 1;
     if (!self->data_as_commands) {
-        self->send(self->bus, true, data, 1);
+        self->send(self->bus, true, true, data, 1);
         data_length = 0;
     }
     if (self->single_byte_bounds) {
@@ -336,13 +343,13 @@ void displayio_display_set_region_to_update(displayio_display_obj_t* self, displ
         data[data_length++] = x2 >> 8;
         data[data_length++] = x2 & 0xff;
     }
-    self->send(self->bus, self->data_as_commands, data, data_length);
+    self->send(self->bus, self->data_as_commands, self->data_as_commands, data, data_length);
 
     // Set row.
     data[0] = self->set_row_command;
     data_length = 1;
     if (!self->data_as_commands) {
-        self->send(self->bus, true, data, 1);
+        self->send(self->bus, true, true, data, 1);
         data_length = 0;
     }
     if (self->single_byte_bounds) {
@@ -356,7 +363,7 @@ void displayio_display_set_region_to_update(displayio_display_obj_t* self, displ
         data[data_length++] = y2 >> 8;
         data[data_length++] = y2 & 0xff;
     }
-    self->send(self->bus, self->data_as_commands, data, data_length);
+    self->send(self->bus, self->data_as_commands, self->data_as_commands, data, data_length);
 }
 
 void displayio_display_start_refresh(displayio_display_obj_t* self) {
@@ -382,9 +389,9 @@ void displayio_display_finish_refresh(displayio_display_obj_t* self) {
 
 void displayio_display_send_pixels(displayio_display_obj_t* self, uint8_t* pixels, uint32_t length) {
     if (!self->data_as_commands) {
-        self->send(self->bus, true, &self->write_ram_command, 1);
+        self->send(self->bus, true, true, &self->write_ram_command, 1);
     }
-    self->send(self->bus, false, pixels, length);
+    self->send(self->bus, false, false, pixels, length);
 }
 
 void displayio_display_update_backlight(displayio_display_obj_t* self) {
@@ -402,6 +409,9 @@ void displayio_display_update_backlight(displayio_display_obj_t* self) {
 }
 
 void release_display(displayio_display_obj_t* self) {
+    if (self->current_group != NULL) {
+        self->current_group->in_group = false;
+    }
     if (self->backlight_pwm.base.type == &pulseio_pwmout_type) {
         common_hal_pulseio_pwmout_reset_ok(&self->backlight_pwm);
         common_hal_pulseio_pwmout_deinit(&self->backlight_pwm);

@@ -319,6 +319,7 @@ $(filter $(SRC_PATTERNS), \
 	displayio/Bitmap.c \
 	displayio/ColorConverter.c \
 	displayio/Display.c \
+	displayio/EPaperDisplay.c \
 	displayio/FourWire.c \
 	displayio/Group.c \
 	displayio/I2CDisplay.c \
