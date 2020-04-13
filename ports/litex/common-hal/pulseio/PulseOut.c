@@ -3,8 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2019 Lucian Copeland for Adafruit Industries
+ * Copyright (c) 2016 Damien P. George
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,17 +23,47 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
-#define MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
 
-#include <stdbool.h>
+#include "common-hal/pulseio/PulseOut.h"
+
 #include <stdint.h>
 
-#include "py/mpconfig.h"
 
-#define INTERNAL_FLASH_SYSTICK_MASK     (0x1ff) // 512ms
-#define INTERNAL_FLASH_IDLE_TICK(tick)  (((tick) & INTERNAL_FLASH_SYSTICK_MASK) == 2)
+#include "mpconfigport.h"
+#include "py/gc.h"
+#include "py/runtime.h"
+#include "shared-bindings/pulseio/PulseOut.h"
+#include "supervisor/shared/translate.h"
 
-void spi_read_unique_id(uint8_t*);
 
-#endif  // MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
+void pulse_finish(void) {
+
+}
+
+void pulseout_interrupt_handler(uint8_t index) {
+}
+
+void pulseout_reset() {
+
+}
+
+void common_hal_pulseio_pulseout_construct(pulseio_pulseout_obj_t* self,
+                                            const pulseio_pwmout_obj_t* carrier) {
+ 
+}
+
+bool common_hal_pulseio_pulseout_deinited(pulseio_pulseout_obj_t* self) {
+    return self->pin == NO_PIN;
+}
+
+void common_hal_pulseio_pulseout_deinit(pulseio_pulseout_obj_t* self) {
+    if (common_hal_pulseio_pulseout_deinited(self)) {
+        return;
+    }
+ 
+    self->pin = NO_PIN;
+}
+
+void common_hal_pulseio_pulseout_send(pulseio_pulseout_obj_t* self, uint16_t* pulses, uint16_t length) {
+ 
+}

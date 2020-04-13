@@ -108,6 +108,12 @@ const mcu_pin_obj_t pin_TOUCH2 = PIN(1);
 const mcu_pin_obj_t pin_TOUCH3 = PIN(2);
 const mcu_pin_obj_t pin_TOUCH4 = PIN(3);
 
+
+const mcu_pin_obj_t pin_LED_R = PIN(0);
+const mcu_pin_obj_t pin_LED_G = PIN(1);
+const mcu_pin_obj_t pin_LED_B = PIN(2);
+
+
 STATIC const mp_rom_map_elem_t mcu_pin_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_TOUCH1), MP_ROM_PTR(&pin_TOUCH1) },
     { MP_ROM_QSTR(MP_QSTR_TOUCH2), MP_ROM_PTR(&pin_TOUCH2) },

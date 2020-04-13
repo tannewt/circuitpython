@@ -202,6 +202,32 @@ static uint8_t spi_read_status(void) {
 }
 
 __attribute__((section(".ramtext")))
+static void spi_read_uuid(uint8_t* uuid) {
+    /* 25Q128JV FLASH, Read Unique ID Number (4Bh) 
+        The Read Unique ID Number instruction accesses a factory-set read-only 64-bit number that is unique to
+        each W25Q128JV device. The ID number can be used in conjunction with user software methods to help
+        prevent copying or cloning of a system. The Read Unique ID instruction is initiated by driving the /CS pin
+        low and shifting the instruction code “4Bh” followed by a four bytes of dummy clocks. After which, the 64-
+        bit ID is shifted out on the falling edge of CLK
+    */
+
+    bb_spi_en(1);
+    bb_spi_begin();
+    spi_single_tx(0x4B);
+    for(int dummy = 0; dummy < 4; dummy++)
+        spi_single_rx();
+    for(int i = 0; i < 8; i++)
+        *uuid++ = spi_single_rx();
+    bb_spi_end();
+    bb_spi_en(0);
+}
+
+void spi_read_unique_id(uint8_t* uuid) {
+    spi_read_uuid(uuid);
+}
+
+
+__attribute__((section(".ramtext")))
 static int bb_spi_is_busy(void) {
     return spi_read_status() & (1 << 0);
 }

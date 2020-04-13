@@ -41,10 +41,19 @@ typedef struct {
         .number = p_number \
     }
 
+// Use illegal pin value to mark unassigned pins.
+#define NO_PIN 0xff
+
 extern const mcu_pin_obj_t pin_TOUCH1;
 extern const mcu_pin_obj_t pin_TOUCH2;
 extern const mcu_pin_obj_t pin_TOUCH3;
 extern const mcu_pin_obj_t pin_TOUCH4;
+
+extern const mcu_pin_obj_t pin_LED_R;
+extern const mcu_pin_obj_t pin_LED_G;
+extern const mcu_pin_obj_t pin_LED_B;
+
+
 
 void reset_all_pins(void);
 // reset_pin_number takes the pin number instead of the pointer so that objects don't

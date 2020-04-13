@@ -89,7 +89,7 @@ CFLAGS += $(OPTIMIZATION_FLAGS)
 CFLAGS += $(INC) -Werror -Wall -std=gnu11 -nostdlib -fshort-enums $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes
 
 # TODO: check this
-CFLAGS += -D__START=main -DFOMU
+CFLAGS += -D__START=main
 
 LD_FILE := boards/$(BOARD)/$(BOARD)-spi.ld
 

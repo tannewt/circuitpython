@@ -327,6 +327,7 @@ jobs:
       matrix:
         board: ${{ fromJSON(needs.test.outputs.boards-riscv) }}
     if: ${{ needs.test.outputs.boards-riscv != '[]' }}
+
     steps:
     - name: Set up Python 3
       uses: actions/setup-python@v2

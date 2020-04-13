@@ -3,8 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2019 Lucian Copeland for Adafruit Industries
+ * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,17 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
-#define MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
 
-#include <stdbool.h>
-#include <stdint.h>
+#ifndef MICROPY_INCLUDED_LITEX_COMMON_HAL_PULSEIO_PWMOUT_H
+#define MICROPY_INCLUDED_LITEX_COMMON_HAL_PULSEIO_PWMOUT_H
 
-#include "py/mpconfig.h"
+#include "common-hal/microcontroller/Pin.h"
 
-#define INTERNAL_FLASH_SYSTICK_MASK     (0x1ff) // 512ms
-#define INTERNAL_FLASH_IDLE_TICK(tick)  (((tick) & INTERNAL_FLASH_SYSTICK_MASK) == 2)
+#include "py/obj.h"
 
-void spi_read_unique_id(uint8_t*);
+typedef struct {
+    mp_obj_base_t base;
+    const mcu_pin_obj_t *pin;
+    bool variable_frequency;
+    uint16_t duty_cycle;
+} pulseio_pwmout_obj_t;
 
-#endif  // MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
+void pwmout_reset(void);
+
+#endif // MICROPY_INCLUDED_ATMEL_SAMD_COMMON_HAL_PULSEIO_PWMOUT_H

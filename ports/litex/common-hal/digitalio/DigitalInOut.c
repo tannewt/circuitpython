@@ -61,7 +61,10 @@ void common_hal_digitalio_digitalinout_deinit(digitalio_digitalinout_obj_t *self
 void common_hal_digitalio_digitalinout_switch_to_input(
     digitalio_digitalinout_obj_t *self, digitalio_pull_t pull) {
     (void)pull;
+#ifdef FOMU
     touch_oe_write(touch_oe_read() & ~(1 << self->pin->number));
+#else
+#endif
 }
 
 digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
@@ -69,29 +72,43 @@ digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
     digitalio_drive_mode_t drive_mode) {
     (void)drive_mode;
     common_hal_digitalio_digitalinout_set_value(self, value);
+#ifdef FOMU
     touch_oe_write(touch_oe_read() | (1 << self->pin->number));
-    return DIGITALINOUT_OK;
+#else
+    return DIGITALINOUT_PIN_BUSY;
+#endif
 }
 
 digitalio_direction_t common_hal_digitalio_digitalinout_get_direction(
     digitalio_digitalinout_obj_t *self) {
+#ifdef FOMU
 
     return (touch_oe_read() & (1 << self->pin->number))
          ? DIRECTION_OUTPUT : DIRECTION_INPUT;
+    return DIRECTION_INPUT;
+#else
+    return DIRECTION_INPUT;
+#endif
 }
 
 void common_hal_digitalio_digitalinout_set_value(
     digitalio_digitalinout_obj_t *self, bool value) {
+#ifdef FOMU
     if (value) {
         touch_o_write(touch_o_read() | (1 << self->pin->number));
     } else {
         touch_o_write(touch_o_read() & ~(1 << self->pin->number));
     }
+#endif
 }
 
 bool common_hal_digitalio_digitalinout_get_value(
     digitalio_digitalinout_obj_t *self) {
+#ifdef FOMU
     return !!(touch_i_read() & (1 << self->pin->number));
+#else
+    return 0;
+#endif
 }
 
 digitalinout_result_t common_hal_digitalio_digitalinout_set_drive_mode(

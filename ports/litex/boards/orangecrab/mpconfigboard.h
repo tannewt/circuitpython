@@ -3,8 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2019 Lucian Copeland for Adafruit Industries
+ * Copyright (c) 2019 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,17 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
-#define MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
 
-#include <stdbool.h>
-#include <stdint.h>
+//Micropython setup
 
-#include "py/mpconfig.h"
+#define MICROPY_HW_BOARD_NAME       "OrangeCrab"
+#define MICROPY_HW_MCU_NAME         "VexRiscv"
 
-#define INTERNAL_FLASH_SYSTICK_MASK     (0x1ff) // 512ms
-#define INTERNAL_FLASH_IDLE_TICK(tick)  (((tick) & INTERNAL_FLASH_SYSTICK_MASK) == 2)
+#define FLASH_SIZE                  (0x800000)
+#define FLASH_PAGE_SIZE             (0x1000)
+#define FLASH_PARTITION_OFFSET_BYTES (8*1024*1024)
 
-void spi_read_unique_id(uint8_t*);
+#define AUTORESET_DELAY_MS 500
+#define BOARD_FLASH_SIZE            (FLASH_SIZE)
 
-#endif  // MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
+// PINS
+
+#define CP_RGB_STATUS_R        (&pin_LED_R)
+#define CP_RGB_STATUS_G        (&pin_LED_G)
+#define CP_RGB_STATUS_B        (&pin_LED_B)

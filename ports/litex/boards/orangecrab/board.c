@@ -3,8 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2019 Lucian Copeland for Adafruit Industries
+ * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,17 +23,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
-#define MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "boards/board.h"
+#include "mpconfigboard.h"
+#include "csr.h"
 
-#include "py/mpconfig.h"
+void board_init(void) {
+    rgb_config_write(0x01);
+    rgb_r_write(0);
+    rgb_g_write(250);
+    rgb_b_write(180);
+}
 
-#define INTERNAL_FLASH_SYSTICK_MASK     (0x1ff) // 512ms
-#define INTERNAL_FLASH_IDLE_TICK(tick)  (((tick) & INTERNAL_FLASH_SYSTICK_MASK) == 2)
+bool board_requests_safe_mode(void) {
+    return false;
+}
 
-void spi_read_unique_id(uint8_t*);
+void reset_board(void) {
 
-#endif  // MICROPY_INCLUDED_LITEX_INTERNAL_FLASH_H
+}
