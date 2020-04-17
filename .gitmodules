@@ -122,3 +122,6 @@
 [submodule "lib/protomatter"]
 	path = lib/protomatter
 	url = https://github.com/adafruit/Adafruit_Protomatter
+[submodule "ports/esp32s2/esp-idf"]
+	path = ports/esp32s2/esp-idf
+	url = https://github.com/espressif/esp-idf.git
