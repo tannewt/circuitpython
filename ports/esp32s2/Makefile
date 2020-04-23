@@ -83,7 +83,7 @@ INC += -Iesp-idf/components/soc/src/esp32s2/include
 INC += -Iesp-idf/components/soc/soc/esp32s2/include
 INC += -Iesp-idf/components/heap/include
 INC += -Iesp-idf/components/esp_system/include
-INC += -Ibuild/include
+INC += -I$(BUILD)/esp-idf/config
 
 CFLAGS += -DHAVE_CONFIG_H \
           -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" \
@@ -183,10 +183,33 @@ SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_MOD) $(SRC_COMMON_HAL_EXPANDED) $(S
 # Sources that only hold QSTRs after pre-processing.
 SRC_QSTR_PREPROCESSOR +=
 
+# IDF build commands
+
+# create the directory
+$(BUILD)/esp-idf:
+	$(Q)$(MKDIR) -p $@
+
+# create the config headers
+$(BUILD)/esp-idf/config: $(BUILD)/esp-idf boards/$(BOARD)/sdkconfig
+	cd $(BUILD)/esp-idf && cmake -S ../.. -B . -DSDKCONFIG=boards/$(BOARD)/sdkconfig -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32s2.cmake -DIDF_TARGET=esp32s2 -GNinja
+
+# build a lib
+$(BUILD)/esp-idf/esp-idf/%.a: $(BUILD)/esp-idf/config
+	cd $(BUILD)/esp-idf && ninja esp-idf/$*.a
+
+# run menuconfig
+menuconfig: $(BUILD)/esp-idf/config
+	cd $(BUILD)/esp-idf && ninja menuconfig
+
+ESP_IDF_LIBS = soc
+
+ESP_IDF_LIBS_EXPANDED = $(foreach lib, $(ESP_IDF_LIBS), $(BUILD)/esp-idf/esp-idf/$(lib)/lib$(lib).a)
+
+$(info $(ESP_IDF_LIBS_EXPANDED))
 
 all: $(BUILD)/firmware.bin $(BUILD)/firmware.dfu
 
-$(BUILD)/firmware.elf: $(OBJ)
+$(BUILD)/firmware.elf: $(OBJ) $(ESP_IDF_LIBS_EXPANDED)
 	$(STEPECHO) "LINK $@"
 	$(Q)$(CC) -o $@ $(LDFLAGS) $^ -Wl,--start-group $(LIBS) -Wl,--end-group
 	$(Q)$(SIZE) $@ | $(PYTHON3) $(TOP)/tools/build_memory_info.py $(LD_FILE)
