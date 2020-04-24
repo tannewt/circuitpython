@@ -104,9 +104,16 @@ CFLAGS += $(INC) -Werror -Wall -std=gnu11 -nostdlib $(BASE_CFLAGS) $(C_DEFS) $(C
 
 LD_FILE := boards/$(BOARD)/$(BOARD)-spi.ld
 
-LDFLAGS = $(CFLAGS) -fshort-enums -Wl,-nostdlib -Wl,-T,$(LD_FILE) -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections -specs=nano.specs -Wl,-melf32lriscv
+LDFLAGS = $(CFLAGS) -fshort-enums -Wl,-nostdlib  -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections -specs=nano.specs
+LDFLAGS += -Wl,-Lesp-idf/components/esp_rom/esp32s2/ld \
+           -Wl,-Tesp32s2.rom.ld \
+           -Wl,-Tesp32s2.rom.libgcc.ld \
+           -Wl,-Tesp32s2.rom.newlib-data.ld \
+           -Wl,-Tesp32s2.rom.newlib-funcs.ld \
+           -Wl,-Tesp32s2.rom.spiflash.ld
 LIBS := -lgcc -lc
 
+#
 
 LDFLAGS +=  -Wl,--gc-section -Wl,-Bstatic \
 			-Wl,--no-warn-mismatch \
@@ -190,26 +197,31 @@ $(BUILD)/esp-idf:
 	$(Q)$(MKDIR) -p $@
 
 # create the config headers
-$(BUILD)/esp-idf/config: $(BUILD)/esp-idf boards/$(BOARD)/sdkconfig
+$(BUILD)/esp-idf/config/sdkconfig.h: boards/$(BOARD)/sdkconfig | $(BUILD)/esp-idf
 	cd $(BUILD)/esp-idf && cmake -S ../.. -B . -DSDKCONFIG=boards/$(BOARD)/sdkconfig -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32s2.cmake -DIDF_TARGET=esp32s2 -GNinja
 
 # build a lib
-$(BUILD)/esp-idf/esp-idf/%.a: $(BUILD)/esp-idf/config
+# Adding -d explain -j 1 -v to the ninja line will output debug info
+$(BUILD)/esp-idf/esp-idf/%.a: $(BUILD)/esp-idf/config/sdkconfig.h
 	cd $(BUILD)/esp-idf && ninja esp-idf/$*.a
 
 # run menuconfig
 menuconfig: $(BUILD)/esp-idf/config
 	cd $(BUILD)/esp-idf && ninja menuconfig
 
-ESP_IDF_LIBS = soc
+# qstr builds include headers so we need to make sure they are up to date
+$(HEADER_BUILD)/qstr.i.last: | $(BUILD)/esp-idf/config/sdkconfig.h
 
-ESP_IDF_LIBS_EXPANDED = $(foreach lib, $(ESP_IDF_LIBS), $(BUILD)/esp-idf/esp-idf/$(lib)/lib$(lib).a)
+ESP_IDF_COMPONENTS = soc driver log
 
-$(info $(ESP_IDF_LIBS_EXPANDED))
+ESP_IDF_COMPONENTS_EXPANDED = $(foreach component, $(ESP_IDF_COMPONENTS), $(BUILD)/esp-idf/esp-idf/$(component)/lib$(component).a)
+
+
+INC += $(foreach component, $(ESP_IDF_COMPONENTS), -Iesp-idf/components/$(component)/include)
 
 all: $(BUILD)/firmware.bin $(BUILD)/firmware.dfu
 
-$(BUILD)/firmware.elf: $(OBJ) $(ESP_IDF_LIBS_EXPANDED)
+$(BUILD)/firmware.elf: $(OBJ) $(ESP_IDF_COMPONENTS_EXPANDED)
 	$(STEPECHO) "LINK $@"
 	$(Q)$(CC) -o $@ $(LDFLAGS) $^ -Wl,--start-group $(LIBS) -Wl,--end-group
 	$(Q)$(SIZE) $@ | $(PYTHON3) $(TOP)/tools/build_memory_info.py $(LD_FILE)

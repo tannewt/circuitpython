@@ -42,4 +42,5 @@ void mp_hal_delay_us(mp_uint_t delay) {
 }
 
 mp_uint_t cpu_get_regs_and_sp(mp_uint_t *regs) {
+    return 0;
 }

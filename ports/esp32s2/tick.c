@@ -24,9 +24,7 @@
  * THE SOFTWARE.
  */
 
-#include "csr.h"
 #include "tick.h"
-#include "irq.h"
 
 #include "supervisor/shared/autoreload.h"
 #include "supervisor/filesystem.h"
@@ -39,44 +37,18 @@
 
 __attribute__((section(".ramtext")))
 void SysTick_Handler(void) {
-    timer0_ev_pending_write(1);
     supervisor_tick();
 }
 
 void tick_init() {
-    int t;
-
-    timer0_en_write(0);
-    t = CONFIG_CLOCK_FREQUENCY / 1000; // 1000 kHz tick
-    timer0_reload_write(t);
-    timer0_load_write(t);
-    timer0_en_write(1);
-    timer0_ev_enable_write(1);
-    timer0_ev_pending_write(1);
-    irq_setmask(irq_getmask() | (1 << TIMER0_INTERRUPT));
 }
 
 void tick_delay(uint32_t us) {
-    // uint32_t ticks_per_us = SystemCoreClock / 1000 / 1000;
-    // uint32_t us_between_ticks = SysTick->VAL / ticks_per_us;
-    // uint64_t start_ms = ticks_ms;
-    // while (us > 1000) {
-    //     while (ticks_ms == start_ms) {}
-    //     us -= us_between_ticks;
-    //     start_ms = ticks_ms;
-    //     us_between_ticks = 1000;
-    // }
-    // while (SysTick->VAL > ((us_between_ticks - us) * ticks_per_us)) {}
 }
 
 // us counts down!
 void current_tick(uint64_t* ms, uint32_t* us_until_ms) {
-    // uint32_t ticks_per_us = SystemCoreClock / 1000 / 1000;
-    // *ms = ticks_ms;
-    // *us_until_ms = SysTick->VAL / ticks_per_us;
 }
 
 void wait_until(uint64_t ms, uint32_t us_until_ms) {
-    // uint32_t ticks_per_us = SystemCoreClock / 1000 / 1000;
-    // while(ticks_ms <= ms && SysTick->VAL / ticks_per_us >= us_until_ms) {}
 }
