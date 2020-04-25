@@ -100,11 +100,11 @@ else
   ### CFLAGS += -flto
 endif
 
-CFLAGS += $(INC) -Werror -Wall -std=gnu11 -nostdlib $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT)
+CFLAGS += $(INC) -Werror -Wall -mlongcalls -std=gnu11 -nostdlib $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT)
 
 LD_FILE := boards/$(BOARD)/$(BOARD)-spi.ld
 
-LDFLAGS = $(CFLAGS) -fshort-enums -Wl,-nostdlib  -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections -specs=nano.specs
+LDFLAGS = $(CFLAGS) -fshort-enums -Wl,-nostdlib  -Wl,-Map=$@.map -Wl,-cref -specs=nano.specs
 LDFLAGS += -Wl,-Lesp-idf/components/esp_rom/esp32s2/ld \
            -Wl,-Tesp32s2.rom.ld \
            -Wl,-Tesp32s2.rom.libgcc.ld \
@@ -115,7 +115,7 @@ LIBS := -lgcc -lc
 
 #
 
-LDFLAGS +=  -Wl,--gc-section -Wl,-Bstatic \
+LDFLAGS +=  -Wl,-Bstatic \
 			-Wl,--no-warn-mismatch \
 			-Wl,--build-id=none
 
