@@ -26,10 +26,10 @@
 
 //Micropython setup
 
-#define MICROPY_HW_BOARD_NAME       "Fomu"
-#define MICROPY_HW_MCU_NAME         "VexRiscv"
+#define MICROPY_HW_BOARD_NAME       "Saola"
+#define MICROPY_HW_MCU_NAME         "ESP32s2"
 
-#define FLASH_SIZE                  (0x100000)
+#define FLASH_SIZE                  (0x400000)
 #define FLASH_PAGE_SIZE             (0x1000)
 #define FLASH_PARTITION_OFFSET_BYTES (1024*1024)
 

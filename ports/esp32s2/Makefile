@@ -100,29 +100,35 @@ else
   ### CFLAGS += -flto
 endif
 
-CFLAGS += $(INC) -Werror -Wall -mlongcalls -std=gnu11 -nostdlib $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT)
+CFLAGS += $(INC) -Werror -Wall -nostdlib $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT)
+CFLAGS += -DCONFIG_ECC -DCONFIG_IEEE80211W -DCONFIG_SHA256 -DCONFIG_TLSV12 -DCONFIG_WPA3_SAE -DCONFIG_WPS2 -DCONFIG_WPS_PIN -DEAP_MSCHAPv2 -DEAP_PEAP -DEAP_PEER_METHOD -DEAP_TLS -DEAP_TTLS -DESP32_WORKAROUND -DESPRESSIF_USE -DESP_SUPPLICANT -DIEEE8021X_EAPOL -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" -DUSE_WPA2_TASK -DUSE_WPS_TASK -D__ets__
+CFLAGS += -mlongcalls -ffunction-sections -fdata-sections -fstrict-volatile-bitfields -ggdb -Og -std=gnu99 -D_GNU_SOURCE -DIDF_VER=\"v4.2-dev-1128-g6cc269364-dirty\" -DESP_PLATFORM
 
-LD_FILE := boards/$(BOARD)/$(BOARD)-spi.ld
+# LD_FILE := boards/$(BOARD)/$(BOARD)-spi.ld
 
-LDFLAGS = $(CFLAGS) -fshort-enums -Wl,-nostdlib  -Wl,-Map=$@.map -Wl,-cref -specs=nano.specs
-LDFLAGS += -Wl,-Lesp-idf/components/esp_rom/esp32s2/ld \
-           -Wl,-Tesp32s2.rom.ld \
-           -Wl,-Tesp32s2.rom.libgcc.ld \
-           -Wl,-Tesp32s2.rom.newlib-data.ld \
-           -Wl,-Tesp32s2.rom.newlib-funcs.ld \
-           -Wl,-Tesp32s2.rom.spiflash.ld
-LIBS := -lgcc -lc
-
-#
-
-LDFLAGS +=  -Wl,-Bstatic \
-			-Wl,--no-warn-mismatch \
-			-Wl,--build-id=none
-
-# Use toolchain libm if we're not using our own.
-ifndef INTERNAL_LIBM
-LIBS += -lm
-endif
+LDFLAGS = -mlongcalls -nostdlib \
+	-Lesp-idf/components/esp_rom/esp32s2/ld \
+	-L$(BUILD)/esp-idf/esp-idf/esp32s2 \
+	-L$(BUILD)/esp-idf/esp-idf/esp32s2/ld \
+	-Tesp32s2_out.ld \
+	-Tesp32s2.project.ld \
+	-Tesp32s2.rom.ld \
+	-Tesp32s2.rom.libgcc.ld \
+	-Tesp32s2.rom.newlib-data.ld \
+	-Tesp32s2.rom.newlib-funcs.ld \
+	-Tesp32s2.rom.spiflash.ld \
+	-Lesp-idf/components/esp32s2/ld \
+	-Tesp32s2.peripherals.ld \
+	-ucall_user_start_cpu0 \
+	-uld_include_panic_highint_hdl \
+	-Bstatic \
+	-Wl,--no-warn-mismatch \
+	-Wl,--build-id=none \
+	-uld_include_panic_highint_hdl \
+	-fno-rtti \
+	-fno-lto \
+	-Wl,--undefined=uxTopUsedPriority \
+	-u__cxa_guard_dummy
 
 # TinyUSB defines
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32S2 -DCFG_TUSB_OS=OPT_OS_FREERTOS -DCFG_TUD_CDC_RX_BUFSIZE=1024 -DCFG_TUD_CDC_TX_BUFSIZE=1024 -DCFG_TUD_MSC_BUFSIZE=4096 -DCFG_TUD_MIDI_RX_BUFSIZE=128 -DCFG_TUD_MIDI_TX_BUFSIZE=128
@@ -191,19 +197,20 @@ SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_MOD) $(SRC_COMMON_HAL_EXPANDED) $(S
 SRC_QSTR_PREPROCESSOR +=
 
 # IDF build commands
-
+IDF_PATH = ./esp-idf
 # create the directory
 $(BUILD)/esp-idf:
 	$(Q)$(MKDIR) -p $@
 
 # create the config headers
 $(BUILD)/esp-idf/config/sdkconfig.h: boards/$(BOARD)/sdkconfig | $(BUILD)/esp-idf
-	cd $(BUILD)/esp-idf && cmake -S ../.. -B . -DSDKCONFIG=boards/$(BOARD)/sdkconfig -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32s2.cmake -DIDF_TARGET=esp32s2 -GNinja
+	IDF_PATH=$(IDF_PATH) cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=boards/$(BOARD)/sdkconfig -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-esp32s2.cmake -DIDF_TARGET=esp32s2 -GNinja
+	ninja -C $(BUILD)/esp-idf
 
 # build a lib
 # Adding -d explain -j 1 -v to the ninja line will output debug info
-$(BUILD)/esp-idf/esp-idf/%.a: $(BUILD)/esp-idf/config/sdkconfig.h
-	cd $(BUILD)/esp-idf && ninja esp-idf/$*.a
+#$(BUILD)/esp-idf/esp-idf/%.a: $(BUILD)/esp-idf/config/sdkconfig.h
+#	ninja -C $(BUILD)/esp-idf esp-idf/$*.a
 
 # run menuconfig
 menuconfig: $(BUILD)/esp-idf/config
@@ -223,8 +230,8 @@ all: $(BUILD)/firmware.bin $(BUILD)/firmware.dfu
 
 $(BUILD)/firmware.elf: $(OBJ) $(ESP_IDF_COMPONENTS_EXPANDED)
 	$(STEPECHO) "LINK $@"
-	$(Q)$(CC) -o $@ $(LDFLAGS) $^ -Wl,--start-group $(LIBS) -Wl,--end-group
-	$(Q)$(SIZE) $@ | $(PYTHON3) $(TOP)/tools/build_memory_info.py $(LD_FILE)
+	$(Q)$(CC) -o $@ $(LDFLAGS) $^
+	#$(Q)$(SIZE) $@ | $(PYTHON3) $(TOP)/tools/build_memory_info.py $(LD_FILE)
 
 $(BUILD)/firmware.bin: $(BUILD)/firmware.elf
 	$(STEPECHO) "Create $@"
