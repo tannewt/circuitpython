@@ -65,5 +65,5 @@ void common_hal_pulseio_pulseout_deinit(pulseio_pulseout_obj_t* self) {
 }
 
 void common_hal_pulseio_pulseout_send(pulseio_pulseout_obj_t* self, uint16_t* pulses, uint16_t length) {
- 
+
 }
