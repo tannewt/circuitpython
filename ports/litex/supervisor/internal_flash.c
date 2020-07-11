@@ -203,7 +203,7 @@ static uint8_t spi_read_status(void) {
 
 __attribute__((section(".ramtext")))
 static void spi_read_uuid(uint8_t* uuid) {
-    /* 25Q128JV FLASH, Read Unique ID Number (4Bh) 
+    /* 25Q128JV FLASH, Read Unique ID Number (4Bh)
         The Read Unique ID Number instruction accesses a factory-set read-only 64-bit number that is unique to
         each W25Q128JV device. The ID number can be used in conjunction with user software methods to help
         prevent copying or cloning of a system. The Read Unique ID instruction is initiated by driving the /CS pin

@@ -74,6 +74,7 @@ digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
     common_hal_digitalio_digitalinout_set_value(self, value);
 #ifdef FOMU
     touch_oe_write(touch_oe_read() | (1 << self->pin->number));
+    return DIGITALINOUT_OK;
 #else
     return DIGITALINOUT_PIN_BUSY;
 #endif

@@ -49,7 +49,7 @@ void pulseout_reset() {
 
 void common_hal_pulseio_pulseout_construct(pulseio_pulseout_obj_t* self,
                                             const pulseio_pwmout_obj_t* carrier) {
- 
+
 }
 
 bool common_hal_pulseio_pulseout_deinited(pulseio_pulseout_obj_t* self) {
@@ -60,7 +60,7 @@ void common_hal_pulseio_pulseout_deinit(pulseio_pulseout_obj_t* self) {
     if (common_hal_pulseio_pulseout_deinited(self)) {
         return;
     }
- 
+
     self->pin = NO_PIN;
 }
 
