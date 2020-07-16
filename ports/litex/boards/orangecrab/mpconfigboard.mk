@@ -14,8 +14,8 @@ USB_SERIAL_NUMBER_LENGTH = 16
 # so increase it to 32.
 CFLAGS += -DCFG_TUD_TASK_QUEUE_SZ=32
 
-# Fomu only implements rv32i
-CFLAGS += -march=rv32im -mabi=ilp32 -DORANGECRAB
+# SoC in OrangeCrab implements rv32im
+CFLAGS += -march=rv32im -mabi=ilp32 -DORANGECRAB -I./boards/orangecrab/generated
 LDFLAGS += -march=rv32im -mabi=ilp32
 
 CIRCUITPY_DIGITALIO = 1

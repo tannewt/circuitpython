@@ -14,7 +14,7 @@ USB_SERIAL_NUMBER_LENGTH = 30
 CFLAGS += -DCFG_TUD_TASK_QUEUE_SZ=32
 
 # Fomu only implements rv32i
-CFLAGS += -march=rv32i -mabi=ilp32 -DFOMU
+CFLAGS += -march=rv32i -mabi=ilp32 -DFOMU -I./boards/fomu/generated
 LDFLAGS += -march=rv32i -mabi=ilp32
 
 CIRCUITPY_NEOPIXEL_WRITE = 1
