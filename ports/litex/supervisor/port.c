@@ -87,6 +87,9 @@ void reset_port(void) {
 }
 
 void reset_to_bootloader(void) {
+#ifdef CSR_REBOOT_BASE
+    reboot_ctrl_write(0xac);
+#endif
 }
 
 void reset_cpu(void) {
