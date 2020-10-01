@@ -50,4 +50,4 @@ void pulsein_reset(void);
 
 void pulsein_interrupt_handler(uint8_t channel);
 
-#endif // MICROPY_INCLUDED_ATMEL_SAMD_COMMON_HAL_PULSEIO_PULSEIN_H
+#endif // MICROPY_INCLUDED_LITEX_COMMON_HAL_PULSEIO_PULSEIN_H

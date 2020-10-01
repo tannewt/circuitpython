@@ -40,4 +40,4 @@ typedef struct {
 
 void pwmout_reset(void);
 
-#endif // MICROPY_INCLUDED_ATMEL_SAMD_COMMON_HAL_PULSEIO_PWMOUT_H
+#endif // MICROPY_INCLUDED_LITEX_COMMON_HAL_PULSEIO_PWMOUT_H
