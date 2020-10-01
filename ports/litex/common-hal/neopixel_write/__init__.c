@@ -26,7 +26,7 @@
 
 #include "py/mphal.h"
 #include "shared-bindings/neopixel_write/__init__.h"
-#include "csr.h"
+#include "generated/csr.h"
 
 // ICE40 LED Driver hard macro.
 // See http://www.latticesemi.com/-/media/LatticeSemi/Documents/ApplicationNotes/IK/ICE40LEDDriverUsageGuide.ashx?document_id=50668

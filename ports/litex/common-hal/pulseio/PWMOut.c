@@ -34,7 +34,7 @@
 
 #include "supervisor/shared/translate.h"
 
-#include "csr.h"
+#include "generated/csr.h"
 
 #undef ENABLE
 

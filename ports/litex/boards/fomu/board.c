@@ -27,7 +27,7 @@
 #include "supervisor/board.h"
 
 #include "mpconfigboard.h"
-#include "csr.h"
+#include "generated/csr.h"
 
 // ICE40 LED Driver hard macro.
 // See http://www.latticesemi.com/-/media/LatticeSemi/Documents/ApplicationNotes/IK/ICE40LEDDriverUsageGuide.ashx?document_id=50668

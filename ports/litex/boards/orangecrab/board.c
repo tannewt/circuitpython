@@ -26,7 +26,7 @@
 
 #include "boards/board.h"
 #include "mpconfigboard.h"
-#include "csr.h"
+#include "generated/csr.h"
 
 void board_init(void) {
     rgb_config_write(0x01);

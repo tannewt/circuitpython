@@ -29,7 +29,7 @@
 #include "py/runtime.h"
 #include "supervisor/shared/translate/translate.h"
 
-#include "csr.h"
+#include "generated/csr.h"
 
 void common_hal_digitalio_digitalinout_never_reset(
     digitalio_digitalinout_obj_t *self) {

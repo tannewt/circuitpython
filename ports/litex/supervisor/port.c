@@ -30,7 +30,7 @@
 #include "supervisor/port.h"
 #include "supervisor/shared/tick.h"
 #include "irq.h"
-#include "csr.h"
+#include "generated/csr.h"
 
 #include "shared-bindings/microcontroller/__init__.h"
 

@@ -33,7 +33,7 @@
 #include "shared-bindings/microcontroller/ResetReason.h"
 #include "supervisor/shared/translate/translate.h"
 
-#include "csr.h"
+#include "generated/csr.h"
 #include "generated/soc.h"
 
 #include "supervisor/internal_flash.h"

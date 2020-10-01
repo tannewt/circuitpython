@@ -39,7 +39,7 @@
 #include "supervisor/filesystem.h"
 #include "supervisor/shared/safe_mode.h"
 
-#include "csr.h"
+#include "generated/csr.h"
 #include "irq.h"
 
 void common_hal_mcu_delay_us(uint32_t delay) {

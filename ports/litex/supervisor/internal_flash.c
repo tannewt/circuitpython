@@ -40,7 +40,7 @@
 #include "supervisor/flash.h"
 #include "supervisor/usb.h"
 
-#include "csr.h"
+#include "generated/csr.h"
 #include "irq.h"
 
 enum pin {
