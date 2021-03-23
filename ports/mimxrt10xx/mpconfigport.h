@@ -31,10 +31,7 @@
 #include <stdint.h>
 
 #define MICROPY_PY_SYS_PLATFORM                     "NXP IMXRT10XX"
-#define SPI_FLASH_MAX_BAUDRATE 24000000
 
-extern uint8_t _ld_filesystem_start;
-extern uint8_t _ld_filesystem_end;
 extern uint8_t _ld_default_stack_size;
 
 // 20kiB stack
@@ -43,9 +40,8 @@ extern uint8_t _ld_default_stack_size;
 #define MICROPY_PY_FUNCTION_ATTRS                   (0)
 #define MICROPY_PY_REVERSE_SPECIAL_METHODS          (1)
 
-
-#define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_START_ADDR ((uint32_t)&_ld_filesystem_start)
-#define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_SIZE ((uint32_t)(&_ld_filesystem_end - &_ld_filesystem_start))
+// #define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_START_ADDR ((uint32_t)&_ld_filesystem_start)
+// #define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_SIZE ((uint32_t)(&_ld_filesystem_end - &_ld_filesystem_start))
 
 #include "py/circuitpy_mpconfig.h"
 

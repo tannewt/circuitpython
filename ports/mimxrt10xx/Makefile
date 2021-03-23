@@ -113,7 +113,7 @@ OPTIMIZATION_FLAGS ?= -O2 -fno-inline-functions
 # option to override compiler optimization level, set in boards/$(BOARD)/mpconfigboard.mk
 CFLAGS += $(OPTIMIZATION_FLAGS)
 
-LD_FILES = $(wildcard boards/$(BOARD)/*.ld) $(addprefix linking/, flash/$(FLASH).ld chip_family/$(CHIP_FAMILY).ld common.ld)
+LD_FILES = $(wildcard boards/$(BOARD)/*.ld) $(addprefix linking/, chip_family/$(CHIP_FAMILY).ld common.ld)
 
 LD_SCRIPT_FLAG := -Wl,-T,
 
@@ -151,7 +151,6 @@ $(addprefix $(BUILD)/, $(SRC_SDK:.c=.o)): CFLAGS += -Wno-undef
 SRC_C += \
 	background.c \
 	boards/$(BOARD)/board.c \
-	boards/$(BOARD)/flash_config.c \
 	boards/$(BOARD)/pins.c \
 	fatfs_port.c \
 	lib/mp-readline/readline.c \
@@ -228,6 +227,13 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_S:.S=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_MOD:.c=.o))
 
 SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_COMMON_HAL_EXPANDED) $(SRC_SHARED_MODULE_EXPANDED)
+
+# Generate the flash config file.
+$(BUILD)/flash_config.c: flash_config.c.jinja gen_flash_config.py | $(BUILD)/
+	$(STEPECHO) "GEN $<"
+	$(Q)$(PYTHON3) gen_flash_config.py $< $@ $(EXTERNAL_FLASH_DEVICES)
+
+OBJ += $(BUILD)/flash_config.o
 
 all: $(BUILD)/firmware.bin $(BUILD)/firmware.uf2 $(BUILD)/firmware.hex
 

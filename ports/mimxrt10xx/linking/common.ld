@@ -1,16 +1,11 @@
 /* Template for iMX RT 10xx linking. This is the last of four linker scripts passed in.
 
-The first three provide variables for this one.
-
-Boards can setup reserved flash with _ld_reserved_flash_size in board.ld. */
+The first three provide variables for this one. */
 
 ENTRY(Reset_Handler)
 
 code_size = 1M;
 _ld_default_stack_size = 20K;
-
-/* Default reserved flash to nothing. */
-_ld_reserved_flash_size = DEFINED(_ld_reserved_flash_size) ? _ld_reserved_flash_size : 0K ;
 
 MEMORY
 {
@@ -22,9 +17,6 @@ MEMORY
     FLASH_IVT (rx)        : ORIGIN = 0x60001000, LENGTH = 4K
     /* Place the ISRs 48k in to leave room for the bootloader when it is available. */
     FLASH_FIRMWARE (rx)   : ORIGIN = 0x6000C000, LENGTH = code_size - 48K
-    FLASH_FATFS (r)       : ORIGIN = 0x60100000, LENGTH = _ld_flash_size - code_size - _ld_reserved_flash_size
-    /* Teensy uses the last bit of flash for recovery. */
-    RESERVED_FLASH        : ORIGIN = 0x60100000 + _ld_flash_size - _ld_reserved_flash_size, LENGTH = _ld_reserved_flash_size
     OCRAM (rwx)           : ORIGIN = 0x20200000, LENGTH = ram_size - 64K
     DTCM (x)              : ORIGIN = 0x20000000, LENGTH = 32K
     ITCM (x)              : ORIGIN = 0x00000000, LENGTH = 32K
@@ -75,9 +67,6 @@ SECTIONS
         _etext = .;        /* define a global symbol at end of code */
         __etext = .;       /* define a global symbol at end of code */
     } > FLASH_FIRMWARE
-
-    _ld_filesystem_start = ORIGIN(FLASH_FATFS);
-    _ld_filesystem_end = _ld_filesystem_start + LENGTH(FLASH_FATFS);
 
     .data :
     {
