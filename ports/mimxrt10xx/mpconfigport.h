@@ -48,6 +48,10 @@ extern uint8_t _ld_default_stack_size;
 #define MICROPY_PORT_ROOT_POINTERS \
     CIRCUITPY_COMMON_ROOT_POINTERS \
 
+#ifndef RESERVED_FLASH_SIZE
+#define RESERVED_FLASH_SIZE 0
+#endif
+
 // TODO:
 //    mp_obj_t playing_audio[AUDIO_DMA_CHANNEL_COUNT];
 

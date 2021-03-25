@@ -9,8 +9,8 @@
 
 #include "fsl_flexspi.h"
 #include "internal_flash.h"
-#include "boards/flash_config.h"
 #include "supervisor/linker.h"
+#include "imx_rt_flash_config/flash_config.h"
 
 status_t PLACE_IN_ITCM(flexspi_nor_write_enable)(FLEXSPI_Type * base, uint32_t baseAddr)
 {

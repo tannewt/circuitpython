@@ -229,9 +229,9 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_MOD:.c=.o))
 SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_COMMON_HAL_EXPANDED) $(SRC_SHARED_MODULE_EXPANDED)
 
 # Generate the flash config file.
-$(BUILD)/flash_config.c: flash_config.c.jinja gen_flash_config.py | $(BUILD)/
+$(BUILD)/flash_config.c: imx_rt_flash_config/templates/flash_config.c.jinja imx_rt_flash_config/gen_flash_config.py | $(BUILD)/
 	$(STEPECHO) "GEN $<"
-	$(Q)$(PYTHON3) gen_flash_config.py $< $@ $(EXTERNAL_FLASH_DEVICES)
+	$(Q)$(PYTHON3) imx_rt_flash_config/gen_flash_config.py $@ $(EXTERNAL_FLASH_DEVICES)
 
 OBJ += $(BUILD)/flash_config.o
 

@@ -178,3 +178,7 @@
 	path = data/nvm.toml
 	url = https://github.com/adafruit/nvm.toml.git
 	branch = main
+[submodule "ports/mimxrt10xx/imx_rt_flash_config"]
+	path = ports/mimxrt10xx/imx_rt_flash_config
+	url = https://github.com/adafruit/imx_rt_flash_config.git
+	branch = main

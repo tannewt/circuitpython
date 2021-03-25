@@ -63,6 +63,8 @@
 #include "fsl_gpio.h"
 #include "fsl_lpuart.h"
 
+#include "imx_rt_flash_config/flash_config.h"
+
 // Device memories must be accessed in order.
 #define DEVICE 2
 // Normal memory can have accesses reorder and prefetched.
@@ -86,7 +88,6 @@
 
 #define NO_SUBREGIONS 0
 
-extern uint32_t _ld_flash_size;
 extern uint32_t _ld_stack_top;
 
 extern uint32_t __isr_vector[];
@@ -104,6 +105,7 @@ extern uint32_t _ld_dtcm_data_flash_copy;
 extern uint32_t _ld_itcm_destination;
 extern uint32_t _ld_itcm_size;
 extern uint32_t _ld_itcm_flash_copy;
+extern uint32_t _ld_code_size;
 
 extern void main(void);
 
@@ -184,7 +186,7 @@ __attribute__((used, naked)) void Reset_Handler(void) {
     // we set the region to the minimal size so that bad data doesn't get speculatively fetched.
     // Thanks to Damien for the tip!
     uint32_t region_size = ARM_MPU_REGION_SIZE_32B;
-    uint32_t filesystem_size = &_ld_filesystem_end - &_ld_filesystem_start;
+    uint32_t filesystem_size = (imx_rt_flash_size() - RESERVED_FLASH_SIZE - (uint32_t) &_ld_code_size);
     while (filesystem_size > (1u << (region_size + 1))) {
         region_size += 1;
     }

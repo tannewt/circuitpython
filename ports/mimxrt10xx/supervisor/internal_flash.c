@@ -30,7 +30,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "boards/flash_config.h"
 #include "extmod/vfs.h"
 #include "extmod/vfs_fat.h"
 #include "py/mphal.h"
@@ -42,9 +41,10 @@
 #include "fsl_flexspi.h"
 #include "fsl_iomuxc.h"
 
-// defined in linker
-extern uint32_t __fatfs_flash_start_addr[];
-extern uint32_t __fatfs_flash_length[];
+#include "imx_rt_flash_config/flash_config.h"
+
+extern uint32_t _ld_firmware_end;
+extern uint32_t _ld_code_size;
 
 #define NO_CACHE        0xffffffff
 #define SECTOR_SIZE     0x1000 /* 4K */
@@ -62,7 +62,7 @@ void PLACE_IN_ITCM(supervisor_flash_init)(void) {
 }
 
 static inline uint32_t lba2addr(uint32_t block) {
-    return CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_START_ADDR + block * FILESYSTEM_BLOCK_SIZE;
+    return (uint32_t) &_ld_firmware_end + block * FILESYSTEM_BLOCK_SIZE;
 }
 
 uint32_t supervisor_flash_get_block_size(void) {
@@ -70,7 +70,7 @@ uint32_t supervisor_flash_get_block_size(void) {
 }
 
 uint32_t supervisor_flash_get_block_count(void) {
-    return CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_SIZE / FILESYSTEM_BLOCK_SIZE;
+    return (imx_rt_flash_size() - RESERVED_FLASH_SIZE - (uint32_t) &_ld_code_size) / FILESYSTEM_BLOCK_SIZE;
 }
 
 void PLACE_IN_ITCM(port_internal_flash_flush)(void) {

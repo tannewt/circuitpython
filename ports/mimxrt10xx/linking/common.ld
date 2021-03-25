@@ -4,7 +4,7 @@ The first three provide variables for this one. */
 
 ENTRY(Reset_Handler)
 
-code_size = 1M;
+_ld_code_size = 1M;
 _ld_default_stack_size = 20K;
 
 MEMORY
@@ -16,7 +16,7 @@ MEMORY
     /* This can't move because the bootrom looks at this address. */
     FLASH_IVT (rx)        : ORIGIN = 0x60001000, LENGTH = 4K
     /* Place the ISRs 48k in to leave room for the bootloader when it is available. */
-    FLASH_FIRMWARE (rx)   : ORIGIN = 0x6000C000, LENGTH = code_size - 48K
+    FLASH_FIRMWARE (rx)   : ORIGIN = 0x6000C000, LENGTH = _ld_code_size - 48K
     OCRAM (rwx)           : ORIGIN = 0x20200000, LENGTH = ram_size - 64K
     DTCM (x)              : ORIGIN = 0x20000000, LENGTH = 32K
     ITCM (x)              : ORIGIN = 0x00000000, LENGTH = 32K
@@ -116,6 +116,7 @@ SECTIONS
     _ld_dtcm_data_destination = ADDR(.dtcm_data);
     _ld_dtcm_data_flash_copy = LOADADDR(.dtcm_data);
     _ld_dtcm_data_size = SIZEOF(.dtcm_data);
+    _ld_firmware_end = ORIGIN(FLASH_FIRMWARE) + LENGTH(FLASH_FIRMWARE);
 
     .dtcm_bss :
     {
