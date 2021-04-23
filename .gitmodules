@@ -73,11 +73,6 @@
 [submodule "ports/nrf/nrfx"]
 	path = ports/nrf/nrfx
 	url = https://github.com/adafruit/nrfx.git
-[submodule "lib/tinyusb"]
-	path = lib/tinyusb
-	url = https://github.com/hathach/tinyusb.git
-	branch = master
-	fetchRecurseSubmodules = false
 [submodule "tools/huffman"]
 	path = tools/huffman
 	url = https://github.com/tannewt/huffman.git

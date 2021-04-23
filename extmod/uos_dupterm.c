@@ -1,6 +1,6 @@
 // Copyright (c) 2016 Paul Sokolovsky
 // SPDX-FileCopyrightText: 2014 MicroPython & CircuitPython contributors (https://github.com/adafruit/circuitpython/graphs/contributors)
-// SPDX-FileCopyrightText: Copyright (c) 2017 Damien P. George
+// SPDX-FileCopyrightText: Copyright (c) 2017-2019 Damien P. George
 //
 // SPDX-License-Identifier: MIT
 
@@ -32,6 +32,45 @@ void mp_uos_deactivate(size_t dupterm_idx, const char *msg, mp_obj_t exc) {
     } else {
         // Ignore any errors during stream closing
     }
+}
+
+uintptr_t mp_uos_dupterm_poll(uintptr_t poll_flags) {
+    uintptr_t poll_flags_out = 0;
+
+    for (size_t idx = 0; idx < MICROPY_PY_OS_DUPTERM; ++idx) {
+        mp_obj_t s = MP_STATE_VM(dupterm_objs[idx]);
+        if (s == MP_OBJ_NULL) {
+            continue;
+        }
+
+        int errcode = 0;
+        mp_uint_t ret = 0;
+        const mp_stream_p_t *stream_p = mp_get_stream(s);
+        #if MICROPY_PY_UOS_DUPTERM_BUILTIN_STREAM
+        if (mp_uos_dupterm_is_builtin_stream(s)) {
+            ret = stream_p->ioctl(s, MP_STREAM_POLL, poll_flags, &errcode);
+        } else
+        #endif
+        {
+            nlr_buf_t nlr;
+            if (nlr_push(&nlr) == 0) {
+                ret = stream_p->ioctl(s, MP_STREAM_POLL, poll_flags, &errcode);
+                nlr_pop();
+            } else {
+                // Ignore error with ioctl
+            }
+        }
+
+        if (ret != MP_STREAM_ERROR) {
+            poll_flags_out |= ret;
+            if (poll_flags_out == poll_flags) {
+                // Finish early if all requested flags are set
+                break;
+            }
+        }
+    }
+
+    return poll_flags_out;
 }
 
 int mp_uos_dupterm_rx_chr(void) {

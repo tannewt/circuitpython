@@ -66,6 +66,7 @@ def get_version_info_from_git():
 
 
 
+
 def get_version_info_from_docs_conf():
     with open(os.path.join(os.path.dirname(sys.argv[0]), "..", "conf.py")) as f:
         for line in f:

@@ -93,7 +93,7 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
                 mp_store_global(MP_QSTR___file__, MP_OBJ_NEW_QSTR(source_name));
             }
             mp_parse_tree_t parse_tree = mp_parse(lex, input_kind);
-            module_fun = mp_compile(&parse_tree, source_name, MP_EMIT_OPT_NONE, exec_flags & EXEC_FLAG_IS_REPL);
+            module_fun = mp_compile(&parse_tree, source_name, exec_flags & EXEC_FLAG_IS_REPL);
             // Clear the parse tree because it has a heap pointer we don't need anymore.
             *((uint32_t volatile *)&parse_tree.chunk) = 0;
             #else
@@ -587,6 +587,18 @@ int pyexec_file_if_exists(const char *filename, pyexec_result_t *result) {
         return 1; // success (no file is the same as an empty file executing without fail)
     }
     return pyexec_file(filename, result);
+}
+
+int pyexec_file_if_exists(const char *filename) {
+    #if MICROPY_MODULE_FROZEN
+    if (mp_frozen_stat(filename) == MP_IMPORT_STAT_FILE) {
+        return pyexec_frozen_module(filename);
+    }
+    #endif
+    if (mp_import_stat(filename) != MP_IMPORT_STAT_FILE) {
+        return 1; // success (no file is the same as an empty file executing without fail)
+    }
+    return pyexec_file(filename);
 }
 
 #if MICROPY_MODULE_FROZEN
