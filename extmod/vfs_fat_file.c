@@ -40,6 +40,11 @@ const byte fresult_to_errno_table[20] = {
     [FR_INVALID_PARAMETER] = MP_EINVAL,
 };
 
+typedef struct _pyb_file_obj_t {
+    mp_obj_base_t base;
+    FIL fp;
+} pyb_file_obj_t;
+
 STATIC void file_obj_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     (void)kind;
     mp_printf(print, "<io.%q %p>", mp_obj_get_type_qstr(self_in), MP_OBJ_TO_PTR(self_in));
@@ -215,7 +220,7 @@ STATIC mp_obj_t file_obj_make_new(const mp_obj_type_t *type, size_t n_args, cons
 
 // TODO gc hook to close the file if not already closed
 
-STATIC const mp_rom_map_elem_t rawfile_locals_dict_table[] = {
+STATIC const mp_rom_map_elem_t vfs_fat_rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&mp_stream_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
@@ -230,10 +235,10 @@ STATIC const mp_rom_map_elem_t rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&file_obj___exit___obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(rawfile_locals_dict, rawfile_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(vfs_fat_rawfile_locals_dict, vfs_fat_rawfile_locals_dict_table);
 
 #if MICROPY_PY_IO_FILEIO
-STATIC const mp_stream_p_t fileio_stream_p = {
+STATIC const mp_stream_p_t vfs_fat_fileio_stream_p = {
     MP_PROTO_IMPLEMENT(MP_QSTR_protocol_stream)
     .read = file_obj_read,
     .write = file_obj_write,
@@ -247,12 +252,12 @@ const mp_obj_type_t mp_type_vfs_fat_fileio = {
     .make_new = file_obj_make_new,
     .getiter = mp_identity_getiter,
     .iternext = mp_stream_unbuffered_iter,
-    .protocol = &fileio_stream_p,
-    .locals_dict = (mp_obj_dict_t *)&rawfile_locals_dict,
+    .protocol = &vfs_fat_fileio_stream_p,
+    .locals_dict = (mp_obj_dict_t *)&vfs_fat_rawfile_locals_dict,
 };
 #endif
 
-STATIC const mp_stream_p_t textio_stream_p = {
+STATIC const mp_stream_p_t vfs_fat_textio_stream_p = {
     MP_PROTO_IMPLEMENT(MP_QSTR_protocol_stream)
     .read = file_obj_read,
     .write = file_obj_write,
@@ -267,8 +272,8 @@ const mp_obj_type_t mp_type_vfs_fat_textio = {
     .make_new = file_obj_make_new,
     .getiter = mp_identity_getiter,
     .iternext = mp_stream_unbuffered_iter,
-    .protocol = &textio_stream_p,
-    .locals_dict = (mp_obj_dict_t *)&rawfile_locals_dict,
+    .protocol = &vfs_fat_textio_stream_p,
+    .locals_dict = (mp_obj_dict_t *)&vfs_fat_rawfile_locals_dict,
 };
 
 // Factory function for I/O stream classes
