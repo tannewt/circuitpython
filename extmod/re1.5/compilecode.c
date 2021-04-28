@@ -23,10 +23,10 @@ static char unescape(char c) {
             return '\n';
         case 'r':
             return '\r';
+        case 't':
+            return '\t';
         case 'v':
             return '\v';
-        case 'x':
-            return '\\';
         default:
             return c;
     }
