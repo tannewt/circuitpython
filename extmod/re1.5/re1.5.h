@@ -11,6 +11,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define nil ((void*)0)
 #define nelem(x) (sizeof(x)/sizeof((x)[0]))

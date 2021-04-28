@@ -250,11 +250,21 @@ int re1_5_compilecode(ByteProg *prog, const char *re)
     return 0;
 }
 
-#if 0
+#if defined(DEBUG_COMPILECODE)
+#include <assert.h>
+void re1_5_fatal(char *x) {
+    fprintf(stderr, "%s\n", x);
+    abort();
+}
+
 int main(int argc, char *argv[])
 {
-    int pc = 0;
-    ByteProg *code = re1_5_compilecode(argv[1]);
-    re1_5_dumpcode(code);
+    char *re_str = argv[1];
+    int size = re1_5_sizecode(re_str);
+    ByteProg *code = malloc(sizeof(ByteProg) + size);
+    int ret = re1_5_compilecode(code, re_str);
+    if (ret == 0) {
+        re1_5_dumpcode(code);
+    }
 }
 #endif
