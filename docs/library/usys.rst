@@ -1,5 +1,5 @@
-:mod:`sys` -- system specific functions
-=======================================
+:mod:`usys` -- system specific functions
+========================================
 
 .. include:: ../templates/unsupported_in_circuitpython.inc
 
@@ -58,7 +58,7 @@ Constants
    value directly, but instead count number of bits in it::
 
     bits = 0
-    v = sys.maxsize
+    v = usys.maxsize
     while v:
         bits += 1
         v >>= 1
