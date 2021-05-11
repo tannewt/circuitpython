@@ -36,7 +36,6 @@ Full Table of Contents
    :caption: MicroPython specific
 
    library/index.rst
-   reference/glossary.rst
 
 .. toctree::
    :maxdepth: 1
