@@ -24,6 +24,7 @@
  * THE SOFTWARE.
  */
 
+#include "py/mpconfig.h"
 #include "shared-bindings/bitops/__init__.h"
 
 #include <stdint.h>
