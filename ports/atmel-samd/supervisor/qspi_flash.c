@@ -74,7 +74,12 @@ bool spi_flash_read_command(uint8_t command, uint8_t *response, uint32_t length)
     // and Example 4, page 998, section 37.6.8.5.
     (volatile uint32_t)QSPI->INSTRFRAME.reg;
 
-    memcpy(response, (uint8_t *)QSPI_AHB, length);
+    for (size_t i = 0; i < length / sizeof(size_t); i++) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wcast-align"
+        ((uint32_t *)response)[i] = ((volatile uint32_t *)QSPI_AHB)[i];
+        #pragma GCC diagnostic pop
+    }
 
     QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE | QSPI_CTRLA_LASTXFER;
 
@@ -106,7 +111,12 @@ bool spi_flash_write_command(uint8_t command, uint8_t *data, uint32_t length) {
     (volatile uint32_t)QSPI->INSTRFRAME.reg;
 
     if (data != NULL) {
-        memcpy((uint8_t *)QSPI_AHB, data, length);
+        for (size_t i = 0; i < length / sizeof(size_t); i++) {
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wcast-align"
+            ((volatile uint32_t *)QSPI_AHB)[i] = ((uint32_t *)data)[i];
+            #pragma GCC diagnostic pop
+        }
     }
 
     QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE | QSPI_CTRLA_LASTXFER;
@@ -205,7 +215,13 @@ bool spi_flash_read_data(uint32_t address, uint8_t *data, uint32_t length) {
         QSPI_INSTRFRAME_DUMMYLEN(8);
     #endif
 
-    memcpy(data, ((uint8_t *)QSPI_AHB) + address, length);
+    for (size_t i = 0; i < length / sizeof(size_t); i++) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wcast-align"
+        ((uint32_t *)data)[i] = ((volatile uint32_t *)QSPI_AHB + address)[i];
+        #pragma GCC diagnostic pop
+    }
+
     // TODO(tannewt): Fix DMA and enable it.
     // qspi_dma_read(address, data, length);
 
