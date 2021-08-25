@@ -878,15 +878,22 @@ int __attribute__((used)) main(void) {
     return 0;
 }
 
+#include "esp_log.h"
+static const char TAG[] = "main";
+
 void gc_collect(void) {
     gc_collect_start();
 
     mp_uint_t regs[10];
     mp_uint_t sp = cpu_get_regs_and_sp(regs);
 
+    // ESP_LOGW(TAG, "collect cpu done");
+
     // This collects root pointers from the VFS mount table. Some of them may
     // have lost their references in the VM even though they are mounted.
     gc_collect_root((void**)&MP_STATE_VM(vfs_mount_table), sizeof(mp_vfs_mount_t) / sizeof(mp_uint_t));
+
+    // ESP_LOGW(TAG, "collect background wifi");
 
     background_callback_gc_collect();
 
@@ -910,10 +917,13 @@ void gc_collect(void) {
     usb_hid_gc_collect();
     #endif
 
+    ESP_LOGW(TAG, "collect to wifi");
+
     #if CIRCUITPY_WIFI
     common_hal_wifi_gc_collect();
     #endif
 
+    ESP_LOGW(TAG, "collect after wifi");
     // This naively collects all object references from an approximate stack
     // range.
     gc_collect_root((void**)sp, ((uint32_t)port_stack_get_top() - sp) / sizeof(uint32_t));

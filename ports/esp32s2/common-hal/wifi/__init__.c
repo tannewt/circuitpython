@@ -103,6 +103,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         radio->retries_left = radio->starting_retries;
         xEventGroupSetBits(radio->event_group_handle, WIFI_CONNECTED_BIT);
     }
+    ESP_LOGW(TAG, "event done");
 }
 
 static bool wifi_inited, wifi_ever_inited;

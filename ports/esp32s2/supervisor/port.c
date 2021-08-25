@@ -71,6 +71,8 @@
 #include "cam.h"
 #endif
 
+#include "components/hal/include/hal/cpu_hal.h"
+
 #define HEAP_SIZE (48 * 1024)
 
 uint32_t *heap;
@@ -94,6 +96,7 @@ void tick_timer_cb(void *arg) {
 void sleep_timer_cb(void *arg);
 
 safe_mode_t port_init(void) {
+    cpu_hal_set_breakpoint(0, (void *)0x4004c72d);
     esp_timer_create_args_t args;
     args.callback = &tick_timer_cb;
     args.arg = NULL;

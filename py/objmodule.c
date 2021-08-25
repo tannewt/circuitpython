@@ -117,6 +117,10 @@ const mp_obj_type_t mp_type_module = {
     .attr = module_attr,
 };
 
+#include "esp_log.h"
+
+static const char TAG[] = "module";
+
 mp_obj_t mp_obj_new_module(qstr module_name) {
     mp_map_t *mp_loaded_modules_map = &MP_STATE_VM(mp_loaded_modules_dict).map;
     mp_map_elem_t *el = mp_map_lookup(mp_loaded_modules_map, MP_OBJ_NEW_QSTR(module_name), MP_MAP_LOOKUP_ADD_IF_NOT_FOUND);
@@ -129,7 +133,14 @@ mp_obj_t mp_obj_new_module(qstr module_name) {
     // create new module object
     mp_obj_module_t *o = m_new_ll_obj(mp_obj_module_t);
     o->base.type = &mp_type_module;
-    o->globals = MP_OBJ_TO_PTR(gc_make_long_lived(mp_obj_new_dict(MICROPY_MODULE_DICT_SIZE)));
+    // This breaks MagTag. /shrug
+    o->globals = MP_OBJ_TO_PTR(mp_obj_new_dict(MICROPY_MODULE_DICT_SIZE));
+    if (true) {
+        o->globals = gc_make_long_lived(o->globals);
+        ESP_LOGE(TAG, "moved %s (%d) to %p", qstr_str(module_name), module_name, o->globals);
+    } else {
+        ESP_LOGI(TAG, "left %s (%d) at %p", qstr_str(module_name), module_name, o->globals);
+    }
 
     // store __name__ entry in the module
     mp_obj_dict_store(MP_OBJ_FROM_PTR(o->globals), MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(module_name));

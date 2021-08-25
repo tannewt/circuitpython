@@ -38,6 +38,10 @@
 #include "shared-module/memorymonitor/__init__.h"
 #endif
 
+#include "components/log/include/esp_log.h"
+
+static const char *TAG = "gc";
+
 #if MICROPY_ENABLE_GC
 
 #if MICROPY_DEBUG_VERBOSE // print debugging info
@@ -95,6 +99,7 @@
 #endif
 
 #if MICROPY_PY_THREAD && !MICROPY_PY_THREAD_GIL
+#error "thread!"
 #define GC_ENTER() mp_thread_mutex_lock(&MP_STATE_MEM(gc_mutex), 1)
 #define GC_EXIT() mp_thread_mutex_unlock(&MP_STATE_MEM(gc_mutex))
 #else
@@ -314,6 +319,10 @@ STATIC void gc_sweep(void) {
                 }
                 #endif
                 free_tail = 1;
+                void *ptr = (void *)PTR_FROM_BLOCK(block);
+                if (MP_STATE_MEM(gc_lowest_long_lived_ptr) <= ptr) {
+                    ESP_LOGE(TAG, "Sweeping long lived pointer %p", ptr);
+                }
                 DEBUG_printf("gc_sweep(%p)\n", (void *)PTR_FROM_BLOCK(block));
 
                 #ifdef LOG_HEAP_ACTIVITY
@@ -356,6 +365,7 @@ STATIC void gc_mark(void *ptr) {
 }
 
 void gc_collect_start(void) {
+    // ESP_LOGW(TAG, "collect start");
     GC_ENTER();
     MP_STATE_THREAD(gc_lock_depth)++;
     #if MICROPY_GC_ALLOC_THRESHOLD
@@ -378,6 +388,7 @@ void gc_collect_start(void) {
     ptrs = (void **)(void *)MP_STATE_THREAD(pystack_start);
     gc_collect_root(ptrs, (MP_STATE_THREAD(pystack_cur) - MP_STATE_THREAD(pystack_start)) / sizeof(void *));
     #endif
+    // ESP_LOGW(TAG, "collect start done");
 }
 
 void gc_collect_ptr(void *ptr) {
@@ -402,6 +413,7 @@ void gc_collect_root(void **ptrs, size_t len) {
 }
 
 void gc_collect_end(void) {
+    // ESP_LOGW(TAG, "collect end");
     gc_deal_with_stack_overflow();
     gc_sweep();
     for (size_t i = 0; i < MICROPY_ATB_INDICES; i++) {
@@ -410,6 +422,7 @@ void gc_collect_end(void) {
     MP_STATE_MEM(gc_last_free_atb_index) = MP_STATE_MEM(gc_alloc_table_byte_len) - 1;
     MP_STATE_THREAD(gc_lock_depth)--;
     GC_EXIT();
+    // ESP_LOGW(TAG, "collect end done");
 }
 
 void gc_sweep_all(void) {
@@ -720,6 +733,10 @@ void gc_free(void *ptr) {
             block += 1;
         } while (ATB_GET_KIND(block) == AT_TAIL);
 
+        if (MP_STATE_MEM(gc_lowest_long_lived_ptr) <= ptr) {
+            ESP_LOGE(TAG, "Freeing long lived pointer %p", ptr);
+        }
+
         // Update the first free pointer for our size only. Not much calls gc_free directly so there
         // is decent chance we'll want to allocate this size again. By only updating the specific
         // size we don't risk something smaller fitting in.
@@ -780,6 +797,7 @@ bool gc_has_finaliser(const void *ptr) {
 }
 
 void *gc_make_long_lived(void *old_ptr) {
+    // return old_ptr;
     // If its already in the long lived section then don't bother moving it.
     if (old_ptr >= MP_STATE_MEM(gc_lowest_long_lived_ptr)) {
         return old_ptr;
