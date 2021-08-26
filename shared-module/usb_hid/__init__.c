@@ -239,12 +239,20 @@ void usb_hid_save_report_descriptor(uint8_t *report_descriptor_space, size_t rep
     memcpy((uint8_t *)hid_report_descriptor_allocation->ptr, report_descriptor_space, report_descriptor_length);
 }
 
+#include "esp_log.h"
+
+static const char TAG[] = "usb_hid";
+
+#define X ESP_EARLY_LOGW(TAG, "%s:%d", __FILE__, __LINE__)
+
 void usb_hid_gc_collect(void) {
+    X;
     gc_collect_ptr(hid_devices_tuple);
 
+    X;
     // Mark possible heap pointers in the static device list as in use.
     for (mp_int_t device_idx = 0; device_idx < num_hid_devices; device_idx++) {
-
+        ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, device_idx);
         // Cast away the const for .report_descriptor. It could be in flash or on the heap.
         // Constant report descriptors must be const so that they are used directly from flash
         // and not copied into RAM.
@@ -252,10 +260,16 @@ void usb_hid_gc_collect(void) {
 
         // Collect all the report buffers for this device.
         for (size_t id_idx = 0; id_idx < hid_devices[device_idx].num_report_ids; id_idx++) {
-            gc_collect_ptr(hid_devices[id_idx].in_report_buffers[id_idx]);
-            gc_collect_ptr(hid_devices[id_idx].out_report_buffers[id_idx]);
+            ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, id_idx);
+            ESP_EARLY_LOGW(TAG, "%s:%d %p", __FILE__, __LINE__, hid_devices[device_idx].in_report_buffers[id_idx]);
+            gc_collect_ptr(hid_devices[device_idx].in_report_buffers[id_idx]);
+            ESP_EARLY_LOGW(TAG, "%s:%d %p", __FILE__, __LINE__, hid_devices[device_idx].out_report_buffers[id_idx]);
+            gc_collect_ptr(hid_devices[device_idx].out_report_buffers[id_idx]);
+            ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, id_idx);
         }
+        ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, device_idx);
     }
+    X;
 }
 
 bool usb_hid_get_device_with_report_id(uint8_t report_id, usb_hid_device_obj_t **device_out, size_t *id_idx_out) {

@@ -131,9 +131,23 @@ void gc_init(void *start, void *end) {
     // => T = A * (1 + BLOCKS_PER_ATB / BLOCKS_PER_FTB + BLOCKS_PER_ATB * BYTES_PER_BLOCK)
     size_t total_byte_len = (byte *)end - (byte *)start;
     #if MICROPY_ENABLE_FINALISER
-    MP_STATE_MEM(gc_alloc_table_byte_len) = total_byte_len * MP_BITS_PER_BYTE / (MP_BITS_PER_BYTE + MP_BITS_PER_BYTE * BLOCKS_PER_ATB / BLOCKS_PER_FTB + MP_BITS_PER_BYTE * BLOCKS_PER_ATB * BYTES_PER_BLOCK);
+    size_t total_bits = total_byte_len * MP_BITS_PER_BYTE;
+    size_t bits_per_atb = MP_BITS_PER_BYTE / BLOCKS_PER_ATB;
+    size_t bits_per_ftb = MP_BITS_PER_BYTE / BLOCKS_PER_FTB;
+    size_t total_bits_per_block = BYTES_PER_BLOCK * MP_BITS_PER_BYTE + bits_per_atb + bits_per_ftb;
+    size_t block_count = total_bits / bits_per_block;
+    size_t spare_bits = total_bits % bits_per_block;
+    // We need at most 16 bits to align the ATB and FTB on byte boundaries.
+    if (spare_bits < 16) {
+        block_count--;
+    }
+
+    // Always add one to ensure we have spare bits before the FTB. The extra
+    // block will be empty if block_count % BLOCKS_PER_ATB == 0 or have at least
+    // two extra bits at the end otherwise.
+    MP_STATE_MEM(gc_alloc_table_byte_len) = (block_count / BLOCKS_PER_ATB) + 1;
     #else
-    MP_STATE_MEM(gc_alloc_table_byte_len) = total_byte_len / (1 + MP_BITS_PER_BYTE / 2 * BYTES_PER_BLOCK);
+    MP_STATE_MEM(gc_alloc_table_byte_len) = total_byte_len / (1 + BLOCKS_PER_ATB * BYTES_PER_BLOCK);
     #endif
 
     MP_STATE_MEM(gc_alloc_table_start) = (byte *)start;
@@ -189,12 +203,12 @@ void gc_init(void *start, void *end) {
 
     MP_STATE_MEM(permanent_pointers) = NULL;
 
-    DEBUG_printf("GC layout:\n");
-    DEBUG_printf("  alloc table at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks\n", MP_STATE_MEM(gc_alloc_table_start), MP_STATE_MEM(gc_alloc_table_byte_len), MP_STATE_MEM(gc_alloc_table_byte_len) * BLOCKS_PER_ATB);
+    ESP_EARLY_LOGI(TAG, "GC layout:");
+    ESP_EARLY_LOGI(TAG, "  alloc table at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks", MP_STATE_MEM(gc_alloc_table_start), MP_STATE_MEM(gc_alloc_table_byte_len), MP_STATE_MEM(gc_alloc_table_byte_len) * BLOCKS_PER_ATB);
     #if MICROPY_ENABLE_FINALISER
-    DEBUG_printf("  finaliser table at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks\n", MP_STATE_MEM(gc_finaliser_table_start), gc_finaliser_table_byte_len, gc_finaliser_table_byte_len * BLOCKS_PER_FTB);
+    ESP_EARLY_LOGI(TAG, "  finaliser table at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks", MP_STATE_MEM(gc_finaliser_table_start), gc_finaliser_table_byte_len, gc_finaliser_table_byte_len * BLOCKS_PER_FTB);
     #endif
-    DEBUG_printf("  pool at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks\n", MP_STATE_MEM(gc_pool_start), gc_pool_block_len * BYTES_PER_BLOCK, gc_pool_block_len);
+    ESP_EARLY_LOGI(TAG, "  pool at %p, length " UINT_FMT " bytes, " UINT_FMT " blocks", MP_STATE_MEM(gc_pool_start), gc_pool_block_len * BYTES_PER_BLOCK, gc_pool_block_len);
 }
 
 void gc_deinit(void) {
@@ -236,17 +250,27 @@ bool gc_is_locked(void) {
 STATIC void gc_mark_subtree(size_t block) {
     // Start with the block passed in the argument.
     size_t sp = 0;
+    size_t starting_block = block;
     for (;;) {
         // work out number of consecutive blocks in the chain starting with this one
         size_t n_blocks = 0;
         do {
             n_blocks += 1;
         } while (ATB_GET_KIND(block + n_blocks) == AT_TAIL);
+        if (starting_block == 128003) {
+            ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, n_blocks);
+        }
 
         // check this block's children
         void **ptrs = (void **)PTR_FROM_BLOCK(block);
         for (size_t i = n_blocks * BYTES_PER_BLOCK / sizeof(void *); i > 0; i--, ptrs++) {
+            if (starting_block == 128003) {
+                ESP_EARLY_LOGW(TAG, "%s:%d %p", __FILE__, __LINE__, ptrs);
+            }
             void *ptr = *ptrs;
+            if (starting_block == 128003) {
+                ESP_EARLY_LOGW(TAG, "%s:%d %p", __FILE__, __LINE__, ptr);
+            }
             if (VERIFY_PTR(ptr)) {
                 // Mark and push this pointer
                 size_t childblock = BLOCK_FROM_PTR(ptr);
@@ -257,6 +281,9 @@ STATIC void gc_mark_subtree(size_t block) {
                     if (sp < MICROPY_ALLOC_GC_STACK_SIZE) {
                         MP_STATE_MEM(gc_stack)[sp++] = childblock;
                     } else {
+                        if (starting_block == 128003) {
+                            ESP_EARLY_LOGW(TAG, "%s:%d overflow", __FILE__, __LINE__);
+                        }
                         MP_STATE_MEM(gc_stack_overflow) = 1;
                     }
                 }
@@ -354,18 +381,33 @@ STATIC void gc_sweep(void) {
 // Mark can handle NULL pointers because it verifies the pointer is within the heap bounds.
 STATIC void gc_mark(void *ptr) {
     if (VERIFY_PTR(ptr)) {
+        if (ptr == (void *)0x3ff7fff0) {
+            ESP_EARLY_LOGW(TAG, "%s:%d", __FILE__, __LINE__);
+        }
         size_t block = BLOCK_FROM_PTR(ptr);
         if (ATB_GET_KIND(block) == AT_HEAD) {
+            if (ptr == (void *)0x3ff7fff0) {
+                ESP_EARLY_LOGW(TAG, "%s:%d", __FILE__, __LINE__);
+            }
             // An unmarked head: mark it, and mark all its children
             TRACE_MARK(block, ptr);
+            if (ptr == (void *)0x3ff7fff0) {
+                ESP_EARLY_LOGW(TAG, "%s:%d", __FILE__, __LINE__);
+            }
             ATB_HEAD_TO_MARK(block);
+            if (ptr == (void *)0x3ff7fff0) {
+                ESP_EARLY_LOGW(TAG, "%s:%d %d", __FILE__, __LINE__, block);
+            }
             gc_mark_subtree(block);
+            if (ptr == (void *)0x3ff7fff0) {
+                ESP_EARLY_LOGW(TAG, "%s:%d", __FILE__, __LINE__);
+            }
         }
     }
 }
 
 void gc_collect_start(void) {
-    // ESP_LOGW(TAG, "collect start");
+    ESP_EARLY_LOGW(TAG, "collect start");
     GC_ENTER();
     MP_STATE_THREAD(gc_lock_depth)++;
     #if MICROPY_GC_ALLOC_THRESHOLD
@@ -388,7 +430,7 @@ void gc_collect_start(void) {
     ptrs = (void **)(void *)MP_STATE_THREAD(pystack_start);
     gc_collect_root(ptrs, (MP_STATE_THREAD(pystack_cur) - MP_STATE_THREAD(pystack_start)) / sizeof(void *));
     #endif
-    // ESP_LOGW(TAG, "collect start done");
+    ESP_EARLY_LOGW(TAG, "collect start done");
 }
 
 void gc_collect_ptr(void *ptr) {
@@ -668,7 +710,14 @@ void *gc_alloc(size_t n_bytes, unsigned int alloc_flags, bool long_lived) {
         ((mp_obj_base_t *)ret_ptr)->type = NULL;
         // set mp_obj flag only if it has a finaliser
         GC_ENTER();
+        if (start_block < 8) {
+            ESP_EARLY_LOGI(TAG, "before %d %d", ATB_GET_KIND(128003), ATB_GET_KIND(128004));
+            ESP_EARLY_LOGI(TAG, "finaliser for block %d", start_block);
+        }
         FTB_SET(start_block);
+        if (start_block < 8) {
+            ESP_EARLY_LOGI(TAG, "after %d %d", ATB_GET_KIND(128003), ATB_GET_KIND(128004));
+        }
         GC_EXIT();
     }
     #else

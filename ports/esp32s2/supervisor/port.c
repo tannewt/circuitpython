@@ -338,8 +338,15 @@ void port_idle_until_interrupt(void) {
     }
 }
 
+#include "esp_log.h"
 // Wrap main in app_main that the IDF expects.
 extern void main(void);
+static const char TAG[] = "port";
+
 void app_main(void) {
+    ESP_EARLY_LOGI(TAG, "hello");
+    size_t x = *((uint32_t *)0x3ff80000);
+    (void)x;
+    ESP_EARLY_LOGI(TAG, "hello %d", x);
     main();
 }
