@@ -101,7 +101,7 @@ endif
 # option to override compiler optimization level, set in boards/$(BOARD)/mpconfigboard.mk
 CFLAGS += $(OPTIMIZATION_FLAGS)
 
-CFLAGS += $(INC) -Wall -Werror -std=gnu11 -nostdlib -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT)
+CFLAGS += $(INC) -Wall -Werror -std=gnu11 -nostdlib -fshort-enums -fno-ipa-modref $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT)
 
 # Undo some warnings.
 # nrfx does casts that increase alignment requirements.

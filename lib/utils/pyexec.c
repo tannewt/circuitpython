@@ -360,6 +360,11 @@ void pyexec_event_repl_init(void) {
     }
 }
 
+STATIC echo(int c) {
+    char buf[1] = {c};
+    mp_hal_stdout_tx_strn(buf, 1);
+}
+
 STATIC int pyexec_raw_repl_process_char(int c) {
     if (c == CHAR_CTRL_A) {
         // reset raw REPL
@@ -371,6 +376,8 @@ STATIC int pyexec_raw_repl_process_char(int c) {
             goto reset;
         }
         serial_write_compressed(translate("raw REPL; CTRL-B to exit\n"));
+        // indicate reception of command
+        echo(CHAR_CTRL_A);
         goto reset;
     } else if (c == CHAR_CTRL_B) {
         // change to friendly REPL
@@ -378,6 +385,7 @@ STATIC int pyexec_raw_repl_process_char(int c) {
         vstr_reset(MP_STATE_VM(repl_line));
         repl.cont_line = false;
         repl.paste_mode = false;
+        echo(CHAR_CTRL_B);
         pyexec_friendly_repl_process_char(CHAR_CTRL_B);
         return 0;
     } else if (c == CHAR_CTRL_C) {
@@ -417,11 +425,13 @@ reset:
 STATIC int pyexec_friendly_repl_process_char(int c) {
     if (repl.paste_mode) {
         if (c == CHAR_CTRL_C) {
-            // cancel everything
+            // cancel everything, switch back to friendly repl.
             mp_hal_stdout_tx_str("\r\n");
+            echo(CHAR_CTRL_B);
             goto input_restart;
         } else if (c == CHAR_CTRL_D) {
-            // end of input
+            // end of input, switching back to friendly repl.
+            echo(CHAR_CTRL_B);
             mp_hal_stdout_tx_str("\r\n");
             int ret = parse_compile_execute(MP_STATE_VM(repl_line), MP_PARSE_FILE_INPUT, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
             if (ret & PYEXEC_FORCED_EXIT) {
@@ -434,8 +444,7 @@ STATIC int pyexec_friendly_repl_process_char(int c) {
             if (c == '\r') {
                 mp_hal_stdout_tx_str("\r\n=== ");
             } else {
-                char buf[1] = {c};
-                mp_hal_stdout_tx_strn(buf, 1);
+                echo(c);
             }
             return 0;
         }
@@ -470,6 +479,7 @@ STATIC int pyexec_friendly_repl_process_char(int c) {
         } else if (ret == CHAR_CTRL_E) {
             // paste mode
             serial_write_compressed(translate("\npaste mode; Ctrl-C to cancel, Ctrl-D to finish\n=== "));
+            echo(CHAR_CTRL_E);
             vstr_reset(MP_STATE_VM(repl_line));
             repl.paste_mode = true;
             return 0;
