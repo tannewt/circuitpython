@@ -28,6 +28,9 @@
 
 #include "py/runtime.h"
 
+#include "esp-idf/components/soc/esp32s2/include/soc/pcnt_struct.h"
+#include "esp-idf/components/soc/esp32s2/include/soc/timer_group_struct.h"
+
 static void IRAM_ATTR pcnt_overflow_handler(void *self_in) {
     frequencyio_frequencyin_obj_t *self = self_in;
     // reset counter
@@ -56,11 +59,11 @@ static void IRAM_ATTR timer_interrupt_handler(void *self_in) {
     // reset interrupt
     timg_dev_t *device = self->timer.group ? &(TIMERG1) : &(TIMERG0);
     if (self->timer.idx) {
-        device->int_clr.t1 = 1;
+        device->int_clr_timers.t1_int_clr = 1;
     } else {
-        device->int_clr.t0 = 1;
+        device->int_clr_timers.t0_int_clr = 1;
     }
-    device->hw_timer[self->timer.idx].config.alarm_en = 1;
+    device->hw_timer[self->timer.idx].config.tx_alarm_en = 1;
 }
 
 static void init_pcnt(frequencyio_frequencyin_obj_t *self) {

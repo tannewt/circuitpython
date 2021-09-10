@@ -86,6 +86,7 @@ INC += -isystem esp-idf/components/esp32s2/include
 INC += -isystem esp-idf/components/esp_common/include
 INC += -isystem esp-idf/components/esp_event/include
 INC += -isystem esp-idf/components/esp_hw_support/include
+INC += -isystem esp-idf/components/esp_hw_support/include/soc
 INC += -isystem esp-idf/components/esp_netif/include
 INC += -isystem esp-idf/components/esp_pm/include
 INC += -isystem esp-idf/components/esp_ringbuf/include
@@ -97,6 +98,7 @@ INC += -isystem esp-idf/components/freertos/include
 INC += -isystem esp-idf/components/freertos/include/freertos
 INC += -isystem esp-idf/components/freertos/port/xtensa/include
 INC += -isystem esp-idf/components/hal/include
+INC += -isystem esp-idf/components/hal/platform_port/include
 INC += -isystem esp-idf/components/hal/esp32s2/include
 INC += -isystem esp-idf/components/heap/include
 INC += -isystem esp-idf/components/log/include/
@@ -143,17 +145,22 @@ LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-Map=$@.map -Wl,-cref -Wl,--undefined=uxTo
 
 LDFLAGS += -L$(BUILD)/esp-idf/esp-idf/esp32s2 \
 		   -L$(BUILD)/esp-idf/esp-idf/esp32s2/ld \
+		   -L$(BUILD)/esp-idf/esp-idf/esp_system/ld \
 		   -Lesp-idf/components/esp32s2/ld \
 		   -Lesp-idf/components/esp_rom/esp32s2/ld \
-		   -Tesp32s2_out.ld \
-		   -Tesp32s2.project.ld \
-		   -Tesp32s2.peripherals.ld \
-		   -Tesp32s2.rom.ld \
-		   -Tesp32s2.rom.api.ld \
-		   -Tesp32s2.rom.libgcc.ld \
-		   -Tesp32s2.rom.newlib-data.ld \
-		   -Tesp32s2.rom.newlib-funcs.ld \
-		   -Tesp32s2.rom.spiflash.ld
+		   -Lesp-idf/components/soc/esp32s2/ld \
+		   -Lesp-idf/components/esp_wifi/lib/esp32s2 \
+		   -T memory.ld \
+		   -T sections.ld \
+		   -T esp32s2.rom.ld \
+		   -T esp32s2.rom.api.ld \
+		   -T esp32s2.rom.libgcc.ld \
+		   -T esp32s2.rom.newlib-funcs.ld \
+		   -T esp32s2.rom.newlib-data.ld \
+		   -T esp32s2.rom.spiflash.ld \
+		   -T esp32s2.peripherals.ld
+
+#		   -u __ubsan_include      -Wl,--wrap=longjmp  -u __assert_func  -u vfs_include_syscalls_impl  
 
 LDFLAGS += -Wl,-Bstatic \
 		   -Wl,--no-warn-mismatch \
@@ -276,7 +283,7 @@ menuconfig: $(BUILD)/esp-idf/config
 # qstr builds include headers so we need to make sure they are up to date
 $(HEADER_BUILD)/qstr.split: | $(BUILD)/esp-idf/config/sdkconfig.h
 
-ESP_IDF_COMPONENTS_LINK = app_update bootloader_support driver efuse esp32s2 esp_adc_cal esp_common esp_event esp_hw_support esp_netif esp_pm esp_ringbuf esp_rom esp_system esp_timer esp-tls esp_wifi freertos hal heap log lwip mbedtls newlib nvs_flash pthread soc spi_flash vfs wpa_supplicant xtensa
+ESP_IDF_COMPONENTS_LINK = app_update bootloader_support driver efuse esp_adc_cal esp_common esp_phy esp_event esp_hw_support esp_netif esp_pm esp_ringbuf esp_rom esp_system esp_timer esp-tls esp_wifi freertos hal heap log lwip mbedtls newlib nvs_flash pthread soc spi_flash vfs wpa_supplicant xtensa
 
 ESP_IDF_COMPONENTS_EXPANDED = $(foreach component, $(ESP_IDF_COMPONENTS_LINK), $(BUILD)/esp-idf/esp-idf/$(component)/lib$(component).a)
 ESP_IDF_WIFI_COMPONENTS_EXPANDED = $(foreach component, $(ESP_IDF_WIFI_COMPONENTS_LINK), $(BUILD)/esp-idf/esp-idf/$(component)/lib$(component).a)
@@ -284,8 +291,8 @@ ESP_IDF_WIFI_COMPONENTS_EXPANDED = $(foreach component, $(ESP_IDF_WIFI_COMPONENT
 MBEDTLS_COMPONENTS_LINK = crypto tls x509
 MBEDTLS_COMPONENTS_LINK_EXPANDED = $(foreach component, $(MBEDTLS_COMPONENTS_LINK), $(BUILD)/esp-idf/esp-idf/mbedtls/mbedtls/library/libmbed$(component).a)
 
-BINARY_BLOBS = esp-idf/components/xtensa/esp32s2/libxt_hal.a
-BINARY_WIFI_BLOBS = libcoexist.a libcore.a libespnow.a libmesh.a libnet80211.a libpp.a librtc.a libsmartconfig.a libphy.a
+BINARY_BLOBS = esp-idf/components/xtensa/esp32s2/libxt_hal.a esp-idf/components/esp_phy/lib/esp32s2/libphy.a
+BINARY_WIFI_BLOBS = libcoexist.a libcore.a libespnow.a libmesh.a libnet80211.a libpp.a libsmartconfig.a
 BINARY_BLOBS += $(addprefix esp-idf/components/esp_wifi/lib/esp32s2/, $(BINARY_WIFI_BLOBS))
 
 ESP_IDF_COMPONENTS_EXPANDED += esp-idf/components/xtensa/esp32s2/libxt_hal.a
@@ -305,8 +312,7 @@ esp-idf-stamp: $(BUILD)/esp-idf/config/sdkconfig.h
 		esp-idf/bootloader_support/libbootloader_support.a \
 		esp-idf/driver/libdriver.a \
 		esp-idf/efuse/libefuse.a \
-		esp-idf/esp32s2/libesp32s2.a \
-		esp-idf/esp32s2/ld/esp32s2.project.ld \
+		esp-idf/esp_system/__ldgen_output_sections.ld \
 		esp-idf/esp_adc_cal/libesp_adc_cal.a \
 		esp-idf/esp_common/libesp_common.a \
 		esp-idf/esp_event/libesp_event.a \

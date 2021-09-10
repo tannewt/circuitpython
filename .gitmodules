@@ -125,7 +125,7 @@
 	url = https://github.com/hathach/st_driver.git
 [submodule "lib/protomatter"]
 	path = lib/protomatter
-	url = https://github.com/adafruit/Adafruit_Protomatter
+	url = https://github.com/tannewt/Adafruit_Protomatter
 [submodule "frozen/Adafruit_CircuitPython_LSM6DS"]
 	path = frozen/Adafruit_CircuitPython_LSM6DS
 	url = https://github.com/adafruit/Adafruit_CircuitPython_LSM6DS
@@ -153,7 +153,7 @@
 [submodule "ports/espressif/esp-idf"]
 	path = ports/espressif/esp-idf
 	url = https://github.com/espressif/esp-idf.git
-	branch = release/v4.3
+	branch = master
 [submodule "ports/espressif/certificates/nina-fw"]
 	path = ports/espressif/certificates/nina-fw
 	url = https://github.com/adafruit/nina-fw.git

@@ -59,7 +59,7 @@
 #include "peripherals/touch.h"
 #include "components/esp_rom/include/esp32s2/rom/ets_sys.h"
 #include "components/heap/include/esp_heap_caps.h"
-#include "components/xtensa/include/esp_debug_helpers.h"
+#include "components/esp_system/include/esp_debug_helpers.h"
 #include "components/soc/esp32s2/include/soc/cache_memory.h"
 #include "components/soc/esp32s2/include/soc/rtc_cntl_reg.h"
 

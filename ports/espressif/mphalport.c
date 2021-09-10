@@ -31,7 +31,7 @@
 #include "py/mpstate.h"
 #include "py/gc.h"
 
-#include "components/xtensa/include/esp_debug_helpers.h"
+#include "components/esp_system/include/esp_debug_helpers.h"
 #include "components/esp_rom/include/esp32s2/rom/ets_sys.h"
 
 void mp_hal_delay_us(mp_uint_t delay) {
