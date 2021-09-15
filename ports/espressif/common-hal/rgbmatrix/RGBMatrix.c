@@ -28,6 +28,7 @@
 
 #include "common-hal/rgbmatrix/RGBMatrix.h"
 
+#include "py/runtime.h"
 #include "peripherals/timer.h"
 
 void *common_hal_rgbmatrix_timer_allocate(rgbmatrix_rgbmatrix_obj_t *self) {

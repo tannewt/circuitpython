@@ -24,31 +24,15 @@
  * THE SOFTWARE.
  */
 
-#include "peripherals/rmt.h"
-#include "py/runtime.h"
+#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_RMT_H
+#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_RMT_H
 
-bool rmt_reserved_channels[RMT_CHANNEL_MAX];
+#include "py/mphal.h"
+#include "components/driver/include/driver/rmt.h"
+#include <stdint.h>
 
-void esp32s2_peripherals_rmt_reset(void) {
-    for (size_t i = 0; i < RMT_CHANNEL_MAX; i++) {
-        if (rmt_reserved_channels[i]) {
-            esp32s2_peripherals_free_rmt(i);
-        }
-    }
-}
+void esp32s2_peripherals_rmt_reset(void);
+rmt_channel_t esp32s2_peripherals_find_and_reserve_rmt(void);
+void esp32s2_peripherals_free_rmt(rmt_channel_t chan);
 
-rmt_channel_t esp32s2_peripherals_find_and_reserve_rmt(void) {
-    for (size_t i = 0; i < RMT_CHANNEL_MAX; i++) {
-        if (!rmt_reserved_channels[i]) {
-            rmt_reserved_channels[i] = true;
-            return i;
-        }
-    }
-    // Returning the max indicates a reservation failure.
-    return RMT_CHANNEL_MAX;
-}
-
-void esp32s2_peripherals_free_rmt(rmt_channel_t chan) {
-    rmt_reserved_channels[chan] = false;
-    rmt_driver_uninstall(chan);
-}
+#endif

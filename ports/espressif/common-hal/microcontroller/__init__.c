@@ -45,9 +45,16 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_private/system_internal.h"
 
+#ifdef CONFIG_IDF_TARGET_ESP32S2
 #include "esp32s2/rom/rtc.h"
 #include "esp32s2/rom/usb/usb_persist.h"
 #include "esp32s2/rom/usb/chip_usb_dw_wrapper.h"
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/rtc.h"
+#include "esp32s3/rom/usb/usb_persist.h"
+#include "esp32s3/rom/usb/chip_usb_dw_wrapper.h"
+#endif
 
 void common_hal_mcu_delay_us(uint32_t delay) {
     mp_hal_delay_us(delay);

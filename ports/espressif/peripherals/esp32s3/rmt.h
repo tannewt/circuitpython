@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
+ * Copyright (c) 2020 Lucian Copeland for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,15 +24,15 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_CONFIG_H
-#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_CONFIG_H
+#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_RMT_H
+#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_RMT_H
 
-#include "py/obj.h"
+#include "py/mphal.h"
+#include "components/driver/include/driver/rmt.h"
+#include <stdint.h>
 
-extern const mp_obj_type_t mcu_pin_type;
+void esp32s2_peripherals_rmt_reset(void);
+rmt_channel_t esp32s2_peripherals_find_and_reserve_rmt(void);
+void esp32s2_peripherals_free_rmt(rmt_channel_t chan);
 
-#define PIN_PREFIX_VALUES { &mcu_pin_type },
-#define PIN_PREFIX_FIELDS mp_obj_base_t base;
-
-
-#endif // MICROPY_INCLUDED_ESP32S2_PERIPHERALS_CONFIG_H
+#endif

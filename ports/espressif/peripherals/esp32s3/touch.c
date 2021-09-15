@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2020 microDev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,33 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#include "touch.h"
 
-#include "py/mphal.h"
+static bool touch_inited = false;
+static bool touch_never_reset = false;
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+void peripherals_touch_reset(void) {
+    if (touch_inited && !touch_never_reset) {
+        touch_pad_deinit();
+        touch_inited = false;
+    }
+}
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+void peripherals_touch_never_reset(const bool enable) {
+    touch_never_reset = enable;
+}
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+void peripherals_touch_init(const touch_pad_t touchpad) {
+    if (!touch_inited) {
+        touch_pad_init();
+        touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
+    }
+    // touch_pad_config() must be done before touch_pad_fsm_start() the first time.
+    // Otherwise the calibration is wrong and we get maximum raw values if there is
+    // a trace of any significant length on the pin.
+    touch_pad_config(touchpad);
+    if (!touch_inited) {
+        touch_pad_fsm_start();
+        touch_inited = true;
+    }
+}

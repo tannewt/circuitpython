@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-#include "peripherals/pins.h"
+#include "pins.h"
 
 #define NO_ADC 0
 #define NO_ADC_CHANNEL ADC_CHANNEL_MAX

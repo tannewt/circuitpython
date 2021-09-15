@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2020 microDev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,45 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#include "pcnt.h"
 
-#include "py/mphal.h"
+#define PCNT_UNIT_ACTIVE    1
+#define PCNT_UNIT_INACTIVE  0
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+static uint8_t pcnt_unit_state[4];
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+void peripherals_pcnt_reset(void) {
+    for (uint8_t i = 0; i <= 3; i++) {
+        pcnt_unit_state[i] = PCNT_UNIT_INACTIVE;
+    }
+}
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+int peripherals_pcnt_init(pcnt_config_t pcnt_config) {
+    // Look for available pcnt unit
+    for (uint8_t i = 0; i <= 3; i++) {
+        if (pcnt_unit_state[i] == PCNT_UNIT_INACTIVE) {
+            pcnt_config.unit = (pcnt_unit_t)i;
+            pcnt_unit_state[i] = PCNT_UNIT_ACTIVE;
+            break;
+        } else if (i == 3) {
+            return -1;
+        }
+    }
+
+    // Initialize PCNT unit
+    pcnt_unit_config(&pcnt_config);
+
+    // Initialize PCNT's counter
+    pcnt_counter_pause(pcnt_config.unit);
+    pcnt_counter_clear(pcnt_config.unit);
+
+    // Everything is set up, now go to counting
+    pcnt_counter_resume(pcnt_config.unit);
+
+    return pcnt_config.unit;
+}
+
+void peripherals_pcnt_deinit(pcnt_unit_t *unit) {
+    pcnt_unit_state[*unit] = PCNT_UNIT_INACTIVE;
+    *unit = PCNT_UNIT_MAX;
+}

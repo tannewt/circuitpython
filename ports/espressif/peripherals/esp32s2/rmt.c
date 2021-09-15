@@ -1,9 +1,9 @@
 /*
- * This file is part of the MicroPython project, http://micropython.org/
+ * This file is part of the Micro Python project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2020 Lucian Copeland for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,31 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#include "rmt.h"
+#include "py/runtime.h"
 
-#include "py/mphal.h"
+bool rmt_reserved_channels[RMT_CHANNEL_MAX];
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+void esp32s2_peripherals_rmt_reset(void) {
+    for (size_t i = 0; i < RMT_CHANNEL_MAX; i++) {
+        if (rmt_reserved_channels[i]) {
+            esp32s2_peripherals_free_rmt(i);
+        }
+    }
+}
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+rmt_channel_t esp32s2_peripherals_find_and_reserve_rmt(void) {
+    for (size_t i = 0; i < RMT_CHANNEL_MAX; i++) {
+        if (!rmt_reserved_channels[i]) {
+            rmt_reserved_channels[i] = true;
+            return i;
+        }
+    }
+    // Returning the max indicates a reservation failure.
+    return RMT_CHANNEL_MAX;
+}
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+void esp32s2_peripherals_free_rmt(rmt_channel_t chan) {
+    rmt_reserved_channels[chan] = false;
+    rmt_driver_uninstall(chan);
+}

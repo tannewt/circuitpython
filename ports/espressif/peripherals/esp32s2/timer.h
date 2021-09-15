@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2020 microDev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,20 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TIMER_HANDLER_H
+#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TIMER_HANDLER_H
 
-#include "py/mphal.h"
+#include "driver/timer.h"
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+typedef struct {
+    timg_dev_t *hw;
+    timer_idx_t idx;
+    timer_group_t group;
+} timer_index_t;
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+extern bool peripherals_timer_init(const timer_config_t *config, timer_index_t *timer);
+extern void peripherals_timer_deinit(timer_index_t *timer);
+extern void peripherals_timer_reset(void);
+extern void peripherals_timer_never_reset(timer_index_t *timer);
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#endif  // MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TIMER_HANDLER_H

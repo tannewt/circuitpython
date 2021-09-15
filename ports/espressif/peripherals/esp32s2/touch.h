@@ -24,45 +24,13 @@
  * THE SOFTWARE.
  */
 
-#include "peripherals/pcnt.h"
+#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H
+#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H
 
-#define PCNT_UNIT_ACTIVE    1
-#define PCNT_UNIT_INACTIVE  0
+#include "driver/touch_pad.h"
 
-static uint8_t pcnt_unit_state[4];
+extern void peripherals_touch_reset(void);
+extern void peripherals_touch_never_reset(const bool enable);
+extern void peripherals_touch_init(const touch_pad_t touchpad);
 
-void peripherals_pcnt_reset(void) {
-    for (uint8_t i = 0; i <= 3; i++) {
-        pcnt_unit_state[i] = PCNT_UNIT_INACTIVE;
-    }
-}
-
-int peripherals_pcnt_init(pcnt_config_t pcnt_config) {
-    // Look for available pcnt unit
-    for (uint8_t i = 0; i <= 3; i++) {
-        if (pcnt_unit_state[i] == PCNT_UNIT_INACTIVE) {
-            pcnt_config.unit = (pcnt_unit_t)i;
-            pcnt_unit_state[i] = PCNT_UNIT_ACTIVE;
-            break;
-        } else if (i == 3) {
-            return -1;
-        }
-    }
-
-    // Initialize PCNT unit
-    pcnt_unit_config(&pcnt_config);
-
-    // Initialize PCNT's counter
-    pcnt_counter_pause(pcnt_config.unit);
-    pcnt_counter_clear(pcnt_config.unit);
-
-    // Everything is set up, now go to counting
-    pcnt_counter_resume(pcnt_config.unit);
-
-    return pcnt_config.unit;
-}
-
-void peripherals_pcnt_deinit(pcnt_unit_t *unit) {
-    pcnt_unit_state[*unit] = PCNT_UNIT_INACTIVE;
-    *unit = PCNT_UNIT_MAX;
-}
+#endif  // MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H

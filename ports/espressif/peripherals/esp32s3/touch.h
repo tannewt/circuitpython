@@ -24,33 +24,13 @@
  * THE SOFTWARE.
  */
 
-#include "peripherals/touch.h"
+#ifndef MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H
+#define MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H
 
-static bool touch_inited = false;
-static bool touch_never_reset = false;
+#include "driver/touch_pad.h"
 
-void peripherals_touch_reset(void) {
-    if (touch_inited && !touch_never_reset) {
-        touch_pad_deinit();
-        touch_inited = false;
-    }
-}
+extern void peripherals_touch_reset(void);
+extern void peripherals_touch_never_reset(const bool enable);
+extern void peripherals_touch_init(const touch_pad_t touchpad);
 
-void peripherals_touch_never_reset(const bool enable) {
-    touch_never_reset = enable;
-}
-
-void peripherals_touch_init(const touch_pad_t touchpad) {
-    if (!touch_inited) {
-        touch_pad_init();
-        touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
-    }
-    // touch_pad_config() must be done before touch_pad_fsm_start() the first time.
-    // Otherwise the calibration is wrong and we get maximum raw values if there is
-    // a trace of any significant length on the pin.
-    touch_pad_config(touchpad);
-    if (!touch_inited) {
-        touch_pad_fsm_start();
-        touch_inited = true;
-    }
-}
+#endif  // MICROPY_INCLUDED_ESP32S2_PERIPHERALS_TOUCH_HANDLER_H

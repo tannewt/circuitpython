@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-#include "peripherals/timer.h"
+#include "timer.h"
 
 #define TIMER_NEVER_RESET 2
 #define TIMER_FREE 1

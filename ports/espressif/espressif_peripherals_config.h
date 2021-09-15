@@ -1,9 +1,9 @@
 /*
- * This file is part of the MicroPython project, http://micropython.org/
+ * This file is part of the Micro Python project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,15 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_PERIPHERALS_CONFIG_H
+#define MICROPY_INCLUDED_ESPRESSIF_PERIPHERALS_CONFIG_H
 
-#include "py/mphal.h"
+#include "py/obj.h"
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+extern const mp_obj_type_t mcu_pin_type;
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+#define PIN_PREFIX_VALUES { &mcu_pin_type },
+#define PIN_PREFIX_FIELDS mp_obj_base_t base;
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+
+#endif // MICROPY_INCLUDED_ESPRESSIF_PERIPHERALS_CONFIG_H

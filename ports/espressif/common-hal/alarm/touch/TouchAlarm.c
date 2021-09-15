@@ -28,6 +28,7 @@
 #include "shared-bindings/microcontroller/__init__.h"
 
 #include "esp_sleep.h"
+#include "py/runtime.h"
 #include "peripherals/touch.h"
 #include "supervisor/esp_port.h"
 

@@ -32,7 +32,12 @@
 #include "py/gc.h"
 
 #include "components/esp_system/include/esp_debug_helpers.h"
+#ifdef CONFIG_IDF_TARGET_ESP32S2
 #include "components/esp_rom/include/esp32s2/rom/ets_sys.h"
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "components/esp_rom/include/esp32s3/rom/ets_sys.h"
+#endif
 
 void mp_hal_delay_us(mp_uint_t delay) {
     ets_delay_us(delay);

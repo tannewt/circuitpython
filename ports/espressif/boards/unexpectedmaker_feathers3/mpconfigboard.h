@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2016 Scott Shawcroft
+ * Copyright (c) 2019 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,26 +24,25 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
-#define MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+// Micropython setup
 
-#include "py/mphal.h"
+#define MICROPY_HW_BOARD_NAME       "FeatherS3"
+#define MICROPY_HW_MCU_NAME         "ESP32S3"
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-#include "peripherals/esp32s2/pins.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-#include "peripherals/esp32s3/pins.h"
-#endif
+#define CIRCUITPY_BOOT_BUTTON (&pin_GPIO0)
+#define BOARD_USER_SAFE_MODE_ACTION translate("pressing boot button at start up.\n")
 
-void reset_all_pins(void);
-// reset_pin_number takes the pin number instead of the pointer so that objects don't
-// need to store a full pointer.
-void reset_pin_number(gpio_num_t pin_number);
-void common_hal_reset_pin(const mcu_pin_obj_t *pin);
-void claim_pin(const mcu_pin_obj_t *pin);
-void claim_pin_number(gpio_num_t pin_number);
-bool pin_number_is_free(gpio_num_t pin_number);
-void never_reset_pin_number(gpio_num_t pin_number);
+#define AUTORESET_DELAY_MS 500
 
-#endif // MICROPY_INCLUDED_ESP32S2_COMMON_HAL_MICROCONTROLLER_PIN_H
+// #define MICROPY_HW_APA102_MOSI   (&pin_GPIO40)
+// #define MICROPY_HW_APA102_SCK    (&pin_GPIO45)
+
+#define DEFAULT_I2C_BUS_SCL (&pin_GPIO9)
+#define DEFAULT_I2C_BUS_SDA (&pin_GPIO8)
+
+#define DEFAULT_SPI_BUS_SCK (&pin_GPIO36)
+#define DEFAULT_SPI_BUS_MOSI (&pin_GPIO35)
+#define DEFAULT_SPI_BUS_MISO (&pin_GPIO37)
+
+#define DEFAULT_UART_BUS_RX (&pin_GPIO44)
+#define DEFAULT_UART_BUS_TX (&pin_GPIO43)

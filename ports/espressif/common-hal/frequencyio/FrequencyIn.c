@@ -28,8 +28,14 @@
 
 #include "py/runtime.h"
 
+#ifdef CONFIG_IDF_TARGET_ESP32S2
 #include "esp-idf/components/soc/esp32s2/include/soc/pcnt_struct.h"
 #include "esp-idf/components/soc/esp32s2/include/soc/timer_group_struct.h"
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "esp-idf/components/soc/esp32s3/include/soc/pcnt_struct.h"
+#include "esp-idf/components/soc/esp32s3/include/soc/timer_group_struct.h"
+#endif
 
 static void IRAM_ATTR pcnt_overflow_handler(void *self_in) {
     frequencyio_frequencyin_obj_t *self = self_in;
@@ -63,7 +69,13 @@ static void IRAM_ATTR timer_interrupt_handler(void *self_in) {
     } else {
         device->int_clr_timers.t0_int_clr = 1;
     }
+    #ifdef CONFIG_IDF_TARGET_ESP32S2
     device->hw_timer[self->timer.idx].config.tx_alarm_en = 1;
+    #endif
+    #ifdef CONFIG_IDF_TARGET_ESP32S3
+    device->hw_timer[self->timer.idx].config.tn_alarm_en = 1;
+    #endif
+    
 }
 
 static void init_pcnt(frequencyio_frequencyin_obj_t *self) {

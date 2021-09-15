@@ -57,11 +57,21 @@
 #include "peripherals/pcnt.h"
 #include "peripherals/timer.h"
 #include "peripherals/touch.h"
-#include "components/esp_rom/include/esp32s2/rom/ets_sys.h"
-#include "components/heap/include/esp_heap_caps.h"
-#include "components/esp_system/include/esp_debug_helpers.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32S2
 #include "components/soc/esp32s2/include/soc/cache_memory.h"
 #include "components/soc/esp32s2/include/soc/rtc_cntl_reg.h"
+#include "components/esp_rom/include/esp32s2/rom/ets_sys.h"
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "components/soc/esp32s3/include/soc/cache_memory.h"
+#include "components/soc/esp32s3/include/soc/rtc_cntl_reg.h"
+#include "components/esp_rom/include/esp32s3/rom/ets_sys.h"
+#endif
+
+#include "components/heap/include/esp_heap_caps.h"
+#include "components/esp_system/include/esp_debug_helpers.h"
+
 
 #if CIRCUITPY_AUDIOBUSIO
 #include "common-hal/audiobusio/__init__.h"

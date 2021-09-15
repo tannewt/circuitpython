@@ -34,8 +34,14 @@
 
 #include "components/driver/include/driver/gpio.h"
 #include "components/driver/include/driver/periph_ctrl.h"
+#ifdef CONFIG_IDF_TARGET_ESP32S2
 #include "components/esp_rom/include/esp32s2/rom/gpio.h"
 #include "components/hal/esp32s2/include/hal/gpio_ll.h"
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "components/esp_rom/include/esp32s3/rom/gpio.h"
+#include "components/hal/esp32s3/include/hal/gpio_ll.h"
+#endif
 #include "components/soc/include/soc/usb_periph.h"
 
 #include "freertos/FreeRTOS.h"
