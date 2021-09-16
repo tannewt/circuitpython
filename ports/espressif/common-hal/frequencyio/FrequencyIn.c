@@ -75,7 +75,7 @@ static void IRAM_ATTR timer_interrupt_handler(void *self_in) {
     #ifdef CONFIG_IDF_TARGET_ESP32S3
     device->hw_timer[self->timer.idx].config.tn_alarm_en = 1;
     #endif
-    
+
 }
 
 static void init_pcnt(frequencyio_frequencyin_obj_t *self) {

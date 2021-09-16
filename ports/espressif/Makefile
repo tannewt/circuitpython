@@ -161,7 +161,7 @@ LDFLAGS += -L$(BUILD)/esp-idf/esp-idf/$(IDF_TARGET)/ \
 		   -T$(IDF_TARGET).peripherals.ld
 
 
-#		   -u __ubsan_include      -Wl,--wrap=longjmp  -u __assert_func  -u vfs_include_syscalls_impl  
+#		   -u __ubsan_include      -Wl,--wrap=longjmp  -u __assert_func  -u vfs_include_syscalls_impl
 
 LDFLAGS += -Wl,-Bstatic \
 		   -Wl,--no-warn-mismatch \
