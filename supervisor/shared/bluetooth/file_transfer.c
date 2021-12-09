@@ -258,6 +258,7 @@ STATIC bool _usb_active(void *response, size_t response_size) {
     if (storage_usb_enabled() && !usb_msc_lock()) {
         // Status is always the second byte of the response.
         ((uint8_t *)response)[1] = STATUS_ERROR_READONLY;
+        mp_printf(&mp_plat_print, "USB active so BLE is read only\n");
         common_hal_bleio_packet_buffer_write(&_transfer_packet_buffer, (const uint8_t *)response, response_size, NULL, 0);
         return true;
     }
@@ -274,6 +275,7 @@ STATIC uint8_t _process_write(const uint8_t *raw_buf, size_t command_len) {
     if (command->path_length > (COMMAND_SIZE - header_size - 1)) { // -1 for the null we'll write
         // TODO: throw away any more packets of path.
         response.status = STATUS_ERROR;
+        mp_printf(&mp_plat_print, "path too long\n");
         common_hal_bleio_packet_buffer_write(&_transfer_packet_buffer, (const uint8_t *)&response, sizeof(struct write_pacing), NULL, 0);
         return ANY_COMMAND;
     }
@@ -288,6 +290,7 @@ STATIC uint8_t _process_write(const uint8_t *raw_buf, size_t command_len) {
     if (_usb_active(&response, sizeof(struct write_pacing))) {
         return ANY_COMMAND;
     }
+    mp_printf(&mp_plat_print, "staring write to %s\n", path);
 
     FATFS *fs = &((fs_user_mount_t *)MP_STATE_VM(vfs_mount_table)->obj)->fatfs;
     DWORD fattime;
@@ -301,6 +304,7 @@ STATIC uint8_t _process_write(const uint8_t *raw_buf, size_t command_len) {
         usb_msc_unlock();
         #endif
         override_fattime(0);
+        mp_printf(&mp_plat_print, "f_open error\n");
         return ANY_COMMAND;
     }
     // Write out the pacing response.
@@ -327,6 +331,7 @@ STATIC uint8_t _process_write(const uint8_t *raw_buf, size_t command_len) {
         common_hal_bleio_packet_buffer_flush(&_transfer_packet_buffer);
         // Trigger an autoreload
         autoreload_start();
+        mp_printf(&mp_plat_print, "write ok\n");
         return ANY_COMMAND;
     }
 
@@ -347,6 +352,8 @@ STATIC uint8_t _process_write_data(const uint8_t *raw_buf, size_t command_len) {
         usb_msc_unlock();
         #endif
         override_fattime(0);
+
+        mp_printf(&mp_plat_print, "data size too large\n");
         return ANY_COMMAND;
     }
     // We need to receive another packet to have the full path.
@@ -365,6 +372,7 @@ STATIC uint8_t _process_write_data(const uint8_t *raw_buf, size_t command_len) {
         usb_msc_unlock();
         #endif
         override_fattime(0);
+        mp_printf(&mp_plat_print, "wrote too little\n");
         return ANY_COMMAND;
     }
     offset += command->data_size;
@@ -385,6 +393,7 @@ STATIC uint8_t _process_write_data(const uint8_t *raw_buf, size_t command_len) {
         common_hal_bleio_packet_buffer_flush(&_transfer_packet_buffer);
         // Trigger an autoreload
         autoreload_start();
+        mp_printf(&mp_plat_print, "write ok\n");
         return ANY_COMMAND;
     }
     return WRITE_DATA;
@@ -490,6 +499,7 @@ STATIC uint8_t _process_mkdir(const uint8_t *raw_buf, size_t command_len) {
     response.status = STATUS_OK;
     if (command->path_length > (COMMAND_SIZE - header_size - 1)) { // -1 for the null we'll write
         // TODO: throw away any more packets of path.
+        mp_printf(&mp_plat_print, "path too long\n");
         response.status = STATUS_ERROR;
         common_hal_bleio_packet_buffer_write(&_transfer_packet_buffer, (const uint8_t *)&response, sizeof(struct mkdir_status), NULL, 0);
         return ANY_COMMAND;
@@ -504,6 +514,7 @@ STATIC uint8_t _process_mkdir(const uint8_t *raw_buf, size_t command_len) {
     FATFS *fs = &((fs_user_mount_t *)MP_STATE_VM(vfs_mount_table)->obj)->fatfs;
     char *path = (char *)command->path;
     _terminate_path(path, command->path_length);
+    mp_printf(&mp_plat_print, "mkdir %s\n", path);
 
     DWORD fattime;
     response.truncated_time = truncate_time(command->modification_time, &fattime);
@@ -515,6 +526,10 @@ STATIC uint8_t _process_mkdir(const uint8_t *raw_buf, size_t command_len) {
     #endif
     if (result != FR_OK) {
         response.status = STATUS_ERROR;
+
+        mp_printf(&mp_plat_print, "mkdir error %d\n", result);
+    } else {
+        mp_printf(&mp_plat_print, "mkdir ok\n");
     }
     common_hal_bleio_packet_buffer_write(&_transfer_packet_buffer, (const uint8_t *)&response, sizeof(struct mkdir_status), NULL, 0);
     if (result == FR_OK) {
