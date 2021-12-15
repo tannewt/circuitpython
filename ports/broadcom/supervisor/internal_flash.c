@@ -90,6 +90,7 @@ void supervisor_flash_init(void) {
         if (i == 1 && part_sector_count > 0 && part_first_lba > 0) {
             sector_count = part_sector_count;
             first_lba = part_first_lba;
+            mp_printf(&mp_plat_print, "found partition\n");
         } else if (i > 1 && part_sector_count > 0) {
             sector_count = 0;
         }
@@ -131,6 +132,7 @@ void supervisor_flash_init(void) {
         part[14] = (new_sector_count >> 16) & 0xff;
         part[15] = (new_sector_count >> 24) & 0xff;
 
+        mp_printf(&mp_plat_print, "Writing new partition\n");
         // Write back the modified MBR with the new partition. CircuitPython can
         // detect a previously formatted FAT filesystem later if only the MBR and
         // BOOT partition was updated.
@@ -139,6 +141,7 @@ void supervisor_flash_init(void) {
             first_lba = first_free_sector;
         }
     }
+    mp_printf(&mp_plat_print, "start %d count %d\n", first_lba, sector_count);
 }
 
 uint32_t supervisor_flash_get_block_size(void) {

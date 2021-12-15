@@ -168,6 +168,7 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         start_ticks = port_get_raw_ticks(NULL);
         while (EMMC->CONTROL1_b.SRST_CMD && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
         }
+        mp_printf(&mp_plat_print, "command timeout\n");
         return SDMMC_ERR_TIMEOUT;
     } else {
         EMMC->INTERRUPT = EMMC_INTERRUPT_CMD_DONE_Msk;
@@ -182,6 +183,7 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
                 while (!EMMC->INTERRUPT_b.READ_RDY && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
                 }
                 if (!EMMC->INTERRUPT_b.READ_RDY) {
+                    mp_printf(&mp_plat_print, "read ready timeout\n");
                     return SDMMC_ERR_TIMEOUT;
                 }
                 ((uint32_t *)cmdinfo->data)[i] = EMMC->DATA;
@@ -192,6 +194,7 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
                 while (!EMMC->INTERRUPT_b.WRITE_RDY && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
                 }
                 if (!EMMC->INTERRUPT_b.WRITE_RDY) {
+                    mp_printf(&mp_plat_print, "write ready timeout\n");
                     return SDMMC_ERR_TIMEOUT;
                 }
                 EMMC->DATA = ((uint32_t *)cmdinfo->data)[i];
@@ -209,6 +212,7 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
             start_ticks = port_get_raw_ticks(NULL);
             while (EMMC->CONTROL1_b.SRST_DATA && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
             }
+            mp_printf(&mp_plat_print, "data timeout\n");
             return SDMMC_ERR_TIMEOUT;
         }
     }
@@ -256,6 +260,7 @@ void common_hal_sdioio_sdcard_construct(sdioio_sdcard_obj_t *self,
         // Switch the sdcard to use the old arasan interface.
         GPIO->EXTRA_MUX_b.SDIO = GPIO_EXTRA_MUX_SDIO_ARASAN;
     }
+    COMPLETE_MEMORY_READS;
 
     COMPLETE_MEMORY_READS;
 
@@ -332,7 +337,9 @@ int common_hal_sdioio_sdcard_writeblocks(sdioio_sdcard_obj_t *self, uint32_t sta
     check_whole_block(bufinfo);
     self->state_programming = true;
 
+    // Make sure any prior reads are done before talking to the EMMC peripheral.
     COMPLETE_MEMORY_READS;
+    // mp_printf(&mp_plat_print, "write %d %d %d %d\n", start_block, bufinfo->len / 512, self->card_info.csd.capacity, self->card_info.csd.sector_size);
     sdmmc_err_t error = sdmmc_write_sectors(&self->card_info, bufinfo->buf,
         start_block, bufinfo->len / 512);
     COMPLETE_MEMORY_READS;
