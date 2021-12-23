@@ -66,9 +66,16 @@ void supervisor_flash_init(void) {
     mp_buffer_info_t bufinfo;
     bufinfo.len = 512;
     bufinfo.buf = buffer;
-    common_hal_sdioio_sdcard_readblocks(&sd, 0, &bufinfo);
     size_t partition_count = 0;
     size_t first_free_sector = 0;
+    mp_printf(&mp_plat_print, "readblocks start\n");
+    int err = common_hal_sdioio_sdcard_readblocks(&sd, 0, &bufinfo);
+    mp_printf(&mp_plat_print, "readblocks result %d\n", err);
+    if (err != SDMMC_OK) {
+        // SD card isn't working or not present.
+        common_hal_sdioio_sdcard_deinit(&sd);
+        return;
+    }
     for (size_t i = 0; i < 4; i++) {
         uint32_t part_first_lba = 0;
         uint32_t part_sector_count = 0;

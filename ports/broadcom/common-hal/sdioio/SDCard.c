@@ -134,6 +134,9 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         }
         EMMC->BLKSIZECNT = (cmdinfo->datalen / cmdinfo->blklen) << EMMC_BLKSIZECNT_BLKCNT_Pos |
             cmdinfo->blklen << EMMC_BLKSIZECNT_BLKSIZE_Pos;
+        if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+            mp_printf(&mp_plat_print, "EMMC->BLKSIZECNT %08x\n", EMMC->BLKSIZECNT);
+        }
     }
 
     uint32_t response_type = EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_48BITS;
@@ -150,6 +153,9 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         response_type = EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_48BITS_USING_BUSY;
     } else if ((cmdinfo->flags & SCF_RSP_PRESENT) == 0) {
         response_type = EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_NONE;
+    }
+    if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+        mp_printf(&mp_plat_print, "scr\n");
     }
     uint32_t full_cmd = cmd_flags | crc |
         cmdinfo->opcode << EMMC_CMDTM_CMD_INDEX_Pos |
@@ -180,13 +186,22 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         if (read) {
             for (size_t i = 0; i < cmdinfo->datalen / sizeof(uint32_t); i++) {
                 start_ticks = port_get_raw_ticks(NULL);
+                size_t c = 0;
                 while (!EMMC->INTERRUPT_b.READ_RDY && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
+                    c++;
                 }
                 if (!EMMC->INTERRUPT_b.READ_RDY) {
                     mp_printf(&mp_plat_print, "read ready timeout\n");
                     return SDMMC_ERR_TIMEOUT;
                 }
+                COMPLETE_MEMORY_READS;
                 ((uint32_t *)cmdinfo->data)[i] = EMMC->DATA;
+                if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+                    mp_printf(&mp_plat_print, "read %08x %d\n", ((uint32_t *)cmdinfo->data)[i], c);
+                }
+            }
+            if (EMMC->INTERRUPT_b.READ_RDY == 1) {
+                mp_printf(&mp_plat_print, "extra data %08x\n", EMMC->DATA);
             }
         } else {
             for (size_t i = 0; i < cmdinfo->datalen / sizeof(uint32_t); i++) {
@@ -202,7 +217,14 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         }
         uint32_t data_done_mask = EMMC_INTERRUPT_ERR_Msk | EMMC_INTERRUPT_DATA_DONE_Msk;
         start_ticks = port_get_raw_ticks(NULL);
+        size_t c = 0;
         while ((EMMC->INTERRUPT & data_done_mask) == 0 && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
+            c++;
+        }
+        if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+            mp_printf(&mp_plat_print, "done wait %d\n", c);
+            mp_printf(&mp_plat_print, "STATUS %08x\n", EMMC->STATUS);
+            mp_printf(&mp_plat_print, "INTERRUPT %08x\n", EMMC->INTERRUPT);
         }
         if (!EMMC->INTERRUPT_b.DATA_DONE) {
             cmdinfo->response[0] = 0;
@@ -217,6 +239,10 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         }
     }
 
+    if (EMMC->INTERRUPT_b.ERR == 1) {
+        mp_printf(&mp_plat_print, "INTERRUPT %08x\n", EMMC->INTERRUPT);
+    }
+
     cmdinfo->response[0] = EMMC->RESP0;
     if (response_type == EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_136BITS) {
         // Rotate one more byte for some reason.
@@ -224,6 +250,11 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         cmdinfo->response[2] = EMMC->RESP2 << 8 | ((EMMC->RESP1 >> 24) & 0xff);
         cmdinfo->response[1] = EMMC->RESP1 << 8 | ((EMMC->RESP0 >> 24) & 0xff);
         cmdinfo->response[0] <<= 8;
+        if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+            mp_printf(&mp_plat_print, "response %08x %08x %08x %08x\n", cmdinfo->response[0], cmdinfo->response[1], cmdinfo->response[2], cmdinfo->response[3]);
+        }
+    } else if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+        mp_printf(&mp_plat_print, "response %08x\n", cmdinfo->response[0]);
     }
     return SDMMC_OK;
 }

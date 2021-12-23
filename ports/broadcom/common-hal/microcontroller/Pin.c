@@ -26,17 +26,33 @@
 
 #include "shared-bindings/microcontroller/Pin.h"
 
+#include "peripherals/broadcom/cpu.h"
 #include "peripherals/broadcom/gpio.h"
 
 STATIC bool pin_in_use[BCM_PIN_COUNT];
 STATIC bool never_reset_pin[BCM_PIN_COUNT];
 
 void reset_all_pins(void) {
+    COMPLETE_MEMORY_READS;
     for (size_t i = 0; i < BCM_PIN_COUNT; i++) {
         if (never_reset_pin[i]) {
             continue;
         }
+        if (i >= 28 && i < 46) {
+            continue;
+        }
+        // BP_PULL_Enum pull_before = gpio_get_pull(i);
+        // BP_Function_Enum alt_before = gpio_get_function(i);
         reset_pin_number(i);
+        // BP_PULL_Enum pull_after = gpio_get_pull(i);
+        // BP_Function_Enum alt_after = gpio_get_function(i);
+        // if (alt_before != alt_after) {
+        //     mp_printf(&mp_plat_print, "%d alt before %d after %d\n", i, alt_before, alt_after);
+        // }
+        // if (pull_before != pull_after) {
+        //     mp_printf(&mp_plat_print, "%d pull before %d after %d\n", i, pull_before, pull_after);
+        // }
+        COMPLETE_MEMORY_READS;
     }
 }
 

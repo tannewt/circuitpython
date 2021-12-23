@@ -22,7 +22,7 @@
         if ((condition)) { \
             sdmmc_err_t err = (function)(card); \
             if (err != SDMMC_OK) { \
-                ESP_LOGD(TAG, "%s: %s returned 0x%x", __func__, #function, err); \
+                ESP_LOGW(TAG, "%s: %s returned 0x%x", __func__, #function, err); \
                 return err; \
             } \
         } \

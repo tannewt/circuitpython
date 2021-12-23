@@ -484,13 +484,13 @@ static inline uint32_t MMC_RSP_BITS(uint32_t *src, int start, int len)
 #include "py/runtime.h"
 
 // Logging macros
-#define ESP_LOGD(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
-#define ESP_LOGV(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
+// #define ESP_LOGD(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
+// #define ESP_LOGV(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
 #define ESP_LOGW(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
 #define ESP_LOGE(tag, string, ...) mp_printf(&mp_plat_print, string "\n" __VA_OPT__(,) __VA_ARGS__)
 
-// #define ESP_LOGD(tag, string, ...)
-// #define ESP_LOGV(tag, string, ...)
+#define ESP_LOGD(tag, string, ...)
+#define ESP_LOGV(tag, string, ...)
 // #define ESP_LOGW(tag, string, ...)
 // #define ESP_LOGE(tag, string, ...)
 #define TSD_MIN(_x, _y)        ( ( (_x) < (_y) ) ? (_x) : (_y) )

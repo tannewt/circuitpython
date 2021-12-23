@@ -163,7 +163,7 @@ sdmmc_err_t sdmmc_send_cmd_switch_func(sdmmc_card_t* card,
             return SDMMC_ERR_BUSY;
         }
     } else {
-        ESP_LOGD(TAG, "%s: got an invalid version of SWITCH_FUNC response: 0x%02x",
+        ESP_LOGE(TAG, "%s: got an invalid version of SWITCH_FUNC response: 0x%02x",
                 __func__, resp_ver);
         return SDMMC_ERR_INVALID_RESPONSE;
     }
@@ -184,7 +184,7 @@ sdmmc_err_t sdmmc_enable_hs_mode(sdmmc_card_t* card)
 
     sdmmc_err_t err = sdmmc_send_cmd_switch_func(card, 0, SD_ACCESS_MODE, 0, &response);
     if (err != SDMMC_OK) {
-        ESP_LOGD(TAG, "%s: sdmmc_send_cmd_switch_func (1) returned 0x%x", __func__, err);
+        ESP_LOGE(TAG, "%s: sdmmc_send_cmd_switch_func (1) returned 0x%x", __func__, err);
         return err;
     }
     uint32_t supported_mask = SD_SFUNC_SUPPORTED(response.data, 1);
@@ -193,7 +193,7 @@ sdmmc_err_t sdmmc_enable_hs_mode(sdmmc_card_t* card)
     }
     err = sdmmc_send_cmd_switch_func(card, 1, SD_ACCESS_MODE, SD_ACCESS_MODE_SDR25, &response);
     if (err != SDMMC_OK) {
-        ESP_LOGD(TAG, "%s: sdmmc_send_cmd_switch_func (2) returned 0x%x", __func__, err);
+        ESP_LOGE(TAG, "%s: sdmmc_send_cmd_switch_func (2) returned 0x%x", __func__, err);
         return err;
     }
 
@@ -213,6 +213,7 @@ sdmmc_err_t sdmmc_enable_hs_mode_and_check(sdmmc_card_t* card)
     /* Try to enabled HS mode */
     sdmmc_err_t err = sdmmc_enable_hs_mode(card);
     if (err != SDMMC_OK) {
+        ESP_LOGE(TAG, "%s: sdmmc_enable_hs_mode returned 0x%x", __func__, err);
         return err;
     }
     /* HS mode has been enabled on the card.
@@ -264,6 +265,8 @@ sdmmc_err_t sdmmc_check_scr(sdmmc_card_t* card)
         ESP_LOGE(TAG, "%s: send_scr returned 0x%x", __func__, err);
         return err;
     }
+    ESP_LOGE(TAG, "sd_spec %d vs %d", card->scr.sd_spec, scr_tmp.sd_spec);
+    ESP_LOGE(TAG, "bus_width %d vs %d", card->scr.bus_width, scr_tmp.bus_width);
     if (memcmp(&card->scr, &scr_tmp, sizeof(scr_tmp)) != 0) {
         ESP_LOGE(TAG, "got corrupted data after increasing clock frequency");
         return SDMMC_ERR_INVALID_RESPONSE;
@@ -339,5 +342,7 @@ sdmmc_err_t sdmmc_decode_scr(uint32_t *raw_scr, sdmmc_scr_t* out_scr)
     }
     out_scr->sd_spec = SCR_SD_SPEC(resp);
     out_scr->bus_width = SCR_SD_BUS_WIDTHS(resp);
+
+    ESP_LOGE(TAG, "scr %08x %08x", resp[0], resp[1]);
     return SDMMC_OK;
 }

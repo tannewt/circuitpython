@@ -156,14 +156,17 @@ sdmmc_err_t sdmmc_init_card_hs_mode(sdmmc_card_t* card)
 {
     sdmmc_err_t err = SDMMC_ERR_NOT_SUPPORTED;
     if (card->is_mem && !card->is_mmc) {
+        ESP_LOGW(TAG, "%s: mem", __func__);
         err = sdmmc_enable_hs_mode_and_check(card);
     } else if (card->is_sdio) {
+        ESP_LOGW(TAG, "%s: sdio", __func__);
         err = sdmmc_io_enable_hs_mode(card);
     } else if (card->is_mmc){
+        ESP_LOGW(TAG, "%s: mmc", __func__);
         err = sdmmc_mmc_enable_hs_mode(card);
     }
     if (err == SDMMC_ERR_NOT_SUPPORTED) {
-        ESP_LOGD(TAG, "%s: host supports HS mode, but card doesn't", __func__);
+        ESP_LOGW(TAG, "%s: host supports HS mode, but card doesn't", __func__);
         card->max_freq_khz = SDMMC_FREQ_DEFAULT;
     } else if (err != SDMMC_OK) {
         return err;

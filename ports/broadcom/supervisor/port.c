@@ -51,7 +51,7 @@
 
 #include "peripherals/broadcom/vcmailbox.h"
 
-// #include "tusb.h"
+#include "supervisor/serial.h"
 
 extern volatile bool mp_msc_enabled;
 
@@ -64,6 +64,8 @@ safe_mode_t port_init(void) {
     init_caches();
 
     // Set brown out.
+
+    // serial_early_init();
 
     // Reset everything into a known state before board_init.
     reset_port();
