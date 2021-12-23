@@ -38,9 +38,7 @@ void reset_all_pins(void) {
         if (never_reset_pin[i]) {
             continue;
         }
-        if (i >= 28 && i < 46) {
-            continue;
-        }
+        continue;
         // BP_PULL_Enum pull_before = gpio_get_pull(i);
         // BP_Function_Enum alt_before = gpio_get_function(i);
         reset_pin_number(i);

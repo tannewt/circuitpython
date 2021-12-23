@@ -34,12 +34,14 @@
 #include "shared-bindings/sdioio/SDCard.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/microcontroller/__init__.h"
+#include "shared-bindings/time/__init__.h"
 #include "supervisor/port.h"
 #include "supervisor/shared/translate.h"
 
 #include "peripherals/broadcom/cpu.h"
 #include "peripherals/broadcom/defines.h"
 #include "peripherals/broadcom/gpio.h"
+#include "peripherals/broadcom/vcmailbox.h"
 
 #include "lib/sdmmc/include/sdmmc_cmd.h"
 
@@ -54,6 +56,10 @@ STATIC sdmmc_err_t _init(void) {
 
 /*!< host function to set bus width */
 STATIC sdmmc_err_t _set_bus_width(int slot, size_t width) {
+    // if (width > 1) {
+    //     mp_printf(&mp_plat_print, "enable high speed\n");
+    //     EMMC->CONTROL0_b.HCTL_HS_EN = true;
+    // }
     if (width == 4) {
         EMMC->CONTROL0_b.HCTL_DWIDTH = true;
     } else if (width == 8) {
@@ -69,7 +75,7 @@ STATIC size_t _get_bus_width(int slot) {
 
 /*!< host function to set card clock frequency */
 STATIC sdmmc_err_t _set_card_clk(int slot, uint32_t freq_khz) {
-    uint32_t base_clock = 125000000;
+    uint32_t base_clock = vcmailbox_get_clock_rate_measured(VCMAILBOX_CLOCK_EMMC);
     uint32_t frequency = freq_khz * 1000;
     uint64_t start_ticks = port_get_raw_ticks(NULL);
     while ((EMMC->STATUS_b.CMD_INHIBIT || EMMC->STATUS_b.DAT_INHIBIT) && (port_get_raw_ticks(NULL) - start_ticks) < 1024) {
@@ -77,6 +83,7 @@ STATIC sdmmc_err_t _set_card_clk(int slot, uint32_t freq_khz) {
     if (EMMC->STATUS_b.CMD_INHIBIT || EMMC->STATUS_b.DAT_INHIBIT) {
         return SDMMC_ERR_TIMEOUT;
     }
+    mp_printf(&mp_plat_print, "base %d target %d\n", base_clock, frequency);
 
     EMMC->CONTROL1_b.CLK_EN = false;
 
@@ -90,18 +97,25 @@ STATIC sdmmc_err_t _set_card_clk(int slot, uint32_t freq_khz) {
     if (divisor % 2 == 1) {
         register_value += 1;
     }
+    divisor *= 2;
+    mp_printf(&mp_plat_print, "new divisor %d reg %d\n", divisor, register_value);
 
     // The divisor is stored with bits swapped.
     EMMC->CONTROL1_b.CLK_FREQ8 = divisor & 0xff;
     EMMC->CONTROL1_b.CLK_FREQ_MS2 = (divisor >> 8) & 0x3;
+
+    mp_printf(&mp_plat_print, "CONTROL1 %08x\n", EMMC->CONTROL1);
 
     EMMC->CONTROL1_b.CLK_EN = true;
     start_ticks = port_get_raw_ticks(NULL);
     while (!EMMC->CONTROL1_b.CLK_STABLE && (port_get_raw_ticks(NULL) - start_ticks) < 1024) {
     }
     if (!EMMC->CONTROL1_b.CLK_STABLE) {
+        mp_printf(&mp_plat_print, "new clock failed\n");
         return SDMMC_ERR_TIMEOUT;
     }
+    common_hal_time_delay_ms(20);
+    mp_printf(&mp_plat_print, "new clock ok\n");
     return SDMMC_OK;
 }
 
@@ -117,6 +131,7 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
 
     uint32_t cmd_flags = 0;
     bool read = (cmdinfo->flags & SCF_CMD_READ) != 0;
+    uint32_t blksizecnt = 0;
     if (SCF_CMD(cmdinfo->flags) == SCF_CMD_ADTC ||
         SCF_CMD(cmdinfo->flags) == (SCF_CMD_ADTC | SCF_CMD_READ)) {
         if (EMMC->STATUS_b.DAT_INHIBIT) {
@@ -132,11 +147,9 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
         if (read) {
             cmd_flags |= EMMC_CMDTM_TM_DAT_DIR_Msk;
         }
-        EMMC->BLKSIZECNT = (cmdinfo->datalen / cmdinfo->blklen) << EMMC_BLKSIZECNT_BLKCNT_Pos |
+        blksizecnt = (cmdinfo->datalen / cmdinfo->blklen) << EMMC_BLKSIZECNT_BLKCNT_Pos |
             cmdinfo->blklen << EMMC_BLKSIZECNT_BLKSIZE_Pos;
-        if (cmdinfo->opcode == SD_APP_SEND_SCR) {
-            mp_printf(&mp_plat_print, "EMMC->BLKSIZECNT %08x\n", EMMC->BLKSIZECNT);
-        }
+        EMMC->BLKSIZECNT = blksizecnt;
     }
 
     uint32_t response_type = EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_48BITS;
@@ -154,12 +167,13 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
     } else if ((cmdinfo->flags & SCF_RSP_PRESENT) == 0) {
         response_type = EMMC_CMDTM_CMD_RSPNS_TYPE_RESPONSE_NONE;
     }
-    if (cmdinfo->opcode == SD_APP_SEND_SCR) {
-        mp_printf(&mp_plat_print, "scr\n");
-    }
     uint32_t full_cmd = cmd_flags | crc |
         cmdinfo->opcode << EMMC_CMDTM_CMD_INDEX_Pos |
         response_type << EMMC_CMDTM_CMD_RSPNS_TYPE_Pos;
+    if (cmdinfo->opcode == SD_APP_SEND_SCR || cmdinfo->opcode == MMC_SWITCH) {
+        mp_printf(&mp_plat_print, "EMMC->BLKSIZECNT %08x\n", blksizecnt);
+        mp_printf(&mp_plat_print, "EMMC->CMDTM %08x\n", full_cmd);
+    }
     EMMC->CMDTM = full_cmd;
 
     // Wait for an interrupt to indicate completion of the command.
@@ -187,28 +201,35 @@ STATIC sdmmc_err_t _do_transaction(int slot, sdmmc_command_t *cmdinfo) {
             for (size_t i = 0; i < cmdinfo->datalen / sizeof(uint32_t); i++) {
                 start_ticks = port_get_raw_ticks(NULL);
                 size_t c = 0;
-                while (!EMMC->INTERRUPT_b.READ_RDY && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
+                while (EMMC->STATUS_b.BUFFER_READ_ENABLE == 0 &&
+                       EMMC->INTERRUPT_b.ERR == 0 &&
+                       (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
                     c++;
                 }
-                if (!EMMC->INTERRUPT_b.READ_RDY) {
+                if (EMMC->INTERRUPT_b.ERR == 1) {
+                    mp_printf(&mp_plat_print, "STATUS %08x\n", EMMC->STATUS);
+                    mp_printf(&mp_plat_print, "INTERRUPT %08x\n", EMMC->INTERRUPT);
+                    return SDMMC_ERR_INVALID_RESPONSE;
+                }
+                if (EMMC->STATUS_b.BUFFER_READ_ENABLE == 0) {
                     mp_printf(&mp_plat_print, "read ready timeout\n");
                     return SDMMC_ERR_TIMEOUT;
                 }
                 COMPLETE_MEMORY_READS;
                 ((uint32_t *)cmdinfo->data)[i] = EMMC->DATA;
-                if (cmdinfo->opcode == SD_APP_SEND_SCR) {
+                if (cmdinfo->opcode == SD_APP_SEND_SCR || cmdinfo->opcode == MMC_SWITCH) {
                     mp_printf(&mp_plat_print, "read %08x %d\n", ((uint32_t *)cmdinfo->data)[i], c);
                 }
             }
-            if (EMMC->INTERRUPT_b.READ_RDY == 1) {
+            if (EMMC->STATUS_b.BUFFER_READ_ENABLE == 1) {
                 mp_printf(&mp_plat_print, "extra data %08x\n", EMMC->DATA);
             }
         } else {
             for (size_t i = 0; i < cmdinfo->datalen / sizeof(uint32_t); i++) {
                 start_ticks = port_get_raw_ticks(NULL);
-                while (!EMMC->INTERRUPT_b.WRITE_RDY && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
+                while (EMMC->STATUS_b.BUFFER_WRITE_ENABLE == 0 && (port_get_raw_ticks(NULL) - start_ticks) < (size_t)cmdinfo->timeout_ms) {
                 }
-                if (!EMMC->INTERRUPT_b.WRITE_RDY) {
+                if (EMMC->STATUS_b.BUFFER_WRITE_ENABLE == 0) {
                     mp_printf(&mp_plat_print, "write ready timeout\n");
                     return SDMMC_ERR_TIMEOUT;
                 }
