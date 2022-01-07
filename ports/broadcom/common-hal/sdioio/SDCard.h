@@ -41,5 +41,4 @@ typedef struct {
     uint8_t command_pin;
     uint8_t clock_pin;
     uint8_t data_pins[4];
-    bool init;
 } sdioio_sdcard_obj_t;
