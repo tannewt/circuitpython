@@ -27,8 +27,6 @@
 #ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CHARACTERISTICBUFFER_H
 #define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CHARACTERISTICBUFFER_H
 
-#include "nrf_soc.h"
-
 #include "py/ringbuf.h"
 #include "shared-bindings/_bleio/Characteristic.h"
 

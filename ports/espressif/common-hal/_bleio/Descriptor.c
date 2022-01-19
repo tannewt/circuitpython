@@ -62,11 +62,6 @@ size_t common_hal_bleio_descriptor_get_value(bleio_descriptor_obj_t *self, uint8
     // Do GATT operations only if this descriptor has been registered
     if (self->handle != BLE_GATT_HANDLE_INVALID) {
         uint16_t conn_handle = bleio_connection_get_conn_handle(self->characteristic->service->connection);
-        if (common_hal_bleio_service_get_is_remote(self->characteristic->service)) {
-            return common_hal_bleio_gattc_read(self->handle, conn_handle, buf, len);
-        } else {
-            return common_hal_bleio_gatts_read(self->handle, conn_handle, buf, len);
-        }
     }
 
     return 0;
