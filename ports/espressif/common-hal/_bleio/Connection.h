@@ -25,8 +25,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CONNECTION_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CONNECTION_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CONNECTION_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CONNECTION_H
 
 #include <stdbool.h>
 
@@ -34,7 +34,7 @@
 #include "py/objlist.h"
 
 #include "common-hal/_bleio/__init__.h"
-#include "common-hal/_bleio/bonding.h"
+// #include "common-hal/_bleio/bonding.h"
 #include "shared-module/_bleio/Address.h"
 #include "common-hal/_bleio/Service.h"
 
@@ -55,7 +55,7 @@ typedef struct {
     // The advertising data and scan response buffers are held by us, not by the SD, so we must
     // maintain them and not change it. If we need to change the contents during advertising,
     // there are tricks to get the SD to notice (see DevZone - TBS).
-    bonding_keys_t bonding_keys;
+    // bonding_keys_t bonding_keys;
     // EDIV: Encrypted Diversifier: Identifies LTK during legacy pairing.
     uint16_t ediv;
     volatile pair_status_t pair_status;
@@ -80,10 +80,9 @@ typedef struct {
 } bleio_connection_obj_t;
 
 void bleio_connection_clear(bleio_connection_internal_t *self);
-bool connection_on_ble_evt(ble_evt_t *ble_evt, void *self_in);
 
 uint16_t bleio_connection_get_conn_handle(bleio_connection_obj_t *self);
 mp_obj_t bleio_connection_new_from_internal(bleio_connection_internal_t *connection);
 bleio_connection_internal_t *bleio_conn_handle_to_connection(uint16_t conn_handle);
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CONNECTION_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CONNECTION_H

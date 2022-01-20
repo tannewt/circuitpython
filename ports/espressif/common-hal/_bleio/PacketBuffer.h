@@ -24,10 +24,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_PACKETBUFFER_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_PACKETBUFFER_H
-
-#include "nrf_soc.h"
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_PACKETBUFFER_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_PACKETBUFFER_H
 
 #include "py/ringbuf.h"
 #include "shared-bindings/_bleio/Characteristic.h"
@@ -51,4 +49,4 @@ typedef struct {
     bool packet_queued;
 } bleio_packet_buffer_obj_t;
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_PACKETBUFFER_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_PACKETBUFFER_H

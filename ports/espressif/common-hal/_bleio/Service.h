@@ -25,8 +25,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_SERVICE_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_SERVICE_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_SERVICE_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_SERVICE_H
 
 #include "py/objlist.h"
 #include "common-hal/_bleio/UUID.h"
@@ -50,4 +50,4 @@ typedef struct bleio_service_obj {
 
 void bleio_service_from_connection(bleio_service_obj_t *self, mp_obj_t connection);
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_SERVICE_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_SERVICE_H

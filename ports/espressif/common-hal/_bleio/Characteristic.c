@@ -25,6 +25,8 @@
  * THE SOFTWARE.
  */
 
+#include <string.h>
+
 #include "py/runtime.h"
 
 #include "shared-bindings/_bleio/__init__.h"
@@ -33,7 +35,7 @@
 #include "shared-bindings/_bleio/Service.h"
 
 #include "common-hal/_bleio/Adapter.h"
-#include "common-hal/_bleio/bonding.h"
+// #include "common-hal/_bleio/bonding.h"
 
 void common_hal_bleio_characteristic_construct(bleio_characteristic_obj_t *self, bleio_service_obj_t *service,
     uint16_t handle, bleio_uuid_obj_t *uuid, bleio_characteristic_properties_t props,
@@ -42,7 +44,7 @@ void common_hal_bleio_characteristic_construct(bleio_characteristic_obj_t *self,
     const char *user_description) {
     self->service = service;
     self->uuid = uuid;
-    self->handle = BLE_GATT_HANDLE_INVALID;
+    self->handle = BLEIO_HANDLE_INVALID;
     self->props = props;
     self->read_perm = read_perm;
     self->write_perm = write_perm;

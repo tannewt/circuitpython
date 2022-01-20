@@ -24,20 +24,20 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_INIT_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_INIT_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_INIT_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_INIT_H
 
 void bleio_background(void);
 void bleio_reset(void);
 
-typedef struct {
-    ble_gap_enc_key_t own_enc;
-    ble_gap_enc_key_t peer_enc;
-    ble_gap_id_key_t peer_id;
-} bonding_keys_t;
+// typedef struct {
+//     ble_gap_enc_key_t own_enc;
+//     ble_gap_enc_key_t peer_enc;
+//     ble_gap_id_key_t peer_id;
+// } bonding_keys_t;
 
 // We assume variable length data.
 // 20 bytes max (23 - 3).
 #define GATT_MAX_DATA_LENGTH (BLE_GATT_ATT_MTU_DEFAULT - 3)
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_INIT_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_INIT_H

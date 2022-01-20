@@ -27,5 +27,3 @@
 #include "shared-bindings/_bleio/Attribute.h"
 
 // Convert a _bleio security mode to a ble_gap_conn_sec_mode_t setting.
-void bleio_attribute_gatts_set_security_mode(ble_gap_conn_sec_mode_t *perm, bleio_attribute_security_mode_t security_mode) {
-}

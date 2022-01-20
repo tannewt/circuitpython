@@ -46,12 +46,14 @@
 #include "shared-bindings/_bleio/ScanEntry.h"
 #include "shared-bindings/time/__init__.h"
 
+#include "nimble/hci_common.h"
+
 bleio_connection_internal_t bleio_connections[BLEIO_TOTAL_CONNECTION_COUNT];
 
-static void bluetooth_adapter_background(void *data) {
-    supervisor_bluetooth_background();
-    bleio_background();
-}
+// static void bluetooth_adapter_background(void *data) {
+//     supervisor_bluetooth_background();
+//     bleio_background();
+// }
 
 void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enabled) {
     const bool is_enabled = common_hal_bleio_adapter_get_enabled(self);
@@ -91,7 +93,7 @@ mp_obj_t common_hal_bleio_adapter_start_scan(bleio_adapter_obj_t *self, uint8_t 
     }
 
     self->scan_results = shared_module_bleio_new_scanresults(buffer_size, prefixes, prefix_length, minimum_rssi);
-    size_t max_packet_size = extended ? BLE_GAP_SCAN_BUFFER_EXTENDED_MAX_SUPPORTED : BLE_GAP_SCAN_BUFFER_MAX;
+    // size_t max_packet_size = extended ? BLE_HCI_MAX_EXT_ADV_DATA_LEN : BLE_HCI_MAX_ADV_DATA_LEN;
 
     return MP_OBJ_FROM_PTR(self->scan_results);
 }
@@ -138,7 +140,7 @@ bool common_hal_bleio_adapter_get_advertising(bleio_adapter_obj_t *self) {
 bool common_hal_bleio_adapter_get_connected(bleio_adapter_obj_t *self) {
     for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
         bleio_connection_internal_t *connection = &bleio_connections[i];
-        if (connection->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (connection->conn_handle != BLEIO_HANDLE_INVALID) {
             return true;
         }
     }
@@ -153,7 +155,7 @@ mp_obj_t common_hal_bleio_adapter_get_connections(bleio_adapter_obj_t *self) {
     mp_obj_t items[BLEIO_TOTAL_CONNECTION_COUNT];
     for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
         bleio_connection_internal_t *connection = &bleio_connections[i];
-        if (connection->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (connection->conn_handle != BLEIO_HANDLE_INVALID) {
             if (connection->connection_obj == mp_const_none) {
                 connection->connection_obj = bleio_connection_new_from_internal(connection);
             }
@@ -166,11 +168,12 @@ mp_obj_t common_hal_bleio_adapter_get_connections(bleio_adapter_obj_t *self) {
 }
 
 void common_hal_bleio_adapter_erase_bonding(bleio_adapter_obj_t *self) {
-    bonding_erase_storage();
+    // bonding_erase_storage();
 }
 
 bool common_hal_bleio_adapter_is_bonded_to_central(bleio_adapter_obj_t *self) {
-    return bonding_peripheral_bond_count() > 0;
+    // return bonding_peripheral_bond_count() > 0;
+    return false;
 }
 
 void bleio_adapter_gc_collect(bleio_adapter_obj_t *adapter) {
@@ -191,7 +194,7 @@ void bleio_adapter_reset(bleio_adapter_obj_t *adapter) {
     for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
         bleio_connection_internal_t *connection = &bleio_connections[i];
         // Disconnect all connections cleanly.
-        if (connection->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (connection->conn_handle != BLEIO_HANDLE_INVALID) {
             common_hal_bleio_connection_disconnect(connection);
         }
         connection->connection_obj = mp_const_none;
@@ -205,7 +208,7 @@ void bleio_adapter_reset(bleio_adapter_obj_t *adapter) {
         any_connected = false;
         for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
             bleio_connection_internal_t *connection = &bleio_connections[i];
-            any_connected |= connection->conn_handle != BLE_CONN_HANDLE_INVALID;
+            any_connected |= connection->conn_handle != BLEIO_HANDLE_INVALID;
         }
     }
 }

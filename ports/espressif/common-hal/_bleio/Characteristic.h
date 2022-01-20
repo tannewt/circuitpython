@@ -25,8 +25,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CHARACTERISTIC_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CHARACTERISTIC_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CHARACTERISTIC_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CHARACTERISTIC_H
 
 #include "shared-bindings/_bleio/Attribute.h"
 #include "common-hal/_bleio/Descriptor.h"
@@ -53,4 +53,4 @@ typedef struct _bleio_characteristic_obj {
     bool fixed_length;
 } bleio_characteristic_obj_t;
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_CHARACTERISTIC_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_CHARACTERISTIC_H

@@ -86,6 +86,10 @@ INC += \
 	-isystem esp-idf \
 	-isystem esp-idf/components/app_update/include \
 	-isystem esp-idf/components/bootloader_support/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/host/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/porting/nimble/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/porting/npl/freertos/include \
 	-isystem esp-idf/components/driver/include \
 	-isystem esp-idf/components/driver/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/$(IDF_TARGET)/include \

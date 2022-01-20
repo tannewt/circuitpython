@@ -26,12 +26,12 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_UUID_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_UUID_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_UUID_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_UUID_H
 
 #include "py/obj.h"
 
-#include "ble.h"
+#include "host/ble_uuid.h"
 
 typedef struct {
     mp_obj_base_t base;
@@ -40,10 +40,10 @@ typedef struct {
     // - ble_uuid_t.type is BLE_UUID_TYPE_BLE if it's a 16-bit Bluetooth SIG UUID.
     //   or is BLE_UUID_TYPE_VENDOR_BEGIN and higher, which indexes into a table of registered
     //   128-bit UUIDs.
-    ble_uuid_t nrf_ble_uuid;
+    ble_uuid_any_t nimble_ble_uuid;
 } bleio_uuid_obj_t;
 
 void bleio_uuid_construct_from_nrf_ble_uuid(bleio_uuid_obj_t *self, ble_uuid_t *nrf_uuid);
 void bleio_uuid_convert_to_nrf_ble_uuid(bleio_uuid_obj_t *self, ble_uuid_t *nrf_uuid);
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_UUID_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_UUID_H

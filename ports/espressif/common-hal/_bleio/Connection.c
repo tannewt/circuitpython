@@ -44,7 +44,7 @@
 #include "shared-bindings/_bleio/UUID.h"
 #include "supervisor/shared/tick.h"
 
-#include "common-hal/_bleio/bonding.h"
+// #include "common-hal/_bleio/bonding.h"
 
 
 bool common_hal_bleio_connection_get_paired(bleio_connection_obj_t *self) {
@@ -58,7 +58,7 @@ bool common_hal_bleio_connection_get_connected(bleio_connection_obj_t *self) {
     if (self->connection == NULL) {
         return false;
     }
-    return self->connection->conn_handle != BLE_CONN_HANDLE_INVALID;
+    return self->connection->conn_handle != BLE_HANDLE_INVALID;
 }
 
 void common_hal_bleio_connection_disconnect(bleio_connection_internal_t *self) {

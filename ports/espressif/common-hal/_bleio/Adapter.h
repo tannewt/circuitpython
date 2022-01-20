@@ -26,8 +26,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_ADAPTER_H
-#define MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_ADAPTER_H
+#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_ADAPTER_H
+#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_ADAPTER_H
 
 #include "py/obj.h"
 #include "py/objtuple.h"
@@ -40,6 +40,8 @@
 #ifndef BLEIO_TOTAL_CONNECTION_COUNT
 #define BLEIO_TOTAL_CONNECTION_COUNT 5
 #endif
+
+#define BLEIO_HANDLE_INVALID     0xffff
 
 extern bleio_connection_internal_t bleio_connections[BLEIO_TOTAL_CONNECTION_COUNT];
 
@@ -60,4 +62,4 @@ typedef struct {
 void bleio_adapter_gc_collect(bleio_adapter_obj_t *adapter);
 void bleio_adapter_reset(bleio_adapter_obj_t *adapter);
 
-#endif // MICROPY_INCLUDED_NRF_COMMON_HAL_BLEIO_ADAPTER_H
+#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BLEIO_ADAPTER_H

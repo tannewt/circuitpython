@@ -31,8 +31,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ble.h"
-#include "ble_drv.h"
 #include "common-hal/_bleio/__init__.h"
 
 #define EDIV_INVALID (0xffff)
