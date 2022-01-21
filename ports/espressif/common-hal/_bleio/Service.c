@@ -32,6 +32,8 @@
 #include "shared-bindings/_bleio/Service.h"
 #include "shared-bindings/_bleio/Adapter.h"
 
+#include "host/ble_gatt.h"
+
 uint32_t _common_hal_bleio_service_construct(bleio_service_obj_t *self, bleio_uuid_obj_t *uuid, bool is_secondary, mp_obj_list_t *characteristic_list) {
     self->handle = 0xFFFF;
     self->uuid = uuid;
@@ -40,20 +42,17 @@ uint32_t _common_hal_bleio_service_construct(bleio_service_obj_t *self, bleio_uu
     self->connection = NULL;
     self->is_secondary = is_secondary;
 
-    ble_uuid_t nordic_uuid;
-    bleio_uuid_convert_to_nrf_ble_uuid(uuid, &nordic_uuid);
+    // uint8_t service_type = BLE_GATT_SVC_TYPE_PRIMARY;
+    // if (is_secondary) {
+    //     service_type = BLE_GATT_SVC_TYPE_SECONDARY;
+    // }
 
-    uint8_t service_type = BLE_GATTS_SRVC_TYPE_PRIMARY;
-    if (is_secondary) {
-        service_type = BLE_GATTS_SRVC_TYPE_SECONDARY;
-    }
-
-    return result;
+    return 0;
 }
 
 void common_hal_bleio_service_construct(bleio_service_obj_t *self, bleio_uuid_obj_t *uuid, bool is_secondary) {
-    check_nrf_error(_common_hal_bleio_service_construct(self, uuid, is_secondary,
-        mp_obj_new_list(0, NULL)));
+    _common_hal_bleio_service_construct(self, uuid, is_secondary,
+        mp_obj_new_list(0, NULL));
 }
 
 void bleio_service_from_connection(bleio_service_obj_t *self, mp_obj_t connection) {
@@ -79,14 +78,6 @@ bool common_hal_bleio_service_get_is_remote(bleio_service_obj_t *self) {
 
 bool common_hal_bleio_service_get_is_secondary(bleio_service_obj_t *self) {
     return self->is_secondary;
-}
-
-STATIC void _expand_range(uint16_t new_value, uint16_t *start, uint16_t *end) {
-    if (new_value == 0) {
-        return;
-    }
-    *start = MIN(*start, new_value);
-    *end = MAX(*end, new_value);
 }
 
 void common_hal_bleio_service_add_characteristic(bleio_service_obj_t *self,

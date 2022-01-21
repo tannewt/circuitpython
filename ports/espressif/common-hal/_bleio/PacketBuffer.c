@@ -38,7 +38,7 @@
 
 #include "supervisor/shared/bluetooth/serial.h"
 
-
+#include "host/ble_att.h"
 
 void _common_hal_bleio_packet_buffer_construct(
     bleio_packet_buffer_obj_t *self, bleio_characteristic_obj_t *characteristic,
@@ -59,7 +59,7 @@ void _common_hal_bleio_packet_buffer_construct(
         outgoing = temp;
         self->conn_handle = bleio_connection_get_conn_handle(MP_OBJ_TO_PTR(self->characteristic->service->connection));
     } else {
-        self->conn_handle = BLE_CONN_HANDLE_INVALID;
+        self->conn_handle = BLEIO_HANDLE_INVALID;
     }
 
     if (incoming) {
@@ -82,7 +82,7 @@ void common_hal_bleio_packet_buffer_construct(
     size_t buffer_size, size_t max_packet_size) {
 
     // Cap the packet size to our implementation limits.
-    max_packet_size = MIN(max_packet_size, BLE_GATTS_VAR_ATTR_LEN_MAX - 3);
+    max_packet_size = MIN(max_packet_size, BLE_ATT_ATTR_MAX_LEN - 3);
 
     bleio_characteristic_properties_t incoming = characteristic->props & (CHAR_PROP_WRITE_NO_RESPONSE | CHAR_PROP_WRITE);
     bleio_characteristic_properties_t outgoing = characteristic->props & (CHAR_PROP_NOTIFY | CHAR_PROP_INDICATE);
@@ -117,16 +117,15 @@ mp_int_t common_hal_bleio_packet_buffer_readinto(bleio_packet_buffer_obj_t *self
     }
 
     // Copy received data. Lock out write interrupt handler while copying.
-    uint8_t is_nested_critical_region;
 
-    return ret;
+    return 0;
 }
 
 mp_int_t common_hal_bleio_packet_buffer_write(bleio_packet_buffer_obj_t *self, const uint8_t *data, size_t len, uint8_t *header, size_t header_len) {
     if (self->outgoing[0] == NULL) {
         mp_raise_bleio_BluetoothError(translate("Writes not supported on Characteristic"));
     }
-    if (self->conn_handle == BLE_CONN_HANDLE_INVALID) {
+    if (self->conn_handle == BLEIO_HANDLE_INVALID) {
         return -1;
     }
     mp_int_t outgoing_packet_length = common_hal_bleio_packet_buffer_get_outgoing_packet_length(self);
@@ -149,19 +148,17 @@ mp_int_t common_hal_bleio_packet_buffer_write(bleio_packet_buffer_obj_t *self, c
         // No room to append len bytes to packet. Wait until we get a free buffer,
         // and keep checking that we haven't been disconnected.
         while (self->pending_size != 0 &&
-               self->conn_handle != BLE_CONN_HANDLE_INVALID &&
+               self->conn_handle != BLEIO_HANDLE_INVALID &&
                !mp_hal_is_interrupted()) {
             RUN_BACKGROUND_TASKS;
         }
     }
-    if (self->conn_handle == BLE_CONN_HANDLE_INVALID ||
+    if (self->conn_handle == BLEIO_HANDLE_INVALID ||
         mp_hal_is_interrupted()) {
         return -1;
     }
 
     size_t num_bytes_written = 0;
-
-    uint8_t is_nested_critical_region;
 
     uint32_t *pending = self->outgoing[self->pending_index];
 
@@ -177,7 +174,6 @@ mp_int_t common_hal_bleio_packet_buffer_write(bleio_packet_buffer_obj_t *self, c
 
     // If no writes are queued then sneak in this data.
     if (!self->packet_queued) {
-        queue_next_write(self);
     }
     return num_bytes_written;
 }
@@ -199,7 +195,7 @@ mp_int_t common_hal_bleio_packet_buffer_get_incoming_packet_length(bleio_packet_
         (common_hal_bleio_characteristic_get_properties(self->characteristic) &
          (CHAR_PROP_INDICATE | CHAR_PROP_NOTIFY))) {
         // We are talking to a remote service, and data is arriving via NOTIFY or INDICATE.
-        if (self->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (self->conn_handle != BLEIO_HANDLE_INVALID) {
             bleio_connection_internal_t *connection = bleio_conn_handle_to_connection(self->conn_handle);
             if (connection) {
                 return common_hal_bleio_connection_get_max_packet_length(connection);
@@ -229,7 +225,7 @@ mp_int_t common_hal_bleio_packet_buffer_get_outgoing_packet_length(bleio_packet_
         (common_hal_bleio_characteristic_get_properties(self->characteristic) &
          (CHAR_PROP_INDICATE | CHAR_PROP_NOTIFY))) {
         // We are sending to a client, via NOTIFY or INDICATE.
-        if (self->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (self->conn_handle != BLEIO_HANDLE_INVALID) {
             bleio_connection_internal_t *connection = bleio_conn_handle_to_connection(self->conn_handle);
             if (connection) {
                 return MIN(MIN(common_hal_bleio_connection_get_max_packet_length(connection),
@@ -246,7 +242,7 @@ mp_int_t common_hal_bleio_packet_buffer_get_outgoing_packet_length(bleio_packet_
     if (self->characteristic->service != NULL &&
         self->characteristic->service->is_remote) {
         // We are talking to a remote service so we're writing.
-        if (self->conn_handle != BLE_CONN_HANDLE_INVALID) {
+        if (self->conn_handle != BLEIO_HANDLE_INVALID) {
             bleio_connection_internal_t *connection = bleio_conn_handle_to_connection(self->conn_handle);
             if (connection) {
                 return MIN(common_hal_bleio_connection_get_max_packet_length(connection),
@@ -260,7 +256,7 @@ mp_int_t common_hal_bleio_packet_buffer_get_outgoing_packet_length(bleio_packet_
 void common_hal_bleio_packet_buffer_flush(bleio_packet_buffer_obj_t *self) {
     while ((self->pending_size != 0 ||
             self->packet_queued) &&
-           self->conn_handle != BLE_CONN_HANDLE_INVALID &&
+           self->conn_handle != BLEIO_HANDLE_INVALID &&
            !mp_hal_is_interrupted()) {
         RUN_BACKGROUND_TASKS;
     }

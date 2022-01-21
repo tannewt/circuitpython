@@ -39,7 +39,7 @@
 #include "supervisor/shared/bluetooth/bluetooth.h"
 
 #include "common-hal/_bleio/__init__.h"
-#include "common-hal/_bleio/bonding.h"
+// #include "common-hal/_bleio/bonding.h"
 
 // Turn off BLE on a reset or reload.
 void bleio_reset() {

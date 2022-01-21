@@ -33,15 +33,17 @@
 #include "shared-bindings/_bleio/Service.h"
 #include "shared-bindings/_bleio/UUID.h"
 
+#include "host/ble_att.h"
+
 void common_hal_bleio_descriptor_construct(bleio_descriptor_obj_t *self, bleio_characteristic_obj_t *characteristic, bleio_uuid_obj_t *uuid, bleio_attribute_security_mode_t read_perm, bleio_attribute_security_mode_t write_perm, mp_int_t max_length, bool fixed_length, mp_buffer_info_t *initial_value_bufinfo) {
     self->characteristic = characteristic;
     self->uuid = uuid;
-    self->handle = BLE_GATT_HANDLE_INVALID;
+    self->handle = BLEIO_HANDLE_INVALID;
     self->read_perm = read_perm;
     self->write_perm = write_perm;
     self->initial_value = mp_obj_new_bytes(initial_value_bufinfo->buf, initial_value_bufinfo->len);
 
-    const mp_int_t max_length_max = fixed_length ? BLE_GATTS_FIX_ATTR_LEN_MAX : BLE_GATTS_VAR_ATTR_LEN_MAX;
+    const mp_int_t max_length_max = BLE_ATT_ATTR_MAX_LEN;
     if (max_length < 0 || max_length > max_length_max) {
         mp_raise_ValueError_varg(translate("max_length must be 0-%d when fixed_length is %s"),
             max_length_max, fixed_length ? "True" : "False");
@@ -60,8 +62,9 @@ bleio_characteristic_obj_t *common_hal_bleio_descriptor_get_characteristic(bleio
 
 size_t common_hal_bleio_descriptor_get_value(bleio_descriptor_obj_t *self, uint8_t *buf, size_t len) {
     // Do GATT operations only if this descriptor has been registered
-    if (self->handle != BLE_GATT_HANDLE_INVALID) {
+    if (self->handle != BLEIO_HANDLE_INVALID) {
         uint16_t conn_handle = bleio_connection_get_conn_handle(self->characteristic->service->connection);
+        (void)conn_handle;
     }
 
     return 0;
@@ -69,11 +72,11 @@ size_t common_hal_bleio_descriptor_get_value(bleio_descriptor_obj_t *self, uint8
 
 void common_hal_bleio_descriptor_set_value(bleio_descriptor_obj_t *self, mp_buffer_info_t *bufinfo) {
     // Do GATT operations only if this descriptor has been registered.
-    if (self->handle != BLE_GATT_HANDLE_INVALID) {
-        uint16_t conn_handle = bleio_connection_get_conn_handle(self->characteristic->service->connection);
+    if (self->handle != BLEIO_HANDLE_INVALID) {
+        // uint16_t conn_handle = bleio_connection_get_conn_handle(self->characteristic->service->connection);
         if (common_hal_bleio_service_get_is_remote(self->characteristic->service)) {
             // false means WRITE_REQ, not write-no-response
-            common_hal_bleio_gattc_write(self->handle, conn_handle, bufinfo, false);
+            // common_hal_bleio_gattc_write(self->handle, conn_handle, bufinfo, false);
         } else {
             // Validate data length for local descriptors only.
             if (self->fixed_length && bufinfo->len != self->max_length) {
@@ -83,7 +86,7 @@ void common_hal_bleio_descriptor_set_value(bleio_descriptor_obj_t *self, mp_buff
                 mp_raise_ValueError(translate("Value length > max_length"));
             }
 
-            common_hal_bleio_gatts_write(self->handle, conn_handle, bufinfo);
+            // common_hal_bleio_gatts_write(self->handle, conn_handle, bufinfo);
         }
     }
 

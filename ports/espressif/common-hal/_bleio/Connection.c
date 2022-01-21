@@ -46,6 +46,8 @@
 
 // #include "common-hal/_bleio/bonding.h"
 
+#include "host/ble_att.h"
+
 
 bool common_hal_bleio_connection_get_paired(bleio_connection_obj_t *self) {
     if (self->connection == NULL) {
@@ -58,7 +60,7 @@ bool common_hal_bleio_connection_get_connected(bleio_connection_obj_t *self) {
     if (self->connection == NULL) {
         return false;
     }
-    return self->connection->conn_handle != BLE_HANDLE_INVALID;
+    return self->connection->conn_handle != BLEIO_HANDLE_INVALID;
 }
 
 void common_hal_bleio_connection_disconnect(bleio_connection_internal_t *self) {
@@ -72,23 +74,19 @@ mp_float_t common_hal_bleio_connection_get_connection_interval(bleio_connection_
     while (self->conn_params_updating && !mp_hal_is_interrupted()) {
         RUN_BACKGROUND_TASKS;
     }
-    return 1.25f * self->conn_params.min_conn_interval;
+    return 0;
 }
 
 // Return the current negotiated MTU length, minus overhead.
 mp_int_t common_hal_bleio_connection_get_max_packet_length(bleio_connection_internal_t *self) {
-    return (self->mtu == 0 ? BLE_GATT_ATT_MTU_DEFAULT : self->mtu) - 3;
+    return (self->mtu == 0 ? BLE_ATT_MTU_DFLT : self->mtu) - 3;
 }
 
 void common_hal_bleio_connection_set_connection_interval(bleio_connection_internal_t *self, mp_float_t new_interval) {
     self->conn_params_updating = true;
-    uint16_t interval = new_interval / 1.25f;
-    self->conn_params.min_conn_interval = interval;
-    self->conn_params.max_conn_interval = interval;
 }
 
 mp_obj_tuple_t *common_hal_bleio_connection_discover_remote_services(bleio_connection_obj_t *self, mp_obj_t service_uuids_whitelist) {
-    discover_remote_services(self->connection, service_uuids_whitelist);
     bleio_connection_ensure_connected(self);
     // Convert to a tuple and then clear the list so the callee will take ownership.
     mp_obj_tuple_t *services_tuple =
@@ -101,7 +99,7 @@ mp_obj_tuple_t *common_hal_bleio_connection_discover_remote_services(bleio_conne
 
 uint16_t bleio_connection_get_conn_handle(bleio_connection_obj_t *self) {
     if (self == NULL || self->connection == NULL) {
-        return BLE_CONN_HANDLE_INVALID;
+        return BLEIO_HANDLE_INVALID;
     }
     return self->connection->conn_handle;
 }

@@ -38,33 +38,29 @@
 // If uuid128 is not NULL, it's a 128-bit (16-byte) UUID, with bytes 12 and 13 zero'd out, where
 // the 16-bit part goes. Those 16 bits are passed in uuid16.
 void common_hal_bleio_uuid_construct(bleio_uuid_obj_t *self, mp_int_t uuid16, const uint8_t uuid128[16]) {
-    self->nrf_ble_uuid.uuid = uuid16;
     if (uuid128 == NULL) {
-        self->nrf_ble_uuid.type = BLE_UUID_TYPE_BLE;
+        ble_uuid_init_from_buf(&self->nimble_ble_uuid, (uint8_t *)uuid16, 2);
     } else {
-        ble_uuid128_t vs_uuid;
-        memcpy(vs_uuid.uuid128, uuid128, sizeof(vs_uuid.uuid128));
-
-        // Register this vendor-specific UUID. Bytes 12 and 13 will be zero.
+        ble_uuid_init_from_buf(&self->nimble_ble_uuid, uuid128, 16);
     }
 }
 
 uint32_t common_hal_bleio_uuid_get_size(bleio_uuid_obj_t *self) {
-    return self->nrf_ble_uuid.type == BLE_UUID_TYPE_BLE ? 16 : 128;
+    return self->nimble_ble_uuid.u.type == BLE_UUID_TYPE_16 ? 16 : 128;
 }
 
 uint32_t common_hal_bleio_uuid_get_uuid16(bleio_uuid_obj_t *self) {
-    return self->nrf_ble_uuid.uuid;
+    return self->nimble_ble_uuid.u16.value;
 }
 
 void common_hal_bleio_uuid_get_uuid128(bleio_uuid_obj_t *self, uint8_t uuid128[16]) {
-    uint8_t length;
+    memcpy(uuid128, self->nimble_ble_uuid.u128.value, 16);
 }
 
 void common_hal_bleio_uuid_pack_into(bleio_uuid_obj_t *self, uint8_t *buf) {
-    if (self->nrf_ble_uuid.type == BLE_UUID_TYPE_BLE) {
-        buf[0] = self->nrf_ble_uuid.uuid & 0xff;
-        buf[1] = self->nrf_ble_uuid.uuid >> 8;
+    if (self->nimble_ble_uuid.u.type == BLE_UUID_TYPE_16) {
+        buf[0] = self->nimble_ble_uuid.u16.value & 0xff;
+        buf[1] = self->nimble_ble_uuid.u16.value >> 8;
     } else {
         common_hal_bleio_uuid_get_uuid128(self, buf);
     }
