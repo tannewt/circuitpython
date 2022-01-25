@@ -47,6 +47,13 @@
 #include "shared-bindings/time/__init__.h"
 
 #include "nimble/hci_common.h"
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_gap.h"
+#include "host/util/util.h"
+#include "services/gap/ble_svc_gap.h"
+
+#include "esp_nimble_hci.h"
 
 bleio_connection_internal_t bleio_connections[BLEIO_TOTAL_CONNECTION_COUNT];
 
@@ -55,6 +62,22 @@ bleio_connection_internal_t bleio_connections[BLEIO_TOTAL_CONNECTION_COUNT];
 //     bleio_background();
 // }
 
+bool ble_active = false;
+
+static void nimble_host_task(void *param) {
+    nimble_port_run();
+    nimble_port_freertos_deinit();
+}
+
+static TaskHandle_t cp_task = NULL;
+
+static void _on_sync(void) {
+    int rc = ble_hs_util_ensure_addr(0);
+    assert(rc == 0);
+
+    xTaskNotifyGive(cp_task);
+}
+
 void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enabled) {
     const bool is_enabled = common_hal_bleio_adapter_get_enabled(self);
 
@@ -62,11 +85,27 @@ void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enable
     if (is_enabled == enabled) {
         return;
     }
+
+    if (enabled) {
+        esp_nimble_hci_and_controller_init();
+        nimble_port_init();
+        // ble_hs_cfg.reset_cb = blecent_on_reset;
+        ble_hs_cfg.sync_cb = _on_sync;
+        // ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+        ble_svc_gap_device_name_set("CIRCUITPY");
+
+        cp_task = xTaskGetCurrentTaskHandle();
+
+        nimble_port_freertos_init(nimble_host_task);
+        // Wait for sync.
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
+    } else {
+        nimble_port_stop();
+    }
 }
 
 bool common_hal_bleio_adapter_get_enabled(bleio_adapter_obj_t *self) {
-
-    return false;
+    return xTaskGetHandle("ble") != NULL;
 }
 
 bleio_address_obj_t *common_hal_bleio_adapter_get_address(bleio_adapter_obj_t *self) {
@@ -84,7 +123,52 @@ mp_obj_str_t *common_hal_bleio_adapter_get_name(bleio_adapter_obj_t *self) {
 void common_hal_bleio_adapter_set_name(bleio_adapter_obj_t *self, const char *name) {
 }
 
-mp_obj_t common_hal_bleio_adapter_start_scan(bleio_adapter_obj_t *self, uint8_t *prefixes, size_t prefix_length, bool extended, mp_int_t buffer_size, mp_float_t timeout, mp_float_t interval, mp_float_t window, mp_int_t minimum_rssi, bool active) {
+static int _scan_event(struct ble_gap_event *event, void *scan_results_in) {
+    bleio_scanresults_obj_t *scan_results = (bleio_scanresults_obj_t *)scan_results_in;
+
+    if (event->type == BLE_GAP_EVENT_DISC_COMPLETE) {
+        shared_module_bleio_scanresults_set_done(scan_results, true);
+        return 0;
+    }
+
+    if (event->type != BLE_GAP_EVENT_DISC || event->type == BLE_GAP_EVENT_EXT_DISC) {
+        return 0;
+    }
+
+    if (event->type == BLE_GAP_EVENT_DISC) {
+        // Legacy advertisement
+        struct ble_gap_disc_desc *disc = &event->disc;
+        bool connectable = disc->event_type == BLE_HCI_ADV_RPT_EVTYPE_ADV_IND ||
+            disc->event_type == BLE_HCI_ADV_RPT_EVTYPE_DIR_IND;
+        shared_module_bleio_scanresults_append(scan_results,
+            supervisor_ticks_ms64(),
+            connectable,
+            disc->event_type == BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP,
+            disc->rssi,
+            disc->addr.val,
+            disc->addr.type,
+            disc->data,
+            disc->length_data);
+    } else {
+        // Extended advertisement
+        struct ble_gap_ext_disc_desc *disc = &event->ext_disc;
+        shared_module_bleio_scanresults_append(scan_results,
+            supervisor_ticks_ms64(),
+            (disc->props & BLE_HCI_ADV_CONN_MASK) != 0,
+            (disc->props & BLE_HCI_ADV_SCAN_MASK) != 0,
+            disc->rssi,
+            disc->addr.val,
+            disc->addr.type,
+            disc->data,
+            disc->length_data);
+    }
+
+    return 0;
+}
+
+mp_obj_t common_hal_bleio_adapter_start_scan(bleio_adapter_obj_t *self, uint8_t *prefixes,
+    size_t prefix_length, bool extended, mp_int_t buffer_size, mp_float_t timeout,
+    mp_float_t interval, mp_float_t window, mp_int_t minimum_rssi, bool active) {
     if (self->scan_results != NULL) {
         if (!shared_module_bleio_scanresults_get_done(self->scan_results)) {
             mp_raise_bleio_BluetoothError(translate("Scan already in progess. Stop with stop_scan."));
@@ -94,6 +178,31 @@ mp_obj_t common_hal_bleio_adapter_start_scan(bleio_adapter_obj_t *self, uint8_t 
 
     self->scan_results = shared_module_bleio_new_scanresults(buffer_size, prefixes, prefix_length, minimum_rssi);
     // size_t max_packet_size = extended ? BLE_HCI_MAX_EXT_ADV_DATA_LEN : BLE_HCI_MAX_ADV_DATA_LEN;
+
+    uint8_t own_addr_type;
+    struct ble_gap_disc_params disc_params;
+    int rc;
+
+    /* Figure out address to use while advertising (no privacy for now) */
+    int privacy = 0;
+    rc = ble_hs_id_infer_auto(privacy, &own_addr_type);
+    if (rc != 0) {
+        // Error. TODO: Make function to translate into exceptions.
+    }
+
+
+    disc_params.filter_duplicates = 0;
+    disc_params.passive = !active;
+    disc_params.itvl = interval / 0.625;
+    disc_params.window = window / 0.625;
+    disc_params.filter_policy = 0;
+    disc_params.limited = 0;
+
+    rc = ble_gap_disc(own_addr_type, timeout * 1000, &disc_params,
+        _scan_event, self->scan_results);
+    if (rc != 0) {
+        // Error
+    }
 
     return MP_OBJ_FROM_PTR(self->scan_results);
 }

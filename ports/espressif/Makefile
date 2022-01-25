@@ -86,10 +86,14 @@ INC += \
 	-isystem esp-idf \
 	-isystem esp-idf/components/app_update/include \
 	-isystem esp-idf/components/bootloader_support/include \
+	-isystem esp-idf/components/bt/host/nimble/esp-hci/include \
 	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/host/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/host/services/gap/include \
 	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/include \
+	-isystem esp-idf/components/bt/host/nimble/nimble/nimble/host/util/include \
 	-isystem esp-idf/components/bt/host/nimble/nimble/porting/nimble/include \
 	-isystem esp-idf/components/bt/host/nimble/nimble/porting/npl/freertos/include \
+	-isystem esp-idf/components/bt/host/nimble/port/include \
 	-isystem esp-idf/components/driver/include \
 	-isystem esp-idf/components/driver/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/$(IDF_TARGET)/include \
@@ -137,6 +141,7 @@ endif
 
 CFLAGS += \
 	-DHAVE_CONFIG_H \
+	-DESP_PLATFORM=1 \
 	-DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" \
 	-DUNITY_INCLUDE_CONFIG_H -DWITH_POSIX
 
@@ -340,7 +345,8 @@ BINARY_BLOBS = esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libphy.a $(addprefix
 ESP_IDF_COMPONENTS_LINK = $(IDF_TARGET_ARCH) app_update bootloader_support driver efuse esp_adc_cal esp_common esp_event esp_hw_support esp_ipc esp_netif esp_pm esp_phy esp_ringbuf esp_rom esp_system esp_timer esp-tls esp_wifi freertos hal heap log lwip mbedtls newlib nvs_flash pthread soc spi_flash vfs wpa_supplicant
 ifneq ($(CIRCUITPY_BLEIO),0)
 	ESP_IDF_COMPONENTS_LINK += bt
-	BINARY_BLOBS += esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libbtbb.a
+	BINARY_BLOBS += esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libbtbb.a \
+	                esp-idf/components/bt/controller/lib_esp32c3_family/$(IDF_TARGET)/libbtdm_app.a
 endif
 
 ESP_IDF_COMPONENTS_EXPANDED = $(foreach component, $(ESP_IDF_COMPONENTS_LINK), $(BUILD)/esp-idf/esp-idf/$(component)/lib$(component).a)
