@@ -291,8 +291,8 @@ jobs:
       run: |
         sudo apt-get install -y gettext
         pip install -r requirements-ci.txt -r requirements-dev.txt
-        wget --no-verbose https://adafruit-circuit-python.s3.amazonaws.com/gcc-arm-11.2-2022.02-x86_64-arm-none-eabi-stripped.tar.xz
-        sudo tar -C /usr --strip-components=1 -xaf gcc-arm-11.2-2022.02-x86_64-arm-none-eabi-stripped.tar.xz
+        wget --no-verbose https://adafruit-circuit-python.s3.amazonaws.com/arm-none-eabi-gcc-11.2.0-1-x86_64.pkg.tar.zst
+        sudo tar -C / -xaf arm-none-eabi-gcc-11.2.0-1-x86_64.pkg.tar.zst
     - name: Versions
       run: |
         gcc --version
@@ -486,8 +486,8 @@ jobs:
         pip install -r requirements-ci.txt -r requirements-dev.txt
         wget --no-verbose https://adafruit-circuit-python.s3.amazonaws.com/gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
         sudo tar -C /usr --strip-components=1 -xaf gcc-arm-10.3-2021.07-x86_64-aarch64-none-elf.tar.xz
-        wget --no-verbose https://adafruit-circuit-python.s3.amazonaws.com/gcc-arm-11.2-2022.02-x86_64-arm-none-eabi-stripped.tar.xz
-        sudo tar -C /usr --strip-components=1 -xaf gcc-arm-11.2-2022.02-x86_64-arm-none-eabi-stripped.tar.xz
+        wget --no-verbose https://adafruit-circuit-python.s3.amazonaws.com/arm-none-eabi-gcc-11.2.0-1-x86_64.pkg.tar.zst
+        sudo tar -C / -xaf arm-none-eabi-gcc-11.2.0-1-x86_64.pkg.tar.zst
     - name: Install mkfs.fat
       run: |
         wget https://github.com/dosfstools/dosfstools/releases/download/v4.2/dosfstools-4.2.tar.gz
