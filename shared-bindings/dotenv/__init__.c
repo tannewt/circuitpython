@@ -33,7 +33,7 @@
 #include "py/obj.h"
 #include "py/objstr.h"
 #include "py/runtime.h"
-#include "shared-bindings/os/__init__.h"
+#include "shared-bindings/dotenv/__init__.h"
 
 //| """Functions to manage environment variables from a .env file.
 //|
@@ -50,7 +50,22 @@
 //|     ...
 //|
 STATIC mp_obj_t dotenv_get_key(mp_obj_t path_in, mp_obj_t key_to_get_in) {
-    return mp_const_none;
+    // Use the stack for short values. Longer values will require a heap allocation after we know
+    // the length.
+    char value[64];
+    mp_int_t actual_len = common_hal_dotenv_get_key(mp_obj_str_get_str(path_in),
+        mp_obj_str_get_str(key_to_get_in), value, sizeof(value));
+    if (actual_len <= 0) {
+        return mp_const_none;
+    }
+    if ((size_t)actual_len >= sizeof(value)) {
+        mp_obj_str_t *str = MP_OBJ_TO_PTR(mp_obj_new_str_copy(&mp_type_str, NULL, actual_len + 1));
+        common_hal_dotenv_get_key(mp_obj_str_get_str(path_in),
+            mp_obj_str_get_str(key_to_get_in), (char *)str->data, actual_len + 1);
+        str->hash = qstr_compute_hash(str->data, actual_len);
+        return MP_OBJ_FROM_PTR(str);
+    }
+    return mp_obj_new_str(value, actual_len);
 }
 MP_DEFINE_CONST_FUN_OBJ_2(dotenv_get_key_obj, dotenv_get_key);
 
@@ -73,6 +88,13 @@ MP_DEFINE_CONST_FUN_OBJ_0(dotenv_load_dotenv_obj, dotenv_load_dotenv);
 //|     ...
 //|
 STATIC mp_obj_t dotenv_set_key(mp_obj_t path_in, mp_obj_t key_to_set_in, mp_obj_t value_to_set) {
+    mp_int_t result = common_hal_dotenv_set_key(
+        mp_obj_str_get_str(path_in),
+        mp_obj_str_get_str(key_to_set_in),
+        mp_obj_str_get_str(value_to_set));
+    if (result < 0) {
+        mp_raise_OSError(-1 * result);
+    }
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_3(dotenv_set_key_obj, dotenv_set_key);
@@ -84,6 +106,12 @@ MP_DEFINE_CONST_FUN_OBJ_3(dotenv_set_key_obj, dotenv_set_key);
 //|     ...
 //|
 STATIC mp_obj_t dotenv_unset_key(mp_obj_t path_in, mp_obj_t key_to_unset_in) {
+    mp_int_t result = common_hal_dotenv_unset_key(
+        mp_obj_str_get_str(path_in),
+        mp_obj_str_get_str(key_to_unset_in));
+    if (result < 0) {
+        mp_raise_OSError(-1 * result);
+    }
     return mp_const_none;
 }
 MP_DEFINE_CONST_FUN_OBJ_2(dotenv_unset_key_obj, dotenv_unset_key);

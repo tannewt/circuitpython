@@ -32,7 +32,7 @@
 
 #include "py/objtuple.h"
 
-bool common_hal_dotenv_get_key(const char *path, const char *key, char *value, mp_int_t value_len);
+mp_int_t common_hal_dotenv_get_key(const char *path, const char *key, char *value, mp_int_t value_len);
 bool common_hal_dotenv_set_key(const char *path, const char *key, const char *value);
 bool common_hal_dotenv_unset_key(const char *path, const char *key);
 
