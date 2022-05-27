@@ -61,18 +61,18 @@ INC += -I. \
        -I../.. \
        -I../lib/mp-readline \
        -I../shared/timeutils \
-       -Iasf4/$(CHIP_FAMILY) \
-       -Iasf4/$(CHIP_FAMILY)/hal/include \
-       -Iasf4/$(CHIP_FAMILY)/hal/utils/include \
-       -Iasf4/$(CHIP_FAMILY)/hri \
-       -Iasf4/$(CHIP_FAMILY)/hpl/core \
-       -Iasf4/$(CHIP_FAMILY)/hpl/gclk \
-       -Iasf4/$(CHIP_FAMILY)/hpl/pm \
-       -Iasf4/$(CHIP_FAMILY)/hpl/port \
-       -Iasf4/$(CHIP_FAMILY)/hpl/rtc \
-       -Iasf4/$(CHIP_FAMILY)/hpl/tc \
-       -Iasf4/$(CHIP_FAMILY)/include \
-       -Iasf4/$(CHIP_FAMILY)/CMSIS/Include \
+       -isystem asf4/$(CHIP_FAMILY) \
+       -isystem asf4/$(CHIP_FAMILY)/hal/include \
+       -isystem asf4/$(CHIP_FAMILY)/hal/utils/include \
+       -isystem asf4/$(CHIP_FAMILY)/hri \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/core \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/gclk \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/pm \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/port \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/rtc \
+       -isystem asf4/$(CHIP_FAMILY)/hpl/tc \
+       -isystem asf4/$(CHIP_FAMILY)/include \
+       -isystem asf4/$(CHIP_FAMILY)/CMSIS/Include \
        -Iasf4_conf/$(CHIP_FAMILY) \
        -Iboards/$(BOARD) \
        -Iboards/ \
@@ -87,7 +87,7 @@ INC += -I. \
 
 ifeq ($(CHIP_FAMILY), samd21)
 PERIPHERALS_CHIP_FAMILY=samd21
-OPTIMIZATION_FLAGS ?= -Os
+OPTIMIZATION_FLAGS ?= -Oz
 # TinyUSB defines
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_SAMD21 -DCFG_TUD_MIDI_RX_BUFSIZE=128 -DCFG_TUD_CDC_RX_BUFSIZE=128 -DCFG_TUD_MIDI_TX_BUFSIZE=128 -DCFG_TUD_CDC_TX_BUFSIZE=128 -DCFG_TUD_MSC_BUFSIZE=512
 endif
@@ -116,15 +116,12 @@ endif
 # option to override default optimization level, set in boards/$(BOARD)/mpconfigboard.mk
 CFLAGS += $(OPTIMIZATION_FLAGS)
 
-# Add -ftree-vrp optimization and checking to all builds. It's not enabled for -Os by default.
-CFLAGS += -ftree-vrp
-
 $(echo PERIPHERALS_CHIP_FAMILY=$(PERIPHERALS_CHIP_FAMILY))
 #Debugging/Optimization
 ifeq ($(DEBUG), 1)
   CFLAGS += -ggdb3 -Og -Os
   # You may want to disable -flto if it interferes with debugging.
-  CFLAGS += -flto -flto-partition=one
+  # CFLAGS += -flto=thin
   # You may want to enable these flags to make setting breakpoints easier.
   # CFLAGS += -fno-inline -fno-ipa-sra
   ifeq ($(CHIP_FAMILY), samd21)
@@ -144,15 +141,9 @@ else
   endif
 
   ifdef CFLAGS_INLINE_LIMIT
-    CFLAGS += -finline-limit=$(CFLAGS_INLINE_LIMIT)
   endif
 
-  CFLAGS += -flto
-
-  ifeq ($(CIRCUITPY_FULL_BUILD),0)
-    CFLAGS += --param inline-unit-growth=15 --param max-inline-insns-auto=20
-    CFLAGS += -flto-partition=one
-  endif
+  CFLAGS += -flto=thin
 
   ifdef CFLAGS_BOARD
     CFLAGS += $(CFLAGS_BOARD)
@@ -161,15 +152,36 @@ endif
 
 CFLAGS += $(INC) -Wall -Werror -std=gnu11 -nostdlib -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes
 
+ARCH_CFLAGS += \
+  -mthumb -mcpu=cortex-m0plus \
+  -mfloat-abi=soft
+
+# Default assumes a GNU Arm toolchain is on your path
+# but an explicit path can also be provided by doing
+# ARM_GNU_CC=<PATH_TO_GCC> make
+ARM_CORTEXM_SYSROOT = \
+  $(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-sysroot 2>&1)
+
+# The directory where Newlib's libc.a & libm.a reside
+# for the specific target architecture
+ARM_CORTEXM_MULTI_DIR = \
+  $(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-multi-directory 2>&1)
+
+# Pick up builtins needed for compilation
+ARM_CORTEXM_BUILTINS ?= \
+$(shell arm-none-eabi-gcc $(ARCH_CFLAGS) -print-libgcc-file-name 2>&1)
+
+CFLAGS += \
+  --sysroot=$(ARM_CORTEXM_SYSROOT)
+
 ifeq ($(CHIP_FAMILY), samd21)
 CFLAGS += \
-	-mthumb \
-	-mabi=aapcs-linux \
+  --target=arm-none-eabi \
 	-mcpu=cortex-m0plus \
 	-msoft-float \
-	-mfloat-abi=soft \
-	-DSAMD21 \
-	-flto-partition=one
+	-Wno-unreachable-code \
+	-Wno-double-promotion \
+	-DSAMD21
 endif
 ifeq ($(CHIP_FAMILY), samd51)
 CFLAGS += \
@@ -199,15 +211,12 @@ CFLAGS += \
 	-DSAM_D5X_E5X -DSAME51
 endif
 
-# GCC 11 adds stringop bounds checks that trigger when writing a memory region
-# we know is ok. It's not clear how to give the compiler the info it needs so
-# disable the checks for now.
-# See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99578
-CFLAGS += -Wno-stringop-overread -Wno-stringop-overflow
-
-LDFLAGS = $(CFLAGS) -nostartfiles -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections -specs=nano.specs
-LDFLAGS += -flto=$(shell $(NPROC))
-LIBS := -lgcc -lc
+LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,-gc-sections -Wl,-O2
+# LDFLAGS += -flto=thin
+LDFLAGS += \
+  -L$(ARM_CORTEXM_SYSROOT)/lib/$(ARM_CORTEXM_MULTI_DIR) \
+  $(ARM_CORTEXM_BUILTINS)
+LIBS := -lc
 
 # Use toolchain libm if we're not using our own.
 ifndef INTERNAL_LIBM

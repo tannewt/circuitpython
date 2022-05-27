@@ -78,11 +78,6 @@ endif
 SUPEROPT_GC = 0
 SUPEROPT_VM = 0
 
-ifeq ($(CIRCUITPY_FULL_BUILD),0)
-# On the smallest boards, this saves about 180 bytes. On other boards, it may -increase- space used.
-CFLAGS_BOARD = -fweb -frename-registers
-endif
-
 endif # samd21
 ######################################################################
 

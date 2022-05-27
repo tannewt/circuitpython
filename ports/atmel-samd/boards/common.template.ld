@@ -26,6 +26,7 @@ SECTIONS
     {
         . = ALIGN(4);
         _sfixed = .;
+        _start = .;
         KEEP(*(.vectors)) /* isr vector table */
 
         __property_getter_start = .;

@@ -44,8 +44,17 @@
 // To work with a NeoPixel, one must have MICROPY_HW_NEOPIXEL defined and
 // neopixel_write implemented.
 
-#define CIRCUITPY_PWM_RGB_LED (defined(CIRCUITPY_RGB_STATUS_R) || defined(CIRCUITPY_RGB_STATUS_G) || defined(CIRCUITPY_RGB_STATUS_B))
-#define CIRCUITPY_STATUS_LED ((CIRCUITPY_DIGITALIO && defined(MICROPY_HW_LED_STATUS)) || defined(MICROPY_HW_NEOPIXEL) || (defined(MICROPY_HW_APA102_MOSI) && defined(MICROPY_HW_APA102_SCK)) || CIRCUITPY_PWM_RGB_LED)
+#if (defined(CIRCUITPY_RGB_STATUS_R) || defined(CIRCUITPY_RGB_STATUS_G) || defined(CIRCUITPY_RGB_STATUS_B))
+#define CIRCUITPY_PWM_RGB_LED 1
+#else
+#define CIRCUITPY_PWM_RGB_LED 0
+#endif
+
+#if ((CIRCUITPY_DIGITALIO && defined(MICROPY_HW_LED_STATUS)) || defined(MICROPY_HW_NEOPIXEL) || (defined(MICROPY_HW_APA102_MOSI) && defined(MICROPY_HW_APA102_SCK)) || CIRCUITPY_PWM_RGB_LED)
+#define CIRCUITPY_STATUS_LED 1
+#else
+#define CIRCUITPY_STATUS_LED 0
+#endif
 
 void status_led_init(void);
 void status_led_deinit(void);

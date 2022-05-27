@@ -57,8 +57,6 @@
 #define WATCHDOG_EXCEPTION_CHECK() 0
 #endif
 
-static volatile uint64_t PLACE_IN_DTCM_BSS(background_ticks);
-
 static background_callback_t tick_callback;
 
 static volatile uint64_t last_finished_tick = 0;

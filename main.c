@@ -204,7 +204,7 @@ STATIC void stop_mp(void) {
 // Look for the first file that exists in the list of filenames, using mp_import_stat().
 // Return its index. If no file found, return -1.
 STATIC const char *first_existing_file_in_list(const char *const *filenames) {
-    for (int i = 0; filenames[i] != (char *)""; i++) {
+    for (int i = 0; strlen(filenames[i]) != 0; i++) {
         mp_import_stat_t stat = mp_import_stat(filenames[i]);
         if (stat == MP_IMPORT_STAT_FILE) {
             return filenames[i];

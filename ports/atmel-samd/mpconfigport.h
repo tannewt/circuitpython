@@ -28,7 +28,7 @@
 #define __INCLUDED_MPCONFIGPORT_H
 
 // Definitions for which SAMD chip we're using.
-#include "include/sam.h"
+#include <include/sam.h>
 
 // Definitions that control circuitpy_mpconfig.h:
 

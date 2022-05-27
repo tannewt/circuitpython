@@ -44,10 +44,14 @@
 #include "hpl/pm/hpl_pm_base.h"
 #endif
 
-#define HAVE_ANALOGOUT ( \
+#if ( \
     (defined(PIN_PA02) && !defined(IGNORE_PA02)) || \
     (defined(SAM_D5X_E5X) && defined(PIN_PA05) && !defined(IGNORE_PA05)) \
     )
+#define HAVE_ANALOGOUT 1
+#else
+#define HAVE_ANALOGOUT 0
+#endif
 
 void common_hal_analogio_analogout_construct(analogio_analogout_obj_t *self,
     const mcu_pin_obj_t *pin) {

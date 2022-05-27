@@ -28,10 +28,9 @@
 # Common compile warnings.
 
 BASE_CFLAGS = \
-	-fsingle-precision-constant \
 	-fno-strict-aliasing \
 	-Wdouble-promotion \
-	-Wimplicit-fallthrough=2 \
+	-Wimplicit-fallthrough \
 	-Wno-endif-labels \
 	-Wstrict-prototypes \
 	-Werror-implicit-function-declaration \
@@ -51,8 +50,7 @@ BASE_CFLAGS = \
 	-DCIRCUITPY_SOFTWARE_SAFE_MODE=0x0ADABEEF \
 	-DCIRCUITPY_CANARY_WORD=0xADAF00 \
 	-DCIRCUITPY_SAFE_RESTART_WORD=0xDEADBEEF \
-	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\"" \
-	--param max-inline-insns-single=500
+	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\""
 
 #        Use these flags to debug build times and header includes.
 #        -ftime-report

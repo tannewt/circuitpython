@@ -55,7 +55,7 @@ TOUCH = touch
 NPROC = $(PYTHON) -c 'import multiprocessing as mp; print(mp.cpu_count())'
 
 AS = $(CROSS_COMPILE)as
-CC = $(CROSS_COMPILE)gcc
+CC = clang
 CXX = $(CROSS_COMPILE)g++
 GDB = $(CROSS_COMPILE)gdb
 LD = $(CROSS_COMPILE)ld

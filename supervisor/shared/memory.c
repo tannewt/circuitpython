@@ -191,11 +191,17 @@ static supervisor_allocation_node *allocate_memory_node(uint32_t length, bool hi
         if ((high_address - low_address) * 4 >= (int32_t)(sizeof(supervisor_allocation_node) + length)) {
             if (high) {
                 high_address -= (sizeof(supervisor_allocation_node) + length) / 4;
+                #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wcast-align"
                 node = (supervisor_allocation_node *)high_address;
+                #pragma clang diagnostic pop
                 node->next = high_head;
                 high_head = node;
             } else {
+                #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wcast-align"
                 node = (supervisor_allocation_node *)low_address;
+                #pragma clang diagnostic pop
                 node->next = low_head;
                 low_head = node;
             }
