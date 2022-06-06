@@ -76,16 +76,23 @@ if missing > 0:
     print("Font missing", missing, "characters", file=sys.stderr)
 
 x, y, dx, dy = f.get_bounding_box()
-tile_x, tile_y = x - dx, y - dy
+print(x, y, dx, dy)
+tile_x, tile_y = x, y
 total_bits = tile_x * len(all_characters)
 total_bits += 32 - total_bits % 32
 bytes_per_row = total_bits // 8
 b = bytearray(bytes_per_row * tile_y)
 
+widths = {}
+
 for x, c in enumerate(filtered_characters):
     g = f.get_glyph(ord(c))
     start_bit = x * tile_x + g["bounds"][2]
     start_y = (tile_y - 2) - (g["bounds"][1] + g["bounds"][3])
+    w = g["bounds"][0]
+    if w not in widths:
+        widths[w] = 0
+    widths[w] += 1
     for y, row in enumerate(g["bitmap"].rows):
         for i in range(g["bounds"][0]):
             byte = i // 8
@@ -94,6 +101,7 @@ for x, c in enumerate(filtered_characters):
                 overall_bit = start_bit + (start_y + y) * bytes_per_row * 8 + i
                 b[overall_bit // 8] |= 1 << (7 - (overall_bit % 8))
 
+print(widths)
 
 extra_characters = ""
 for c in filtered_characters:
@@ -143,7 +151,7 @@ displayio_tilegrid_t supervisor_terminal_text_grid = {{
     .base = {{ .type = &displayio_tilegrid_type }},
     .bitmap = (displayio_bitmap_t*) &supervisor_terminal_font_bitmap,
     .pixel_shader = &supervisor_terminal_color,
-    .x = 16,
+    .x = 12,
     .y = 0,
     .pixel_width = {1},
     .pixel_height = {2},

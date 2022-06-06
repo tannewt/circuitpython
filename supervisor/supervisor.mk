@@ -192,7 +192,7 @@ CFLAGS += -DUSB_HIGHSPEED=$(USB_HIGHSPEED)
 
 $(BUILD)/supervisor/shared/translate/translate.o: $(HEADER_BUILD)/qstrdefs.generated.h $(HEADER_BUILD)/compression.generated.h
 
-CIRCUITPY_DISPLAY_FONT ?= "../../tools/fonts/ter-u12n.bdf"
+CIRCUITPY_DISPLAY_FONT ?= "../../tools/fonts/unifont-14.0.03.bdf"
 
 $(BUILD)/autogen_display_resources-$(TRANSLATION).c: ../../tools/gen_display_resources.py $(TOP)/locale/$(TRANSLATION).po Makefile | $(HEADER_BUILD)
 	$(STEPECHO) "GEN $@"
