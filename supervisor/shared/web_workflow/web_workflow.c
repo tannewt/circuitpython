@@ -440,7 +440,9 @@ static void _reply_directory_html(socketpool_socket_obj_t *socket, FF_DIR *dir, 
         _send_chunk(socket, file_info.fname);
         _send_chunk(socket, "</a>");
         if (editable) {
-            _send_chunk(socket, "<a>✏️</a>");
+            _send_chunk(socket, "<a href=\"/edit/#");
+            _send_chunk(socket, file_info.fname);
+            _send_chunk(socket, "\">✏️</a>");
         }
         _send_chunk(socket, "<a>🗑️</a><br/>");
         res = f_readdir(dir, &file_info);
@@ -550,6 +552,15 @@ static void _reply_with_version_json(socketpool_socket_obj_t *socket) {
     snprintf(encoded_id, sizeof(encoded_id), "%d", CIRCUITPY_CREATION_ID);
     _send_chunk(socket, encoded_id);
     _send_chunk(socket, "}");
+    // Empty chunk signals the end of the response.
+    _send_chunk(socket, "");
+}
+
+static void _reply_with_edit_page(socketpool_socket_obj_t *socket) {
+    const char *ok_response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"
+        "Content-Type: text/html\r\nConnection: close\r\n\r\n";
+    socketpool_socket_send(socket, (const uint8_t *)ok_response, strlen(ok_response));
+    _send_chunk(socket, "<!doctypehtml><html lang=en><meta charset=UTF-8><title>Code Edit</title><style>textarea{width:90%;height:600px}</style><body><button id=save_btn>Save</button><br><textarea id=code_textarea></textarea><script>let filename=location.hash.substring(1);fetch(`/fs/${filename}`).then(e=>e.text()).then(function(e){document.querySelector(\"#code_textarea\").innerHTML=e}),document.querySelector(\"#save_btn\").onclick=function(){const e={method:\"PUT\",body:document.querySelector(\"#code_textarea\").value};fetch(`/fs/${filename}`,e).then(t=>t.text()).then(function(t){console.log(\"after fetch: \"+t)}),console.log(\"Click Save!\")};</script>");
     // Empty chunk signals the end of the response.
     _send_chunk(socket, "");
 }
@@ -788,6 +799,16 @@ static void _reply(socketpool_socket_obj_t *socket, _request *request) {
             _reply_with_devices_json(socket);
         } else if (strcmp(path, "/version.json") == 0) {
             _reply_with_version_json(socket);
+        }
+    } else if (strcmp(request->path, "/edit/") == 0) {
+        if (!request->authenticated) {
+            if (_api_password[0] != '\0') {
+                _reply_unauthorized(socket);
+            } else {
+                _reply_forbidden(socket);
+            }
+        } else {
+            _reply_with_edit_page(socket);
         }
     } else {
         const char *ok_response = "HTTP/1.1 200 OK\r\nContent-Length: 11\r\nContent-Type: text/plain\r\n\r\nHello World";
