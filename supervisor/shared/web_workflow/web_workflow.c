@@ -169,6 +169,15 @@ static bool _base64_in_place(char *buf, size_t in_len, size_t out_len) {
     return true;
 }
 
+static const char *our_ip_encoded(void) {
+    uint32_t ipv4_address = wifi_radio_get_ipv4_address(&common_hal_wifi_radio_obj);
+    if (_encoded_ip != ipv4_address) {
+        uint8_t *octets = (uint8_t *)&ipv4_address;
+        snprintf(_our_ip_encoded, sizeof(_our_ip_encoded), "%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
+        _encoded_ip = ipv4_address;
+    }
+    return _our_ip_encoded;
+}
 
 void supervisor_web_workflow_status(void) {
     serial_write_compressed(translate("Wi-Fi: "));
@@ -182,13 +191,7 @@ void supervisor_web_workflow_status(void) {
         } else if (ipv4_address == 0) {
             serial_write_compressed(translate("No IP"));
         } else {
-            if (_encoded_ip != ipv4_address) {
-                uint8_t *octets = (uint8_t *)&ipv4_address;
-                snprintf(_our_ip_encoded, sizeof(_our_ip_encoded), "%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
-                _encoded_ip = ipv4_address;
-            }
-
-            mp_printf(&mp_plat_print, "%s", _our_ip_encoded);
+            mp_printf(&mp_plat_print, "%s", our_ip_encoded());
             // TODO: Use these unicode to show signal strength: ▂▄▆█
         }
     } else {
@@ -368,7 +371,7 @@ static bool _origin_ok(const char *origin) {
         return true;
     }
 
-    end = origin + strlen(http) + strlen(_our_ip_encoded);
+    end = origin + strlen(http) + strlen(our_ip_encoded());
     if (memcmp(origin + strlen(http), _our_ip_encoded, strlen(_our_ip_encoded)) == 0 &&
         (end[0] == '\0' || end[0] == ':')) {
         return true;
@@ -686,7 +689,7 @@ static void _reply_with_version_json(socketpool_socket_obj_t *socket, _request *
         "\"creation_id\": ", encoded_creation_id, ", ",
         "\"hostname\": \"", hostname, "\", ",
         "\"port\": 80, ",
-        "\"ip\": \"", _our_ip_encoded,
+        "\"ip\": \"", our_ip_encoded(),
         "\"}", NULL);
     // Empty chunk signals the end of the response.
     _send_chunk(socket, "");
