@@ -42,6 +42,7 @@
 #include "supervisor/port.h"
 #include "supervisor/shared/workflow.h"
 
+#include "esp_ipc.h"
 #include "esp_sleep.h"
 
 #include "soc/rtc_cntl_reg.h"
@@ -162,13 +163,25 @@ void common_hal_alarm_set_deep_sleep_alarms(size_t n_alarms, const mp_obj_t *ala
     _setup_sleep_alarms(true, n_alarms, alarms);
 }
 
+STATIC void sleep_on_pro_core(void *arg) {
+    esp_deep_sleep_start();
+}
+
 void NORETURN common_hal_alarm_enter_deep_sleep(void) {
     alarm_pin_pinalarm_prepare_for_deep_sleep();
     alarm_touch_touchalarm_prepare_for_deep_sleep();
 
     // The ESP-IDF caches the deep sleep settings and applies them before sleep.
     // We don't need to worry about resetting them in the interim.
+    #ifdef CONFIG_IDF_TARGET_ESP32S3
+    esp_ipc_call(0, sleep_on_pro_core, NULL);
+    // We shouldn't get here.
+    while (true) {
+        port_yield();
+    }
+    #else
     esp_deep_sleep_start();
+    #endif
 }
 
 void common_hal_alarm_gc_collect(void) {
