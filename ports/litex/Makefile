@@ -80,7 +80,7 @@ ifeq ($(DEBUG), 1)
   OPTIMIZATION_FLAGS ?= -Og
 else
   CFLAGS += -DNDEBUG -ggdb3
-  OPTIMIZATION_FLAGS ?= -O2 -fno-inline-functions
+  OPTIMIZATION_FLAGS ?= -Os -fno-inline-functions
 endif
 
 # option to override compiler optimization level, set in boards/$(BOARD)/mpconfigboard.mk

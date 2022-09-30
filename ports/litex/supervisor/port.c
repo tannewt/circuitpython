@@ -87,9 +87,10 @@ void reset_port(void) {
 }
 
 void reset_to_bootloader(void) {
-#ifdef CSR_REBOOT_BASE
+    #ifdef CSR_REBOOT_BASE
     reboot_ctrl_write(0xac);
-#endif
+    #endif
+    for (;;) {}
 }
 
 void reset_cpu(void) {
@@ -98,7 +99,9 @@ void reset_cpu(void) {
     // 0xac, to ensure random values aren’t written. We can reboot Fomu by
     // simply writing this value" --
     //     https://workshop.fomu.im/en/latest/riscv.html
+    #ifdef CSR_REBOOT_BASE
     reboot_ctrl_write(0xac);
+    #endif
     for (;;) {}
 }
 
