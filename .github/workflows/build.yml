@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   scheduler:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       build-doc: ${{ steps.set-matrix.outputs.build-doc }}
       build-boards: ${{ steps.set-matrix.outputs.build-boards }}
