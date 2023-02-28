@@ -135,8 +135,7 @@ all: $(BUILD)/firmware.bin $(BUILD)/firmware.dfu
 
 $(BUILD)/firmware.elf: $(OBJ)
 	$(STEPECHO) "LINK $@"
-	$(Q)$(CC) -o $@ $(LDFLAGS) $^ -Wl,--start-group $(LIBS) -Wl,--end-group
-	$(Q)$(SIZE) $@ | $(PYTHON) $(TOP)/tools/build_memory_info.py $(LD_FILE)
+	$(Q)$(CC) -o $@ $(LDFLAGS) -Wl,--print-memory-usage $^ -Wl,--start-group $(LIBS) -Wl,--end-group
 
 $(BUILD)/firmware.bin: $(BUILD)/firmware.elf
 	$(STEPECHO) "Create $@"

@@ -48,7 +48,7 @@ runs:
       if: inputs.platform == 'aarch' || inputs.platform == 'arm'
       uses: carlosperate/arm-none-eabi-gcc-action@v1
       with:
-        release: '10-2020-q4'
+        release: '12.2.Rel1'
 
     # esp
     - name: Get esp toolchain
