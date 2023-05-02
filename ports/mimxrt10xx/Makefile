@@ -126,6 +126,8 @@ SRC_SDK := \
 
 SRC_SDK := $(addprefix sdk/, $(SRC_SDK))
 
+$(addprefix $(BUILD)/, $(SRC_SDK:.c=.o)): CFLAGS += -Wno-array-bounds
+
 SRC_C += \
 	background.c \
 	boards/$(BOARD)/board.c \

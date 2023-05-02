@@ -39,6 +39,7 @@ bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t d
     if (device_number == 0 || device_number > CFG_TUH_DEVICE_MAX + CFG_TUH_HUB) {
         return false;
     }
+    mp_printf(&mp_plat_print, "trying device %d\n", device_number);
     if (!tuh_ready(device_number)) {
         return false;
     }
@@ -113,12 +114,52 @@ mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self
     return _get_string(temp_buf);
 }
 
-mp_obj_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t endpoint, const uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
-    return mp_const_none;
+xfer_result_t xfer_result;
+STATIC void _xfer_complete_cb(tuh_xfer_t *xfer) {
+    xfer_result = xfer->result;
 }
 
-mp_obj_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t endpoint, uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
-    return mp_const_none;
+STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
+    xfer_result = XFER_RESULT_STALLED;
+    xfer->complete_cb = _xfer_complete_cb;
+
+    if (!tuh_edpt_xfer(xfer)) {
+        mp_raise_usb_core_USBError(NULL);
+    }
+    uint32_t start_time = supervisor_ticks_ms32();
+    while (supervisor_ticks_ms32() - start_time < (uint32_t)timeout &&
+           !mp_hal_is_interrupted() &&
+           xfer_result == XFER_RESULT_STALLED) {
+        // The background tasks include TinyUSB which will call the function
+        // we provided above. In other words, the callback isn't in an interrupt.
+        RUN_BACKGROUND_TASKS;
+    }
+    if (xfer_result == XFER_RESULT_STALLED) {
+        mp_raise_usb_core_USBTimeoutError();
+    }
+    if (xfer_result == XFER_RESULT_SUCCESS) {
+        return xfer->actual_len;
+    }
+
+    return 0;
+}
+
+mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t endpoint, const uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    tuh_xfer_t xfer;
+    xfer.daddr = self->device_number;
+    xfer.ep_addr = endpoint;
+    xfer.buffer = (uint8_t *)buffer;
+    xfer.buflen = len;
+    return _xfer(&xfer, timeout);
+}
+
+mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t endpoint, uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    tuh_xfer_t xfer;
+    xfer.daddr = self->device_number;
+    xfer.ep_addr = endpoint;
+    xfer.buffer = buffer;
+    xfer.buflen = len;
+    return _xfer(&xfer, timeout);
 }
 
 xfer_result_t control_result;
@@ -149,8 +190,7 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
 
     control_result = XFER_RESULT_STALLED;
 
-    bool result = tuh_control_xfer(&xfer);
-    if (!result) {
+    if (!tuh_control_xfer(&xfer)) {
         mp_raise_usb_core_USBError(NULL);
     }
     uint32_t start_time = supervisor_ticks_ms32();
