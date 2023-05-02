@@ -74,6 +74,7 @@ size_t common_hal_usb_cdc_serial_read(usb_cdc_serial_obj_t *self, uint8_t *data,
             total_num_read += num_read;
         }
     }
+    mp_printf(&mp_plat_print, "read %d characters\n", total_num_read);
 
     return total_num_read;
 }
