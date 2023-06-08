@@ -51,7 +51,7 @@ extern "C" {
 // When debugging TinyUSB, only output to the console UART link.
 #if CIRCUITPY_DEBUG_TINYUSB > 0 && defined(CIRCUITPY_CONSOLE_UART)
 #define CFG_TUSB_DEBUG              CIRCUITPY_DEBUG_TINYUSB
-#define CFG_TUSB_DEBUG_PRINTF       debug_uart_printf
+#define CFG_TUSB_DEBUG_PRINTF       console_uart_printf
 #endif
 
 /*------------- RTOS -------------*/

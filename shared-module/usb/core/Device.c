@@ -39,7 +39,6 @@ bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t d
     if (device_number == 0 || device_number > CFG_TUH_DEVICE_MAX + CFG_TUH_HUB) {
         return false;
     }
-    mp_printf(&mp_plat_print, "trying device %d\n", device_number);
     if (!tuh_ready(device_number)) {
         return false;
     }
@@ -67,13 +66,14 @@ STATIC void _transfer_done_cb(tuh_xfer_t *xfer) {
     _get_string_result = xfer->result;
 }
 
-STATIC void _wait_for_callback(void) {
+STATIC bool _wait_for_callback(void) {
     while (!mp_hal_is_interrupted() &&
            _get_string_result == 0xff) {
         // The background tasks include TinyUSB which will call the function
         // we provided above. In other words, the callback isn't in an interrupt.
         RUN_BACKGROUND_TASKS;
     }
+    return _get_string_result == XFER_RESULT_SUCCESS;
 }
 
 STATIC mp_obj_t _get_string(const uint16_t *temp_buf) {
@@ -87,31 +87,44 @@ STATIC mp_obj_t _get_string(const uint16_t *temp_buf) {
 mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *self) {
     _get_string_result = 0xff;
     uint16_t temp_buf[127];
-    if (!tuh_descriptor_get_serial_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0)) {
+    if (!tuh_descriptor_get_serial_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
+        !_wait_for_callback()) {
         return mp_const_none;
     }
-    _wait_for_callback();
     return _get_string(temp_buf);
 }
 
 mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
     _get_string_result = 0xff;
     uint16_t temp_buf[127];
-    if (!tuh_descriptor_get_product_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0)) {
+    if (!tuh_descriptor_get_product_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
+        !_wait_for_callback()) {
         return mp_const_none;
     }
-    _wait_for_callback();
     return _get_string(temp_buf);
 }
 
 mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self) {
     _get_string_result = 0xff;
     uint16_t temp_buf[127];
-    if (!tuh_descriptor_get_manufacturer_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0)) {
+    if (!tuh_descriptor_get_manufacturer_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
+        !_wait_for_callback()) {
         return mp_const_none;
     }
-    _wait_for_callback();
     return _get_string(temp_buf);
+}
+
+void common_hal_usb_core_device_set_configuration(usb_core_device_obj_t *self, mp_int_t configuration) {
+    if (configuration == 0x100) {
+        tusb_desc_configuration_t desc;
+        if (!tuh_descriptor_get_configuration(self->device_number, 0, &desc, sizeof(desc), _transfer_done_cb, 0) ||
+            !_wait_for_callback()) {
+            return;
+        }
+        configuration = desc.bConfigurationValue;
+    }
+    tuh_configuration_set(self->device_number, configuration, _transfer_done_cb, 0);
+    _wait_for_callback();
 }
 
 xfer_result_t xfer_result;
@@ -122,7 +135,6 @@ STATIC void _xfer_complete_cb(tuh_xfer_t *xfer) {
 STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
     xfer_result = XFER_RESULT_STALLED;
     xfer->complete_cb = _xfer_complete_cb;
-
     if (!tuh_edpt_xfer(xfer)) {
         mp_raise_usb_core_USBError(NULL);
     }
@@ -144,7 +156,52 @@ STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
     return 0;
 }
 
+STATIC bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
+    bool endpoint_open = false;
+    for (size_t i = 0; i < sizeof(self->open_endpoints); i++) {
+        if (self->open_endpoints[i] == endpoint) {
+            endpoint_open = true;
+        }
+    }
+    if (endpoint_open) {
+        return true;
+    }
+
+    // Fetch the full configuration descriptor and search for the endpoint's descriptor.
+    uint8_t desc_buf[128];
+    if (!tuh_descriptor_get_configuration(self->device_number, self->configuration_index, &desc_buf, sizeof(desc_buf), _transfer_done_cb, 0) ||
+        !_wait_for_callback()) {
+        return false;
+    }
+    tusb_desc_configuration_t *desc_cfg = (tusb_desc_configuration_t *)desc_buf;
+
+    uint8_t const *desc_end = ((uint8_t const *)desc_cfg) + tu_le16toh(desc_cfg->wTotalLength);
+    uint8_t const *p_desc = tu_desc_next(desc_cfg);
+
+    // parse each interfaces
+    while (p_desc < desc_end) {
+        console_uart_printf("usb desc %p %d\r\n", p_desc, tu_desc_type(p_desc));
+        if (TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
+            tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *)p_desc;
+            if (desc_ep->bEndpointAddress == endpoint) {
+                break;
+            }
+        }
+
+        p_desc = tu_desc_next(p_desc);
+    }
+    if (p_desc >= desc_end) {
+        return false;
+    }
+    tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *)p_desc;
+
+    return tuh_edpt_open(self->device_number, desc_ep);
+}
+
 mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t endpoint, const uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    if (!_open_endpoint(self, endpoint)) {
+        mp_raise_usb_core_USBError(NULL);
+    }
     tuh_xfer_t xfer;
     xfer.daddr = self->device_number;
     xfer.ep_addr = endpoint;
@@ -154,6 +211,9 @@ mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t 
 }
 
 mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t endpoint, uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    if (!_open_endpoint(self, endpoint)) {
+        mp_raise_usb_core_USBError(NULL);
+    }
     tuh_xfer_t xfer;
     xfer.daddr = self->device_number;
     xfer.ep_addr = endpoint;

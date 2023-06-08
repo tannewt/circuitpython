@@ -43,6 +43,7 @@ extern uint8_t _ld_default_stack_size;
 #define MICROPY_PY_FUNCTION_ATTRS                   (0)
 #define MICROPY_PY_REVERSE_SPECIAL_METHODS          (1)
 
+#define CIRCUITPY_DEBUG_TINYUSB 1
 
 #define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_START_ADDR ((uint32_t)&_ld_filesystem_start)
 #define CIRCUITPY_INTERNAL_FLASH_FILESYSTEM_SIZE ((uint32_t)(&_ld_filesystem_end - &_ld_filesystem_start))
