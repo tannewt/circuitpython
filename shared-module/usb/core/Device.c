@@ -35,6 +35,7 @@
 #include "shared-module/usb/utf16le.h"
 #include "supervisor/shared/tick.h"
 
+STATIC xfer_result_t _xfer_result;
 bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t device_number) {
     if (device_number == 0 || device_number > CFG_TUH_DEVICE_MAX + CFG_TUH_HUB) {
         return false;
@@ -43,6 +44,7 @@ bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t d
         return false;
     }
     self->device_number = device_number;
+    _xfer_result = 0xff;
     return true;
 }
 
@@ -60,20 +62,21 @@ uint16_t common_hal_usb_core_device_get_idProduct(usb_core_device_obj_t *self) {
     return pid;
 }
 
-STATIC xfer_result_t _get_string_result;
 STATIC void _transfer_done_cb(tuh_xfer_t *xfer) {
     // Store the result so we stop waiting for the transfer.
-    _get_string_result = xfer->result;
+    _xfer_result = xfer->result;
 }
 
 STATIC bool _wait_for_callback(void) {
     while (!mp_hal_is_interrupted() &&
-           _get_string_result == 0xff) {
+           _xfer_result == 0xff) {
         // The background tasks include TinyUSB which will call the function
         // we provided above. In other words, the callback isn't in an interrupt.
         RUN_BACKGROUND_TASKS;
     }
-    return _get_string_result == XFER_RESULT_SUCCESS;
+    xfer_result_t result = _xfer_result;
+    _xfer_result = 0xff;
+    return result == XFER_RESULT_SUCCESS;
 }
 
 STATIC mp_obj_t _get_string(const uint16_t *temp_buf) {
@@ -85,7 +88,6 @@ STATIC mp_obj_t _get_string(const uint16_t *temp_buf) {
 }
 
 mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *self) {
-    _get_string_result = 0xff;
     uint16_t temp_buf[127];
     if (!tuh_descriptor_get_serial_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
         !_wait_for_callback()) {
@@ -95,7 +97,6 @@ mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *sel
 }
 
 mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
-    _get_string_result = 0xff;
     uint16_t temp_buf[127];
     if (!tuh_descriptor_get_product_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
         !_wait_for_callback()) {
@@ -105,7 +106,6 @@ mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
 }
 
 mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self) {
-    _get_string_result = 0xff;
     uint16_t temp_buf[127];
     if (!tuh_descriptor_get_manufacturer_string(self->device_number, 0, temp_buf, MP_ARRAY_SIZE(temp_buf), _transfer_done_cb, 0) ||
         !_wait_for_callback()) {
@@ -127,29 +127,26 @@ void common_hal_usb_core_device_set_configuration(usb_core_device_obj_t *self, m
     _wait_for_callback();
 }
 
-xfer_result_t xfer_result;
-STATIC void _xfer_complete_cb(tuh_xfer_t *xfer) {
-    xfer_result = xfer->result;
-}
-
 STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
-    xfer_result = XFER_RESULT_STALLED;
-    xfer->complete_cb = _xfer_complete_cb;
+    _xfer_result = 0xff;
+    xfer->complete_cb = _transfer_done_cb;
     if (!tuh_edpt_xfer(xfer)) {
         mp_raise_usb_core_USBError(NULL);
     }
     uint32_t start_time = supervisor_ticks_ms32();
-    while (supervisor_ticks_ms32() - start_time < (uint32_t)timeout &&
+    while ((timeout == 0 || supervisor_ticks_ms32() - start_time < (uint32_t)timeout) &&
            !mp_hal_is_interrupted() &&
-           xfer_result == XFER_RESULT_STALLED) {
+           _xfer_result == 0xff) {
         // The background tasks include TinyUSB which will call the function
         // we provided above. In other words, the callback isn't in an interrupt.
         RUN_BACKGROUND_TASKS;
     }
-    if (xfer_result == XFER_RESULT_STALLED) {
+    xfer_result_t result = _xfer_result;
+    _xfer_result = 0xff;
+    if (result == XFER_RESULT_STALLED || result == 0xff) {
         mp_raise_usb_core_USBTimeoutError();
     }
-    if (xfer_result == XFER_RESULT_SUCCESS) {
+    if (result == XFER_RESULT_SUCCESS) {
         return xfer->actual_len;
     }
 
@@ -158,9 +155,13 @@ STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
 
 STATIC bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
     bool endpoint_open = false;
-    for (size_t i = 0; i < sizeof(self->open_endpoints); i++) {
+    size_t open_size = sizeof(self->open_endpoints);
+    size_t first_free = open_size;
+    for (size_t i = 0; i < open_size; i++) {
         if (self->open_endpoints[i] == endpoint) {
             endpoint_open = true;
+        } else if (first_free == open_size && self->open_endpoints[i] == 0) {
+            first_free = i;
         }
     }
     if (endpoint_open) {
@@ -180,7 +181,6 @@ STATIC bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
 
     // parse each interfaces
     while (p_desc < desc_end) {
-        console_uart_printf("usb desc %p %d\r\n", p_desc, tu_desc_type(p_desc));
         if (TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
             tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *)p_desc;
             if (desc_ep->bEndpointAddress == endpoint) {
@@ -195,7 +195,11 @@ STATIC bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
     }
     tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *)p_desc;
 
-    return tuh_edpt_open(self->device_number, desc_ep);
+    bool open = tuh_edpt_open(self->device_number, desc_ep);
+    if (open) {
+        self->open_endpoints[first_free] = endpoint;
+    }
+    return open;
 }
 
 mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t endpoint, const uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
@@ -222,11 +226,6 @@ mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t e
     return _xfer(&xfer, timeout);
 }
 
-xfer_result_t control_result;
-STATIC void _control_complete_cb(tuh_xfer_t *xfer) {
-    control_result = xfer->result;
-}
-
 mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
     mp_int_t bmRequestType, mp_int_t bRequest,
     mp_int_t wValue, mp_int_t wIndex,
@@ -245,10 +244,10 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
         .ep_addr = 0,
         .setup = &request,
         .buffer = buffer,
-        .complete_cb = _control_complete_cb,
+        .complete_cb = _transfer_done_cb,
     };
 
-    control_result = XFER_RESULT_STALLED;
+    _xfer_result = 0xff;
 
     if (!tuh_control_xfer(&xfer)) {
         mp_raise_usb_core_USBError(NULL);
@@ -256,15 +255,17 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
     uint32_t start_time = supervisor_ticks_ms32();
     while (supervisor_ticks_ms32() - start_time < (uint32_t)timeout &&
            !mp_hal_is_interrupted() &&
-           control_result == XFER_RESULT_STALLED) {
+           _xfer_result == 0xff) {
         // The background tasks include TinyUSB which will call the function
         // we provided above. In other words, the callback isn't in an interrupt.
         RUN_BACKGROUND_TASKS;
     }
-    if (control_result == XFER_RESULT_STALLED) {
+    xfer_result_t result = _xfer_result;
+    _xfer_result = 0xff;
+    if (result == XFER_RESULT_STALLED || result == 0xff) {
         mp_raise_usb_core_USBTimeoutError();
     }
-    if (control_result == XFER_RESULT_SUCCESS) {
+    if (result == XFER_RESULT_SUCCESS) {
         return len;
     }
 
