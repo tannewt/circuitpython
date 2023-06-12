@@ -57,7 +57,7 @@
 #define WATCHDOG_EXCEPTION_CHECK() 0
 #endif
 
-static volatile uint64_t PLACE_IN_DTCM_BSS(background_ticks);
+// static volatile uint64_t PLACE_IN_DTCM_BSS(background_ticks);
 
 static background_callback_t tick_callback;
 
@@ -106,14 +106,14 @@ void supervisor_tick(void) {
     background_callback_add(&tick_callback, supervisor_background_tick, NULL);
 }
 
-uint64_t supervisor_ticks_ms64() {
+uint64_t supervisor_ticks_ms64(void) {
     uint64_t result;
     result = port_get_raw_ticks(NULL);
     result = result * 1000 / 1024;
     return result;
 }
 
-uint32_t supervisor_ticks_ms32() {
+uint32_t supervisor_ticks_ms32(void) {
     return supervisor_ticks_ms64();
 }
 

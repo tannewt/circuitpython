@@ -28,10 +28,8 @@
 # Common compile warnings.
 
 BASE_CFLAGS = \
-	-fsingle-precision-constant \
 	-fno-strict-aliasing \
 	-Wdouble-promotion \
-	-Wimplicit-fallthrough=2 \
 	-Wno-endif-labels \
 	-Wstrict-prototypes \
 	-Werror-implicit-function-declaration \
@@ -51,8 +49,7 @@ BASE_CFLAGS = \
 	-DCIRCUITPY_SOFTWARE_SAFE_MODE=0x0ADABEEF \
 	-DCIRCUITPY_CANARY_WORD=0xADAF00 \
 	-DCIRCUITPY_SAFE_RESTART_WORD=0xDEADBEEF \
-	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\"" \
-	--param max-inline-insns-single=500
+	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\""
 
 #        Use these flags to debug build times and header includes.
 #        -ftime-report
@@ -70,7 +67,7 @@ endif
 CIRCUITPY_LTO ?= 0
 CIRCUITPY_LTO_PARTITION ?= balanced
 ifeq ($(CIRCUITPY_LTO),1)
-CFLAGS += -flto -flto-partition=$(CIRCUITPY_LTO_PARTITION) -DCIRCUITPY_LTO=1
+CFLAGS += -flto -DCIRCUITPY_LTO=1
 else
 CFLAGS += -DCIRCUITPY_LTO=0
 endif
@@ -829,7 +826,7 @@ check-release-needs-clean-build:
 	@echo "RELEASE_NEEDS_CLEAN_BUILD = $(RELEASE_NEEDS_CLEAN_BUILD)"
 
 # Ignore these errors
-$(BUILD)/lib/libm/kf_rem_pio2.o: CFLAGS += -Wno-maybe-uninitialized
+# $(BUILD)/lib/libm/kf_rem_pio2.o: CFLAGS += -Wno-maybe-uninitialized
 
 # Fetch only submodules needed for this particular port.
 .PHONY: fetch-port-submodules

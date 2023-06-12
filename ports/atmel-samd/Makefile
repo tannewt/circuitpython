@@ -88,9 +88,6 @@ endif
 # option to override default optimization level, set in boards/$(BOARD)/mpconfigboard.mk
 CFLAGS += $(OPTIMIZATION_FLAGS)
 
-# Add -ftree-vrp optimization and checking to all builds. It's not enabled for -Os by default.
-CFLAGS += -ftree-vrp
-
 $(echo PERIPHERALS_CHIP_FAMILY=$(PERIPHERALS_CHIP_FAMILY))
 #Debugging/Optimization
 ifeq ($(DEBUG), 1)
@@ -108,11 +105,11 @@ else
   # -finline-limit=80 or so is similar to not having it on.
   # There is no simple default value, though.
   ifeq ($(CIRCUITPY_FULL_BUILD),0)
-    CFLAGS += -finline-limit=45
+    CFLAGS +=
   else
     ifeq ($(CHIP_FAMILY), samd21)
       # max-inline-insns-auto increases the size of SAMD51 builds.
-      CFLAGS += -finline-limit=45 --param max-inline-insns-auto=110
+      CFLAGS += --param max-inline-insns-auto=110
     endif
   endif
 
@@ -126,21 +123,26 @@ else
 endif
 
 CFLAGS += $(INC) -Wall -Werror -std=gnu11 -nostdlib -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes
+# For clang
+CFLAGS += -Wno-expansion-to-defined
 
 ifeq ($(CHIP_FAMILY), samd21)
 CFLAGS += \
+	--config armv6m_soft_nofp.cfg \
 	-mthumb \
 	-mabi=aapcs-linux \
 	-mcpu=cortex-m0plus \
 	-msoft-float \
 	-mfloat-abi=soft \
+	-Wno-double-promotion \
 	-DSAMD21
-LIBS := libs/libgcc-12.1.0-Os-v6-m-nofp.a -lc
+LIBS := -lc
 else
 LIBS := -lgcc -lc
 endif
 ifeq ($(CHIP_FAMILY), samd51)
 CFLAGS += \
+	--config armv7em_hard_fpv4_sp_d16.cfg \
 	-mthumb \
 	-mabi=aapcs-linux \
 	-mcpu=cortex-m4 \
@@ -171,9 +173,9 @@ endif
 # we know is ok. It's not clear how to give the compiler the info it needs so
 # disable the checks for now.
 # See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99578
-CFLAGS += -Wno-stringop-overread -Wno-stringop-overflow
+# CFLAGS += -Wno-stringop-overread -Wno-stringop-overflow
 
-LDFLAGS = $(CFLAGS) -nostartfiles -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections -specs=nano.specs
+LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,--cref -Wl,-gc-sections
 
 # Use toolchain libm if we're not using our own.
 ifndef INTERNAL_LIBM
@@ -369,7 +371,7 @@ else
 $(BUILD)/firmware.elf: $(OBJ) $(GENERATED_LD_FILE)
 	$(STEPECHO) "LINK $@"
 	$(Q)echo $(OBJ) > $(BUILD)/firmware.objs
-	$(Q)$(CC) -o $@ $(LDFLAGS) @$(BUILD)/firmware.objs -Wl,--print-memory-usage -Wl,--start-group $(LIBS) -Wl,--end-group
+	$(Q)$(CC) -o $@ $(LDFLAGS) @$(BUILD)/firmware.objs -Wl,--start-group $(LIBS) -Wl,--end-group
 	$(Q)$(SIZE) $@ | $(PYTHON) $(TOP)/tools/build_memory_info.py $(GENERATED_LD_FILE) $(BUILD)
 endif
 

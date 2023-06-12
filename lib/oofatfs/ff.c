@@ -1679,7 +1679,9 @@ static FRESULT dir_sdi (    /* FR_OK(0):succeeded, !=0:error */
     clst = dp->obj.sclust;      /* Table start cluster (0:root) */
     if (clst == 0 && fs->fs_type >= FS_FAT32) { /* Replace cluster# 0 with root cluster# */
         clst = fs->dirbase;
-        if (FF_FS_EXFAT) dp->obj.stat = 0;  /* exFAT: Root dir has an FAT chain */
+        #if FF_FS_EXFAT
+        dp->obj.stat = 0;  /* exFAT: Root dir has an FAT chain */
+        #endif
     }
 
     if (clst == 0) {    /* Static table (root-directory on the FAT volume) */
@@ -1747,7 +1749,9 @@ static FRESULT dir_next (   /* FR_OK(0):succeeded, FR_NO_FILE:End of table, FR_D
                     if (clst == 1) return FR_INT_ERR;           /* Internal error */
                     if (clst == 0xFFFFFFFF) return FR_DISK_ERR; /* Disk error */
                     if (dir_clear(fs, clst) != FR_OK) return FR_DISK_ERR;   /* Clean up the stretched table */
-                    if (FF_FS_EXFAT) dp->obj.stat |= 4;         /* exFAT: The directory has been stretched */
+                    #if FF_FS_EXFAT
+                    dp->obj.stat |= 4;         /* exFAT: The directory has been stretched */
+                    #endif
 #else
                     if (!stretch) dp->sect = 0;                 /* (this line is to suppress compiler warning) */
                     dp->sect = 0; return FR_NO_FILE;            /* Report EOT */
@@ -4232,10 +4236,12 @@ FRESULT f_lseek (
                     ofs -= bcs; fp->fptr += bcs;
 #if !FF_FS_READONLY
                     if (fp->flag & FA_WRITE) {          /* Check if in write mode or not */
-                        if (FF_FS_EXFAT && fp->fptr > fp->obj.objsize) {    /* No FAT chain object needs correct objsize to generate FAT value */
+                        #if FF_FS_EXFAT
+                        if (fp->fptr > fp->obj.objsize) {    /* No FAT chain object needs correct objsize to generate FAT value */
                             fp->obj.objsize = fp->fptr;
                             fp->flag |= FA_MODIFIED;
                         }
+                        #endif
                         clst = create_chain(&fp->obj, clst);    /* Follow chain with forceed stretch */
                         if (clst == 0) {                /* Clip file size in case of disk full */
                             ofs = 0; break;
@@ -5493,17 +5499,21 @@ FRESULT f_mkfs (
 
     /* Pre-determine the FAT type */
     do {
-        if (FF_FS_EXFAT && (opt & FM_EXFAT)) {  /* exFAT possible? */
+        #if FF_FS_EXFAT
+        if (opt & FM_EXFAT) {  /* exFAT possible? */
             if ((opt & FM_ANY) == FM_EXFAT || sz_vol >= 0x4000000 || au > 128) {    /* exFAT only, vol >= 64Ms or au > 128s ? */
                 fmt = FS_EXFAT; break;
             }
         }
+        #endif
         if (au > 128) LEAVE_MKFS(FR_INVALID_PARAMETER); /* Too large au for FAT/FAT32 */
-        if (FF_MKFS_FAT32 && (opt & FM_FAT32)) {   /* FAT32 possible? */
+        #if FF_MKFS_FAT32
+        if (opt & FM_FAT32) {   /* FAT32 possible? */
             if ((opt & FM_ANY) == FM_FAT32 || !(opt & FM_FAT)) {    /* FAT32 only or no-FAT? */
                 fmt = FS_FAT32; break;
             }
         }
+        #endif
         if (!(opt & FM_FAT)) LEAVE_MKFS(FR_INVALID_PARAMETER);  /* no-FAT? */
         fmt = FS_FAT16;
     } while (0);

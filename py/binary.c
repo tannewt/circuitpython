@@ -244,15 +244,16 @@ mp_obj_t mp_binary_get_val(char struct_type, char val_type, byte *p_base, byte *
 
     long long val = mp_binary_get_int(size, is_signed(val_type), (struct_type == '>'), p);
 
-    if (MICROPY_NONSTANDARD_TYPECODES && (val_type == 'O')) {
-        return (mp_obj_t)(mp_uint_t)val;
     #if MICROPY_NONSTANDARD_TYPECODES
+    if (val_type == 'O') {
+        return (mp_obj_t)(mp_uint_t)val;
     } else if (val_type == 'S') {
         const char *s_val = (const char *)(uintptr_t)(mp_uint_t)val;
         return mp_obj_new_str(s_val, strlen(s_val));
+    } else
     #endif
     #if MICROPY_PY_BUILTINS_FLOAT
-    } else if (val_type == 'f') {
+    if (val_type == 'f') {
         union { uint32_t i;
                 float f;
         } fpu = {val};
@@ -262,8 +263,9 @@ mp_obj_t mp_binary_get_val(char struct_type, char val_type, byte *p_base, byte *
                 double f;
         } fpu = {val};
         return mp_obj_new_float_from_d(fpu.f);
+    } else
     #endif
-    } else if (is_signed(val_type)) {
+    if (is_signed(val_type)) {
         if ((long long)MP_SMALL_INT_MIN <= val && val <= (long long)MP_SMALL_INT_MAX) {
             return mp_obj_new_int((mp_int_t)val);
         } else {
@@ -279,21 +281,28 @@ mp_obj_t mp_binary_get_val(char struct_type, char val_type, byte *p_base, byte *
 }
 
 void mp_binary_set_int(size_t val_sz, bool big_endian, byte *dest, mp_uint_t val) {
-    if (MP_ENDIANNESS_LITTLE && !big_endian) {
+    #if MP_ENDIANNESS_LITTLE
+    if (!big_endian) {
         memcpy(dest, &val, val_sz);
-    } else if (MP_ENDIANNESS_BIG && big_endian) {
+        return;
+    }
+    #endif
+
+    #if MP_ENDIANNESS_BIG
+    if (big_endian) {
         // only copy the least-significant val_sz bytes
         memcpy(dest, (byte *)&val + sizeof(mp_uint_t) - val_sz, val_sz);
-    } else {
-        const byte *src;
-        if (MP_ENDIANNESS_LITTLE) {
-            src = (const byte *)&val + val_sz;
-        } else {
-            src = (const byte *)&val + sizeof(mp_uint_t);
-        }
-        while (val_sz--) {
-            *dest++ = *--src;
-        }
+        return;
+    }
+    #endif
+    const byte *src;
+    #if MP_ENDIANNESS_LITTLE
+    src = (const byte *)&val + val_sz;
+    #else
+    src = (const byte *)&val + sizeof(mp_uint_t);
+    #endif
+    while (val_sz--) {
+        *dest++ = *--src;
     }
 }
 
@@ -305,11 +314,11 @@ void mp_binary_set_val(char struct_type, char val_type, mp_obj_t val_in, byte *p
     if (struct_type == '@') {
         // Align p relative to p_base
         p = p_base + (uintptr_t)MP_ALIGN(p - p_base, align);
-        if (MP_ENDIANNESS_LITTLE) {
-            struct_type = '<';
-        } else {
-            struct_type = '>';
-        }
+        #if MP_ENDIANNESS_LITTLE
+        struct_type = '<';
+        #else
+        struct_type = '>';
+        #endif
     }
     *ptr = p + size;
 
@@ -335,7 +344,8 @@ void mp_binary_set_val(char struct_type, char val_type, mp_obj_t val_in, byte *p
                     double f;
             } fp_dp;
             fp_dp.f = mp_obj_get_float_to_d(val_in);
-            if (MP_BYTES_PER_OBJ_WORD == 8) {
+            size_t obj_per_word = MP_BYTES_PER_OBJ_WORD;
+            if (obj_per_word == 8) {
                 val = fp_dp.i64;
             } else {
                 int be = struct_type == '>';

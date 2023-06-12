@@ -78,9 +78,6 @@ SUPEROPT_VM = 0
 
 CIRCUITPY_LTO_PARTITION = one
 
-# On smaller builds this saves about 180 bytes. On other boards, it may -increase- space used, so use with care.
-CFLAGS_BOARD = -fweb -frename-registers
-
 endif # samd21
 ######################################################################
 

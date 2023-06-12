@@ -128,10 +128,13 @@ STATIC void str_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t
     #endif
     #if !MICROPY_PY_BUILTINS_STR_UNICODE
     bool is_bytes = mp_obj_is_type(self_in, &mp_type_bytes);
+    if (kind == PRINT_STR && !is_bytes) {
+        kind = PRINT_RAW;
+    }
     #else
     bool is_bytes = true;
     #endif
-    if (kind == PRINT_RAW || (!MICROPY_PY_BUILTINS_STR_UNICODE && kind == PRINT_STR && !is_bytes)) {
+    if (kind == PRINT_RAW) {
         print->print_strn(print->data, (const char *)str_data, str_len);
     } else {
         if (is_bytes) {
@@ -459,7 +462,10 @@ STATIC mp_obj_t bytes_subscr(mp_obj_t self_in, mp_obj_t index, mp_obj_t value) {
         #endif
         size_t index_val = mp_get_index(type, self_len, index, false);
         // If we have unicode enabled the type will always be bytes, so take the short cut.
-        if (MICROPY_PY_BUILTINS_STR_UNICODE || type == &mp_type_bytes) {
+        #if MICROPY_PY_BUILTINS_STR_UNICODE
+        type = &mp_type_bytes;
+        #endif
+        if (type == &mp_type_bytes) {
             return MP_OBJ_NEW_SMALL_INT(self_data[index_val]);
         } else {
             return mp_obj_new_str_via_qstr((char *)&self_data[index_val], 1);

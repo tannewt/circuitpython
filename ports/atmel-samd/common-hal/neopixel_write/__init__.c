@@ -51,63 +51,63 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
 
 static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMask,
     const uint8_t *ptr, int numBytes) {
-    asm volatile ("        push    {r4, r5, r6, lr};"
-        "        add     r3, r2, r3;"
-        "loopLoad:"
-        "        ldrb r5, [r2, #0];"          // r5 := *ptr
-        "        add  r2, #1;"                // ptr++
-        "        movs    r4, #128;"           // r4-mask, 0x80
+    asm volatile ("        push    {r4, r5, r6, lr};\n"
+        "        add     r3, r2, r3;\n"
+        "loopLoad:\n"
+        "        ldrb r5, [r2, #0];\n"          // r5 := *ptr
+        "        adds  r2, r2, #1;\n"                // ptr++
+        "        movs    r4, #128;\n"           // r4-mask, 0x80
 
-        "loopBit:"
-        "        str r1, [r0, #4];"                             // set
+        "loopBit:\n"
+        "        str r1, [r0, #4];\n"                             // set
         #ifdef SAMD21
-        "        movs r6, #2; d2: sub r6, #1; bne d2;"          // 248 ns high (entire T0H or start T1H)
+        "        movs r6, #2; d2: subs r6, #1; bne d2;\n"          // 248 ns high (entire T0H or start T1H)
         #endif
         #ifdef SAM_D5X_E5X
-        "        movs r6, #11; d2: subs r6, #1; bne d2;"        // 300 ns high (entire T0H or start T1H)
+        "        movs r6, #11; d2: subs r6, #1; bne d2;\n"        // 300 ns high (entire T0H or start T1H)
         #endif
-        "        tst r4, r5;"                                   // mask&r5
-        "        bne skipclr;"
-        "        str r1, [r0, #0];"          // clr
+        "        tst r4, r5;\n"                                   // mask&r5
+        "        bne skipclr;\n"
+        "        str r1, [r0, #0];\n"          // clr
 
-        "skipclr:"
+        "skipclr:\n"
         #ifdef SAMD21
-        "        movs r6, #7; d0: sub r6, #1; bne d0;"          // 772 ns low or high (start T0L or end T1H)
+        "        movs r6, #7; d0: subs r6, #1; bne d0;\n"          // 772 ns low or high (start T0L or end T1H)
         #endif
         #ifdef SAM_D5X_E5X
-        "        movs r6, #15; d0: subs r6, #1; bne d0;"        // 388 ns low or high (start T0L or end T1H)
+        "        movs r6, #15; d0: subs r6, #1; bne d0;\n"        // 388 ns low or high (start T0L or end T1H)
         #endif
-        "        str r1, [r0, #0];"            // clr (possibly again, doesn't matter)
+        "        str r1, [r0, #0];\n"            // clr (possibly again, doesn't matter)
 
         #ifdef SAMD21
-        "        asr     r4, r4, #1;"          // mask >>= 1
+        "        asrs     r4, r4, #1;\n"          // mask >>= 1
         #endif
         #ifdef SAM_D5X_E5X
-        "        asrs     r4, r4, #1;"          // mask >>= 1
+        "        asrs     r4, r4, #1;\n"          // mask >>= 1
         #endif
-        "        beq     nextbyte;"
-        "        uxtb    r4, r4;"
+        "        beq     nextbyte;\n"
+        "        uxtb    r4, r4;\n"
         #ifdef SAMD21
-        "        movs r6, #5; d1: sub r6, #1; bne d1;"          // 496 ns (end TOL or entire T1L)
+        "        movs r6, #5; d1: subs r6, #1; bne d1;\n"          // 496 ns (end TOL or entire T1L)
         #endif
         #ifdef SAM_D5X_E5X
-        "        movs r6, #20; d1: subs r6, #1; bne d1;"        // 548 ns (end TOL or entire T1L)
+        "        movs r6, #20; d1: subs r6, #1; bne d1;\n"        // 548 ns (end TOL or entire T1L)
         #endif
-        "        b       loopBit;"
+        "        b       loopBit;\n"
 
-        "nextbyte:"
+        "nextbyte:\n"
         #ifdef SAMD21
-        "        movs r6, #1; d3: sub r6, #1; bne d3;"          // 60 ns (end TOL or entire T1L)
-                                                                // other instructions add more delay
+        "        movs r6, #1; d3: subs r6, #1; bne d3;\n"          // 60 ns (end TOL or entire T1L)
+                                                                   // other instructions add more delay
         #endif
         #ifdef SAM_D5X_E5X
-        "        movs r6, #18; d3: subs r6, #1; bne d3;"        // extra for 936 ns total (byte end T0L or entire T1L)
+        "        movs r6, #18; d3: subs r6, #1; bne d3;\n"        // extra for 936 ns total (byte end T0L or entire T1L)
         #endif
-        "        cmp r2, r3;"
-        "        bcs neopixel_stop;"
-        "        b loopLoad;"
-        "neopixel_stop:"
-        "        pop {r4, r5, r6, pc};"
+        "        cmp r2, r3;\n"
+        "        bcs neopixel_stop;\n"
+        "        b loopLoad;\n"
+        "neopixel_stop:\n"
+        "        pop {r4, r5, r6, pc};\n"
         "");
 }
 

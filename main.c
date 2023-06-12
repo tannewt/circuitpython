@@ -1158,7 +1158,7 @@ void gc_collect(void) {
 }
 
 // Ports may provide an implementation of this function if it is needed
-MP_WEAK void port_gc_collect() {
+MP_WEAK void port_gc_collect(void) {
 }
 
 void NORETURN nlr_jump_fail(void *val) {

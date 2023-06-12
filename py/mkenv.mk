@@ -39,6 +39,10 @@ endif
 PY_SRC ?= $(TOP)/py
 BUILD ?= build
 
+SYSROOT ?= /home/tannewt/Downloads/LLVMEmbeddedToolchainForArm-16.0.0-Linux-x86_64
+
+export PATH := $(SYSROOT)/bin:$(PATH)
+
 ECHO = @echo
 
 CAT = cat
@@ -55,7 +59,7 @@ TOUCH = touch
 NPROC = $(PYTHON) -c 'import multiprocessing as mp; print(mp.cpu_count())'
 
 AS = $(CROSS_COMPILE)as
-CC = $(CROSS_COMPILE)gcc
+CC = clang
 CXX = $(CROSS_COMPILE)g++
 GDB = $(CROSS_COMPILE)gdb
 LD = $(CROSS_COMPILE)ld

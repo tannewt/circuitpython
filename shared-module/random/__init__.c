@@ -115,11 +115,11 @@ STATIC mp_float_t yasmarang_float(void) {
     } u;
     u.p.sgn = 0;
     u.p.exp = (1 << (MP_FLOAT_EXP_BITS - 1)) - 1;
-    if (MP_FLOAT_FRAC_BITS <= 32) {
-        u.p.frc = yasmarang();
-    } else {
-        u.p.frc = ((uint64_t)yasmarang() << 32) | (uint64_t)yasmarang();
-    }
+    #if MP_FLOAT_FRAC_BITS <= 32
+    u.p.frc = yasmarang();
+    #else
+    u.p.frc = ((uint64_t)yasmarang() << 32) | (uint64_t)yasmarang();
+    #endif
     return u.f - 1;
 }
 

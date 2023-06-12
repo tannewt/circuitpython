@@ -1565,13 +1565,17 @@ mp_obj_t mp_parse_compile_execute(mp_lexer_t *lex, mp_parse_input_kind_t parse_i
         mp_obj_t module_fun = mp_compile(&parse_tree, source_name, parse_input_kind == MP_PARSE_SINGLE_INPUT);
 
         mp_obj_t ret;
-        if (MICROPY_PY_BUILTINS_COMPILE && globals == NULL) {
+        #if MICROPY_PY_BUILTINS_COMPILE
+        if (globals == NULL) {
             // for compile only, return value is the module function
             ret = module_fun;
         } else {
-            // execute module function and get return value
-            ret = mp_call_function_0(module_fun);
-        }
+        #endif
+        // execute module function and get return value
+        ret = mp_call_function_0(module_fun);
+        #if MICROPY_PY_BUILTINS_COMPILE
+    }
+        #endif
 
         // finish nlr block, restore context and return value
         nlr_pop();

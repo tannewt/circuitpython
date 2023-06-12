@@ -79,6 +79,9 @@ SECTIONS
         . = ALIGN(4);
         _erelocate = .;        /* define a global symbol at data end; used by startup code in order to initialize the .data section in RAM */
     } >RAM
+    PROVIDE( __data_start = ADDR(.data));
+    PROVIDE( __data_source = LOADADDR(.data));
+    PROVIDE( __data_size = SIZEOF(.data));
 
     /* Uninitialized data section */
     .bss (NOLOAD) :
@@ -94,6 +97,8 @@ SECTIONS
         _ezero = .;         /* define a global symbol at bss end; used by startup code */
         _ebss = .;
     } >RAM
+    PROVIDE( __bss_start = ADDR(.bss));
+    PROVIDE( __bss_size = SIZEOF(.bss));
 
     /* this just checks there is enough RAM for the requested stack. */
     .stack :

@@ -172,10 +172,10 @@ STATIC mp_obj_t mp_vfs_autodetect(mp_obj_t bdev_obj) {
 
     #if MICROPY_VFS_FAT
     return mp_fat_vfs_type.make_new(&mp_fat_vfs_type, 1, 0, &bdev_obj);
-    #endif
-
+    #else
     // no filesystem found
     mp_raise_OSError(MP_ENODEV);
+    #endif
 }
 
 mp_obj_t mp_vfs_mount(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
