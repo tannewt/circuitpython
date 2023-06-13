@@ -58,7 +58,7 @@ INC += -I. \
 
 ifeq ($(CHIP_FAMILY), samd21)
 PERIPHERALS_CHIP_FAMILY=samd21
-OPTIMIZATION_FLAGS ?= -Os
+OPTIMIZATION_FLAGS ?= -Oz
 
 # TinyUSB defines
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_SAMD21 -DCFG_TUD_MIDI_RX_BUFSIZE=128 -DCFG_TUD_CDC_RX_BUFSIZE=128 -DCFG_TUD_MIDI_TX_BUFSIZE=128 -DCFG_TUD_CDC_TX_BUFSIZE=128 -DCFG_TUD_MSC_BUFSIZE=512
@@ -134,9 +134,9 @@ CFLAGS += \
 	-mcpu=cortex-m0plus \
 	-msoft-float \
 	-mfloat-abi=soft \
-	-Wno-double-promotion \
+	-Wdouble-promotion \
 	-DSAMD21
-LIBS := -lc
+LIBS := -lc -lclang_rt.builtins
 else
 LIBS := -lgcc -lc
 endif
@@ -175,7 +175,7 @@ endif
 # See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99578
 # CFLAGS += -Wno-stringop-overread -Wno-stringop-overflow
 
-LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,--cref -Wl,-gc-sections
+LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,--cref -Wl,-gc-sections -Wl,--trace-symbol=__aeabi_dmul
 
 # Use toolchain libm if we're not using our own.
 ifndef INTERNAL_LIBM

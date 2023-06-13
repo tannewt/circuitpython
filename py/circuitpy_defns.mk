@@ -791,7 +791,6 @@ $(patsubst %.c,$(BUILD)/%.o,$(SRC_LIBM)): CFLAGS += -Wno-missing-prototypes
 endif
 
 SRC_CIRCUITPY_COMMON = \
-	shared/libc/string0.c \
 	shared/readline/readline.c \
 	lib/oofatfs/ff.c \
 	lib/oofatfs/ffunicode.c \

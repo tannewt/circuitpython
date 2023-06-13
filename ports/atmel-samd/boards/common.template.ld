@@ -79,9 +79,22 @@ SECTIONS
         . = ALIGN(4);
         _erelocate = .;        /* define a global symbol at data end; used by startup code in order to initialize the .data section in RAM */
     } >RAM
+
+    .tdata : {
+        *(.tdata .tdata.* .gnu.linkonce.td.*)
+    } >RAM AT> FLASH_FIRMWARE
     PROVIDE( __data_start = ADDR(.data));
     PROVIDE( __data_source = LOADADDR(.data));
-    PROVIDE( __data_size = SIZEOF(.data));
+    PROVIDE( __tls_base = ADDR(.tdata));
+    PROVIDE( __data_size = SIZEOF(.data) | SIZEOF(.tdata));
+
+
+    .tbss (NOLOAD) : {
+        *(.tbss .tbss.* .gnu.linkonce.tb.*)
+        *(.tcommon)
+    } > RAM AT> RAM
+    PROVIDE( __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss)) );
+    PROVIDE( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
 
     /* Uninitialized data section */
     .bss (NOLOAD) :

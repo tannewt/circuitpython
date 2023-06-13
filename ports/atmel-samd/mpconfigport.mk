@@ -2,14 +2,14 @@
 # parameters that vary based on chip and/or board.
 LD_TEMPLATE_FILE = boards/common.template.ld
 
-INTERNAL_LIBM = 1
+INTERNAL_LIBM = 0
 
 # Number of USB endpoint pairs.
 USB_NUM_ENDPOINT_PAIRS = 8
 
 CIRCUITPY_ROTARYIO_SOFTENCODER = 1
 CIRCUITPY_OPTIMIZE_PROPERTY_FLASH_SIZE ?= 1
-CIRCUITPY_LTO = 1
+CIRCUITPY_LTO = 0
 
 ######################################################################
 # Put samd21-only choices here.
@@ -53,6 +53,10 @@ CIRCUITPY_ULAB = 0
 CIRCUITPY_VECTORIO = 0
 CIRCUITPY_ZLIB = 0
 
+# To make clang fit
+CIRCUITPY_ONEWIREIO = 0
+CIRCUITPY_ROTARYIO = 0
+
 # Turn off a few more things that don't fit in 192kB
 
 ifeq ($(INTERNAL_FLASH_FILESYSTEM),1)
@@ -76,7 +80,7 @@ endif
 SUPEROPT_GC = 0
 SUPEROPT_VM = 0
 
-CIRCUITPY_LTO_PARTITION = one
+CIRCUITPY_LTO_PARTITION = none
 
 endif # samd21
 ######################################################################
@@ -90,7 +94,7 @@ ifeq ($(CHIP_FAMILY),samd51)
 CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 
 ifeq ($(CIRCUITPY_FULL_BUILD),0)
-CIRCUITPY_LTO_PARTITION ?= one
+CIRCUITPY_LTO_PARTITION ?= none
 endif
 
 # The ?='s allow overriding in mpconfigboard.mk.
