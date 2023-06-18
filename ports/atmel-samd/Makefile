@@ -98,7 +98,7 @@ ifeq ($(DEBUG), 1)
     CFLAGS += -DENABLE_MICRO_TRACE_BUFFER
   endif
 else
-  CFLAGS += -DNDEBUG
+  CFLAGS += -DNDEBUG -ggdb3
 
   # Do a default shrink for small builds, including all SAMD21 builds.
   # -finline-limit can shrink the image size.
@@ -123,20 +123,43 @@ else
 endif
 
 CFLAGS += $(INC) -Wall -Werror -std=gnu11 -nostdlib -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes
-# For clang
-CFLAGS += -Wno-expansion-to-defined
 
 ifeq ($(CHIP_FAMILY), samd21)
 CFLAGS += \
-	--config armv6m_soft_nofp.cfg \
 	-mthumb \
 	-mabi=aapcs-linux \
 	-mcpu=cortex-m0plus \
 	-msoft-float \
 	-mfloat-abi=soft \
-	-Wdouble-promotion \
 	-DSAMD21
-LIBS := -lc -lclang_rt.builtins
+	ifeq ($(MICROPY_BUILD_CLANG),1)
+		# clang on flags
+	CFLAGS += \
+		--config armv6m_soft_nofp.cfg \
+		-Wno-expansion-to-defined \
+	-Wdouble-promotion \
+
+	LIBS := -lc -lclang_rt.builtins
+	else
+		# GCC only flags
+	CFLAGS += \
+		-ftree-vrp \
+		-finline-limit=45 \
+		-nostartfiles \
+		-Wno-stringop-overread -Wno-stringop-overflow \
+		-fweb -frename-registers \
+		-fsingle-precision-constant \
+		-Wimplicit-fallthrough=2 \
+		--param max-inline-insns-single=500 \
+		-Wno-double-promotion \
+		-flto-partition=$(CIRCUITPY_LTO_PARTITION)
+
+	LDFLAGS += \
+		-specs=nano.specs \
+		-Wl,--print-memory-usage
+
+	LIBS := libs/libgcc-12.1.0-Os-v6-m-nofp.a -lc
+	endif
 else
 LIBS := -lgcc -lc
 endif
@@ -175,7 +198,7 @@ endif
 # See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=99578
 # CFLAGS += -Wno-stringop-overread -Wno-stringop-overflow
 
-LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,--cref -Wl,-gc-sections -Wl,--trace-symbol=__aeabi_dmul
+LDFLAGS = $(CFLAGS) -Wl,-nostdlib -Wl,-T,$(GENERATED_LD_FILE) -Wl,-Map=$@.map -Wl,--cref -Wl,-gc-sections
 
 # Use toolchain libm if we're not using our own.
 ifndef INTERNAL_LIBM

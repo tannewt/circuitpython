@@ -49,19 +49,28 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
 // The SAMD21 timing loop durations below are approximate,
 // because the other instructions take significant time.
 
+#if defined(__clang__) && __clang__
+#define ASM_SUFFIX "s"
+#else
+#define ASM_SUFFIX ""
+#endif
 static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMask,
     const uint8_t *ptr, int numBytes) {
     asm volatile ("        push    {r4, r5, r6, lr};\n"
         "        add     r3, r2, r3;\n"
         "loopLoad:\n"
         "        ldrb r5, [r2, #0];\n"          // r5 := *ptr
+        #if defined(__clang__) && __clang__
         "        adds  r2, r2, #1;\n"                // ptr++
+        #else
+        "        add   r2, #1;\n"                // ptr++
+        #endif
         "        movs    r4, #128;\n"           // r4-mask, 0x80
 
         "loopBit:\n"
         "        str r1, [r0, #4];\n"                             // set
         #ifdef SAMD21
-        "        movs r6, #2; d2: subs r6, #1; bne d2;\n"          // 248 ns high (entire T0H or start T1H)
+        "        movs r6, #2; d2: sub" ASM_SUFFIX " r6, #1; bne d2;\n"          // 248 ns high (entire T0H or start T1H)
         #endif
         #ifdef SAM_D5X_E5X
         "        movs r6, #11; d2: subs r6, #1; bne d2;\n"        // 300 ns high (entire T0H or start T1H)
@@ -72,7 +81,7 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
 
         "skipclr:\n"
         #ifdef SAMD21
-        "        movs r6, #7; d0: subs r6, #1; bne d0;\n"          // 772 ns low or high (start T0L or end T1H)
+        "        movs r6, #7; d0: sub" ASM_SUFFIX " r6, #1; bne d0;\n"          // 772 ns low or high (start T0L or end T1H)
         #endif
         #ifdef SAM_D5X_E5X
         "        movs r6, #15; d0: subs r6, #1; bne d0;\n"        // 388 ns low or high (start T0L or end T1H)
@@ -80,7 +89,7 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
         "        str r1, [r0, #0];\n"            // clr (possibly again, doesn't matter)
 
         #ifdef SAMD21
-        "        asrs     r4, r4, #1;\n"          // mask >>= 1
+        "        asr" ASM_SUFFIX "     r4, r4, #1;\n"          // mask >>= 1
         #endif
         #ifdef SAM_D5X_E5X
         "        asrs     r4, r4, #1;\n"          // mask >>= 1
@@ -88,7 +97,7 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
         "        beq     nextbyte;\n"
         "        uxtb    r4, r4;\n"
         #ifdef SAMD21
-        "        movs r6, #5; d1: subs r6, #1; bne d1;\n"          // 496 ns (end TOL or entire T1L)
+        "        movs r6, #5; d1: sub" ASM_SUFFIX " r6, #1; bne d1;\n"          // 496 ns (end TOL or entire T1L)
         #endif
         #ifdef SAM_D5X_E5X
         "        movs r6, #20; d1: subs r6, #1; bne d1;\n"        // 548 ns (end TOL or entire T1L)
@@ -97,7 +106,7 @@ static void neopixel_send_buffer_core(volatile uint32_t *clraddr, uint32_t pinMa
 
         "nextbyte:\n"
         #ifdef SAMD21
-        "        movs r6, #1; d3: subs r6, #1; bne d3;\n"          // 60 ns (end TOL or entire T1L)
+        "        movs r6, #1; d3: sub" ASM_SUFFIX " r6, #1; bne d3;\n"          // 60 ns (end TOL or entire T1L)
                                                                    // other instructions add more delay
         #endif
         #ifdef SAM_D5X_E5X

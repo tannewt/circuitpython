@@ -35,6 +35,11 @@ PORT ?= /dev/tty.SLAB_USBtoUART
 # If the build directory is not given, make it reflect the board name.
 BUILD ?= build-$(BOARD)
 
+# Change these for testing
+MICROPY_BUILD_CLANG = 1
+CIRCUITPY_LTO = 1
+OPTIMIZATION_FLAGS = -Oz
+
 # First makefile with targets. Defines the default target.
 include ../../py/mkenv.mk
 

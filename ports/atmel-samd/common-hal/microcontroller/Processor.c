@@ -73,9 +73,9 @@
 #include "peripheral_clk_config.h"
 
 #define ADC_TEMP_SAMPLE_LENGTH 4
-#define INT1V_VALUE_FLOAT MICROPY_FLOAT_CONST(1.0)
-#define INT1V_DIVIDER_1000 MICROPY_FLOAT_CONST(1000.0)
-#define ADC_12BIT_FULL_SCALE_VALUE_FLOAT MICROPY_FLOAT_CONST(4095.0)
+#define INT1V_VALUE_FLOAT MICROPY_FLOAT_CONST(1.0f)
+#define INT1V_DIVIDER_1000 MICROPY_FLOAT_CONST(1000.0f)
+#define ADC_12BIT_FULL_SCALE_VALUE_FLOAT MICROPY_FLOAT_CONST(4095.0f)
 
 // channel argument (ignored in calls below)
 #define IGNORED_CHANNEL 0
@@ -156,7 +156,7 @@ STATIC float calculate_temperature(uint16_t raw_value) {
 
     return fine_temp / 10;
     #else
-    return coarse_temp / 10.;
+    return coarse_temp / 10.f;
     #endif
 }
 #endif // SAMD21
@@ -164,7 +164,7 @@ STATIC float calculate_temperature(uint16_t raw_value) {
 #ifdef SAM_D5X_E5X
 // Decimal to fraction conversion. (adapted from ASF sample).
 STATIC float convert_dec_to_frac(uint8_t val) {
-    return val / MICROPY_FLOAT_CONST(10.);
+    return val / MICROPY_FLOAT_CONST(10.f);
 }
 STATIC float calculate_temperature(uint16_t TP, uint16_t TC) {
     uint32_t TLI = (*(uint32_t *)FUSES_ROOM_TEMP_VAL_INT_ADDR & FUSES_ROOM_TEMP_VAL_INT_Msk) >> FUSES_ROOM_TEMP_VAL_INT_Pos;
