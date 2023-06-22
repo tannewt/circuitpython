@@ -388,13 +388,14 @@ SRC_QSTR_PREPROCESSOR += peripherals/samd/$(PERIPHERALS_CHIP_FAMILY)/clocks.c
 
 all: $(BUILD)/firmware.bin $(BUILD)/firmware.uf2
 
+# To render remarks: ~/repos/LLVM-embedded-toolchain-for-Arm/repos/llvm-project/llvm/tools/opt-viewer/opt-viewer.py build-feather_m0_express/firmware.elf.remarks.yaml html
 ifeq ($(VALID_BOARD),)
 $(BUILD)/firmware.elf: invalid-board
 else
 $(BUILD)/firmware.elf: $(OBJ) $(GENERATED_LD_FILE)
 	$(STEPECHO) "LINK $@"
 	$(Q)echo $(OBJ) > $(BUILD)/firmware.objs
-	$(Q)$(CC) -o $@ $(LDFLAGS) @$(BUILD)/firmware.objs -Wl,--start-group $(LIBS) -Wl,--end-group
+	$(Q)$(CC) -o $@ $(LDFLAGS) @$(BUILD)/firmware.objs -Wl,--start-group $(LIBS) -Wl,--end-group -Wl,--opt-remarks-filename,$@.remarks.yaml -Wl,-opt-remarks-with-hotness -Wl,-opt-remarks-format=yaml
 	$(Q)$(SIZE) $@ | $(PYTHON) $(TOP)/tools/build_memory_info.py $(GENERATED_LD_FILE) $(BUILD)
 endif
 

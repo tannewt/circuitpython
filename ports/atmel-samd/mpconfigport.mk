@@ -59,6 +59,7 @@ CIRCUITPY_ZLIB = 0
 # To make clang fit
 CIRCUITPY_ONEWIREIO = 0
 CIRCUITPY_ROTARYIO = 0
+CIRCUITPY_TOUCHIO = 0
 
 # Turn off a few more things that don't fit in 192kB
 

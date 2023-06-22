@@ -40,8 +40,8 @@ PY_SRC ?= $(TOP)/py
 BUILD ?= build
 
 MICROPY_BUILD_CLANG ?= 0
-# SYSROOT ?= /home/tannewt/Downloads/LLVMEmbeddedToolchainForArm-16.0.0-Linux-x86_64
-SYSROOT ?= /Users/tannewt/repos/LLVM-embedded-toolchain-for-Arm/build/llvm
+SYSROOT ?= /home/tannewt/repos/LLVM-embedded-toolchain-for-Arm/build/llvm
+# SYSROOT ?= /Users/tannewt/repos/LLVM-embedded-toolchain-for-Arm/build/llvm
 
 export PATH := $(SYSROOT)/bin:$(PATH)
 
