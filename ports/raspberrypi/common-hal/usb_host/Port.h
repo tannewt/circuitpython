@@ -1,9 +1,9 @@
 /*
- * This file is part of the MicroPython project, http://micropython.org/
+ * This file is part of the Micro Python project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
+ * Copyright (c) 2022 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,14 +24,18 @@
  * THE SOFTWARE.
  */
 
-#include "supervisor/board.h"
+#ifndef MICROPY_INCLUDED_MIMXRT10XX_COMMON_HAL_USB_HOST_PORT_H
+#define MICROPY_INCLUDED_MIMXRT10XX_COMMON_HAL_USB_HOST_PORT_H
 
-#include "shared-bindings/usb_host/Port.h"
+#include "py/obj.h"
 
-// Use the MP_WEAK supervisor/shared/board.c versions of routines not defined here.
+typedef struct {
+    mp_obj_base_t base;
+    bool init;
+} usb_host_port_obj_t;
 
-usb_host_port_obj_t _host_port;
+// Cheater state so that the usb module knows if it should return the TinyUSB
+// state.
+extern bool usb_host_init;
 
-void board_init(void) {
-    common_hal_usb_host_port_construct(&_host_port, &pin_GPIO16, &pin_GPIO17);
-}
+#endif // MICROPY_INCLUDED_MIMXRT10XX_COMMON_HAL_USB_HOST_PORT_H

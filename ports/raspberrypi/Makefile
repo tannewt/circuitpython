@@ -258,6 +258,18 @@ SRC_C += \
 	$(SRC_CYW43) \
 	$(SRC_LWIP) \
 
+
+ifeq ($(CIRCUITPY_USB_HOST), 1)
+SRC_C += \
+  lib/tinyusb/src/portable/raspberrypi/pio_usb/hcd_pio_usb.c \
+  lib/Pico-PIO-USB/src/pio_usb.c \
+  lib/Pico-PIO-USB/src/pio_usb_host.c \
+  lib/Pico-PIO-USB/src/usb_crc.c \
+
+INC += \
+  -isystem lib/Pico-PIO-USB/src
+endif
+
 ifeq ($(CIRCUITPY_PICODVI),1)
 SRC_C += \
   bindings/picodvi/__init__.c \

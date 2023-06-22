@@ -127,6 +127,10 @@ extern "C" {
 // --------------------------------------------------------------------
 
 #if CIRCUITPY_USB_HOST
+#define CFG_TUH_ENABLED 1
+
+// Always use PIO to do host on RP2.
+#define CFG_TUH_RPI_PIO_USB 1
 
 #if CIRCUITPY_USB_HOST_INSTANCE == 0
 #if USB_HIGHSPEED

@@ -1,9 +1,9 @@
 /*
- * This file is part of the MicroPython project, http://micropython.org/
+ * This file is part of the Micro Python project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
+ * Copyright (c) 2022 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,14 +24,4 @@
  * THE SOFTWARE.
  */
 
-#include "supervisor/board.h"
-
-#include "shared-bindings/usb_host/Port.h"
-
-// Use the MP_WEAK supervisor/shared/board.c versions of routines not defined here.
-
-usb_host_port_obj_t _host_port;
-
-void board_init(void) {
-    common_hal_usb_host_port_construct(&_host_port, &pin_GPIO16, &pin_GPIO17);
-}
+// Nothing

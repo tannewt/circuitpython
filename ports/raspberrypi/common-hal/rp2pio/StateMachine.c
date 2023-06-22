@@ -178,7 +178,6 @@ STATIC uint32_t _check_pins_free(const mcu_pin_obj_t *first_pin, uint8_t pin_cou
     return pins_we_use;
 }
 
-
 bool rp2pio_statemachine_construct(rp2pio_statemachine_obj_t *self,
     const uint16_t *program, size_t program_len,
     size_t frequency,
