@@ -147,6 +147,7 @@ extern "C" {
 #define CFG_TUH_ENUMERATION_BUFSIZE 256
 #endif
 
+#define CFG_TUH_HID                 2
 #define CFG_TUH_HUB                 1
 #define CFG_TUH_CDC                 0
 #define CFG_TUH_MSC                 0

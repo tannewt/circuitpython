@@ -268,11 +268,6 @@ void tud_suspend_cb(bool remote_wakeup_en) {
 void tud_resume_cb(void) {
 }
 
-// void tuh_mount_cb(uint8_t daddr)
-// {
-//   mp_printf(&mp_plat_print, "Device attached, address = %d\r\n", daddr);
-// }
-
 // Invoked when cdc when line state changed e.g connected/disconnected
 // Use to reset to DFU when disconnect with 1200 bps
 void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {

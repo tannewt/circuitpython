@@ -34,6 +34,7 @@
 #include "shared-bindings/usb/core/__init__.h"
 #include "shared-module/usb/utf16le.h"
 #include "supervisor/shared/tick.h"
+#include "supervisor/usb.h"
 
 STATIC xfer_result_t _xfer_result;
 bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t device_number) {
@@ -273,14 +274,22 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
 }
 
 bool common_hal_usb_core_device_is_kernel_driver_active(usb_core_device_obj_t *self, mp_int_t interface) {
-    // TODO: Implement this when CP natively uses a keyboard.
+    #if CIRCUITPY_USB_KEYBOARD_WORKFLOW
+    if (usb_keyboard_in_use(self->device_number, interface)) {
+        return true;
+    }
+    #endif
     return false;
 }
 
 void common_hal_usb_core_device_detach_kernel_driver(usb_core_device_obj_t *self, mp_int_t interface) {
-    // TODO: Implement this when CP natively uses a keyboard.
+    #if CIRCUITPY_USB_KEYBOARD_WORKFLOW
+    usb_keyboard_detach(self->device_number, interface);
+    #endif
 }
 
 void common_hal_usb_core_device_attach_kernel_driver(usb_core_device_obj_t *self, mp_int_t interface) {
-    // TODO: Implement this when CP natively uses a keyboard.
+    #if CIRCUITPY_USB_KEYBOARD_WORKFLOW
+    usb_keyboard_attach(self->device_number, interface);
+    #endif
 }
