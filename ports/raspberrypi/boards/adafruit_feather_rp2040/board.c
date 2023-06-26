@@ -27,3 +27,13 @@
 #include "supervisor/board.h"
 
 // Use the MP_WEAK supervisor/shared/board.c versions of routines not defined here.
+
+#include "shared-bindings/usb_host/Port.h"
+
+// Use the MP_WEAK supervisor/shared/board.c versions of routines not defined here.
+
+usb_host_port_obj_t _host_port;
+
+void board_init(void) {
+    common_hal_usb_host_port_construct(&_host_port, &pin_GPIO11, &pin_GPIO12);
+}

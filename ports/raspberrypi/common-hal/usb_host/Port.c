@@ -26,6 +26,7 @@
 
 #include "bindings/rp2pio/StateMachine.h"
 #include "shared-bindings/microcontroller/Pin.h"
+#include "shared-bindings/microcontroller/Processor.h"
 #include "shared-bindings/usb_host/Port.h"
 
 #include "src/common/pico_time/include/pico/time.h"
@@ -38,6 +39,7 @@
 
 #include "tusb.h"
 
+#include "lib/Pico-PIO-USB/src/pio_usb.h"
 #include "lib/Pico-PIO-USB/src/pio_usb_configuration.h"
 
 #include "supervisor/serial.h"
@@ -45,27 +47,32 @@
 bool usb_host_init;
 
 STATIC PIO pio_instances[2] = {pio0, pio1};
-static alarm_pool_t *volatile _core1_alarm_pool = NULL;
+volatile bool _core1_ready = false;
 
 static void __not_in_flash_func(core1_main)(void) {
     // The MPU is reset before this starts.
-    _core1_alarm_pool = alarm_pool_create(2, 1);
-    console_uart_printf("core1 alarm pool created %p\r\n", _core1_alarm_pool);
+    SysTick->LOAD = (uint32_t)((common_hal_mcu_processor_get_frequency() / 1000) - 1UL);
+    SysTick->VAL = 0UL;   /* Load the SysTick Counter Value */
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |  // Processor clock.
+        SysTick_CTRL_ENABLE_Msk;
 
     // Turn off flash access. After this, it will hard fault. Better than messing
     // up CIRCUITPY.
-    // MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
-    // MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
-    // MPU->RBAR = XIP_MAIN_BASE | MPU_RBAR_VALID_Msk;
-    // MPU->RASR = MPU_RASR_XN_Msk | // Set execute never and everything else is restricted.
-    //     MPU_RASR_ENABLE_Msk |
-    //     (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
-    // MPU->RNR = 7;
+    MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
+    MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
+    MPU->RBAR = XIP_MAIN_BASE | MPU_RBAR_VALID_Msk;
+    MPU->RASR = MPU_RASR_XN_Msk | // Set execute never and everything else is restricted.
+        MPU_RASR_ENABLE_Msk |
+        (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
+    MPU->RNR = 7;
+
+    _core1_ready = true;
 
     while (true) {
-        // Sleep until an interrupt occurs.
-        // __wfi();
-        asm ("nop");
+        pio_usb_host_frame();
+        // Wait for systick to reload.
+        while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0) {
+        }
     }
 }
 
@@ -95,6 +102,7 @@ void common_hal_usb_host_port_construct(usb_host_port_obj_t *self, const mcu_pin
         raise_ValueError_invalid_pins();
     }
     pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
+    pio_cfg.use_alarm_pool = false;
     pio_cfg.pin_dp = dp->number;
     pio_cfg.pio_tx_num = 0;
     pio_cfg.pio_rx_num = 1;
@@ -127,21 +135,15 @@ void common_hal_usb_host_port_construct(usb_host_port_obj_t *self, const mcu_pin
     rp2pio_statemachine_never_reset(rx_pio, pio_cfg.sm_eop);
 
 
-    // Core 1 will run the SOF interrupt in the alarm pool it creates.
-    _core1_alarm_pool = NULL;
+    // Core 1 will run the SOF interrupt directly.
+    _core1_ready = false;
     multicore_launch_core1(core1_main);
-    console_uart_printf("waiting for alarm pool\r\n");
-    while (_core1_alarm_pool == NULL) {
+    while (!_core1_ready) {
     }
-    console_uart_printf("got alarm pool\r\n");
-    pio_cfg.alarm_pool = _core1_alarm_pool;
 
-    console_uart_printf("tuh_configure\r\n");
     tuh_configure(TUH_OPT_RHPORT, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
-    console_uart_printf("tuh_configured\r\n");
     tuh_init(TUH_OPT_RHPORT);
 
-    console_uart_printf("tuh_inited\r\n");
     self->init = true;
     usb_host_init = true;
 }
