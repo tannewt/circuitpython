@@ -134,6 +134,8 @@ void common_hal_usb_host_port_construct(usb_host_port_obj_t *self, const mcu_pin
     rp2pio_statemachine_never_reset(rx_pio, pio_cfg.sm_rx);
     rp2pio_statemachine_never_reset(rx_pio, pio_cfg.sm_eop);
 
+    common_hal_never_reset_pin(dp);
+    common_hal_never_reset_pin(dm);
 
     // Core 1 will run the SOF interrupt directly.
     _core1_ready = false;
