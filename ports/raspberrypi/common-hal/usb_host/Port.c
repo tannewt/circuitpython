@@ -69,15 +69,12 @@ static void __not_in_flash_func(core1_main)(void) {
 
     _core1_ready = true;
 
-    bool last_ready = false;
     while (true) {
         pio_usb_host_frame();
-        bool ready = tuh_task_event_ready();
-        if (ready && !last_ready) {
-            // Grab a lock and queue the tinyusb background task.
+        if (tuh_task_event_ready()) {
+            // Queue the tinyusb background task.
             usb_background_schedule();
         }
-        last_ready = ready;
         // Wait for systick to reload.
         while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0) {
         }

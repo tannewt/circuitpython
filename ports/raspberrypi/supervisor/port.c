@@ -304,7 +304,7 @@ void port_interrupt_after_ticks(uint32_t ticks) {
 
 void port_idle_until_interrupt(void) {
     common_hal_mcu_disable_interrupts();
-    if (!background_callback_pending() && !tud_task_event_ready() && !_woken_up) {
+    if (!background_callback_pending() && !tud_task_event_ready() && !tuh_task_event_ready() && !_woken_up) {
         __DSB();
         __WFI();
     }
