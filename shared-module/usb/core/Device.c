@@ -254,7 +254,7 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
         mp_raise_usb_core_USBError(NULL);
     }
     uint32_t start_time = supervisor_ticks_ms32();
-    while (supervisor_ticks_ms32() - start_time < (uint32_t)timeout &&
+    while ((timeout == 0 || supervisor_ticks_ms32() - start_time < (uint32_t)timeout) &&
            !mp_hal_is_interrupted() &&
            _xfer_result == 0xff) {
         // The background tasks include TinyUSB which will call the function

@@ -28,6 +28,7 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/microcontroller/Processor.h"
 #include "shared-bindings/usb_host/Port.h"
+#include "supervisor/usb.h"
 
 #include "src/common/pico_time/include/pico/time.h"
 #include "src/rp2040/hardware_structs/include/hardware/structs/mpu.h"
@@ -68,8 +69,15 @@ static void __not_in_flash_func(core1_main)(void) {
 
     _core1_ready = true;
 
+    bool last_ready = false;
     while (true) {
         pio_usb_host_frame();
+        bool ready = tuh_task_event_ready();
+        if (ready && !last_ready) {
+            // Grab a lock and queue the tinyusb background task.
+            usb_background_schedule();
+        }
+        last_ready = ready;
         // Wait for systick to reload.
         while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0) {
         }

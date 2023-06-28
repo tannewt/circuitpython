@@ -247,7 +247,10 @@ STATIC mp_obj_t usb_core_device_ctrl_transfer(size_t n_args, const mp_obj_t *pos
 
     mp_buffer_info_t bufinfo;
     // check request type
-    if ((args[ARG_bmRequestType].u_int & 0x80) != 0) {
+    if (args[ARG_data_or_wLength].u_obj == mp_const_none) {
+        bufinfo.len = 0;
+        bufinfo.buf = NULL;
+    } else if ((args[ARG_bmRequestType].u_int & 0x80) != 0) {
         mp_get_buffer_raise(args[ARG_data_or_wLength].u_obj, &bufinfo, MP_BUFFER_WRITE);
     } else {
         mp_get_buffer_raise(args[ARG_data_or_wLength].u_obj, &bufinfo, MP_BUFFER_READ);
