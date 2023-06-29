@@ -200,12 +200,13 @@ void usb_disconnect(void) {
 
 void usb_background(void) {
     if (usb_enabled()) {
-        #if CFG_TUSB_OS == OPT_OS_NONE
+        #if CFG_TUSB_OS == OPT_OS_NONE || CFG_TUSB_OS == OPT_OS_PICO
         tud_task();
         #if CIRCUITPY_USB_HOST
         tuh_task();
         #endif
         #endif
+
         // No need to flush if there's no REPL.
         #if CIRCUITPY_USB_CDC
         if (usb_cdc_console_enabled()) {

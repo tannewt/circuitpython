@@ -36,6 +36,6 @@ typedef struct {
 
 // Cheater state so that the usb module knows if it should return the TinyUSB
 // state.
-extern bool usb_host_init;
+extern volatile bool usb_host_init;
 
 #endif // MICROPY_INCLUDED_MIMXRT10XX_COMMON_HAL_USB_HOST_PORT_H

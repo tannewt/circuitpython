@@ -43,8 +43,9 @@
 #include "lib/Pico-PIO-USB/src/pio_usb_configuration.h"
 
 #include "supervisor/serial.h"
+#include "supervisor/usb.h"
 
-bool usb_host_init;
+volatile bool usb_host_init;
 
 STATIC PIO pio_instances[2] = {pio0, pio1};
 volatile bool _core1_ready = false;
@@ -56,6 +57,7 @@ static void __not_in_flash_func(core1_main)(void) {
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |  // Processor clock.
         SysTick_CTRL_ENABLE_Msk;
 
+#if 0
     // Turn off flash access. After this, it will hard fault. Better than messing
     // up CIRCUITPY.
     MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
@@ -65,11 +67,17 @@ static void __not_in_flash_func(core1_main)(void) {
         MPU_RASR_ENABLE_Msk |
         (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
     MPU->RNR = 7;
+#endif
 
     _core1_ready = true;
+    while(!usb_host_init) {
+        // Wait for USB host to be initialized.
+    }
 
     while (true) {
         pio_usb_host_frame();
+        usb_background_schedule();
+
         // Wait for systick to reload.
         while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0) {
         }
@@ -101,6 +109,20 @@ void common_hal_usb_host_port_construct(usb_host_port_obj_t *self, const mcu_pin
     if (dp->number + 1 != dm->number) {
         raise_ValueError_invalid_pins();
     }
+
+    // PIO-USB requires CPU clock to be multiple of 120Mhz
+    uint32_t cpu_freq = common_hal_mcu_processor_get_frequency();
+    if (cpu_freq != 120000000 && cpu_freq != 240000000) {
+        // Change CPU clock here cause in-correct clock computation for other already inited peripherals such as UART
+//        mcu_processor_obj_t dummy_mcu;
+//        common_hal_mcu_processor_set_frequency(&dummy_mcu, 120000000);
+//        cpu_freq = common_hal_mcu_processor_get_frequency();
+//        if (cpu_freq != 120000000 && cpu_freq != 240000000) {
+            mp_raise_RuntimeError(translate("CPU clock must be multiple of 120 MHz"));
+            return;
+//        }
+    }
+
     pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
     pio_cfg.use_alarm_pool = false;
     pio_cfg.pin_dp = dp->number;

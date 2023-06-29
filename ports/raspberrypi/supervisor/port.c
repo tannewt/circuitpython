@@ -69,6 +69,7 @@
 #include "src/common/pico_binary_info/include/pico/binary_info.h"
 
 #include "pico/bootrom.h"
+#include "pico/stdlib.h"
 #include "hardware/watchdog.h"
 
 #include "supervisor/serial.h"
@@ -204,6 +205,11 @@ void reset_port(void) {
 
     #if CIRCUITPY_WIFI
     wifi_reset();
+    #endif
+
+    #if CIRCUITPY_USB_HOST
+    // PIO USB need cpu frequency to be multiple of 120Mhz
+    set_sys_clock_khz(120000, true);
     #endif
 
     reset_all_pins();
