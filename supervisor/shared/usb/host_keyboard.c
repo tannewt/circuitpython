@@ -176,11 +176,7 @@ STATIC void process_event(uint8_t dev_addr, uint8_t instance, const hid_keyboard
 
     uint8_t leds = (caps | (num << 1));
     if (leds != old_report.reserved) {
-        console_uart_printf("Send LEDs report %d (dev:instance = %d:%d)\r\n", leds, dev_addr, instance);
-        // no worky
-        if (!tuh_hid_set_report(dev_addr, instance /*idx*/, 0 /*report_id*/, HID_REPORT_TYPE_OUTPUT /*report_type*/, &leds, sizeof(leds))) {
-            console_uart_printf("set_report() for leds failed\r\n");
-        }
+        tuh_hid_set_report(dev_addr, instance /*idx*/, 0 /*report_id*/, HID_REPORT_TYPE_OUTPUT /*report_type*/, &leds, sizeof(leds));
     }
     old_report = *report;
     old_report.reserved = leds;
@@ -211,25 +207,21 @@ void usb_keyboard_attach(uint8_t dev_addr, uint8_t interface) {
 }
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t interface, uint8_t const *desc_report, uint16_t desc_len) {
-    console_uart_printf("Device attached, address = %d\r\n", dev_addr);
     usb_keyboard_attach(dev_addr, interface);
 }
 
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t interface) {
-    console_uart_printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, interface);
     usb_keyboard_detach(dev_addr, interface);
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len) {
     if (len != sizeof(hid_keyboard_report_t)) {
-        console_uart_printf("report len = %u NOT 8, probably something wrong !!\r\n", len);
+        return;
     } else {
         process_event(dev_addr, instance, (hid_keyboard_report_t *)report);
     }
     // continue to request to receive report
-    if (!tuh_hid_receive_report(dev_addr, instance)) {
-        console_uart_printf("Error: cannot request to receive report\r\n");
-    }
+    tuh_hid_receive_report(dev_addr, instance);
 }
 
 void usb_keyboard_init(void) {
