@@ -206,6 +206,7 @@ void usb_background(void) {
         tuh_task();
         #endif
         #endif
+
         // No need to flush if there's no REPL.
         #if CIRCUITPY_USB_CDC
         if (usb_cdc_console_enabled()) {
