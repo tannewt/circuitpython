@@ -49,6 +49,7 @@ void tuh_umount_cb(uint8_t dev_addr) {
 }
 
 STATIC xfer_result_t _xfer_result;
+STATIC size_t _actual_len;
 bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t device_number) {
     if (device_number == 0 || device_number > CFG_TUH_DEVICE_MAX + CFG_TUH_HUB) {
         return false;
@@ -78,6 +79,7 @@ uint16_t common_hal_usb_core_device_get_idProduct(usb_core_device_obj_t *self) {
 STATIC void _transfer_done_cb(tuh_xfer_t *xfer) {
     // Store the result so we stop waiting for the transfer.
     _xfer_result = xfer->result;
+    _actual_len = xfer->actual_len;
 }
 
 STATIC bool _wait_for_callback(void) {
@@ -164,6 +166,7 @@ STATIC size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
     }
     if (result == XFER_RESULT_SUCCESS) {
         return xfer->actual_len;
+        return _actual_len;
     }
 
     return 0;
@@ -297,6 +300,9 @@ bool common_hal_usb_core_device_is_kernel_driver_active(usb_core_device_obj_t *s
         return true;
     }
     #endif
+    if (tuh_driver_attached(self->device_number, interface)) {
+        return true;
+    }
     return false;
 }
 
@@ -304,10 +310,12 @@ void common_hal_usb_core_device_detach_kernel_driver(usb_core_device_obj_t *self
     #if CIRCUITPY_USB_KEYBOARD_WORKFLOW
     usb_keyboard_detach(self->device_number, interface);
     #endif
+    tuh_driver_detach(self->device_number, interface);
 }
 
 void common_hal_usb_core_device_attach_kernel_driver(usb_core_device_obj_t *self, mp_int_t interface) {
     #if CIRCUITPY_USB_KEYBOARD_WORKFLOW
     usb_keyboard_attach(self->device_number, interface);
     #endif
+    tuh_driver_attach(self->device_number, interface);
 }
