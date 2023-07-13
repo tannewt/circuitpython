@@ -36,6 +36,7 @@ class BitmapStub:
 
 
 f = bitmap_font.load_font(args.font, BitmapStub)
+f2 = bitmap_font.load_font("../../tools/fonts/UnifontUpper-16.bdf", BitmapStub)
 
 # Load extra characters from the sample file.
 sample_characters = set()
@@ -60,15 +61,22 @@ filtered_characters = all_characters
 
 # Try to pre-load all of the glyphs. Misses will still be slow later.
 f.load_glyphs(set(ord(c) for c in all_characters))
+f2.load_glyphs(set(ord(c) for c in all_characters))
+
+print(f2._glyphs)
 
 missing = 0
 # Get each glyph.
 for c in set(all_characters):
-    if ord(c) not in f._glyphs:
+    if ord(c) in f._glyphs:
+        g = f.get_glyph(ord(c))
+    elif ord(c) in f2._glyphs:
+        g = f2.get_glyph(ord(c))
+    else:
+        print(c, "missing", ord(c))
         missing += 1
         filtered_characters = filtered_characters.replace(c, "")
         continue
-    g = f.get_glyph(ord(c))
     if g["shift"][1] != 0:
         raise RuntimeError("y shift")
 
@@ -76,22 +84,36 @@ if missing > 0:
     print("Font missing", missing, "characters", file=sys.stderr)
 
 tile_x, tile_y, dx, dy = f.get_bounding_box()
+print("bounding box", tile_x, tile_y, dx, dy)
+tile_x = 16
+tile_y = 16
 total_bits = tile_x * len(all_characters)
 total_bits += 32 - total_bits % 32
 bytes_per_row = total_bits // 8
 b = bytearray(bytes_per_row * tile_y)
+print("total len", len(b))
 
 for x, c in enumerate(filtered_characters):
-    g = f.get_glyph(ord(c))
+    if ord(c) in f._glyphs:
+        g = f.get_glyph(ord(c))
+    else:
+        g = f2.get_glyph(ord(c))
+    print(c, g["bounds"])
     start_bit = x * tile_x + g["bounds"][2]
-    start_y = (tile_y - 2) - (g["bounds"][1] + g["bounds"][3])
+    if c in "4q":
+        start_bit -= 1
+    start_y = (tile_y + dy) - (g["bounds"][1] + g["bounds"][3])
     for y, row in enumerate(g["bitmap"].rows):
-        for i in range(g["bounds"][0]):
+        for i in range(min(tile_x, g["bounds"][0])):
             byte = i // 8
             bit = i % 8
             if row[byte] & (1 << (7 - bit)) != 0:
                 overall_bit = start_bit + (start_y + y) * bytes_per_row * 8 + i
-                b[overall_bit // 8] |= 1 << (7 - (overall_bit % 8))
+                try:
+                    b[overall_bit // 8] |= 1 << (7 - (overall_bit % 8))
+                except IndexError:
+                    print("index error", c, y, i, overall_bit, overall_bit // 8)
+                    pass
 
 
 extra_characters = ""
@@ -328,8 +350,21 @@ const uint32_t font_bitmap_data[{}] = {{
     )
 )
 
+chars = list(filtered_characters)
+for i in range(16, len(chars), 16):
+    chars.insert(i, "  ")
+print(chars)
+
+c_file.write(
+    """\
+// {}
+""".format(
+        "     ".join(chars)
+    )
+)
+
 for i, word in enumerate(struct.iter_unpack(">I", b)):
-    c_file.write("0x{:08x}, ".format(word[0]))
+    c_file.write("0b{:032b}, ".format(word[0]))
     if (i + 1) % (bytes_per_row // 4) == 0:
         c_file.write("\n")
 
