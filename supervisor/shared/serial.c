@@ -145,7 +145,7 @@ void serial_early_init(void) {
     common_hal_busio_uart_never_reset(&console_uart);
 
     // Do an initial print so that we can confirm the serial output is working.
-    console_uart_printf("Serial console setup\r\n");
+    console_uart_printf("\r\n\r\nSerial console setup\r\n");
     #endif
 
     port_serial_early_init();
@@ -331,12 +331,12 @@ void serial_write_substring(const char *text, uint32_t length) {
     #endif
 
     #if CIRCUITPY_CONSOLE_UART
-    if (!_first_write_done) {
-        mp_hal_delay_ms(50);
-        _first_write_done = true;
-    }
-    int uart_errcode;
-    common_hal_busio_uart_write(&console_uart, (const uint8_t *)text, length, &uart_errcode);
+    // if (!_first_write_done) {
+    //     mp_hal_delay_ms(50);
+    //     _first_write_done = true;
+    // }
+    // int uart_errcode;
+    // common_hal_busio_uart_write(&console_uart, (const uint8_t *)text, length, &uart_errcode);
     #endif
 
     #if CIRCUITPY_SERIAL_BLE

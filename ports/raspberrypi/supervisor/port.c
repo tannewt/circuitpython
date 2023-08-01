@@ -252,14 +252,15 @@ uint32_t *port_heap_get_top(void) {
     return port_stack_get_top();
 }
 
+uint32_t __uninitialized_ram(saved_word);
 void port_set_saved_word(uint32_t value) {
-    // Store in a watchdog scratch register instead of RAM. 4-7 are used by the
-    // sdk. 0 is used by alarm. 1-3 are free.
-    watchdog_hw->scratch[1] = value;
+    // Store in RAM because the watchdog scratch registers don't survive
+    // resetting by pulling the RUN pin low.
+    saved_word = value;
 }
 
 uint32_t port_get_saved_word(void) {
-    return watchdog_hw->scratch[1];
+    return saved_word;
 }
 
 static volatile bool ticks_enabled;
@@ -311,6 +312,8 @@ void port_idle_until_interrupt(void) {
     common_hal_mcu_enable_interrupts();
 }
 
+extern int console_uart_printf(const char *fmt, ...);
+
 /**
  * \brief Default interrupt handler for unused IRQs.
  */
@@ -320,6 +323,8 @@ __attribute__((used)) void __not_in_flash_func(HardFault_Handler)(void) {
     // should not be fatal to CP. (Fingers crossed.)
     if (get_core_num() == 0) {
         reset_into_safe_mode(SAFE_MODE_HARD_FAULT);
+    } else {
+        console_uart_printf("core 1 hard fault\r\n");
     }
     while (true) {
         asm ("nop;");

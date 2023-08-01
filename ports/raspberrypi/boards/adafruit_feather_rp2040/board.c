@@ -26,4 +26,24 @@
 
 #include "supervisor/board.h"
 
+#include "shared-bindings/usb_host/Port.h"
+
+#include "src/rp2_common/hardware_gpio/include/hardware/gpio.h"
+
+void board_init(void) {
+    common_hal_usb_host_port_construct(&pin_GPIO11, &pin_GPIO12);
+
+    never_reset_pin_number(13);
+    gpio_init(13);
+    gpio_put(13, false);
+    gpio_set_dir(13, GPIO_OUT);
+
+
+    gpio_put(13, true);
+    for (size_t i = 0; i < 100; i++) {
+        asm ("nop");
+    }
+    gpio_put(13, false);
+}
+
 // Use the MP_WEAK supervisor/shared/board.c versions of routines not defined here.

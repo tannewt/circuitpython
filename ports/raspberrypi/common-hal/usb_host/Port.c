@@ -59,13 +59,13 @@ static void __not_in_flash_func(core1_main)(void) {
 
     // Turn off flash access. After this, it will hard fault. Better than messing
     // up CIRCUITPY.
-    MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
-    MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
-    MPU->RBAR = XIP_MAIN_BASE | MPU_RBAR_VALID_Msk;
-    MPU->RASR = MPU_RASR_XN_Msk | // Set execute never and everything else is restricted.
-        MPU_RASR_ENABLE_Msk |
-        (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
-    MPU->RNR = 7;
+    // MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
+    // MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
+    // MPU->RBAR = XIP_MAIN_BASE | MPU_RBAR_VALID_Msk;
+    // MPU->RASR = MPU_RASR_XN_Msk | // Set execute never and everything else is restricted.
+    //     MPU_RASR_ENABLE_Msk |
+    //     (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
+    // MPU->RNR = 7;
 
     _core1_ready = true;
 
