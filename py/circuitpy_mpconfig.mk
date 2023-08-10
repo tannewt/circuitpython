@@ -586,6 +586,9 @@ CFLAGS += -DCIRCUITPY_TUSB_ATTR_USBRAM=$(CIRCUITPY_TUSB_ATTR_USBRAM)
 CIRCUITPY_SWO_TRACE ?= 0
 CFLAGS += -DCIRCUITPY_SWO_TRACE=$(CIRCUITPY_SWO_TRACE)
 
+CIRCUITPY_ARM_TRACE ?= 0
+CFLAGS += -DCIRCUITPY_ARM_TRACE=$(CIRCUITPY_ARM_TRACE)
+
 # Define an equivalent for MICROPY_LONGINT_IMPL, to pass to $(MPY-TOOL) in py/mkrules.mk
 # $(MPY-TOOL) needs to know what kind of longint to use (if any) to freeze long integers.
 # This should correspond to the MICROPY_LONGINT_IMPL definition in mpconfigport.h.

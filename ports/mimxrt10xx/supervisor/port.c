@@ -345,6 +345,46 @@ void __attribute__((no_instrument_function,section(".itcm.profile_exit"),long_ca
     ITM->PORT[4].u32 = addr;
 }
 
+typedef struct
+{
+  __IOM uint32_t PRGCTLR;
+  __IOM uint32_t PROCSELR;
+  __IOM uint32_t STATR;
+  __IOM uint32_t CONFIGR;
+  __IOM uint32_t EVENTCTL0R;
+  __IOM uint32_t EVENTCTL1R;
+  __IOM uint32_t STALLCTLR;
+  __IOM uint32_t TSCTLR;
+  __IOM uint32_t SYNCPR;
+  __IOM uint32_t CCCCTLR;
+  __IOM uint32_t BBCTLR;
+  __IOM uint32_t TRACEIDR;               /*!< Offset: 0xE00 (R/W)  ITM Trace Enable Register */
+
+        uint32_t RESERVED0[864U];
+  __IOM uint32_t TER;                    /*!< Offset: 0xE00 (R/W)  ITM Trace Enable Register */
+        uint32_t RESERVED1[15U];
+  __IOM uint32_t TPR;                    /*!< Offset: 0xE40 (R/W)  ITM Trace Privilege Register */
+        uint32_t RESERVED2[15U];
+  __IOM uint32_t TCR;                    /*!< Offset: 0xE80 (R/W)  ITM Trace Control Register */
+        uint32_t RESERVED3[32U];
+        uint32_t RESERVED4[43U];
+  __OM  uint32_t LAR;                    /*!< Offset: 0xFB0 ( /W)  ITM Lock Access Register */
+  __IM  uint32_t LSR;                    /*!< Offset: 0xFB4 (R/ )  ITM Lock Status Register */
+        uint32_t RESERVED5[6U];
+  __IM  uint32_t PID4;                   /*!< Offset: 0xFD0 (R/ )  ETM Peripheral Identification Register #4 */
+  __IM  uint32_t PID5;                   /*!< Offset: 0xFD4 (R/ )  ETM Peripheral Identification Register #5 */
+  __IM  uint32_t PID6;                   /*!< Offset: 0xFD8 (R/ )  ETM Peripheral Identification Register #6 */
+  __IM  uint32_t PID7;                   /*!< Offset: 0xFDC (R/ )  ETM Peripheral Identification Register #7 */
+  __IM  uint32_t PID0;                   /*!< Offset: 0xFE0 (R/ )  ETM Peripheral Identification Register #0 */
+  __IM  uint32_t PID1;                   /*!< Offset: 0xFE4 (R/ )  ETM Peripheral Identification Register #1 */
+  __IM  uint32_t PID2;                   /*!< Offset: 0xFE8 (R/ )  ETM Peripheral Identification Register #2 */
+  __IM  uint32_t PID3;                   /*!< Offset: 0xFEC (R/ )  ETM Peripheral Identification Register #3 */
+  __IM  uint32_t CID0;                   /*!< Offset: 0xFF0 (R/ )  ETM Component  Identification Register #0 */
+  __IM  uint32_t CID1;                   /*!< Offset: 0xFF4 (R/ )  ETM Component  Identification Register #1 */
+  __IM  uint32_t CID2;                   /*!< Offset: 0xFF8 (R/ )  ETM Component  Identification Register #2 */
+  __IM  uint32_t CID3;                   /*!< Offset: 0xFFC (R/ )  ETM Component  Identification Register #3 */
+} ETM_Type;
+
 safe_mode_t port_init(void) {
     #if IMXRT10XX
     CLOCK_SetMode(kCLOCK_ModeRun);
@@ -356,16 +396,31 @@ safe_mode_t port_init(void) {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL = 0x2 << DWT_CTRL_SYNCTAP_Pos | DWT_CTRL_CYCCNTENA_Msk;
 
-    // Enable SWO if needed.
-    #if CIRCUITPY_SWO_TRACE
+    // Enable trace if needed.
+    #if CIRCUITPY_SWO_TRACE || CIRCUITPY_ARM_TRACE
 
     // Turn on the 528 MHz clock to the TPIU.
-    CLOCK_EnableClock(kCLOCK_Trace); /* Make these edits*/
+    CLOCK_EnableClock(kCLOCK_Trace);
     /* Set TRACE_PODF. */
-    CLOCK_SetDiv(kCLOCK_TraceDiv, 0); /* Make these edits*/
+    CLOCK_SetDiv(kCLOCK_TraceDiv, 12);
     /* Set Trace clock source. */
-    CLOCK_SetMux(kCLOCK_TraceMux, 0); /* Make these edits*/
+    CLOCK_SetMux(kCLOCK_TraceMux, 0);
 
+    #if CIRCUITPY_ARM_TRACE
+    // TPI->CSPSR = 1 << (4 - 1); // 4 bits wide
+    TPI->CSPSR = 1 << (2 - 1); // 2 bits wide
+    TPI->SPPR = 0x0; // Parallel trace
+
+    ITM->TCR = ITM_TCR_TSENA_Msk | ITM_TCR_ITMENA_Msk | ITM_TCR_SYNCENA_Msk | ITM_TCR_DWTENA_Msk | 1 << ITM_TCR_TraceBusID_Pos;
+    ITM->TER |= 0x1f;
+    ITM->PORT[0].u8 = 'C';
+    ITM->PORT[0].u8 = 'P';
+    ITM->PORT[0].u8 = '\n';
+
+    // ETM->
+    #endif
+
+    #if CIRCUITPY_SWO_TRACE
     ITM->TCR = ITM_TCR_TSENA_Msk | ITM_TCR_ITMENA_Msk | ITM_TCR_SYNCENA_Msk | ITM_TCR_DWTENA_Msk;
 
     // Run at 2.75 mbaud. CP2102N says it can do up to 3.
@@ -376,12 +431,8 @@ safe_mode_t port_init(void) {
     TPI->SPPR = 0x2; // NRZ aka UART
     TPI->FFCR = 0;
 
-    IOMUXC_SetPinMux( /* Add these lines*/
-        IOMUXC_GPIO_AD_09_ARM_TRACE_SWO,
-        0U);
-    IOMUXC_SetPinConfig( /* Add these lines*/
-        IOMUXC_GPIO_AD_09_ARM_TRACE_SWO,
-        0x00F9U);
+    // Reset the SWO pin now so it is active. (The board should set it up correctly.)
+    common_hal_reset_pin(&pin_GPIO_AD_09);
 
     // Enable ports 0-4:
     // * 0 is serial output
@@ -392,6 +443,7 @@ safe_mode_t port_init(void) {
     ITM->PORT[0].u8 = 'C';
     ITM->PORT[0].u8 = 'P';
     ITM->PORT[0].u8 = '\n';
+    #endif
     #endif
 
     // Set all peripheral interrupt priorities to the lowest priority by default.
