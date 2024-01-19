@@ -127,8 +127,8 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
     if (display->colorspace.depth < 8) {
         uint8_t pixels_per_byte = 8 / display->colorspace.depth;
         if (display->colorspace.pixels_in_byte_share_row) {
-            x1 /= pixels_per_byte * display->colorspace.bytes_per_cell;
-            x2 /= pixels_per_byte * display->colorspace.bytes_per_cell;
+            // x1 /= pixels_per_byte * display->colorspace.bytes_per_cell;
+            // x2 /= pixels_per_byte * display->colorspace.bytes_per_cell;
         } else {
             y1 /= pixels_per_byte * display->colorspace.bytes_per_cell;
             y2 /= pixels_per_byte * display->colorspace.bytes_per_cell;
