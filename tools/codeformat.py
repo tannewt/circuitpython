@@ -63,6 +63,7 @@ EXCLUSIONS = [
     "ports/*/build*",
     # gitignore in ports/unix ignores *.py, so also do it here.
     "ports/unix/*.py",
+    "ports/nrf/bluetooth/s140/**/*.h",
     # not real python files
     "tests/**/repl_*.py",
     # needs careful attention before applying automatic formatting
@@ -114,7 +115,7 @@ path_rx = re.compile(path_re)
 # Path to repo top-level dir.
 TOP = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-UNCRUSTIFY_CFG = os.path.join(TOP, "tools/uncrustify.cfg")
+UNCRUSTIFY_CFG = os.path.join(TOP, "tools/uncrustify-0.{}.cfg")
 
 C_EXTS = (
     ".c",
@@ -129,6 +130,8 @@ def check_uncrustify_version():
     )
     if version < "Uncrustify-0.71":
         raise SystemExit(f"codeformat.py requires Uncrustify 0.71 or newer, got {version}")
+    # This will break if they ever do 1.xx. Right now it gets the 0.xx.0 portion.
+    return int(version.split(".")[1])
 
 
 # Transform a filename argument relative to the current directory into one
@@ -238,8 +241,12 @@ def main():
 
     # Format C files with uncrustify.
     if format_c:
-        check_uncrustify_version()
-        command = ["uncrustify", "-c", UNCRUSTIFY_CFG, "-lC", "--no-backup"]
+        version = check_uncrustify_version()
+        if version < 73:
+            version = 72
+        else:
+            version = 77
+        command = ["uncrustify", "-c", UNCRUSTIFY_CFG.format(version), "-lC", "--no-backup"]
         if not args.v:
             command.append("-q")
         batch(command, lang_files(C_EXTS))
