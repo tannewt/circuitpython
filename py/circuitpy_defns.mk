@@ -28,10 +28,8 @@
 # Common compile warnings.
 
 BASE_CFLAGS = \
-	-fsingle-precision-constant \
 	-fno-strict-aliasing \
 	-Wdouble-promotion \
-	-Wimplicit-fallthrough=2 \
 	-Wno-endif-labels \
 	-Wstrict-prototypes \
 	-Werror-implicit-function-declaration \
@@ -43,7 +41,6 @@ BASE_CFLAGS = \
 	-Wmissing-format-attribute \
 	-Wno-deprecated-declarations \
 	-Wnested-externs \
-	-Wunreachable-code \
 	-Wcast-align \
 	-D__$(CHIP_VARIANT)__ \
 	-ffunction-sections \
@@ -51,9 +48,19 @@ BASE_CFLAGS = \
 	-DCIRCUITPY_SOFTWARE_SAFE_MODE=0x0ADABEEF \
 	-DCIRCUITPY_CANARY_WORD=0xADAF00 \
 	-DCIRCUITPY_SAFE_RESTART_WORD=0xDEADBEEF \
-	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\"" \
-	--param max-inline-insns-single=500
+	-DCIRCUITPY_BOARD_ID="\"$(BOARD)\""
 
+ifeq ($(MICROPY_BUILD_CLANG),1)
+BASE_CFLAGS += \
+	-Wimplicit-fallthrough \
+	-Wno-expansion-to-defined
+else
+BASE_CFLAGS += \
+	-fsingle-precision-constant \
+	--param max-inline-insns-single=500 \
+	-Wunreachable-code \
+	-Wimplicit-fallthrough=2
+endif
 #        Use these flags to debug build times and header includes.
 #        -ftime-report
 #        -H
@@ -906,7 +913,6 @@ endif
 
 # Sources used in all ports except unix.
 SRC_CIRCUITPY_COMMON = \
-	shared/libc/string0.c \
 	shared/readline/readline.c \
 	lib/oofatfs/ff.c \
 	lib/oofatfs/ffunicode.c \

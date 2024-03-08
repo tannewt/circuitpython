@@ -27,7 +27,7 @@ static int64_t round_float_to_int64(mp_float_t f) {
 }
 
 mp_float_t common_hal_synthio_midi_to_hz_float(mp_float_t arg) {
-    return common_hal_synthio_voct_to_hz_float(arg / 12. - 3);
+    return common_hal_synthio_voct_to_hz_float(arg / 12.f - 3);
 }
 
 mp_float_t common_hal_synthio_voct_to_hz_float(mp_float_t octave) {

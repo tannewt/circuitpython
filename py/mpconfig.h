@@ -2077,7 +2077,7 @@ typedef double mp_float_t;
 #endif
 
 // Explicitly annotate switch case fall throughs
-#if defined(__GNUC__) && __GNUC__ >= 7
+#if (defined(__GNUC__) && __GNUC__ >= 7) || defined(__clang__)
 #define MP_FALLTHROUGH __attribute__((fallthrough));
 #else
 #define MP_FALLTHROUGH

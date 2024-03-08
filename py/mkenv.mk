@@ -51,6 +51,11 @@ endif
 PY_SRC ?= $(TOP)/py
 BUILD ?= build
 
+MICROPY_BUILD_CLANG ?= 0
+ifneq ($(SYSROOT),)
+export PATH := $(SYSROOT)/bin:$(PATH)
+endif
+
 RM = rm
 ECHO = @echo
 CP = cp
@@ -62,7 +67,11 @@ PYTHON = python3
 ZIP = zip
 
 AS = $(CROSS_COMPILE)as
+ifeq ($(MICROPY_BUILD_CLANG),1)
+CC = clang
+else
 CC = $(CROSS_COMPILE)gcc
+endif
 CPP = $(CC) -E
 CXX = $(CROSS_COMPILE)g++
 GDB = $(CROSS_COMPILE)gdb

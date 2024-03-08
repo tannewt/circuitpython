@@ -672,6 +672,7 @@ int GIF_getInfo(GIFIMAGE *pPage, GIFINFO *pInfo)
                 lFileOff += iReadAmount;
             }
             iOff += (int)c;  /* Skip this data block */
+            (void) lFileOff;
 //            if ((int)lFileOff + iOff > pPage->GIFFile.iSize) // past end of file, stop
 //            {
 //                iNumFrames--; // don't count this page

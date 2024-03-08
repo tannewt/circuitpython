@@ -158,9 +158,22 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
     self->baudrate = baudrate;
     self->timeout_ms = timeout * 1000;
 
+    uart_parity_t pico_parity = UART_PARITY_NONE;
+    switch (parity) {
+        case BUSIO_UART_PARITY_NONE:
+            pico_parity = UART_PARITY_NONE;
+            break;
+        case BUSIO_UART_PARITY_EVEN:
+            pico_parity = UART_PARITY_EVEN;
+            break;
+        case BUSIO_UART_PARITY_ODD:
+            pico_parity = UART_PARITY_ODD;
+            break;
+    }
+
     uart_init(self->uart, self->baudrate);
     uart_set_fifo_enabled(self->uart, true);
-    uart_set_format(self->uart, bits, stop, parity);
+    uart_set_format(self->uart, bits, stop, pico_parity);
     uart_set_hw_flow(self->uart, (cts != NULL), (rts != NULL));
 
     if (rx != NULL) {

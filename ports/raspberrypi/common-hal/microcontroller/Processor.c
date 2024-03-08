@@ -42,9 +42,9 @@ float common_hal_mcu_processor_get_temperature(void) {
     adc_select_input(4);
     uint16_t value = adc_read();
     adc_set_temp_sensor_enabled(false);
-    float voltage = value * 3.3 / (1 << 12);
+    float voltage = value * 3.3f / (1 << 12);
     // TODO: turn the ADC back off
-    return 27 - (voltage - 0.706) / 0.001721;
+    return 27 - (voltage - 0.706f) / 0.001721f;
 }
 
 float common_hal_mcu_processor_get_voltage(void) {
