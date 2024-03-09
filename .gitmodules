@@ -383,3 +383,6 @@
 [submodule "frozen/Adafruit_CircuitPython_SHT4x"]
 	path = frozen/Adafruit_CircuitPython_SHT4x
 	url = https://github.com/adafruit/Adafruit_CircuitPython_SHT4x
+[submodule "lib/picolibc"]
+	path = lib/picolibc
+	url = https//github.com/picolibc/picolibc.git
