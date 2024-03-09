@@ -1,0 +1,32 @@
+import glob
+import pathlib
+
+port_dir = pathlib.Path.cwd().absolute()
+
+circuitpython = load("../../circuitpython.hancho")
+
+# compile_circuitpython = Rule(
+#   desc = "Compile {files_in} -> {files_out}",
+#   command = "{compiler} -MMD -c {files_in} {circuitpython_flags} {port_flags} -o {files_out}",
+#   files_out = str(top / "build/{swap_ext(files_in, '.o')}"),
+#   depfile = "{swap_ext(files_out, '.d')}",
+#   circuitpython_flags = f"-I {top}"
+# )
+
+def board(board_name, *, external_flash_devices, **kwargs):
+    print("board()", glob.glob("*.c"))
+    print("hello board")
+
+    board_id = pathlib.Path.cwd().name
+
+    port_flags = []
+    port_flags.append(f"-I {port_dir}")
+    port_flags.append(f"-isystem {port_dir}/sdk")
+    port_flags.append(f"-isystem {port_dir}/sdk/src/rp2_common/cmsis")
+    port_flags.append(f"-isystem {port_dir}/sdk_config")
+    port_flags.append(f"-I {port_dir}/boards/{board_id}")
+
+    for include in (port_dir / "sdk").glob("**/include"):
+        port_flags.append(f"-isystem {include}")
+
+    circuitpython.board(board_name, port_flags=" ".join(port_flags), flash_filesystem="internal", **kwargs)
