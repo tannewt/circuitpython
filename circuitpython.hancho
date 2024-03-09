@@ -1,3 +1,4 @@
+from hancho import *
 import pathlib
 
 top = pathlib.Path.cwd()
@@ -22,8 +23,9 @@ qstr_preprocessed = Rule(
 
 qstr_generated = Rule(
     desc="Generate QSTRs",
-    command="python py/makeqstrdata.py {files_in} > {files_out}",
-    deps="py/makeqstrdata.py"
+    command="python {top}/py/makeqstrdata.py {files_in} > {files_out}",
+    deps="{top}/py/makeqstrdata.py",
+    top=str(top)
 )
 
 def board(
