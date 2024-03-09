@@ -847,6 +847,8 @@ static bool _transfer(rp2pio_statemachine_obj_t *self,
         size_t tx_remaining = out_len / out_stride_in_bytes;
 
         while (rx_remaining || tx_remaining) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wcast-align"
             while (tx_remaining && !pio_sm_is_tx_fifo_full(self->pio, self->state_machine)) {
                 if (out_stride_in_bytes == 1) {
                     *tx_destination = *data_out;
@@ -869,6 +871,7 @@ static bool _transfer(rp2pio_statemachine_obj_t *self,
                 data_in += in_stride_in_bytes;
                 --rx_remaining;
             }
+            #pragma clang diagnostic pop
             RUN_BACKGROUND_TASKS;
             if (self->user_interruptible && mp_hal_is_interrupted()) {
                 break;

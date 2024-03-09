@@ -478,7 +478,8 @@ STATIC void dma_callback_fun(void *arg) {
         channel++;
     }
 }
-
+// pico-sdk doesnt' do this for us.
+void isr_dma_0(void);
 void isr_dma_0(void) {
     for (size_t i = 0; i < NUM_DMA_CHANNELS; i++) {
         uint32_t mask = 1 << i;

@@ -159,7 +159,7 @@ mp_float_t common_hal_busdisplay_busdisplay_get_brightness(busdisplay_busdisplay
 
 bool common_hal_busdisplay_busdisplay_set_brightness(busdisplay_busdisplay_obj_t *self, mp_float_t brightness) {
     if (!self->backlight_on_high) {
-        brightness = 1.0 - brightness;
+        brightness = 1.0f - brightness;
     }
     bool ok = false;
 
@@ -178,7 +178,7 @@ bool common_hal_busdisplay_busdisplay_set_brightness(busdisplay_busdisplay_obj_t
         ok = false;
         #endif
     } else if (self->backlight_inout.base.type == &digitalio_digitalinout_type) {
-        common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, brightness > 0.99);
+        common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, brightness > 0.99f);
         ok = true;
     } else if (self->brightness_command != NO_BRIGHTNESS_COMMAND) {
         ok = displayio_display_bus_begin_transaction(&self->bus);

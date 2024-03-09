@@ -330,7 +330,7 @@ __attribute__((used)) void __not_in_flash_func(HardFault_Handler)(void) {
     }
 }
 
-void port_yield() {
+void port_yield(void) {
     #if CIRCUITPY_CYW43
     cyw43_arch_poll();
     #endif

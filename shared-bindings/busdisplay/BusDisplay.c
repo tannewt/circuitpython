@@ -343,7 +343,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(busdisplay_busdisplay_get_brightness_obj, busdisplay_b
 STATIC mp_obj_t busdisplay_busdisplay_obj_set_brightness(mp_obj_t self_in, mp_obj_t brightness_obj) {
     busdisplay_busdisplay_obj_t *self = native_display(self_in);
     mp_float_t brightness = mp_obj_get_float(brightness_obj);
-    if (brightness < 0 || brightness > 1.0) {
+    if (brightness < 0 || brightness > 1.0f) {
         mp_raise_ValueError_varg(MP_ERROR_TEXT("%q must be %d-%d"), MP_QSTR_brightness, 0, 1);
     }
     bool ok = common_hal_busdisplay_busdisplay_set_brightness(self, brightness);

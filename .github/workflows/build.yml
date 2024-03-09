@@ -298,3 +298,52 @@ jobs:
     with:
       boards: ${{ toJSON(fromJSON(needs.scheduler.outputs.ports)[matrix.port]) }}
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
+
+  clang:
+    runs-on: ubuntu-22.04
+    needs: scheduler
+    if: needs.scheduler.outputs.clang == 'True'
+    env:
+      CP_VERSION: ${{ needs.scheduler.outputs.cp-version }}
+
+    steps:
+    - name: Set up repository
+      uses: actions/checkout@v4
+      with:
+        submodules: false
+        show-progress: false
+        fetch-depth: 1
+    - name: Set up python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: Set up port
+      id: set-up-port
+      uses: ./.github/actions/deps/ports
+      with:
+        board: adafruit_feather_rp2040
+
+    - name: Set up submodules
+      id: set-up-submodules
+      uses: ./.github/actions/deps/submodules
+
+    - name: Set up external
+      uses: ./.github/actions/deps/external
+      with:
+        port: ${{ steps.set-up-port.outputs.port }}
+    - name: Set up mpy-cross
+      if: steps.set-up-submodules.outputs.frozen == 'True'
+      uses: ./.github/actions/mpy_cross
+      with:
+        cp-version: ${{ inputs.cp-version }}
+    - name: Versions
+      run: |
+        clang --version
+        python3 --version
+        cmake --version || true
+        ninja --version || true
+        mkfs.fat --version || true
+    - name: build mpy-cross
+      run: make -j4 -C mpy-cross
+    - name: build rp2040
+      run: make -j4 -C ports/raspberrypi BOARD=adafruit_feather_rp2040 TRANSLATION=de_DE

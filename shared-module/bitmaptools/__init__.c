@@ -618,6 +618,7 @@ void common_hal_bitmaptools_readinto(displayio_bitmap_t *self, mp_obj_t *file, i
                     for (size_t i = 0; i < rowsize_in_u32; i++) {
                         rowdata32[i] = __builtin_bswap32(rowdata32[i]);
                     }
+                    break;
                 default:
                     break;
             }

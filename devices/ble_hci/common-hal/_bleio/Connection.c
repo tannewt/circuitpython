@@ -70,8 +70,8 @@
   #define CONNECTION_DEBUG_PRINTF(...)
 #endif
 
-static volatile bool m_discovery_in_process;
-static volatile bool m_discovery_successful;
+// static volatile bool m_discovery_in_process;
+// static volatile bool m_discovery_successful;
 
 // FIX static bleio_service_obj_t *m_char_discovery_service;
 // FIX static bleio_characteristic_obj_t *m_desc_discovery_characteristic;

@@ -33,7 +33,7 @@
 
 #define SWAP(type, var1, var2) { type t = var2; var2 = var1; var1 = t; }
 
-#if __GNUC__ < 5
+#if !defined(__clang__) && __GNUC__ < 5
 // n.b. does not actually detect overflow!
 #define __builtin_mul_overflow(a, b, x) (*(x) = (a) * (b), false)
 #endif
