@@ -94,4 +94,4 @@ TAGS
 
 # clangd cache
 ##############
-.cache
+**/.cache

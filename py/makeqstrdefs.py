@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 import multiprocessing, multiprocessing.dummy
-
+import pathlib
 
 from html.entities import name2codepoint
 
@@ -133,7 +133,7 @@ def qstr_unescape(qstr):
     return qstr
 
 
-def process_file(f):
+def process_file(f, output_filename=None):
     # match gcc-like output (# n "file") and msvc-like output (#line n "file")
     re_line = re.compile(r"^#(?:line)?\s+\d+\s\"([^\"]+)\"")
     if args.mode == _MODE_QSTR:
@@ -146,7 +146,6 @@ def process_file(f):
         )
     elif args.mode == _MODE_ROOT_POINTER:
         re_match = re.compile(r"MP_REGISTER_ROOT_POINTER\(.*?\);")
-    re_translate = re.compile(r"MP_COMPRESSED_ROM_TEXT\(\"((?:(?=(\\?))\2.)*?)\"\)")
     output = []
     last_fname = None
     for line in f:
@@ -157,7 +156,7 @@ def process_file(f):
             fname = m.group(1)
             if not is_c_source(fname) and not is_cxx_source(fname):
                 continue
-            if fname != last_fname:
+            if fname != last_fname and output_filename is None:
                 write_out(last_fname, output)
                 output = []
                 last_fname = fname
@@ -170,11 +169,12 @@ def process_file(f):
             elif args.mode in (_MODE_COMPRESS, _MODE_MODULE, _MODE_ROOT_POINTER):
                 output.append(match)
 
-        for match in re_translate.findall(line):
-            output.append('TRANSLATE("' + match[0] + '")')
-
-    if last_fname:
+    if last_fname and output_filename is None:
         write_out(last_fname, output)
+    elif output_filename is not None:
+        print("writing to", output_filename, pathlib.Path.cwd())
+        with open(output_filename, "w") as f:
+            f.write("\n".join(output) + "\n")
     return ""
 
 
@@ -268,6 +268,8 @@ if __name__ == "__main__":
     args.input_filename = sys.argv[3]  # Unused for command=cat
     args.output_dir = sys.argv[4]
     args.output_file = None if len(sys.argv) == 5 else sys.argv[5]  # Unused for command=split
+    if args.output_file == "_":
+        args.output_file = None
 
     if args.mode not in (_MODE_QSTR, _MODE_COMPRESS, _MODE_MODULE, _MODE_ROOT_POINTER):
         print("error: mode %s unrecognised" % sys.argv[2])
@@ -280,7 +282,7 @@ if __name__ == "__main__":
 
     if args.command == "split":
         with io.open(args.input_filename, encoding="utf-8") as infile:
-            process_file(infile)
+            process_file(infile, args.output_file)
 
     if args.command == "cat":
         cat_together()

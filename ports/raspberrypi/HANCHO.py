@@ -4,7 +4,7 @@ import pathlib
 
 port_dir = pathlib.Path.cwd().absolute()
 
-circuitpython = load("../../circuitpython.hancho")
+circuitpython = load("../../HANCHO.py")
 
 # compile_circuitpython = Rule(
 #   desc = "Compile {files_in} -> {files_out}",
@@ -13,6 +13,7 @@ circuitpython = load("../../circuitpython.hancho")
 #   depfile = "{swap_ext(files_out, '.d')}",
 #   circuitpython_flags = f"-I {top}"
 # )
+
 
 def board(board_name, *, external_flash_devices, **kwargs):
     print("board()", glob.glob("*.c"))
@@ -30,4 +31,6 @@ def board(board_name, *, external_flash_devices, **kwargs):
     for include in (port_dir / "sdk").glob("**/include"):
         port_flags.append(f"-isystem {include}")
 
-    circuitpython.board(board_name, port_flags=" ".join(port_flags), flash_filesystem="internal", **kwargs)
+    circuitpython.board(
+        board_name, port_flags=" ".join(port_flags), flash_filesystem="internal", **kwargs
+    )
