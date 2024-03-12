@@ -1,11 +1,16 @@
 from hancho import *
 import pathlib
 
+CPU_FLAGS = {
+    "cortex-m0+": "--target=arm-none-eabi -march=armv6-m -mthumb -mabi=aapcs-linux -mcpu=cortex-m0plus -msoft-float -mfloat-abi=soft"
+
+}
+
 top = pathlib.Path.cwd()
 
 compile_circuitpython = Rule(
     desc="Compile {files_in} -> {files_out}",
-    command="{compiler} -MMD -c {files_in} {circuitpython_flags} {port_flags} -o {files_out}",
+    command="{compiler} -MMD {cpu_flags} {circuitpython_flags} {port_flags} -c {files_in} -o {files_out}",
     files_out="{swap_ext(files_in, '.o')}",
     depfile="{swap_ext(files_out, '.o.d')}",
 )
@@ -26,13 +31,17 @@ split_defs = Rule(
   desc = "Splitting {mode} defs",
   command = "python py/makeqstrdefs.py split {mode} {files_in} {build_dir}/genhdr/{mode} {files_out}",
   deps="py/makeqstrdefs.py",
-  files_out="genhdr/{mode}/{swap_ext(files_in, '.split')}",
+  files_out="genhdr/{mode}/{swap_ext(files_in, '.split')}.{mode}",
 )
 
 collect_defs = Rule(
   desc = "Collecting {mode} defs",
-  command = "python py/makeqstrdefs.py cat {mode} _ {build_dir}/genhdr/{mode} {files_out}",
+  command = ["rm -f {files_out}.hash", "python py/makeqstrdefs.py cat {mode} _ {build_dir}/genhdr/{mode} {files_out}"],
   deps="py/makeqstrdefs.py",
+)
+
+python_script = Rule(
+    command = "python {deps} {files_in} > {files_out}",
 )
 
 qstr_preprocessed = Rule(
@@ -41,11 +50,8 @@ qstr_preprocessed = Rule(
     deps=[""]
 )
 
-qstr_generated = Rule(
-    desc="Generate QSTRs",
-    command="python {top}/py/makeqstrdata.py {files_in} > {files_out}",
-    deps="{top}/py/makeqstrdata.py",
-    top=str(top)
+qstr_generated = python_script.extend(
+    deps="py/makeqstrdata.py"
 )
 
 version_generate = Rule(
@@ -56,26 +62,33 @@ version_generate = Rule(
 
 version_header = version_generate([], files_out="genhdr/mpversion.h")
 
-generate_root_pointers = Rule(
-    desc="Generate root pointers",
-    command="python py/make_root_pointers.py {files_in} > {files_out}",
-    deps="py/make_root_pointers.py"
-    )
-
 def board(
-    board_name, compiler="clang", port_flags="", flash_filesystem="external", **kwargs
+    board_name, cpu, compiler="clang", port_flags="", flash_filesystem="external", tusb_mem_align=4, usb=False, **kwargs
 ):
     print("top level", board_name)
 
     board_id = pathlib.Path.cwd().name
+    port_id = pathlib.Path.cwd().parent.parent.name
     top_build = top / "build" / board_id
     print("top, board_id", board_id)
+
+    always_on_modules = ["sys"]
+
+    cpu_flags = CPU_FLAGS[cpu]
 
     circuitpython_flags = []
     circuitpython_flags.append("-Wno-expansion-to-defined")
     circuitpython_flags.append("-DCIRCUITPY")
+    for module in always_on_modules:
+        circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
+    circuitpython_flags.append(f"-DCIRCUITPY_USB={1 if usb else 0}")
+    circuitpython_flags.append(f"-DCIRCUITPY_BOARD_ID=\\\"{board_id}\\\"")
+    circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
     circuitpython_flags.append("-DFFCONF_H=\\\"lib/oofatfs/ffconf.h\\\"")
     circuitpython_flags.append(f"-I {top}")
+    circuitpython_flags.append(f"-I lib/tinyusb/src")
+    circuitpython_flags.append(f"-isystem lib/cmsis/inc")
+    circuitpython_flags.append("-isystem lib/picolibc/newlib/libc/include/")
     circuitpython_flags.append(f"-I {config.build_dir}")
 
     for fs_type in ["internal", "external", "qspi"]:
@@ -84,13 +97,15 @@ def board(
 
     circuitpython_flags = " ".join(circuitpython_flags)
 
-    qstr_files = ["main.c"]
+    supervisor_source = ["main.c", "lib/tlsf/tlsf.c", f"ports/{port_id}/supervisor/port.c", "supervisor/stub/misc.c"] + glob("supervisor/shared/**/*.c")
+
+    source_files = supervisor_source + ["py/modsys.c", "extmod/vfs.c"]
     preprocessed = [preprocess(f,
             compiler=compiler,
             qstr_flags="-DNO_QSTR",
             deps=version_header,
             circuitpython_flags=circuitpython_flags,
-            port_flags=port_flags) for f in qstr_files]
+            port_flags=port_flags) for f in source_files]
     qstr_split = [split_defs(f, mode="qstr") for f in preprocessed]
     modules_split = [split_defs(f, mode="module") for f in preprocessed]
     root_pointers_split = [split_defs(f, mode="root_pointer") for f in preprocessed]
@@ -99,22 +114,24 @@ def board(
     modules_collected = collect_defs(files_in=modules_split, files_out="genhdr/moduledefs.collected", mode="module")
     root_pointers_collected = collect_defs(files_in=root_pointers_split, files_out="genhdr/root_pointers.collected", mode="root_pointer")
 
-    qstrpp = qstr_preprocessed(files_in=[top / "py/qstrdefs.h", qstr_collected], files_out="genhdr/qstrdefs.preprocessed.h", compiler=compiler, cflags=[circuitpython_flags, port_flags])
-    qstrdefs = qstr_generated(qstrpp, files_out="genhdr/qstrdefs.generated.h")
+    module_header = python_script(modules_collected, "genhdr/moduledefs.h", deps="py/makemoduledefs.py")
 
-    root_pointers = generate_root_pointers(files_in=root_pointers_collected, files_out="genhdr/root_pointers.h")
+    qstrpp = qstr_preprocessed(files_in=[top / "py/qstrdefs.h"], files_out="genhdr/qstrdefs.preprocessed.h", compiler=compiler, cflags=[circuitpython_flags, port_flags])
+    qstrdefs = qstr_generated(files_in=[qstrpp, qstr_collected], files_out="genhdr/qstrdefs.generated.h")
 
-    # partial_link()
+    root_pointers = python_script(files_in=root_pointers_collected, files_out="genhdr/root_pointers.h", deps="py/make_root_pointers.py")
+
     objects = []
-    objects.append(
-        compile_circuitpython(
-            top / "main.c",
-            top_build / "main.o",
-            deps=[qstrdefs, version_header, root_pointers],
-            compiler=compiler,
-            circuitpython_flags=circuitpython_flags,
-            port_flags=port_flags,
+    for source_file in source_files:
+        objects.append(
+            compile_circuitpython(
+                source_file,
+                deps=[qstrdefs, version_header, root_pointers, module_header],
+                compiler=compiler,
+                cpu_flags=cpu_flags,
+                circuitpython_flags=circuitpython_flags,
+                port_flags=port_flags,
+            )
         )
-    )
 
     link(objects, f"circuitpython-{board_id}.elf", compiler=compiler)

@@ -185,7 +185,8 @@ def cat_together():
     hasher = hashlib.md5()
     all_lines = []
     outf = open(args.output_dir + "/out", "wb")
-    for fname in glob.glob(args.output_dir + "/*." + args.mode):
+    for fname in glob.glob(args.output_dir + "/**/*." + args.mode, recursive=True):
+        print("catting", fname)
         with open(fname, "rb") as f:
             lines = f.readlines()
             all_lines += lines
