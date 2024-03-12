@@ -1,4 +1,4 @@
-from hancho import *
+import hancho
 import pathlib
 
 CPU_FLAGS = {
@@ -8,43 +8,45 @@ CPU_FLAGS = {
 
 top = pathlib.Path.cwd()
 
-compile_circuitpython = Rule(
+picolibc = hancho.load("lib/picolibc.py")
+
+compile_circuitpython = hancho.Rule(
     desc="Compile {files_in} -> {files_out}",
     command="{compiler} -MMD {cpu_flags} {circuitpython_flags} {port_flags} -c {files_in} -o {files_out}",
     files_out="{swap_ext(files_in, '.o')}",
     depfile="{swap_ext(files_out, '.o.d')}",
 )
 
-link = Rule(
+link = hancho.Rule(
     desc="Link {files_in} -> {files_out}",
     command="{compiler} {files_in} -o {files_out}",
 )
 
-preprocess = Rule(
+preprocess = hancho.Rule(
     desc="Preprocess {files_in} -> {files_out}",
     command="{compiler} -E -MMD -c {files_in} {qstr_flags} {circuitpython_flags} {port_flags} -o {files_out}",
     files_out="{swap_ext(files_in, '.pp')}",
     depfile="{swap_ext(files_out, '.pp.d')}",
 )
 
-split_defs = Rule(
+split_defs = hancho.Rule(
   desc = "Splitting {mode} defs",
   command = "python py/makeqstrdefs.py split {mode} {files_in} {build_dir}/genhdr/{mode} {files_out}",
   deps="py/makeqstrdefs.py",
   files_out="genhdr/{mode}/{swap_ext(files_in, '.split')}.{mode}",
 )
 
-collect_defs = Rule(
+collect_defs = hancho.Rule(
   desc = "Collecting {mode} defs",
   command = ["rm -f {files_out}.hash", "python py/makeqstrdefs.py cat {mode} _ {build_dir}/genhdr/{mode} {files_out}"],
   deps="py/makeqstrdefs.py",
 )
 
-python_script = Rule(
+python_script = hancho.Rule(
     command = "python {deps} {files_in} > {files_out}",
 )
 
-qstr_preprocessed = Rule(
+qstr_preprocessed = hancho.Rule(
     desc="Preprocess QSTRs",
     command='cat {files_in} | sed \'s/^Q(.*)/"&"/\' | {compiler} -DNO_QSTR {cflags} -E - | sed \'s/^\"\\(Q(.*)\\)\"/\1/\' > {files_out}',
     deps=[""]
@@ -54,7 +56,7 @@ qstr_generated = python_script.extend(
     deps="py/makeqstrdata.py"
 )
 
-version_generate = Rule(
+version_generate = hancho.Rule(
     desc="Generate version info",
     command="python py/makeversionhdr.py {files_out}",
     deps="py/makeversionhdr.py"
@@ -76,6 +78,8 @@ def board(
 
     cpu_flags = CPU_FLAGS[cpu]
 
+    picolibc_includes, picolibc_a = picolibc.build(top / hancho.config.build_dir / "picolibc" / cpu, cpu_flags)
+
     circuitpython_flags = []
     circuitpython_flags.append("-Wno-expansion-to-defined")
     circuitpython_flags.append("-DCIRCUITPY")
@@ -89,21 +93,21 @@ def board(
     circuitpython_flags.append(f"-I lib/tinyusb/src")
     circuitpython_flags.append(f"-isystem lib/cmsis/inc")
     circuitpython_flags.append("-isystem lib/picolibc/newlib/libc/include/")
-    circuitpython_flags.append(f"-I {config.build_dir}")
+    circuitpython_flags.append(f"-I {hancho.config.build_dir}")
+    for picolibc_include_path in picolibc_includes:
+        circuitpython_flags.extend(("-isystem ", picolibc_include_path))
 
     for fs_type in ["internal", "external", "qspi"]:
       value = 1 if flash_filesystem == fs_type else 0
       circuitpython_flags.append(f"-D{fs_type.upper()}_FLASH_FILESYSTEM={value}")
 
-    circuitpython_flags = " ".join(circuitpython_flags)
-
-    supervisor_source = ["main.c", "lib/tlsf/tlsf.c", f"ports/{port_id}/supervisor/port.c", "supervisor/stub/misc.c"] + glob("supervisor/shared/**/*.c")
+    supervisor_source = ["main.c", "lib/tlsf/tlsf.c", f"ports/{port_id}/supervisor/port.c", "supervisor/stub/misc.c"] + hancho.glob("supervisor/shared/**/*.c")
 
     source_files = supervisor_source + ["py/modsys.c", "extmod/vfs.c"]
     preprocessed = [preprocess(f,
             compiler=compiler,
             qstr_flags="-DNO_QSTR",
-            deps=version_header,
+            deps=[version_header, picolibc_a],
             circuitpython_flags=circuitpython_flags,
             port_flags=port_flags) for f in source_files]
     qstr_split = [split_defs(f, mode="qstr") for f in preprocessed]
@@ -121,12 +125,12 @@ def board(
 
     root_pointers = python_script(files_in=root_pointers_collected, files_out="genhdr/root_pointers.h", deps="py/make_root_pointers.py")
 
-    objects = []
+    objects = [picolibc_a]
     for source_file in source_files:
         objects.append(
             compile_circuitpython(
                 source_file,
-                deps=[qstrdefs, version_header, root_pointers, module_header],
+                deps=[qstrdefs, version_header, root_pointers, module_header, picolibc_a],
                 compiler=compiler,
                 cpu_flags=cpu_flags,
                 circuitpython_flags=circuitpython_flags,
