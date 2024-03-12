@@ -6,7 +6,9 @@ CPU_FLAGS = {
 
 }
 
-top = pathlib.Path.cwd()
+hancho.config.task_dir = "{ root_dir / rule_dir }"
+hancho.config.in_dir = "{ root_dir / call_dir }"
+hancho.config.out_dir = "{ root_dir / build_dir / call_dir }"
 
 picolibc = hancho.load("lib/picolibc.py")
 
@@ -71,14 +73,12 @@ def board(
 
     board_id = pathlib.Path.cwd().name
     port_id = pathlib.Path.cwd().parent.parent.name
-    top_build = top / "build" / board_id
-    print("top, board_id", board_id)
 
     always_on_modules = ["sys"]
 
     cpu_flags = CPU_FLAGS[cpu]
 
-    picolibc_includes, picolibc_a = picolibc.build(top / hancho.config.build_dir / "picolibc" / cpu, cpu_flags)
+    picolibc_includes, picolibc_a = picolibc.build(hancho.config.root_dir / hancho.config.build_dir / "lib" / "picolibc" / cpu, cpu_flags)
 
     circuitpython_flags = []
     circuitpython_flags.append("-Wno-expansion-to-defined")
@@ -89,7 +89,7 @@ def board(
     circuitpython_flags.append(f"-DCIRCUITPY_BOARD_ID=\\\"{board_id}\\\"")
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
     circuitpython_flags.append("-DFFCONF_H=\\\"lib/oofatfs/ffconf.h\\\"")
-    circuitpython_flags.append(f"-I {top}")
+    circuitpython_flags.append("-I {root_dir}")
     circuitpython_flags.append(f"-I lib/tinyusb/src")
     circuitpython_flags.append(f"-isystem lib/cmsis/inc")
     circuitpython_flags.append("-isystem lib/picolibc/newlib/libc/include/")
@@ -104,26 +104,31 @@ def board(
     supervisor_source = ["main.c", "lib/tlsf/tlsf.c", f"ports/{port_id}/supervisor/port.c", "supervisor/stub/misc.c"] + hancho.glob("supervisor/shared/**/*.c")
 
     source_files = supervisor_source + ["py/modsys.c", "extmod/vfs.c"]
+    board_output = f"{{ root_dir / build_dir / \"{board_id}\" }}"
     preprocessed = [preprocess(f,
             compiler=compiler,
+            out_dir=board_output,
             qstr_flags="-DNO_QSTR",
             deps=[version_header, picolibc_a],
             circuitpython_flags=circuitpython_flags,
             port_flags=port_flags) for f in source_files]
-    qstr_split = [split_defs(f, mode="qstr") for f in preprocessed]
-    modules_split = [split_defs(f, mode="module") for f in preprocessed]
-    root_pointers_split = [split_defs(f, mode="root_pointer") for f in preprocessed]
+    board_split_defs = split_defs.extend(out_dir=board_output)
+    qstr_split = [board_split_defs(f, mode="qstr") for f in preprocessed]
+    modules_split = [board_split_defs(f, mode="module") for f in preprocessed]
+    root_pointers_split = [board_split_defs(f, mode="root_pointer") for f in preprocessed]
 
-    qstr_collected = collect_defs(files_in=qstr_split, files_out="genhdr/qstrdefs.collected", mode="qstr")
-    modules_collected = collect_defs(files_in=modules_split, files_out="genhdr/moduledefs.collected", mode="module")
-    root_pointers_collected = collect_defs(files_in=root_pointers_split, files_out="genhdr/root_pointers.collected", mode="root_pointer")
+    board_collect_defs = collect_defs.extend(out_dir=board_output)
+    qstr_collected = board_collect_defs(files_in=qstr_split, files_out="genhdr/qstrdefs.collected", mode="qstr")
+    modules_collected = board_collect_defs(files_in=modules_split, files_out="genhdr/moduledefs.collected", mode="module")
+    root_pointers_collected = board_collect_defs(files_in=root_pointers_split, files_out="genhdr/root_pointers.collected", mode="root_pointer")
 
-    module_header = python_script(modules_collected, "genhdr/moduledefs.h", deps="py/makemoduledefs.py")
+    board_python_script = python_script.extend(out_dir=board_output)
+    module_header = board_python_script(modules_collected, "genhdr/moduledefs.h", deps="py/makemoduledefs.py")
 
-    qstrpp = qstr_preprocessed(files_in=[top / "py/qstrdefs.h"], files_out="genhdr/qstrdefs.preprocessed.h", compiler=compiler, cflags=[circuitpython_flags, port_flags])
-    qstrdefs = qstr_generated(files_in=[qstrpp, qstr_collected], files_out="genhdr/qstrdefs.generated.h")
+    qstrpp = qstr_preprocessed(files_in=["py/qstrdefs.h"], files_out="genhdr/qstrdefs.preprocessed.h", compiler=compiler, cflags=[circuitpython_flags, port_flags], out_dir=board_output)
+    qstrdefs = qstr_generated(files_in=[qstrpp, qstr_collected], files_out="genhdr/qstrdefs.generated.h", out_dir=board_output)
 
-    root_pointers = python_script(files_in=root_pointers_collected, files_out="genhdr/root_pointers.h", deps="py/make_root_pointers.py")
+    root_pointers = board_python_script(files_in=root_pointers_collected, files_out="genhdr/root_pointers.h", deps="py/make_root_pointers.py")
 
     objects = [picolibc_a]
     for source_file in source_files:
@@ -135,6 +140,7 @@ def board(
                 cpu_flags=cpu_flags,
                 circuitpython_flags=circuitpython_flags,
                 port_flags=port_flags,
+                out_dir=board_output
             )
         )
 

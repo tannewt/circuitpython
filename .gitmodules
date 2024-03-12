@@ -388,7 +388,7 @@
 	url = https://github.com/adafruit/Adafruit_CircuitPython_Bitmap_Font
 [submodule "tools/hancho"]
 	path = tools/hancho
-	url = git@github.com:aappleby/hancho.git
+	url = git@github.com:tannewt/hancho.git
 [submodule "lib/picolibc"]
 	path = lib/picolibc
 	url = https://github.com/picolibc/picolibc.git
