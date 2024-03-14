@@ -15,7 +15,9 @@ circuitpython = load("../../HANCHO.py")
 # )
 
 
-def board(board_name, *, external_flash_devices, **kwargs):
+def board(
+    board_name, *, external_flash_devices, linker_script="ports/raspberrypi/link.ld", **kwargs
+):
     print("board()", glob.glob("*.c"))
     print("hello board")
 
@@ -41,10 +43,18 @@ def board(board_name, *, external_flash_devices, **kwargs):
     for include in (port_dir / "sdk" / "src" / "rp2_common").glob("**/include"):
         port_flags.append(f"-isystem {include}")
 
+    source_files = []
+    objects = []
+
     circuitpython.board(
         board_name,
         "cortex-m0+",
+        source_files,
+        objects,
+        linker_script=linker_script,
         port_flags=" ".join(port_flags),
         flash_filesystem="internal",
+        usb_num_endpoint_pairs=8,
+        usb_host=True,
         **kwargs,
     )

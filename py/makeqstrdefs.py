@@ -172,7 +172,6 @@ def process_file(f, output_filename=None):
     if last_fname and output_filename is None:
         write_out(last_fname, output)
     elif output_filename is not None:
-        print("writing to", output_filename, pathlib.Path.cwd())
         with open(output_filename, "w") as f:
             f.write("\n".join(output) + "\n")
     return ""
@@ -186,7 +185,6 @@ def cat_together():
     all_lines = []
     outf = open(args.output_dir + "/out", "wb")
     for fname in glob.glob(args.output_dir + "/**/*." + args.mode, recursive=True):
-        print("catting", fname)
         with open(fname, "rb") as f:
             lines = f.readlines()
             all_lines += lines

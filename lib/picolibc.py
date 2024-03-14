@@ -6,7 +6,7 @@ meson = Rule(
 )
 
 ninja = Rule(
-    command="ninja -j 8",
+    command=["ninja -j {1 if jobs == 1 else (jobs // 2)}", "touch {files_out}"],
     out_dir="{task_dir}",
     job_count=8,
 )
