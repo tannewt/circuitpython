@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2019 Dan Halbert for Adafruit Industries
+ * Copyright (c) 2024 Scott Shawcroft for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,15 +23,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#pragma once
 
-#define EIC_HANDLER_NO_INTERRUPT 0x0
-#define EIC_HANDLER_PULSEIN 0x1
-#define EIC_HANDLER_INCREMENTAL_ENCODER 0x2
-#define EIC_HANDLER_PS2 0x3
-#define EIC_HANDLER_COUNTER 0x04
-#define EIC_HANDLER_ALARM 0x05
-#define EIC_HANDLER_MAX3421E 0x06
+#include <stdint.h>
 
-void set_eic_handler(uint8_t channel, uint8_t eic_handler);
-void shared_eic_handler(uint8_t channel);
+#include "py/enum.h"
+#include "py/obj.h"
+#include "py/runtime.h"
+
+#include "shared-bindings/max3421e/__init__.h"
+#include "shared-bindings/max3421e/Max3421E.h"
+
+//| """Provide USB host via a connected MAX3421E chip.
+//|
+//| """
+
+STATIC const mp_rom_map_elem_t max3421e_module_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_max3421e) },
+
+    { MP_ROM_QSTR(MP_QSTR_Max3421E), MP_ROM_PTR(&max3421e_max3421e_type) },
+};
+STATIC MP_DEFINE_CONST_DICT(max3421e_module_globals, max3421e_module_globals_table);
+
+const mp_obj_module_t max3421e_module = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t *)&max3421e_module_globals,
+};
+
+MP_REGISTER_MODULE(MP_QSTR_max3421e, max3421e_module);
