@@ -27,10 +27,10 @@ ALLOW_FLAGS = {
     "supervisor/shared/usb/usb_desc.c": ["usb_midi", "usb_hid"]
 }
 
-hancho.config.task_dir = "{ root_dir / rule_dir }"
-hancho.config.deps_dir = "{ root_dir / rule_dir }"
-hancho.config.in_dir = "{ root_dir / call_dir }"
-hancho.config.out_dir = "{ root_dir / build_dir / call_dir }"
+config.work_dir = "{ root_dir / rule_dir }"
+config.deps_dir = "{ root_dir / rule_dir }"
+config.in_dir = "{ root_dir / call_dir }"
+config.out_dir = "{ root_dir / build_dir / call_dir }"
 
 picolibc = hancho.load("lib/picolibc.py")
 
@@ -118,7 +118,7 @@ def board(
     version_header = version_generate([], files_out="genhdr/mpversion.h")
 
     picolibc_includes, picolibc_a = picolibc.build(
-        hancho.config.root_dir / hancho.config.build_dir / "lib" / "picolibc" / cpu,
+        config.root_dir / config.build_dir / "lib" / "picolibc" / cpu,
         cpu_flags,
     )
 
@@ -139,8 +139,8 @@ def board(
     circuitpython_flags.append("-I supervisor/shared/usb")
     circuitpython_flags.append(f"-isystem lib/cmsis/inc")
     circuitpython_flags.append("-isystem lib/picolibc/newlib/libc/include/")
-    circuitpython_flags.append(f"-I {hancho.config.build_dir}")
-    circuitpython_flags.append(f"-I {hancho.config.build_dir}/{board_id}")
+    circuitpython_flags.append(f"-I {config.build_dir}")
+    circuitpython_flags.append(f"-I {config.build_dir}/{board_id}")
     for picolibc_include_path in picolibc_includes:
         circuitpython_flags.extend(("-isystem ", picolibc_include_path))
 

@@ -6,9 +6,9 @@ meson = Rule(
 )
 
 ninja = Rule(
-    command=["ninja -j {1 if jobs == 1 else (jobs // 2)}", "touch {files_out}"],
-    out_dir="{task_dir}",
-    job_count=8,
+    command=["ninja -j {job_count}", "touch {files_out}"],
+    out_dir="{work_dir}",
+    job_count=1 if config.jobs == 1 else (config.jobs // 2),
 )
 
 
@@ -25,7 +25,7 @@ def build(build_dir, cflags="", compiler="clang"):
     picolibc_a = ninja(
         ninja_file,
         files_out=["newlib/libm.a", "newlib/libc.a", "newlib/libg.a"],
-        task_dir=build_dir,
+        work_dir=build_dir,
     )
 
     return include_paths, picolibc_a
