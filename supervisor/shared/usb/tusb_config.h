@@ -52,6 +52,9 @@ extern "C" {
 #if CIRCUITPY_DEBUG_TINYUSB > 0 && defined(CIRCUITPY_CONSOLE_UART)
 #define CFG_TUSB_DEBUG              CIRCUITPY_DEBUG_TINYUSB
 #define CFG_TUSB_DEBUG_PRINTF       console_uart_printf
+
+// Raise the log level for device so that host-only is possible at level 2.
+#define CFG_TUD_LOG_LEVEL           3
 #endif
 
 /*------------- RTOS -------------*/
