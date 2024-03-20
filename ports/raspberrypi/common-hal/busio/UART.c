@@ -149,7 +149,7 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
     self->baudrate = baudrate;
     self->timeout_ms = timeout * 1000;
 
-    uart_parity_t pico_parity;
+    uart_parity_t pico_parity = UART_PARITY_NONE;
     switch (parity) {
         case BUSIO_UART_PARITY_NONE:
             pico_parity = UART_PARITY_NONE;

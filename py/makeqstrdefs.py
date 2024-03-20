@@ -69,7 +69,15 @@ def is_c_source(fname):
 
 
 def is_cxx_source(fname):
-    return os.path.splitext(fname)[1] in [".cc", ".cp", ".cxx", ".cpp", ".CPP", ".c++", ".C"]
+    return os.path.splitext(fname)[1] in [
+        ".cc",
+        ".cp",
+        ".cxx",
+        ".cpp",
+        ".CPP",
+        ".c++",
+        ".C",
+    ]
 
 
 def preprocess():
@@ -136,6 +144,7 @@ def qstr_unescape(qstr):
 def process_file(f, output_filename=None):
     # match gcc-like output (# n "file") and msvc-like output (#line n "file")
     re_line = re.compile(r"^#(?:line)?\s+\d+\s\"([^\"]+)\"")
+    re_translate = re.compile(r"MP_COMPRESSED_ROM_TEXT\(\"((?:(?=(\\?))\2.)*?)\"\)")
     if args.mode == _MODE_QSTR:
         re_match = re.compile(r"MP_QSTR_[_a-zA-Z0-9]+")
     elif args.mode == _MODE_COMPRESS:
@@ -168,6 +177,9 @@ def process_file(f, output_filename=None):
                 output.append("Q(" + qstr_unescape(name) + ")")
             elif args.mode in (_MODE_COMPRESS, _MODE_MODULE, _MODE_ROOT_POINTER):
                 output.append(match)
+
+        for match in re_translate.findall(line):
+            output.append('TRANSLATE("' + match[0] + '")')
 
     if last_fname and output_filename is None:
         write_out(last_fname, output)
