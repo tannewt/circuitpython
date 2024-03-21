@@ -24,8 +24,7 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESPRESSIF_BINDINGS_ESPIDF___INIT___H
-#define MICROPY_INCLUDED_ESPRESSIF_BINDINGS_ESPIDF___INIT___H
+#pragma once
 
 #include "esp_err.h"
 #include "py/mpconfig.h"
@@ -44,5 +43,3 @@ void raise_esp_error(esp_err_t err) NORETURN;
 size_t common_hal_espidf_get_total_psram(void);
 intptr_t common_hal_espidf_get_psram_start(void);
 intptr_t common_hal_espidf_get_psram_end(void);
-
-#endif  // MICROPY_INCLUDED_ESPRESSIF_BINDINGS_ESPIDF___INIT___H

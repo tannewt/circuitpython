@@ -64,10 +64,16 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
 
     reset_pin_number(self->scl_pin->number);
     reset_pin_number(self->sda_pin->number);
+
+    common_hal_busio_i2c_mark_deinit(self);
 }
 
 bool common_hal_busio_i2c_deinited(busio_i2c_obj_t *self) {
     return self->i2c_dev == NULL;
+}
+
+void common_hal_busio_i2c_mark_deinit(busio_i2c_obj_t *self) {
+    self->i2c_dev = NULL;
 }
 
 bool common_hal_busio_i2c_try_lock(busio_i2c_obj_t *self) {

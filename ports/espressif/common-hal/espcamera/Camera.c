@@ -35,6 +35,19 @@
 #include "shared-bindings/util.h"
 #include "common-hal/microcontroller/Pin.h"
 
+// These two includes are needed to peek into the i2c handle to get the i2c port
+// number.
+#include "sdkconfig.h"
+// Define these two macros if not defined so that we don't get the -Wundef
+// warning from i2c_private.h
+#ifndef CONFIG_I2C_ISR_IRAM_SAFE
+#define CONFIG_I2C_ISR_IRAM_SAFE 0
+#endif
+#ifndef CONFIG_PM_ENABLE
+#define CONFIG_PM_ENABLE 0
+#endif
+#include "esp-idf/components/driver/i2c/i2c_private.h"
+
 #include "esp-camera/driver/private_include/cam_hal.h"
 
 #if !CONFIG_SPIRAM
@@ -126,7 +139,7 @@ void common_hal_espcamera_camera_construct(
     self->camera_config.fb_count = framebuffer_count;
     self->camera_config.grab_mode = grab_mode;
 
-    self->camera_config.sccb_i2c_port = i2c->i2c_num;
+    self->camera_config.sccb_i2c_port = self->i2c->handle->base->port_num;
 
     i2c_lock(self);
     esp_err_t result = esp_camera_init(&self->camera_config);

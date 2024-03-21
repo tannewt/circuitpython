@@ -24,8 +24,7 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_BUSIO_I2C_H
-#define MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_BUSIO_I2C_H
+#pragma once
 
 #include "common-hal/microcontroller/Pin.h"
 #include "shared-module/bitbangio/I2C.h"
@@ -43,7 +42,3 @@ typedef struct {
     uint8_t scl_pin;
     uint8_t sda_pin;
 } busio_i2c_obj_t;
-
-void reset_i2c(void);
-
-#endif // MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_BUSIO_I2C_H

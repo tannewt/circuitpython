@@ -24,8 +24,7 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_EFR32_COMMON_HAL_BUSIO_I2C_H
-#define MICROPY_INCLUDED_EFR32_COMMON_HAL_BUSIO_I2C_H
+#pragma once
 
 #include "common-hal/microcontroller/Pin.h"
 #include "peripherals/periph.h"
@@ -40,7 +39,3 @@ typedef struct {
     const mcu_pin_obj_t *scl;
     const mcu_pin_obj_t *sda;
 } busio_i2c_obj_t;
-
-void i2c_reset(void);
-
-#endif  // MICROPY_INCLUDED_EFR32_COMMON_HAL_BUSIO_I2C_H

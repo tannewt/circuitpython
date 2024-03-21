@@ -32,15 +32,6 @@
 
 STATIC I2CSPM_Init_TypeDef i2cspm_init;
 STATIC bool in_used = false;
-STATIC bool never_reset = false;
-
-// Reser I2C peripheral
-void i2c_reset(void) {
-    if ((!never_reset) && in_used) {
-        I2C_Reset(DEFAULT_I2C_PERIPHERAL);
-        in_used = false;
-    }
-}
 
 // Construct I2C protocol, this function init i2c peripheral
 void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
@@ -80,7 +71,6 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
 
 // Never reset I2C obj when reload
 void common_hal_busio_i2c_never_reset(busio_i2c_obj_t *self) {
-    never_reset = true;
     common_hal_never_reset_pin(self->sda);
     common_hal_never_reset_pin(self->scl);
 }
@@ -102,6 +92,11 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
     self->scl = NULL;
     self->i2cspm = NULL;
     in_used = false;
+    common_hal_busio_i2c_mark_deinit(self);
+}
+
+void common_hal_busio_i2c_mark_deinit(busio_i2c_obj_t *self) {
+    self->sda = NULL;
 }
 
 // Probe device in I2C bus

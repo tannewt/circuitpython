@@ -24,8 +24,7 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_BROADCOM_COMMON_HAL_BUSIO_I2C_H
-#define MICROPY_INCLUDED_BROADCOM_COMMON_HAL_BUSIO_I2C_H
+#pragma once
 
 #include "common-hal/microcontroller/Pin.h"
 
@@ -44,7 +43,3 @@ typedef struct {
     bool finish_write;
     uint8_t last_write_data;
 } busio_i2c_obj_t;
-
-void reset_i2c(void);
-
-#endif // MICROPY_INCLUDED_BROADCOM_COMMON_HAL_BUSIO_I2C_H

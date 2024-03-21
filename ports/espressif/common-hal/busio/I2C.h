@@ -24,8 +24,7 @@
  * THE SOFTWARE.
  */
 
-#ifndef MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BUSIO_I2C_H
-#define MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BUSIO_I2C_H
+#pragma once
 
 #include "common-hal/microcontroller/Pin.h"
 
@@ -34,15 +33,15 @@
 #include "freertos/semphr.h"
 #include "py/obj.h"
 
-#include "peripherals/i2c.h"
+#include "driver/i2c_master.h"
 
 typedef struct {
     mp_obj_base_t base;
     const mcu_pin_obj_t *scl_pin;
     const mcu_pin_obj_t *sda_pin;
-    i2c_port_t i2c_num;
+    size_t timeout_ms;
+    size_t frequency;
+    i2c_master_bus_handle_t handle;
     SemaphoreHandle_t xSemaphore;
     bool has_lock;
 } busio_i2c_obj_t;
-
-#endif // MICROPY_INCLUDED_ESPRESSIF_COMMON_HAL_BUSIO_I2C_H

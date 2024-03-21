@@ -42,7 +42,6 @@
 
 #include "common-hal/microcontroller/Pin.h"
 #include "common-hal/rtc/RTC.h"
-#include "common-hal/busio/I2C.h"
 #include "common-hal/busio/SPI.h"
 #include "shared-bindings/microcontroller/__init__.h"
 
@@ -447,7 +446,6 @@ safe_mode_t port_init(void) {
 
 void reset_port(void) {
     #if CIRCUITPY_BUSIO
-    i2c_reset();
     spi_reset();
     #endif
 

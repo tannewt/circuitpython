@@ -62,12 +62,10 @@
 //|         :param ~microcontroller.Pin scl: The clock pin
 //|         :param ~microcontroller.Pin sda: The data pin
 //|         :param int frequency: The clock frequency in Hertz
-//|         :param int timeout: The maximum clock stretching timeut - (used only for
-//|             :class:`bitbangio.I2C`; ignored for :class:`busio.I2C`)
+//|         :param int timeout: The maximum clock stretching timeout in microseconds
 //|         """
 //|         ...
 STATIC mp_obj_t busio_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    busio_i2c_obj_t *self = mp_obj_malloc(busio_i2c_obj_t, &busio_i2c_type);
     enum { ARG_scl, ARG_sda, ARG_frequency, ARG_timeout };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_scl, MP_ARG_REQUIRED | MP_ARG_OBJ },
@@ -81,6 +79,8 @@ STATIC mp_obj_t busio_i2c_make_new(const mp_obj_type_t *type, size_t n_args, siz
     const mcu_pin_obj_t *scl = validate_obj_is_free_pin(args[ARG_scl].u_obj, MP_QSTR_scl);
     const mcu_pin_obj_t *sda = validate_obj_is_free_pin(args[ARG_sda].u_obj, MP_QSTR_sda);
 
+    busio_i2c_obj_t *self = m_new_obj_with_finaliser(busio_i2c_obj_t);
+    self->base.type = &busio_i2c_type;
     common_hal_busio_i2c_construct(self, scl, sda, args[ARG_frequency].u_int, args[ARG_timeout].u_int);
     return (mp_obj_t)self;
 }
@@ -373,6 +373,7 @@ STATIC mp_obj_t busio_i2c_writeto_then_readfrom(size_t n_args, const mp_obj_t *p
 MP_DEFINE_CONST_FUN_OBJ_KW(busio_i2c_writeto_then_readfrom_obj, 1, busio_i2c_writeto_then_readfrom);
 
 STATIC const mp_rom_map_elem_t busio_i2c_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&busio_i2c_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&busio_i2c_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&busio_i2c___exit___obj) },

@@ -128,19 +128,27 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
         mp_arg_error_invalid(MP_QSTR_frequency);
     }
 
-    self->sda_pin = sda->number;
-    self->scl_pin = scl->number;
-    claim_pin(sda);
-    claim_pin(scl);
 
     if (i2c_m_sync_enable(&self->i2c_desc) != ERR_NONE) {
         common_hal_busio_i2c_deinit(self);
         mp_raise_OSError(MP_EIO);
     }
+
+    self->sda_pin = sda->number;
+    self->scl_pin = scl->number;
+    claim_pin(sda);
+    claim_pin(scl);
+
+    // Prevent bulk sercom reset from resetting us. The finalizer will instead.
+    never_reset_sercom(self->i2c_desc.device.hw);
 }
 
 bool common_hal_busio_i2c_deinited(busio_i2c_obj_t *self) {
     return self->sda_pin == NO_PIN;
+}
+
+void common_hal_busio_i2c_mark_deinit(busio_i2c_obj_t *self) {
+    self->sda_pin = NO_PIN;
 }
 
 void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
@@ -155,6 +163,7 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
     reset_pin_number(self->scl_pin);
     self->sda_pin = NO_PIN;
     self->scl_pin = NO_PIN;
+    common_hal_busio_i2c_mark_deinit(self);
 }
 
 bool common_hal_busio_i2c_probe(busio_i2c_obj_t *self, uint8_t addr) {
@@ -253,8 +262,6 @@ uint8_t common_hal_busio_i2c_write_read(busio_i2c_obj_t *self, uint16_t addr,
 }
 
 void common_hal_busio_i2c_never_reset(busio_i2c_obj_t *self) {
-    never_reset_sercom(self->i2c_desc.device.hw);
-
     never_reset_pin_number(self->scl_pin);
     never_reset_pin_number(self->sda_pin);
 }

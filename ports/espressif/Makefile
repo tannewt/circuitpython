@@ -288,7 +288,6 @@ SRC_C += \
 	boards/$(BOARD)/board.c \
 	boards/$(BOARD)/pins.c \
 	shared/netutils/netutils.c \
-	peripherals/i2c.c \
 	peripherals/$(IDF_TARGET)/pins.c
 
 SRC_C += lib/mbedtls_config/crt_bundle.c

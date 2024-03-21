@@ -39,10 +39,14 @@ extern void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
     const mcu_pin_obj_t *scl,
     const mcu_pin_obj_t *sda,
     uint32_t frequency,
-    uint32_t timeout);
+    uint32_t timeout_ms);
 
 extern void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self);
 extern bool common_hal_busio_i2c_deinited(busio_i2c_obj_t *self);
+
+// Mark as deinit without deiniting. This is used by displayio after copying the
+// object elsewhere and prevents the heap from deiniting the object.
+extern void common_hal_busio_i2c_mark_deinit(busio_i2c_obj_t *self);
 
 extern bool common_hal_busio_i2c_try_lock(busio_i2c_obj_t *self);
 extern bool common_hal_busio_i2c_has_lock(busio_i2c_obj_t *self);

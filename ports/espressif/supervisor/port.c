@@ -44,7 +44,6 @@
 #include "bindings/espulp/__init__.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "common-hal/analogio/AnalogOut.h"
-#include "common-hal/busio/I2C.h"
 #include "common-hal/busio/SPI.h"
 #include "common-hal/busio/UART.h"
 #include "common-hal/dualbank/__init__.h"
@@ -360,7 +359,6 @@ void reset_port(void) {
     #endif
 
     #if CIRCUITPY_BUSIO
-    i2c_reset();
     spi_reset();
     uart_reset();
     #endif

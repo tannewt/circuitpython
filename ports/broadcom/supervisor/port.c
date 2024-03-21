@@ -33,7 +33,6 @@
 #include "genhdr/mpversion.h"
 
 #include "common-hal/rtc/RTC.h"
-#include "common-hal/busio/I2C.h"
 #include "common-hal/busio/SPI.h"
 #include "common-hal/busio/UART.h"
 
@@ -86,7 +85,6 @@ safe_mode_t port_init(void) {
 
 void reset_port(void) {
     #if CIRCUITPY_BUSIO
-    reset_i2c();
     reset_spi();
     reset_uart();
     #endif
