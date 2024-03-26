@@ -4,7 +4,7 @@ import pathlib
 
 port_dir = pathlib.Path.cwd().absolute()
 
-circuitpython = load("../../HANCHO.py")
+circuitpython = load("../../HANCHO.py", None)
 
 # compile_circuitpython = Rule(
 #   desc = "Compile {files_in} -> {files_out}",

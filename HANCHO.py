@@ -27,57 +27,52 @@ ALLOW_FLAGS = {
     "supervisor/shared/usb/usb_desc.c": ["usb_midi", "usb_hid"]
 }
 
-config.work_dir = "{ root_dir / rule_dir }"
-config.deps_dir = "{ root_dir / rule_dir }"
-config.in_dir = "{ root_dir / call_dir }"
-config.out_dir = "{ root_dir / build_dir / call_dir }"
-
-picolibc = hancho.load("lib/picolibc.py")
+picolibc = hancho.load("lib/picolibc.py", None)
 
 top = pathlib.Path.cwd()
 
 compile_circuitpython = hancho.Rule(
-    desc="Compile {files_in} -> {files_out}",
-    command="{compiler} -MMD -Wall -Werror -Wundef {cpu_flags} {module_flags} {circuitpython_flags} {port_flags} -c {files_in} -o {files_out}",
-    files_out="{swap_ext(files_in, '.o')}",
-    depfile="{swap_ext(files_out, '.o.d')}",
+    desc="Compile {source_files} -> {build_files}",
+    command="{compiler} -MMD -Wall -Werror -Wundef {cpu_flags} {module_flags} {circuitpython_flags} {port_flags} -c {source_files} -o {build_files}",
+    build_files="{swap_ext(source_files, '.o')}",
+    depfile="{swap_ext(build_files, '.o.d')}",
 )
 
 link = hancho.Rule(
-    desc="Link {files_in} -> {files_out}",
-    command="{compiler} {flags} -Wl,-T,{linker_script} {files_in} -o {files_out}",
+    desc="Link {source_files} -> {build_files}",
+    command="{compiler} {flags} -Wl,-T,{linker_script} {source_files} -o {build_files}",
 )
 
 preprocess = hancho.Rule(
-    desc="Preprocess {files_in} -> {files_out}",
-    command="{compiler} -E -MMD -c {files_in} {module_flags} {qstr_flags} {circuitpython_flags} {port_flags} -o {files_out}",
-    files_out="{swap_ext(files_in, '.pp')}",
-    depfile="{swap_ext(files_out, '.pp.d')}",
+    desc="Preprocess {source_files} -> {build_files}",
+    command="{compiler} -E -MMD -c {source_files} {module_flags} {qstr_flags} {circuitpython_flags} {port_flags} -o {build_files}",
+    build_files="{swap_ext(source_files, '.pp')}",
+    depfile="{swap_ext(build_files, '.pp.d')}",
 )
 
 split_defs = hancho.Rule(
     desc="Splitting {mode} defs",
-    command="python py/makeqstrdefs.py split {mode} {files_in} {build_dir}/genhdr/{mode} {files_out}",
+    command="python py/makeqstrdefs.py split {mode} {source_files} {build_dir}/genhdr/{mode} {build_files}",
     deps="py/makeqstrdefs.py",
-    files_out="genhdr/{mode}/{swap_ext(files_in, '.split')}.{mode}",
+    build_files="genhdr/{mode}/{swap_ext(source_files, '.split')}.{mode}",
 )
 
 collect_defs = hancho.Rule(
     desc="Collecting {mode} defs",
     command=[
-        "rm -f {files_out}.hash",
-        "python py/makeqstrdefs.py cat {mode} _ {out_dir}/genhdr/{mode} {files_out}",
+        "rm -f {build_files}.hash",
+        "python py/makeqstrdefs.py cat {mode} _ {out_dir}/genhdr/{mode} {build_files}",
     ],
     deps="py/makeqstrdefs.py",
 )
 
 python_script = hancho.Rule(
-    command="python {deps} {files_in} > {files_out}",
+    command="python {deps} {source_files} > {build_files}",
 )
 
 qstr_preprocessed = hancho.Rule(
     desc="Preprocess QSTRs",
-    command="cat {files_in} | sed 's/^Q(.*)/\"&\"/' | {compiler} -DNO_QSTR {cflags} -E - | sed 's/^\"\\(Q(.*)\\)\"/\1/' > {files_out}",
+    command="cat {source_files} | sed 's/^Q(.*)/\"&\"/' | {compiler} -DNO_QSTR {cflags} -E - | sed 's/^\"\\(Q(.*)\\)\"/\1/' > {build_files}",
     deps=[""],
 )
 
@@ -85,7 +80,7 @@ qstr_generated = python_script.extend(deps="py/makeqstrdata.py")
 
 version_generate = hancho.Rule(
     desc="Generate version info",
-    command="python py/makeversionhdr.py {files_out}",
+    command="python py/makeversionhdr.py {build_files}",
     deps="py/makeversionhdr.py",
 )
 
@@ -115,10 +110,10 @@ def board(
 
     cpu_flags = CPU_FLAGS[cpu]
 
-    version_header = version_generate([], files_out="genhdr/mpversion.h")
+    version_header = version_generate([], build_files="genhdr/mpversion.h")
 
     picolibc_includes, picolibc_a = picolibc.build(
-        config.root_dir / config.build_dir / "lib" / "picolibc" / cpu,
+        build_config.build_path / "lib" / "picolibc" / cpu,
         cpu_flags,
     )
 
@@ -134,13 +129,13 @@ def board(
     circuitpython_flags.append(f'-DCIRCUITPY_BOARD_ID=\\"{board_id}\\"')
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
     circuitpython_flags.append('-DFFCONF_H=\\"lib/oofatfs/ffconf.h\\"')
-    circuitpython_flags.append("-I {root_dir}")
+    circuitpython_flags.append("-I {start_path}")
     circuitpython_flags.append("-I lib/tinyusb/src")
     circuitpython_flags.append("-I supervisor/shared/usb")
     circuitpython_flags.append(f"-isystem lib/cmsis/inc")
     circuitpython_flags.append("-isystem lib/picolibc/newlib/libc/include/")
-    circuitpython_flags.append(f"-I {config.build_dir}")
-    circuitpython_flags.append(f"-I {config.build_dir}/{board_id}")
+    circuitpython_flags.append(f"-I {build_config.build_path}")
+    circuitpython_flags.append(f"-I {build_config.build_path}/{board_id}")
     for picolibc_include_path in picolibc_includes:
         circuitpython_flags.extend(("-isystem ", picolibc_include_path))
 
@@ -242,14 +237,14 @@ def board(
 
     board_collect_defs = collect_defs.extend(out_dir=board_output)
     qstr_collected = board_collect_defs(
-        files_in=qstr_split, files_out="genhdr/qstrdefs.collected", mode="qstr"
+        source_files=qstr_split, build_files="genhdr/qstrdefs.collected", mode="qstr"
     )
     modules_collected = board_collect_defs(
-        files_in=modules_split, files_out="genhdr/moduledefs.collected", mode="module"
+        source_files=modules_split, build_files="genhdr/moduledefs.collected", mode="module"
     )
     root_pointers_collected = board_collect_defs(
-        files_in=root_pointers_split,
-        files_out="genhdr/root_pointers.collected",
+        source_files=root_pointers_split,
+        build_files="genhdr/root_pointers.collected",
         mode="root_pointer",
     )
 
@@ -259,21 +254,21 @@ def board(
     )
 
     qstrpp = qstr_preprocessed(
-        files_in=["py/qstrdefs.h"],
-        files_out="genhdr/qstrdefs.preprocessed.h",
+        source_files=["py/qstrdefs.h"],
+        build_files="genhdr/qstrdefs.preprocessed.h",
         compiler=compiler,
         cflags=[circuitpython_flags, port_flags],
         out_dir=board_output,
     )
     qstrdefs = qstr_generated(
-        files_in=[qstrpp, qstr_collected],
-        files_out="genhdr/qstrdefs.generated.h",
+        source_files=[qstrpp, qstr_collected],
+        build_files="genhdr/qstrdefs.generated.h",
         out_dir=board_output,
     )
 
     root_pointers = board_python_script(
-        files_in=root_pointers_collected,
-        files_out="genhdr/root_pointers.h",
+        source_files=root_pointers_collected,
+        build_files="genhdr/root_pointers.h",
         deps="py/make_root_pointers.py",
     )
 

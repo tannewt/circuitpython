@@ -3,7 +3,7 @@ import glob
 
 print("hello world")
 
-rp2040 = load("../../HANCHO.py")
+rp2040 = load("../../HANCHO.py", None)
 
 # CHIP_VARIANT = RP2040
 # CHIP_FAMILY = rp2
