@@ -34,11 +34,20 @@ def embedded_build(function):
         print("looking in cmsis packs")
         cmsis_cache = cmsis_packs.Cache(True, False)
 
+        target_processor = None
         for part in cmsis_cache.index.keys():
             if args.target in part:
                 print(part)
-                print(cmsis_cache.index[part])
-                print(cmsis_cache.index[part].get("processor", None))
+                device_info = cmsis_cache.index[part]
+                if "processor" in device_info:
+                    print(device_info["processor"])
+                if "processors" in device_info:
+                    for processor in device_info["processors"]:
+                        if target_processor is None:
+                            target_processor = processor
+                        elif target_processor != processor:
+                            print("mismatched processor", target_processor, processor)
+        print(target_processor)
 
 
 
