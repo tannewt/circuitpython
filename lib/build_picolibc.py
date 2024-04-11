@@ -41,6 +41,10 @@ class ARM(CPU):
                 return CortexM0Plus()
             elif core == "CortexM4":
                 return CortexM4(description["fpu"] != "None")
+            elif core == "CortexM7":
+                return CortexM7(description["fpu"])
+            elif core == "CortexM33":
+                return CortexM33(description["fpu"])
         return None
 
 class CortexM0Plus(ARM):
@@ -66,6 +70,18 @@ class CortexM7(ARM):
         else:
             fp = "+nofp"
         super().__init__("cortex-m7" + fp, floating_point)
+
+class CortexM33(ARM):
+    def __init__(self, floating_point: str, dsp: bool):
+        if floating_point:
+            fp = ""
+        else:
+            fp = "+nofp"
+        if dsp:
+            dsp_flag = ""
+        else:
+            dsp_flag = "+nodsp"
+        super().__init__("cortex-m33" + fp + dsp_flag, floating_point)
 
 def embedded_build(function):
     parser = argparse.ArgumentParser()
