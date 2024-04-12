@@ -25,7 +25,7 @@ firmware_size = DEFINED(firmware_size) ? firmware_size : 1020K ;
 
 MEMORY
 {
-    FLASH_FIRMWARE (rx) : ORIGIN = 0x10000000, LENGTH = firmware_size
+    FLASH_FIRMWARE (rx) : ORIGIN = 0x10000000, LENGTH = 1020K
     /* Followed by: 4kB of NVRAM and at least 1024kB of CIRCUITPY */
     RAM (rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_Y (rwx) : ORIGIN = 0x20040000, LENGTH = 4k

@@ -10,4 +10,8 @@ SECTIONS {
         *(.entry.*)
         *(.text.*)
     } >SRAM
+
+   /DISCARD/ : {
+    *(.ARM.exidx);
+    }
 }

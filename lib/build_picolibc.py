@@ -18,6 +18,20 @@ class Microcontroller:
 class Compiler:
     pass
 
+class GCC(Compiler):
+    def __init__(self):
+        self.c_compiler = "arm-none-eabi-gcc"
+        self.cpp_compiler = "arm-none-eabi-g++"
+        self.ar = "arm-none-eabi-ar"
+        self.strip = "arm-none-eabi-strip"
+
+class Clang(Compiler):
+    def __init__(self):
+        self.c_compiler = "clang"
+        self.cpp_compiler = "clang++"
+        self.ar = "llvm-ar"
+        self.strip = "llvm-strip"
+
 class CPU:
     pass
 
@@ -49,10 +63,11 @@ class ARM(CPU):
 
     def get_arch_cflags(self, compiler: Compiler) -> list[str]:
         flags = [f"-mcpu={self.mcpu}", "-mthumb"]
+        if isinstance(compiler, Clang):
+            flags.append("--target=arm-none-eabi")
         if self.floating_point:
             flags.extend(("-mfloat-abi=hard", "-mfpu=auto"))
         return flags
-
 
     @staticmethod
     def from_pdsc(description: dict) -> Optional[CPU]:
@@ -179,29 +194,21 @@ def embedded_build(function):
 
     function(*function_args)
 
-def create_meson_cross_file(cpu: CPU):
-    cflags = ",".join(f"'{flag}'" for flag in cpu.get_arch_cflags(None))
+def create_meson_cross_file(cpu: CPU, compiler: Compiler):
+    cflags = ",".join(f"'{flag}'" for flag in cpu.get_arch_cflags(compiler))
     link_flags = cflags
+    link_flags += ",'-fuse-ld=lld', '-nostdlib'"
     if isinstance(cpu, ARM):
         cpu_family = "arm"
-        c_compiler = "arm-none-eabi-gcc"
-        cpp_compiler = "arm-none-eabi-g++"
-        ar = "arm-none-eabi-ar"
-        strip = "arm-none-eabi-strip"
     elif isinstance(cpu, RISCV):
-        c_compiler = "clang"
-        cpp_compiler = "clang++"
-        ar = "llvm-ar"
-        strip = "llvm-strip"
         cpu_family = f"riscv{cpu.bits}"
-        link_flags += ",'-fuse-ld=lld', '-nostdlib'"
     else:
         raise RuntimeError("Unsupported CPU")
     return f"""[binaries]
-c = '{c_compiler}'
-cpp = '{cpp_compiler}'
-ar = '{ar}'
-strip = '{strip}'
+c = '{compiler.c_compiler}'
+cpp = '{compiler.cpp_compiler}'
+ar = '{compiler.ar}'
+strip = '{compiler.strip}'
 
 [host_machine]
 system = ''
@@ -220,6 +227,7 @@ class Artifacts:
         return True
 
 def build(cpu: CPU) -> Artifacts:
+    compiler = Clang()
     absolute_source_dir = pathlib.Path(__file__).parent / "picolibc"
     if sys.version_info.minor >= 12:
         source_dir = absolute_source_dir.relative_to(pathlib.Path.cwd(), walk_up=True)
@@ -228,7 +236,7 @@ def build(cpu: CPU) -> Artifacts:
     build_path = pathlib.Path("build") / cpu.unique_id
     build_path.mkdir(parents=True, exist_ok=True)
     cross_file = build_path / "cross_file.txt"
-    cross_file.write_text(create_meson_cross_file(cpu))
+    cross_file.write_text(create_meson_cross_file(cpu, compiler))
 
     cmd = f"meson setup --reconfigure -Dsemihost=false -Dtests=false -Dmultilib=false --cross-file {cross_file} {source_dir} {build_path}"
     print(cmd)
