@@ -201,7 +201,7 @@ LIBS += $(BUILD)/lib/picolibc/thumbv6m/newlib/libm.a $(BUILD)/lib/picolibc/thumb
 
 ifeq ($(MICROPY_BUILD_CLANG),1)
  CFLAGS += --target=arm-none-eabi
- LIBS += /home/tannewt/repos/llvm-project/build-arm-compiler-rt/lib/linux/libclang_rt.builtins-arm.a
+ # LIBS +=
 else
  LIBS += -lgcc
 endif
@@ -397,6 +397,9 @@ SRC_COMMON_HAL_SHARED_MODULE_EXPANDED = $(sort $(SRC_COMMON_HAL_EXPANDED) $(SRC_
 
 SRC_S = supervisor/$(CHIP_FAMILY)_cpu.s
 BOOT2_S_CFLAGS ?= -DPICO_FLASH_SPI_CLKDIV=4
+ifeq ($(MICROPY_BUILD_CLANG),1)
+BOOT2_S_CFLAGS += -nostdlib
+endif
 SRC_S_UPPER = sdk/src/rp2_common/hardware_divider/divider.S \
               sdk/src/rp2_common/hardware_irq/irq_handler_chain.S \
               sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S \
