@@ -116,7 +116,7 @@ def get_cpu_from_mcu(substr):
     target_processor = None
     for part in cmsis_cache.index.keys():
         if substr in part:
-            # print(part)
+            print(part)
             device_info = cmsis_cache.index[part]
             if "processor" in device_info:
                 print(device_info["processor"])
