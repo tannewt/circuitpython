@@ -56,17 +56,26 @@ class Hazard3(RISCV):
 
 
 class ARM(CPU):
-    def __init__(self, mcpu: str, floating_point: bool = False):
+    def __init__(self, mcpu: str, floating_point: bool = False, floating_point_unit: str = None):
         self.mcpu = mcpu
         self.floating_point = floating_point
-        self.unique_id = mcpu
+        self.floating_point_unit = floating_point_unit
+        self.unique_id = mcpu + "f" if floating_point else ""
 
     def get_arch_cflags(self, compiler: Compiler) -> list[str]:
-        flags = [f"-mcpu={self.mcpu}", "-mthumb"]
+        flags = ["-mthumb"]
+        floating_point_unit = self.floating_point_unit
         if isinstance(compiler, Clang):
             flags.append("--target=arm-none-eabi")
+            flags.append(f"-mcpu={self.mcpu}+{floating_point_unit}")
+        else:
+            flags.append(f"-mcpu={self.mcpu}")
+            if self.floating_point_unit is None:
+                floating_point_unit = "auto"
+            if self.floating_point:
+                flags.append(f"-mfpu={self.floating_point_unit}")
         if self.floating_point:
-            flags.extend(("-mfloat-abi=hard", "-mfpu=auto"))
+            flags.extend(("-mfloat-abi=hard",))
         return flags
 
     @staticmethod
@@ -78,7 +87,7 @@ class ARM(CPU):
                 print("cm0")
                 return CortexM0Plus()
             elif core == "CortexM4":
-                return CortexM4(description["fpu"] != "None")
+                return CortexM4(description["fpu"])
             elif core == "CortexM7":
                 return CortexM7(description["fpu"])
             elif core == "CortexM33":
@@ -99,7 +108,7 @@ class CortexM4(ARM):
             fp = ""
         else:
             fp = "+nofp"
-        super().__init__("cortex-m4" + fp, floating_point)
+        super().__init__("cortex-m4" + fp, floating_point=floating_point, floating_point_unit="vfp4sp")
 
 class CortexM7(ARM):
     def __init__(self, floating_point: str):
@@ -122,6 +131,7 @@ class CortexM33(ARM):
         super().__init__("cortex-m33" + fp + dsp_flag, floating_point)
 
 def get_cpu_from_mcu(substr):
+    print("get_cpu_from_mcu", substr)
     if not cmsis_packs:
         return None
 
@@ -252,6 +262,8 @@ def build(cpu: CPU) -> Artifacts:
         print(result.stdout.decode("utf-8"))
     return Artifacts()
 
+# for compiler rt
+# cmake -DCOMPILER_RT_BAREMETAL_BUILD=ON -DCOMPILER_RT_BUILD_LIBFUZZER=OFF -DCOMPILER_RT_BUILD_PROFILE=OFF -DCOMPILER_RT_BUILD_SANITIZERS=OFF -DCOMPILER_RT_BUILD_XRAY=OFF -DCOMPILER_RT_INCLUDE_TESTS=OFF -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY -DCMAKE_C_COMPILER_TARGET="arm-none-eabihf" -DCMAKE_ASM_COMPILER_TARGET="arm-none-eabihf" -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=lld -DLLVM_DEFAULT_TARGET_TRIPLE="arm-none-eabihf" -DLLVM_TARGETS_TO_BUILD="ARM" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_FLAGS="-march=armv8-m.main+fp+dsp -mthumb -mabi=aapcs-linux -mcpu=cortex-m33 -mfloat-abi=hard" -DCMAKE_ASM_FLAGS="-march=armv8-m.main+fp+dsp -mthumb -mabi=aapcs-linux -mcpu=cortex-m33 -mfloat-abi=hard" -DCMAKE_C_COMPILER=clang -G "Ninja" ../compiler-rt/
 
 if __name__ == "__main__":
     embedded_build(build)
