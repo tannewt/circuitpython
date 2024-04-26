@@ -27,3 +27,5 @@ sysbus LoadBinary @build-renode_cortex_m0plus/circuitpy.img 0x10000000
 
 # Enable the gdb server
 # machine StartGdbServer 3333 true
+
+sysbus AddWatchpointHook `sysbus GetSymbolAddress "vm_memory_use"` DoubleWord Write "print '%d vm_memory_use = %d' % (cpu.ExecutedInstructions,value)"
