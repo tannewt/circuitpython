@@ -1,0 +1,17 @@
+#define MICROPY_HW_BOARD_NAME "Entropic DefCon32 Badge"
+#define MICROPY_HW_MCU_NAME "rp2350a"
+
+#define MICROPY_HW_NEOPIXEL (&pin_GPIO4)
+#define MICROPY_HW_NEOPIXEL_COUNT   (9)
+
+#define DEFAULT_I2C_BUS_SCL (&pin_GPIO3)
+#define DEFAULT_I2C_BUS_SDA (&pin_GPIO2)
+
+#define DEFAULT_SPI_BUS_SCK (&pin_GPIO14)
+#define DEFAULT_SPI_BUS_MOSI (&pin_GPIO12)
+#define DEFAULT_SPI_BUS_MISO (&pin_GPIO15)
+
+#define DEFAULT_UART_BUS_RX (&pin_GPIO27)
+#define DEFAULT_UART_BUS_TX (&pin_GPIO26)
+
+#define CIRCUITPY_PSRAM_CHIP_SELECT (&pin_GPIO0)
