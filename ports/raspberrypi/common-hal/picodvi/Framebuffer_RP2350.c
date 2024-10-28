@@ -53,11 +53,17 @@
 #define SYNC_V1_H0 (TMDS_CTRL_10 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
 #define SYNC_V1_H1 (TMDS_CTRL_11 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
 
-#define MODE_H_SYNC_POLARITY 0
-#define MODE_H_FRONT_PORCH   16
-#define MODE_H_SYNC_WIDTH    96
-#define MODE_H_BACK_PORCH    48
-#define MODE_H_ACTIVE_PIXELS 640
+#define MODE_800_H_SYNC_POLARITY 0
+#define MODE_800_H_FRONT_PORCH   16
+#define MODE_800_H_SYNC_WIDTH    96
+#define MODE_800_H_BACK_PORCH    48
+#define MODE_800_H_ACTIVE_PIXELS 800
+
+#define MODE_640_H_SYNC_POLARITY 0
+#define MODE_640_H_FRONT_PORCH   16
+#define MODE_640_H_SYNC_WIDTH    96
+#define MODE_640_H_BACK_PORCH    48
+#define MODE_640_H_ACTIVE_PIXELS 640
 
 #define MODE_V_SYNC_POLARITY 0
 #define MODE_V_FRONT_PORCH   10
@@ -83,34 +89,64 @@
 // ----------------------------------------------------------------------------
 // HSTX command lists
 
-static uint32_t vblank_line_vsync_off[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_H_FRONT_PORCH,
+static uint32_t vblank_line640_vsync_off[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_FRONT_PORCH,
     SYNC_V1_H1,
-    HSTX_CMD_RAW_REPEAT | MODE_H_SYNC_WIDTH,
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_SYNC_WIDTH,
     SYNC_V1_H0,
-    HSTX_CMD_RAW_REPEAT | (MODE_H_BACK_PORCH + MODE_H_ACTIVE_PIXELS),
+    HSTX_CMD_RAW_REPEAT | (MODE_640_H_BACK_PORCH + MODE_640_H_ACTIVE_PIXELS),
     SYNC_V1_H1
 };
 
-static uint32_t vblank_line_vsync_on[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_H_FRONT_PORCH,
+static uint32_t vblank_line640_vsync_on[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_FRONT_PORCH,
     SYNC_V0_H1,
-    HSTX_CMD_RAW_REPEAT | MODE_H_SYNC_WIDTH,
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_SYNC_WIDTH,
     SYNC_V0_H0,
-    HSTX_CMD_RAW_REPEAT | (MODE_H_BACK_PORCH + MODE_H_ACTIVE_PIXELS),
+    HSTX_CMD_RAW_REPEAT | (MODE_640_H_BACK_PORCH + MODE_640_H_ACTIVE_PIXELS),
     SYNC_V0_H1
 };
 
-static uint32_t vactive_line[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_H_FRONT_PORCH,
+static uint32_t vactive_line640[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_FRONT_PORCH,
     SYNC_V1_H1,
     HSTX_CMD_NOP,
-    HSTX_CMD_RAW_REPEAT | MODE_H_SYNC_WIDTH,
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_SYNC_WIDTH,
     SYNC_V1_H0,
     HSTX_CMD_NOP,
-    HSTX_CMD_RAW_REPEAT | MODE_H_BACK_PORCH,
+    HSTX_CMD_RAW_REPEAT | MODE_640_H_BACK_PORCH,
     SYNC_V1_H1,
-    HSTX_CMD_TMDS | MODE_H_ACTIVE_PIXELS
+    HSTX_CMD_TMDS | MODE_640_H_ACTIVE_PIXELS
+};
+
+static uint32_t vblank_line800_vsync_off[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
+    SYNC_V1_H1,
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
+    SYNC_V1_H0,
+    HSTX_CMD_RAW_REPEAT | (MODE_800_H_BACK_PORCH + MODE_800_H_ACTIVE_PIXELS),
+    SYNC_V1_H1
+};
+
+static uint32_t vblank_line800_vsync_on[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
+    SYNC_V0_H1,
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
+    SYNC_V0_H0,
+    HSTX_CMD_RAW_REPEAT | (MODE_800_H_BACK_PORCH + MODE_800_H_ACTIVE_PIXELS),
+    SYNC_V0_H1
+};
+
+static uint32_t vactive_line800[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
+    SYNC_V1_H1,
+    HSTX_CMD_NOP,
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
+    SYNC_V1_H0,
+    HSTX_CMD_NOP,
+    HSTX_CMD_RAW_REPEAT | MODE_800_H_BACK_PORCH,
+    SYNC_V1_H1,
+    HSTX_CMD_TMDS | MODE_800_H_ACTIVE_PIXELS
 };
 
 picodvi_framebuffer_obj_t *active_picodvi = NULL;
@@ -129,11 +165,11 @@ static void __not_in_flash_func(dma_irq_handler)(void) {
     ch->al3_read_addr_trig = (uintptr_t)active_picodvi->dma_commands;
 }
 
-static void mode_ok(mp_uint_t width, mp_uint_t height, mp_uint_t color_depth) {
-    if (width == 640 && height == 480 && (color_depth < 8)) {
+static bool mode_ok(mp_uint_t width, mp_uint_t height, mp_uint_t color_depth) {
+    if ((width == 640 || width == 800) && height == 480 && (color_depth < 8)) {
         return true;
     }
-    if (width == 320 && height == 240 )
+    if ((width == 320 || width == 400) && height == 240) {
         return true;
     }
     return false;
@@ -154,7 +190,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q and %q for color depth %d"), MP_QSTR_width, MP_QSTR_height, color_depth);
     }
 
-    bool pixel_doubled = width == 320 && height == 240;
+    bool pixel_doubled = height == 240;
 
     size_t all_allocated = 0;
     int8_t pins[8] = {
@@ -277,22 +313,27 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         dma_channel_hw_addr(self->dma_pixel_channel)->al1_ctrl = dma_ctrl;
         dma_channel_hw_addr(self->dma_pixel_channel)->al1_write_addr = dma_write_addr;
     }
+    bool is_640_based = (width == 320 || width == 640);
+    uint32_t *vblank_line_vsync_on = is_640_based ?  vblank_line640_vsync_on : vblank_line800_vsync_on;
+    uint32_t *vblank_line_vsync_off = is_640_based ?  vblank_line640_vsync_off : vblank_line800_vsync_off;
+    uint32_t *vactive_line = is_640_based ?  vactive_line640 : vactive_line800;
+
     for (size_t v_scanline = 0; v_scanline < MODE_V_TOTAL_LINES; v_scanline++) {
         if (pixel_doubled) {
             self->dma_commands[command_word++] = dma_ctrl;
             self->dma_commands[command_word++] = dma_write_addr;
         }
         if (vsync_start <= v_scanline && v_scanline < vsync_end) {
-            self->dma_commands[command_word++] = count_of(vblank_line_vsync_on);
+            self->dma_commands[command_word++] = count_of(vblank_line640_vsync_on);
             self->dma_commands[command_word++] = (uintptr_t)vblank_line_vsync_on;
         } else if (backporch_start <= v_scanline && v_scanline < backporch_end) {
-            self->dma_commands[command_word++] = count_of(vblank_line_vsync_off);
+            self->dma_commands[command_word++] = count_of(vblank_line640_vsync_off);
             self->dma_commands[command_word++] = (uintptr_t)vblank_line_vsync_off;
         } else if (frontporch_start <= v_scanline && v_scanline < frontporch_end) {
-            self->dma_commands[command_word++] = count_of(vblank_line_vsync_off);
+            self->dma_commands[command_word++] = count_of(vblank_line640_vsync_off);
             self->dma_commands[command_word++] = (uintptr_t)vblank_line_vsync_off;
         } else {
-            self->dma_commands[command_word++] = count_of(vactive_line);
+            self->dma_commands[command_word++] = count_of(vactive_line640);
             self->dma_commands[command_word++] = (uintptr_t)vactive_line;
             size_t row = v_scanline - active_start;
             size_t transfer_count = words_per_line;
@@ -371,13 +412,15 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
             1 << HSTX_CTRL_EXPAND_SHIFT_RAW_N_SHIFTS_LSB |
             0 << HSTX_CTRL_EXPAND_SHIFT_RAW_SHIFT_LSB;
 
-    // Serial output config: clock period of 5 cycles, pop from command
-    // expander every 5 cycles, shift the output shiftreg by 2 every cycle.
+    uint32_t clk_factor = is_640_based ? 5u : 4u;
+
+    // Serial output config: clock period of 4 or 5 cycles, pop from command
+    // expander every 4 or 5 cycles, shift the output shiftreg by 2 every cycle.
     hstx_ctrl_hw->csr = 0;
     hstx_ctrl_hw->csr =
         HSTX_CTRL_CSR_EXPAND_EN_BITS |
-        5u << HSTX_CTRL_CSR_CLKDIV_LSB |
-            5u << HSTX_CTRL_CSR_N_SHIFTS_LSB |
+        clk_factor << HSTX_CTRL_CSR_CLKDIV_LSB |
+            clk_factor << HSTX_CTRL_CSR_N_SHIFTS_LSB |
             2u << HSTX_CTRL_CSR_SHIFT_LSB |
             HSTX_CTRL_CSR_EN_BITS;
 
@@ -385,6 +428,9 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     // we shift out two bits per HSTX clock cycle, this gives us an output of
     // 250 Mbps, which is very close to the bit clock for 480p 60Hz (252 MHz).
     // If we want the exact rate then we'll have to reconfigure PLLs.
+
+    // Similarly for 800 it's at least close to the nominal rate, we hope..
+    // (since 800/640 is 5/4)
 
     // Setup the data to pin mapping. `pins` is a pair of pins in a standard
     // order: clock, red, green and blue. We don't actually care they are next
