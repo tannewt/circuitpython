@@ -129,6 +129,16 @@ static void __not_in_flash_func(dma_irq_handler)(void) {
     ch->al3_read_addr_trig = (uintptr_t)active_picodvi->dma_commands;
 }
 
+static void mode_ok(mp_uint_t width, mp_uint_t height, mp_uint_t color_depth) {
+    if (width == 640 && height == 480 && (color_depth < 8)) {
+        return true;
+    }
+    if (width == 320 && height == 240 )
+        return true;
+    }
+    return false;
+}
+
 void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     mp_uint_t width, mp_uint_t height,
     const mcu_pin_obj_t *clk_dp, const mcu_pin_obj_t *clk_dn,
@@ -140,8 +150,8 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("%q in use"), MP_QSTR_picodvi);
     }
 
-    if (!(width == 640 && height == 480) && !(width == 320 && height == 240 && (color_depth == 16 || color_depth == 8))) {
-        mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q and %q"), MP_QSTR_width, MP_QSTR_height);
+    if (!mode_ok(width, height, color_depth)) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q and %q for color depth %d"), MP_QSTR_width, MP_QSTR_height, color_depth);
     }
 
     bool pixel_doubled = width == 320 && height == 240;
