@@ -139,7 +139,7 @@ def qstr_unescape(qstr):
     return qstr
 
 
-def process_file(f):
+def process_file(f, output_filename=None):
     # match gcc-like output (# n "file") and msvc-like output (#line n "file")
     re_line = re.compile(r"^#(?:line)?\s+\d+\s\"([^\"]+)\"")
     if args.mode == _MODE_QSTR:
@@ -164,7 +164,7 @@ def process_file(f):
             fname = m.group(1)
             if not is_c_source(fname) and not is_cxx_source(fname):
                 continue
-            if fname != last_fname:
+            if fname != last_fname and output_filename is None:
                 write_out(last_fname, output)
                 output = []
                 last_fname = fname
@@ -181,7 +181,10 @@ def process_file(f):
         for match in re_translate.findall(line):
             output.append('TRANSLATE("' + match[0] + '")')
 
-    if last_fname:
+    if output_filename is not None:
+        with open(output_filename, "w") as f:
+            f.write("\n".join(output) + "\n")
+    elif last_fname:
         write_out(last_fname, output)
     return ""
 
@@ -194,7 +197,8 @@ def cat_together():
     all_lines = []
     # CIRCUITPY-CHANGE: added
     outf = open(args.output_dir + "/out", "wb")
-    for fname in glob.glob(args.output_dir + "/*." + args.mode):
+    for fname in glob.glob(args.output_dir + "/**/*." + args.mode):
+        print(fname)
         with open(fname, "rb") as f:
             lines = f.readlines()
             all_lines += lines
@@ -296,7 +300,7 @@ if __name__ == "__main__":
 
     if args.command == "split":
         with io.open(args.input_filename, encoding="utf-8") as infile:
-            process_file(infile)
+            process_file(infile, args.output_file)
 
     if args.command == "cat":
         cat_together()

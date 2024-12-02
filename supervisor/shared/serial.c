@@ -113,28 +113,28 @@ MP_WEAK void board_serial_write_substring(const char *text, uint32_t length) {
     (void)length;
 }
 
-MP_WEAK void port_serial_early_init(void) {
-}
+// MP_WEAK void port_serial_early_init(void) {
+// }
 
-MP_WEAK void port_serial_init(void) {
-}
+// MP_WEAK void port_serial_init(void) {
+// }
 
-MP_WEAK bool port_serial_connected(void) {
-    return false;
-}
+// MP_WEAK bool port_serial_connected(void) {
+//     return false;
+// }
 
-MP_WEAK char port_serial_read(void) {
-    return -1;
-}
+// MP_WEAK char port_serial_read(void) {
+//     return -1;
+// }
 
-MP_WEAK uint32_t port_serial_bytes_available(void) {
-    return 0;
-}
+// MP_WEAK uint32_t port_serial_bytes_available(void) {
+//     return 0;
+// }
 
-MP_WEAK void port_serial_write_substring(const char *text, uint32_t length) {
-    (void)text;
-    (void)length;
-}
+// MP_WEAK void port_serial_write_substring(const char *text, uint32_t length) {
+//     (void)text;
+//     (void)length;
+// }
 
 void serial_early_init(void) {
     // Set up console UART, if enabled.
@@ -152,6 +152,7 @@ void serial_early_init(void) {
 
     // Do an initial print so that we can confirm the serial output is working.
     console_uart_printf("Serial console setup\r\n");
+    printk("Serial console setup\r\n");
     #endif
 
     board_serial_early_init();

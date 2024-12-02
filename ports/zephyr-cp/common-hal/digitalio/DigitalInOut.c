@@ -1,0 +1,88 @@
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
+
+#include "shared-bindings/digitalio/DigitalInOut.h"
+#include "py/runtime.h"
+
+void common_hal_digitalio_digitalinout_never_reset(
+    digitalio_digitalinout_obj_t *self) {
+    never_reset_pin_number(self->pin->number);
+}
+
+digitalinout_result_t common_hal_digitalio_digitalinout_construct(
+    digitalio_digitalinout_obj_t *self, const mcu_pin_obj_t *pin) {
+    claim_pin(pin);
+    self->pin = pin;
+
+
+    return DIGITALINOUT_OK;
+}
+
+bool common_hal_digitalio_digitalinout_deinited(digitalio_digitalinout_obj_t *self) {
+    return self->pin == NULL;
+}
+
+void common_hal_digitalio_digitalinout_deinit(digitalio_digitalinout_obj_t *self) {
+    if (common_hal_digitalio_digitalinout_deinited(self)) {
+        return;
+    }
+
+    reset_pin_number(self->pin->number);
+    self->pin = NULL;
+}
+
+digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_input(
+    digitalio_digitalinout_obj_t *self, digitalio_pull_t pull) {
+    common_hal_digitalio_digitalinout_set_pull(self, pull);
+    return DIGITALINOUT_OK;
+}
+
+digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
+    digitalio_digitalinout_obj_t *self, bool value,
+    digitalio_drive_mode_t drive_mode) {
+
+    common_hal_digitalio_digitalinout_set_drive_mode(self, drive_mode);
+    common_hal_digitalio_digitalinout_set_value(self, value);
+    return DIGITALINOUT_OK;
+}
+
+digitalio_direction_t common_hal_digitalio_digitalinout_get_direction(
+    digitalio_digitalinout_obj_t *self) {
+
+    return DIRECTION_OUTPUT;
+}
+
+void common_hal_digitalio_digitalinout_set_value(
+    digitalio_digitalinout_obj_t *self, bool value) {
+}
+
+bool common_hal_digitalio_digitalinout_get_value(
+    digitalio_digitalinout_obj_t *self) {
+    return true;
+}
+
+digitalinout_result_t common_hal_digitalio_digitalinout_set_drive_mode(
+    digitalio_digitalinout_obj_t *self,
+    digitalio_drive_mode_t drive_mode) {
+    return DIGITALINOUT_OK;
+}
+
+digitalio_drive_mode_t common_hal_digitalio_digitalinout_get_drive_mode(
+    digitalio_digitalinout_obj_t *self) {
+    // uint32_t pin = self->pin->number;
+    return DRIVE_MODE_PUSH_PULL;
+}
+
+digitalinout_result_t common_hal_digitalio_digitalinout_set_pull(
+    digitalio_digitalinout_obj_t *self, digitalio_pull_t pull) {
+    return DIGITALINOUT_OK;
+}
+
+digitalio_pull_t common_hal_digitalio_digitalinout_get_pull(
+    digitalio_digitalinout_obj_t *self) {
+    // uint32_t pin = self->pin->number;
+    return PULL_NONE;
+}

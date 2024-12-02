@@ -1,0 +1,5 @@
+# West manages these folders.
+bootloader
+build
+modules
+tools
