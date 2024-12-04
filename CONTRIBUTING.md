@@ -46,9 +46,16 @@ Build Documentation:
 
 ### CircuitPython is built on top of Zephyr
 
-First, install Zephyr tools:
+First, install Zephyr tools (see [Zephyr's Getting Started Guide](https://docs.zephyrproject.org/4.0.0/develop/getting_started/index.html)). (These are `fish` commands because that's what Scott uses.)
 
-TODO
+
+```sh
+pip install west
+west update
+west zephyr-export
+pip install -r lib/zephyr/scripts/requirements.txt
+env ZEPHYR_BASE=lib/zephyr west sdk install
+```
 
 Now to build from the top level:
 

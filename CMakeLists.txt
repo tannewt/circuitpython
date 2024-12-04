@@ -45,6 +45,7 @@ ExternalProject_Add(circuitpython
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
     BUILD_JOB_SERVER_AWARE TRUE
     BUILD_ALWAYS TRUE
+    DEPENDS zephyr
     INSTALL_COMMAND ""
     )
 
