@@ -44,6 +44,21 @@ Build Documentation:
 
 - For SAMD21 debugging workflow tips check out [this learn guide](https://learn.adafruit.com/debugging-the-samd21-with-gdb) from Scott (@tannewt).
 
+### CircuitPython is built on top of Zephyr
+
+First, install Zephyr tools:
+
+TODO
+
+Now to build from the top level:
+
+```sh
+west build -b pca10056 -o=-j32 -- -G'Unix Makefiles'  -DCMAKE_VERBOSE_MAKEFILE=ON
+```
+
+This uses Zephyr's cmake to generate Makefiles that then delegate to
+`tools/cpbuild/build_circuitpython.py` to build the CircuitPython bits in parallel.
+
 ## Developer contacts
 Scott Shawcroft ([@tannewt](https://github.com/tannewt)) is the lead developer of CircuitPython
 and is sponsored by [Adafruit Industries LLC](https://adafruit.com). Scott is usually available

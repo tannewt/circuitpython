@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
+set(ZEPHYR_BOARD_ALIASES boards/board_aliases.cmake)
+
 find_package(Zephyr REQUIRED HINTS lib/zephyr)
 project(circuitpython)
 
@@ -30,11 +32,19 @@ set(external_project_cflags
 ExternalProject_Add(circuitpython
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/tools/build/build_circuitpython.py
+    BUILD_COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/tools/cpbuild/build_circuitpython.py
     CC=${CMAKE_C_COMPILER}
     AR=${CMAKE_AR}
     CFLAGS=${external_project_cflags}
+    BOARD=${BOARD}
+    BOARD_ALIAS=${BOARD_ALIAS}
+    BOARD_REVISION=${BOARD_REVISION}
+    BOARD_QUALIFIERS=${BOARD_QUALIFIERS}
+    SOC_DIRECTORIES=${SOC_DIRECTORIES}
+    OUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
+    BUILD_JOB_SERVER_AWARE TRUE
+    BUILD_ALWAYS TRUE
     INSTALL_COMMAND ""
     )
 
