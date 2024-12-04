@@ -29,10 +29,18 @@ DEFAULT_MODULES = []
 # io and collections are MP modules that fit this bill
 MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm"]
 
-ALLOW_FLAGS = {
+ALLOW_MODULE_FLAGS = {
     pathlib.Path("main.c"): ["atexit", "board", "bleio", "canio", "collections", "cyw43", "digitalio", "epaperdisplay", "io", "keypad", "memorymonitor", "microcontroller", "socketpool", "usb_hid", "watchdog", "wifi"],
     "supervisor/shared/usb/usb_desc.c": ["usb_midi", "usb_hid"],
     "supervisor/shared/micropython.c": ["atexit", "watchdog"]
+}
+
+ALLOW_FEATURE_FLAGS = {
+    pathlib.Path("main.c"): ["debug", "bleio_hci", "safemode_py", "status_bar", "os_getenv", "usb_keyboard_workflow", "lto", "translate_object", "ssl_mbedtls", "opt_map_lookup_cache"],
+}
+
+ALLOW_MICROPYTHON_FLAGS = {
+    pathlib.Path("main.c"): ["py_async_await"],
 }
 
 # compile_circuitpython = hancho.Rule(
@@ -167,7 +175,6 @@ async def board(
 
     supervisor_source = [
         "main.c",
-        "lib/tlsf/tlsf.c",
         f"ports/{port_id}/supervisor/port.c",
         "supervisor/stub/misc.c",
     ]
@@ -232,14 +239,22 @@ async def board(
     async with asyncio.TaskGroup() as tg:
         extra_source_flags = {}
         for source_file in source_files:
-            if source_file in ALLOW_FLAGS:
-                extra_flags = []
-                for module_name in ALLOW_FLAGS[source_file]:
+            extra_flags = []
+            if source_file in ALLOW_MODULE_FLAGS:
+                for module_name in ALLOW_MODULE_FLAGS[source_file]:
                     name_upper = module_name.upper()
                     extra_flags.append(f"-DCIRCUITPY_{name_upper}={1 if kwargs.get(module_name, False) else 0}")
-
-                extra_source_flags[source_file] = extra_flags
+            if source_file in ALLOW_FEATURE_FLAGS:
+                for module_name in ALLOW_FEATURE_FLAGS[source_file]:
+                    name_upper = module_name.upper()
+                    extra_flags.append(f"-DCIRCUITPY_{name_upper}={1 if kwargs.get(module_name, False) else 0}")
+            if source_file in ALLOW_MICROPYTHON_FLAGS:
+                for module_name in ALLOW_MICROPYTHON_FLAGS[source_file]:
+                    name_upper = module_name.upper()
+                    extra_flags.append(f"-DMICROPY_{name_upper}={1 if kwargs.get(module_name, False) else 0}")
+            if extra_flags:
                 print(extra_flags)
+                extra_source_flags[source_file] = extra_flags
             tg.create_task(
                 preprocess_and_split_defs(compiler, top / source_file, build_path / board_id, [qstr_flags, *circuitpython_flags, *port_flags, *extra_source_flags.get(source_file, [])]),
                 name=f"Split defs {source_file}",
