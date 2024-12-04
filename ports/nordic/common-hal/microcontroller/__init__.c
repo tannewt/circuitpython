@@ -20,8 +20,6 @@
 #include "supervisor/port.h"
 #include "supervisor/shared/safe_mode.h"
 #include "nrfx_glue.h"
-#include "nrf_nvic.h"
-#include "nrf_power.h"
 
 // This routine should work even when interrupts are disabled. Used by OneWire
 // for precise timing.
@@ -41,7 +39,7 @@ void common_hal_mcu_disable_interrupts() {
         // This only disables interrupts of priority 2 through 7; levels 0, 1,
         // and 4, are exclusive to softdevice and should never be used, so
         // this limitation is not important.
-        sd_nvic_critical_region_enter(&is_nested_critical_region);
+        // sd_nvic_critical_region_enter(&is_nested_critical_region);
     }
     __DMB();
     nesting_count++;
@@ -57,7 +55,7 @@ void common_hal_mcu_enable_interrupts() {
         return;
     }
     __DMB();
-    sd_nvic_critical_region_exit(is_nested_critical_region);
+    // sd_nvic_critical_region_exit(is_nested_critical_region);
 }
 
 void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
@@ -66,11 +64,11 @@ void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
     if (runmode == RUNMODE_BOOTLOADER || runmode == RUNMODE_UF2) {
         new_value = DFU_MAGIC_UF2_RESET;
     }
-    int err_code = sd_power_gpregret_set(0, DFU_MAGIC_UF2_RESET);
-    if (err_code != NRF_SUCCESS) {
-        // Set it without the soft device if the SD failed. (It may be off.)
-        nrf_power_gpregret_set(NRF_POWER, new_value);
-    }
+    // int err_code = sd_power_gpregret_set(0, DFU_MAGIC_UF2_RESET);
+    // if (err_code != NRF_SUCCESS) {
+    //     // Set it without the soft device if the SD failed. (It may be off.)
+    //     nrf_power_gpregret_set(NRF_POWER, new_value);
+    // }
     if (runmode == RUNMODE_SAFE_MODE) {
         safe_mode_on_next_reset(SAFE_MODE_PROGRAMMATIC);
     }
@@ -89,7 +87,7 @@ const mcu_processor_obj_t common_hal_mcu_processor_obj = {
     },
 };
 
-#if CIRCUITPY_INTERNAL_NVM_SIZE > 0
+#if CIRCUITPY_NVM && CIRCUITPY_INTERNAL_NVM_SIZE > 0
 // The singleton nvm.ByteArray object.
 const nvm_bytearray_obj_t common_hal_mcu_nvm_obj = {
     .base = {

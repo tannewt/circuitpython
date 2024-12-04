@@ -34,7 +34,7 @@ extern const mp_obj_type_t mcu_pin_type;
 #define NO_PIN 0xff
 
 // Choose based on chip, but not specifically revision (e.g., not NRF52840_XXAA)
-#ifdef NRF52840
+#ifdef NRF52840_XXAA
 #include "nrf52840/pins.h"
 #endif
 

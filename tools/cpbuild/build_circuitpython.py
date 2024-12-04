@@ -192,7 +192,15 @@ async def build_circuitpython():
         "main.c",
         "lib/tlsf/tlsf.c",
         f"ports/{port}/supervisor/port.c",
+        f"ports/{port}/common-hal/microcontroller/__init__.c",
+        f"ports/{port}/common-hal/microcontroller/Processor.c",
         "supervisor/stub/misc.c",
+        "shared/readline/readline.c",
+        "shared/runtime/pyexec.c",
+        "shared/runtime/interrupt_char.c",
+        "shared/runtime/stdout_helpers.c",
+        "shared/runtime/sys_stdio_mphal.c",
+        "extmod/vfs_reader.c",
     ]
     top = srcdir
     supervisor_source = [pathlib.Path(p) for p in supervisor_source]
