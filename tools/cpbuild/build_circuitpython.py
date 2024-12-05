@@ -10,7 +10,7 @@ import cpbuild
 
 print("hello zephyr", sys.argv)
 
-print(os.environ)
+# print(os.environ)
 srcdir = pathlib.Path("/home/tannewt/repos/circuitpython")
 builddir = pathlib.Path.cwd()
 cmake_args = {}
@@ -32,7 +32,7 @@ async def preprocess_and_split_defs(compiler, source_file, build_path, flags):
     await compiler.preprocess(source_file, build_file, flags=flags)
     async with asyncio.TaskGroup() as tg:
         for mode in ("qstr", "module", "root_pointer"):
-            split_file = build_file.relative_to(build_path).with_suffix(f".split.{mode}")
+            split_file = build_file.relative_to(build_path).with_suffix(f".{mode}")
             split_file = build_path / "genhdr" / mode / split_file
             split_file.parent.mkdir(exist_ok=True, parents=True)
             tg.create_task(

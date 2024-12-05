@@ -5,6 +5,7 @@ import os
 import pathlib
 import shlex
 import time
+import hashlib
 import atexit
 import json
 import re
@@ -15,12 +16,21 @@ logger = logging.getLogger(__name__)
 shared_semaphore = None
 
 trace_entries = []
+LAST_BUILD_TIMES = {}
+ALREADY_RUN = {}
+_last_build_times = pathlib.Path("last_build_times.json")
+if _last_build_times.exists():
+    with open(_last_build_times) as f:
+        LAST_BUILD_TIMES = json.load(f)
 
 
 def save_trace():
     with open("trace.json", "w") as f:
         json.dump(trace_entries, f)
+    with open("last_build_times.json", "w") as f:
+        json.dump(LAST_BUILD_TIMES, f)
     print("wrote trace", pathlib.Path(".").absolute() / "trace.json")
+    print("wrote build times", pathlib.Path(".").absolute() / "last_build_times.json")
 
 
 atexit.register(save_trace)
@@ -70,10 +80,12 @@ class _MakeJobClient:
         future = loop.create_future()
         self.pending_futures.append(future)
         self.read_transport.resume_reading()
+        print("aenter")
         self.tokens_in_use.append(await future)
 
     async def __aexit__(self, exc_type, exc, tb):
         token = self.tokens_in_use.pop()
+        print("aexit")
         self.new_token(token)
 
 
@@ -92,14 +104,34 @@ max_track = 0
 
 
 async def run_command(command, working_directory, description=None):
+    paths = []
     if isinstance(command, list):
         for i, part in enumerate(command):
             if isinstance(part, pathlib.Path):
+                paths.append(part)
                 part = part.relative_to(working_directory, walk_up=True)
             # if isinstance(part, list):
 
             command[i] = str(part)
         command = " ".join(command)
+
+    command_hash = hashlib.sha3_256(command.encode("utf-8"))
+    command_hash.update(str(working_directory).encode("utf-8"))
+    command_hash = command_hash.hexdigest()
+
+    # If a command is run multiple times, then wait for the first one to continue. Don't run it again.
+    if command_hash in ALREADY_RUN:
+        await ALREADY_RUN[command_hash].wait()
+        return
+    ALREADY_RUN[command_hash] = asyncio.Event()
+
+    # If the path inputs are all older than the last time we ran them, then we don't have anything to do.
+    if command_hash in LAST_BUILD_TIMES and all((p.exists() for p in paths)):
+        newest_file = max((p.stat().st_mtime_ns for p in paths))
+        last_build_time = LAST_BUILD_TIMES[command_hash]
+        if last_build_time < newest_file:
+            ALREADY_RUN[command_hash].set()
+            return
 
     cancellation = None
     async with shared_semaphore:
@@ -135,6 +167,9 @@ async def run_command(command, working_directory, description=None):
         tracks.append(track)
 
     if process.returncode == 0:
+        newest_file = max((p.stat().st_mtime_ns for p in paths))
+        LAST_BUILD_TIMES[command_hash] = newest_file
+
         # If something has failed and we've been canceled, hide our success so
         # the error is clear.
         if cancellation:
@@ -144,7 +179,10 @@ async def run_command(command, working_directory, description=None):
             logger.debug(command)
         else:
             logger.info(command)
+        ALREADY_RUN[command_hash].set()
     else:
+        if command_hash in LAST_BUILD_TIMES:
+            del LAST_BUILD_TIMES[command_hash]
         if stdout:
             logger.info(stdout.decode("utf-8").strip())
         if stderr:
