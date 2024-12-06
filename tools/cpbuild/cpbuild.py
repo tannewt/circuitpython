@@ -80,12 +80,10 @@ class _MakeJobClient:
         future = loop.create_future()
         self.pending_futures.append(future)
         self.read_transport.resume_reading()
-        print("aenter")
         self.tokens_in_use.append(await future)
 
     async def __aexit__(self, exc_type, exc, tb):
         token = self.tokens_in_use.pop()
-        print("aexit")
         self.new_token(token)
 
 
@@ -103,7 +101,21 @@ tracks = []
 max_track = 0
 
 
-async def run_command(command, working_directory, description=None):
+async def run_command(command, working_directory, description=None, check_hash=[]):
+    """
+    Runs a command asynchronously. The command should ideally be a list of strings
+    and pathlib.Path objects. If all of the paths haven't been modified since the last
+    time the command was run, then it'll be skipped. (The last time a command was run
+    is stored based on the hash of the command.)
+
+    The command is run from the working_directory and the paths are made relative to it.
+
+    Description is used for logging only. If None, the command itself is logged.
+
+    Paths in check_hash are hashed before and after the command. If the hash is
+    the same, then the old mtimes are reset. This is helpful if a command may produce
+    the same result and you don't want the rest of the build impacted.
+    """
     paths = []
     if isinstance(command, list):
         for i, part in enumerate(command):
@@ -129,9 +141,23 @@ async def run_command(command, working_directory, description=None):
     if command_hash in LAST_BUILD_TIMES and all((p.exists() for p in paths)):
         newest_file = max((p.stat().st_mtime_ns for p in paths))
         last_build_time = LAST_BUILD_TIMES[command_hash]
-        if last_build_time < newest_file:
+        if last_build_time <= newest_file:
             ALREADY_RUN[command_hash].set()
             return
+
+    else:
+        newest_file = 0
+
+    file_hashes = {}
+    for path in check_hash:
+        if not path.exists():
+            continue
+        with path.open("rb") as f:
+            digest = hashlib.file_digest(f, "sha256")
+            stat = path.stat()
+            mtimes = (stat.st_atime, stat.st_mtime)
+            mtimes_ns = (stat.st_atime_ns, stat.st_mtime_ns)
+            file_hashes[path] = (digest, mtimes, mtimes_ns)
 
     cancellation = None
     async with shared_semaphore:
@@ -167,8 +193,18 @@ async def run_command(command, working_directory, description=None):
         tracks.append(track)
 
     if process.returncode == 0:
+        old_newest_file = newest_file
         newest_file = max((p.stat().st_mtime_ns for p in paths))
         LAST_BUILD_TIMES[command_hash] = newest_file
+
+        for path in check_hash:
+            if path not in file_hashes:
+                continue
+            with path.open("rb") as f:
+                digest = hashlib.file_digest(f, "sha256")
+                old_digest, _, old_mtimes_ns = file_hashes[path]
+                if old_digest.digest() == digest.digest():
+                    os.utime(path, ns=old_mtimes_ns)
 
         # If something has failed and we've been canceled, hide our success so
         # the error is clear.
@@ -179,6 +215,9 @@ async def run_command(command, working_directory, description=None):
             logger.debug(command)
         else:
             logger.info(command)
+        if old_newest_file == newest_file:
+            logger.error("No files were modified by the command.")
+            raise RuntimeError()
         ALREADY_RUN[command_hash].set()
     else:
         if command_hash in LAST_BUILD_TIMES:
@@ -268,6 +307,7 @@ class Compiler:
             ],
             description=f"Preprocess {source_file.relative_to(self.srcdir)} -> {output_file.relative_to(self.builddir)}",
             working_directory=self.srcdir,
+            check_hash=[output_file],
         )
 
     async def compile(

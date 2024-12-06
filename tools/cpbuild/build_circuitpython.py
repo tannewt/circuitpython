@@ -53,17 +53,10 @@ async def preprocess_and_split_defs(compiler, source_file, build_path, flags):
 
 async def collect_defs(mode, build_path):
     output_file = build_path / f"{mode}defs.collected"
+    splitdir = build_path / "genhdr" / mode
     await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "makeqstrdefs.py",
-            "cat",
-            mode,
-            "_",
-            build_path / "genhdr" / mode,
-            output_file,
-        ],
-        srcdir,
+        ["cat", "-s", *splitdir.glob(f"**/*.{mode}"), ">", output_file],
+        splitdir,
     )
     return output_file
 
@@ -184,8 +177,18 @@ async def build_circuitpython():
 
     genhdr = builddir / "genhdr"
     genhdr.mkdir(exist_ok=True, parents=True)
+    version_header = genhdr / "mpversion.h"
     await cpbuild.run_command(
-        ["python", srcdir / "py" / "makeversionhdr.py", genhdr / "mpversion.h"], srcdir
+        [
+            "python",
+            srcdir / "py" / "makeversionhdr.py",
+            version_header,
+            "&&",
+            "touch",
+            version_header,
+        ],
+        srcdir,
+        check_hash=[version_header],
     )
 
     supervisor_source = [
@@ -310,6 +313,6 @@ async def main():
 handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter("%(log_color)s%(levelname)s:%(name)s:%(message)s"))
 
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.DEBUG, handlers=[handler])
 
 asyncio.run(main())
