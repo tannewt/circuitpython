@@ -22,6 +22,12 @@ _last_build_times = pathlib.Path("last_build_times.json")
 if _last_build_times.exists():
     with open(_last_build_times) as f:
         LAST_BUILD_TIMES = json.load(f)
+    logger.info("Build times loaded.")
+    print("build times loaded")
+else:
+    logger.warn(
+        "No last build times found. This is normal if you're running this for the first time."
+    )
 
 
 def save_trace():
@@ -58,6 +64,8 @@ class _MakeJobClient:
         self.read_transport: asyncio.ReadTransport | None = None
         self.read_protocol = None
 
+        self.started = None
+
     def new_token(self, token):
         # Keep a token and reuse it. Ignore cancelled Futures.
         if self.pending_futures:
@@ -73,10 +81,13 @@ class _MakeJobClient:
 
     async def __aenter__(self):
         loop = asyncio.get_event_loop()
-        if self.read_transport is None:
+        if self.started is None:
+            self.started = asyncio.Event()
             self.read_transport, self.read_protocol = await loop.connect_read_pipe(
                 lambda: _TokenProtocol(self), self.reader
             )
+            self.started.set()
+        await self.started.wait()
         future = loop.create_future()
         self.pending_futures.append(future)
         self.read_transport.resume_reading()
@@ -133,6 +144,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
 
     # If a command is run multiple times, then wait for the first one to continue. Don't run it again.
     if command_hash in ALREADY_RUN:
+        logging.debug(f"Already running {command_hash} {command}")
         await ALREADY_RUN[command_hash].wait()
         return
     ALREADY_RUN[command_hash] = asyncio.Event()
@@ -141,10 +153,9 @@ async def run_command(command, working_directory, description=None, check_hash=[
     if command_hash in LAST_BUILD_TIMES and all((p.exists() for p in paths)):
         newest_file = max((p.stat().st_mtime_ns for p in paths))
         last_build_time = LAST_BUILD_TIMES[command_hash]
-        if last_build_time <= newest_file:
+        if newest_file <= last_build_time:
             ALREADY_RUN[command_hash].set()
             return
-
     else:
         newest_file = 0
 

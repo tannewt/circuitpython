@@ -1,3 +1,25 @@
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2024 Scott Shawcroft for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
+
+#include "supervisor/port.h"
+
+#include <zephyr/kernel.h>
+
+safe_mode_t port_init(void) {
+    return SAFE_MODE_NONE;
+}
+
+// Reset the microcontroller completely.
+void reset_cpu(void) {
+    while (true) {
+    }
+}
+
+void reset_port(void);
+
 void port_wake_main_task(void) {
 }
 
@@ -11,21 +33,56 @@ void port_boot_info(void) {
 }
 
 void port_heap_init(void) {
-    uint32_t *heap_bottom = port_heap_get_bottom();
-    uint32_t *heap_top = port_heap_get_top();
-    size_t size = (heap_top - heap_bottom) * sizeof(uint32_t);
-    heap = tlsf_create_with_pool(heap_bottom, size, size);
+}
+
+// Get stack limit address
+uint32_t *port_stack_get_limit(void) {
+    return NULL;
+}
+
+// Get stack top address
+uint32_t *port_stack_get_top(void) {
+    return NULL;
+}
+
+// Get heap bottom address
+uint32_t *port_heap_get_bottom(void) {
+    return NULL;
+}
+
+// Get heap top address
+uint32_t *port_heap_get_top(void) {
+    return NULL;
+}
+
+// Save and retrieve a word from memory that is preserved over reset. Used for safe mode.
+void port_set_saved_word(uint32_t) {
+
+}
+uint32_t port_get_saved_word(void) {
+    return 0;
+}
+
+
+// Enable 1/1024 second tick.
+void port_enable_tick(void) {
+
+}
+
+// Disable 1/1024 second tick.
+void port_disable_tick(void) {
+
 }
 
 void *port_malloc(size_t size, bool dma_capable) {
-    void *block = tlsf_malloc(heap, size);
+    void *block = k_malloc(size);
     return block;
 }
 
 void port_free(void *ptr) {
-    tlsf_free(heap, ptr);
+    k_free(ptr);
 }
 
 void *port_realloc(void *ptr, size_t size) {
-    return tlsf_realloc(heap, ptr, size);
+    return k_realloc(ptr, size);
 }
