@@ -18,7 +18,9 @@ void reset_cpu(void) {
     }
 }
 
-void reset_port(void);
+void reset_port(void) {
+
+}
 
 void port_wake_main_task(void) {
 }
@@ -63,6 +65,9 @@ uint32_t port_get_saved_word(void) {
     return 0;
 }
 
+uint64_t port_get_raw_ticks(uint8_t *subticks) {
+    return 0;
+}
 
 // Enable 1/1024 second tick.
 void port_enable_tick(void) {
@@ -72,6 +77,12 @@ void port_enable_tick(void) {
 // Disable 1/1024 second tick.
 void port_disable_tick(void) {
 
+}
+
+void port_interrupt_after_ticks(uint32_t ticks) {
+}
+
+void port_idle_until_interrupt(void) {
 }
 
 void *port_malloc(size_t size, bool dma_capable) {

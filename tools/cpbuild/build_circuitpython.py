@@ -166,6 +166,7 @@ async def build_circuitpython():
     circuitpython_flags.append(f"-DCIRCUITPY_USB_HOST={1 if usb_host else 0}")
     circuitpython_flags.append(f'-DCIRCUITPY_BOARD_ID=\\"{board}\\"')
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
+    circuitpython_flags.append("-DINTERNAL_FLASH_FILESYSTEM")
     circuitpython_flags.append('-DFFCONF_H=\\"lib/oofatfs/ffconf.h\\"')
     circuitpython_flags.extend(("-I", srcdir))
     circuitpython_flags.extend(("-I", srcdir / "lib/tinyusb/src"))
@@ -301,6 +302,7 @@ async def build_circuitpython():
     source_files.append(srcdir / "shared/timeutils/timeutils.c")
     source_files.append(srcdir / "shared-module/time/__init__.c")
     source_files.append(srcdir / "shared-module/os/__init__.c")
+    source_files.append(srcdir / "shared-module/supervisor/__init__.c")
 
     assembly_files = []
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")
