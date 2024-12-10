@@ -296,6 +296,7 @@ async def build_circuitpython():
     # These files don't include unique QSTRs. They just need to be compiled.
     source_files.append(srcdir / "supervisor" / "zephyr" / "flash.c")
     source_files.append(srcdir / "supervisor" / "zephyr" / "port.c")
+    source_files.append(srcdir / "supervisor" / "zephyr" / "serial.c")
     source_files.append(srcdir / "lib" / "oofatfs" / "ff.c")
     source_files.append(srcdir / "lib" / "oofatfs" / "ffunicode.c")
     source_files.append(srcdir / "extmod" / "vfs_fat_diskio.c")

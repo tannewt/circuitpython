@@ -975,6 +975,8 @@ static int run_repl(safe_mode_t safe_mode) {
 }
 
 #if defined(__ZEPHYR__) && __ZEPHYR__ == 1
+#include <zephyr/console/console.h>
+
 int circuitpython_main(void) {
 #else
 int __attribute__((used)) main(void) {
@@ -997,12 +999,18 @@ int __attribute__((used)) main(void) {
 
     // Start the debug serial
     serial_early_init();
+    console_write(NULL, "serial_early_init\r\n", strlen("serial_early_init\r\n"));
+
     mp_hal_stdout_tx_str(line_clear);
 
     // Wait briefly to give a reset window where we'll enter safe mode after the reset.
     if (get_safe_mode() == SAFE_MODE_NONE) {
+        console_write(NULL, "wait_for_safe_mode_reset\r\n", strlen("wait_for_safe_mode_reset\r\n"));
         set_safe_mode(wait_for_safe_mode_reset());
     }
+    printk("safe_mode: %d\r\n", get_safe_mode());
+
+    console_write(NULL, "stack_init\r\n", strlen("stack_init\r\n"));
 
     stack_init();
 

@@ -6,6 +6,7 @@
 
 #include "supervisor/port.h"
 
+#include <zephyr/autoconf.h>
 #include <zephyr/kernel.h>
 
 safe_mode_t port_init(void) {
@@ -39,6 +40,7 @@ void port_heap_init(void) {
 
 // Get stack limit address
 uint32_t *port_stack_get_limit(void) {
+    k_tid_t current_thread_id = k_current_get();
     return NULL;
 }
 
@@ -66,7 +68,14 @@ uint32_t port_get_saved_word(void) {
 }
 
 uint64_t port_get_raw_ticks(uint8_t *subticks) {
-    return 0;
+    #if CONFIG_SYS_CLOCK_TICKS_PER_SEC != 32768
+    #error "This code assumes 32768 Hz system clock"
+    #endif
+    int64_t uptime = k_uptime_ticks();
+    if (subticks != NULL) {
+        *subticks = uptime % 32;
+    }
+    return uptime / 32;
 }
 
 // Enable 1/1024 second tick.
