@@ -152,6 +152,7 @@ void serial_early_init(void) {
 
     // Do an initial print so that we can confirm the serial output is working.
     console_uart_printf("Serial console setup\r\n");
+    printk("Serial console setup\r\n");
     #endif
 
     board_serial_early_init();

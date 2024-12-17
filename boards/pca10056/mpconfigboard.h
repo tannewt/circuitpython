@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include "nrfx/hal/nrf_gpio.h"
-
 #define MICROPY_HW_BOARD_NAME       "PCA10056 nRF52840-DK"
 #define MICROPY_HW_MCU_NAME         "nRF52840"
 
@@ -22,6 +20,9 @@
 
 #define DEFAULT_UART_BUS_RX         (&pin_P1_01)
 #define DEFAULT_UART_BUS_TX         (&pin_P1_02)
+
+#define CIRCUITPY_CONSOLE_UART_TX (&pin_P0_06)
+#define CIRCUITPY_CONSOLE_UART_RX (&pin_P0_08)
 
 // Flash operation mode is determined by MICROPY_QSPI_DATAn pin configuration.
 // A pin config is valid if it is defined and its value is not 0xFF.

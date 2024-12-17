@@ -16,7 +16,6 @@
 
 #include "nrfx_twim.h"
 #include "nrfx_spim.h"
-#include "nrf_gpio.h"
 
 // all TWI instances have the same max size
 // 16 bits for 840, 10 bits for 810, 8 bits for 832

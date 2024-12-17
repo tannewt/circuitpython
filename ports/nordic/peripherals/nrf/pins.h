@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <hal/nrf_gpio.h>
+
 typedef struct {
     mp_obj_base_t base;
     // These could be squeezed to fewer bits if more fields are needed.

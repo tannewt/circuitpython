@@ -15,7 +15,12 @@
 #include "py/runtime.h"
 #include "lib/oofatfs/ff.h"
 
+#include <zephyr/storage/flash_map.h>
+
+static struct flash_area *filesystem_area = NULL;
+
 void supervisor_flash_init(void) {
+    flash_area_open(FIXED_PARTITION_ID(storage_partition), &filesystem_area);
 }
 
 uint32_t supervisor_flash_get_block_size(void) {
@@ -27,6 +32,7 @@ uint32_t supervisor_flash_get_block_count(void) {
 }
 
 mp_uint_t supervisor_flash_read_blocks(uint8_t *dest, uint32_t block, uint32_t num_blocks) {
+    flash_area_read(filesystem_area, block * 512, dest, num_blocks * 512);
     return 0; // success
 }
 

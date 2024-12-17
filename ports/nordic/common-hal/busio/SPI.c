@@ -12,7 +12,6 @@
 #include "py/runtime.h"
 
 #include "nrfx_spim.h"
-#include "nrf_gpio.h"
 
 #ifndef NRFX_SPIM3_ENABLED
 #define NRFX_SPIM3_ENABLED (0)
@@ -63,7 +62,7 @@ static bool never_reset[MP_ARRAY_SIZE(spim_peripherals)];
 
 // Separate RAM area for SPIM3 transmit buffer to avoid SPIM3 hardware errata.
 // https://infocenter.nordicsemi.com/index.jsp?topic=%2Ferrata_nRF52840_Rev2%2FERR%2FnRF52840%2FRev2%2Flatest%2Fanomaly_840_198.html
-static uint8_t *spim3_transmit_buffer = (uint8_t *)SPIM3_BUFFER_RAM_START_ADDR;
+// static uint8_t *spim3_transmit_buffer = (uint8_t *)SPIM3_BUFFER_RAM_START_ADDR;
 
 void spi_reset(void) {
     for (size_t i = 0; i < MP_ARRAY_SIZE(spim_peripherals); i++) {
@@ -142,8 +141,8 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self, const mcu_pin_obj_t *
         mp_raise_ValueError(MP_ERROR_TEXT("All SPI peripherals are in use"));
     }
 
-    nrfx_spim_config_t config = NRFX_SPIM_DEFAULT_CONFIG(NRFX_SPIM_PIN_NOT_USED, NRFX_SPIM_PIN_NOT_USED,
-        NRFX_SPIM_PIN_NOT_USED, NRFX_SPIM_PIN_NOT_USED);
+    nrfx_spim_config_t config = NRFX_SPIM_DEFAULT_CONFIG(NRF_SPIM_PIN_NOT_CONNECTED, NRF_SPIM_PIN_NOT_CONNECTED,
+        NRF_SPIM_PIN_NOT_CONNECTED, NRF_SPIM_PIN_NOT_CONNECTED);
 
     config.frequency = baudrate_to_spim_frequency(self->spim_peripheral->max_frequency);
 
@@ -241,11 +240,11 @@ bool common_hal_busio_spi_write(busio_spi_obj_t *self, const uint8_t *data, size
     while (len > 0) {
         size_t chunk_size = MIN(len, self->spim_peripheral->max_xfer_size);
         uint8_t *chunk = next_chunk;
-        if (is_spim3) {
-            // If SPIM3, copy into unused RAM block, and do DMA from there.
-            memcpy(spim3_transmit_buffer, chunk, chunk_size);
-            chunk = spim3_transmit_buffer;
-        }
+        // if (is_spim3) {
+        //     // If SPIM3, copy into unused RAM block, and do DMA from there.
+        //     memcpy(spim3_transmit_buffer, chunk, chunk_size);
+        //     chunk = spim3_transmit_buffer;
+        // }
         const nrfx_spim_xfer_desc_t xfer = NRFX_SPIM_XFER_TX(chunk, chunk_size);
         if (nrfx_spim_xfer(&self->spim_peripheral->spim, &xfer, 0) != NRFX_SUCCESS) {
             return false;
@@ -269,11 +268,11 @@ bool common_hal_busio_spi_transfer(busio_spi_obj_t *self, const uint8_t *data_ou
     while (len > 0) {
         const uint8_t *chunk_out = next_chunk_out;
         size_t chunk_size = MIN(len, self->spim_peripheral->max_xfer_size);
-        if (is_spim3) {
-            // If SPIM3, copy into unused RAM block, and do DMA from there.
-            memcpy(spim3_transmit_buffer, chunk_out, chunk_size);
-            chunk_out = spim3_transmit_buffer;
-        }
+        // if (is_spim3) {
+        //     // If SPIM3, copy into unused RAM block, and do DMA from there.
+        //     memcpy(spim3_transmit_buffer, chunk_out, chunk_size);
+        //     chunk_out = spim3_transmit_buffer;
+        // }
         const nrfx_spim_xfer_desc_t xfer =
             NRFX_SPIM_SINGLE_XFER(next_chunk_out, chunk_size,
                 next_chunk_in, chunk_size);

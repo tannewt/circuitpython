@@ -7,7 +7,6 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/digitalio/DigitalInOut.h"
 
-#include "nrf_gpio.h"
 #include "py/mphal.h"
 
 #include "nrf/pins.h"

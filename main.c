@@ -997,20 +997,19 @@ int __attribute__((used)) main(void) {
     common_hal_nvm_bytearray_set_bytes(&common_hal_mcu_nvm_obj, 0, &value_out, 1);
     #endif
 
+    printk("serial_early_init\r\n");
+
     // Start the debug serial
     serial_early_init();
-    console_write(NULL, "serial_early_init\r\n", strlen("serial_early_init\r\n"));
 
     mp_hal_stdout_tx_str(line_clear);
 
     // Wait briefly to give a reset window where we'll enter safe mode after the reset.
     if (get_safe_mode() == SAFE_MODE_NONE) {
-        console_write(NULL, "wait_for_safe_mode_reset\r\n", strlen("wait_for_safe_mode_reset\r\n"));
         set_safe_mode(wait_for_safe_mode_reset());
     }
     printk("safe_mode: %d\r\n", get_safe_mode());
 
-    console_write(NULL, "stack_init\r\n", strlen("stack_init\r\n"));
 
     stack_init();
 

@@ -173,6 +173,7 @@ async def build_circuitpython():
     circuitpython_flags.extend(("-I", srcdir / "supervisor/shared/usb"))
     circuitpython_flags.extend(("-I", builddir))
     circuitpython_flags.extend(("-I", srcdir / "ports" / port))
+    circuitpython_flags.extend(("-I", srcdir / "ports" / port / "peripherals"))
     circuitpython_flags.extend(("-I", srcdir / "boards" / board))
     # circuitpython_flags.extend(("-I", build_path / board_id))
 
@@ -198,6 +199,7 @@ async def build_circuitpython():
         "lib/tlsf/tlsf.c",
         f"ports/{port}/background.c",
         f"ports/{port}/common-hal/microcontroller/__init__.c",
+        f"ports/{port}/common-hal/microcontroller/Pin.c",
         f"ports/{port}/common-hal/microcontroller/Processor.c",
         f"ports/{port}/common-hal/os/__init__.c",
         "supervisor/stub/misc.c",
@@ -206,10 +208,14 @@ async def build_circuitpython():
         "shared/runtime/interrupt_char.c",
         "shared/runtime/stdout_helpers.c",
         "shared/runtime/sys_stdio_mphal.c",
+        "shared-bindings/board/__init__.c",
         "shared-bindings/supervisor/Runtime.c",
+        "shared-bindings/microcontroller/Pin.c",
+        "shared-module/board/__init__.c",
         "extmod/vfs_reader.c",
         "extmod/vfs_blockdev.c",
         "extmod/vfs_fat_file.c",
+        f"boards/{board}/pins.c",
     ]
     top = srcdir
     supervisor_source = [pathlib.Path(p) for p in supervisor_source]
@@ -220,6 +226,7 @@ async def build_circuitpython():
 
     # Load the toml settings
     kwargs = {}
+    kwargs["busio"] = True
     with open(srcdir / "boards" / board / "mpconfigboard.toml", "rb") as f:
         mpconfigboard = tomllib.load(f)
     if usb_num_endpoint_pairs > 0:
@@ -251,19 +258,26 @@ async def build_circuitpython():
     # if flash_filesystem == "external":
     #     supervisor_source.extend(top.glob("supervisor/shared/usb/*.c"))
     # Make sure all modules have a setting by filling in defaults.
+    hal_source = []
     for module in top.glob("shared-bindings/*"):
         if not module.is_dir():
             continue
         enabled = kwargs.get(module.name, module.name in DEFAULT_MODULES)
         kwargs[module.name] = enabled
+        print(f"Module {module.name} enabled: {enabled}")
         circuitpython_flags.append(
             f"-DCIRCUITPY_{module.name.upper()}={1 if kwargs[module.name] else 0}"
         )
 
+        if enabled:
+            hal_source.extend(top.glob(f"ports/{port}/common-hal/{module.name}/*.c"))
+            hal_source.extend(top.glob(f"shared-bindings/{module.name}/*.c"))
+
     for mpflag in MPCONFIG_FLAGS:
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}=0")
 
-    source_files = supervisor_source + ["extmod/vfs.c"]
+    print(hal_source)
+    source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
     for file in top.glob("py/*.c"):
         source_files.append(file)
     qstr_flags = "-DNO_QSTR"
@@ -304,6 +318,7 @@ async def build_circuitpython():
     source_files.append(srcdir / "shared-module/time/__init__.c")
     source_files.append(srcdir / "shared-module/os/__init__.c")
     source_files.append(srcdir / "shared-module/supervisor/__init__.c")
+    source_files.append(srcdir / "ports" / port / "peripherals" / "nrf" / "nrf52840" / "pins.c")
 
     assembly_files = []
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")

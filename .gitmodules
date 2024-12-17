@@ -63,9 +63,6 @@
 [submodule "frozen/Adafruit_CircuitPython_Crickit"]
 	path = frozen/Adafruit_CircuitPython_Crickit
 	url = https://github.com/adafruit/Adafruit_CircuitPython_Crickit
-[submodule "ports/nordic/nrfx"]
-	path = ports/nordic/nrfx
-	url = https://github.com/adafruit/nrfx.git
 [submodule "lib/tinyusb"]
 	path = lib/tinyusb
 	url = https://github.com/hathach/tinyusb.git

@@ -15,14 +15,14 @@
 #include "py/stream.h"
 
 #include "nrfx_uarte.h"
-#include "nrf_gpio.h"
+#include <stdatomic.h>
 #include <string.h>
 
 // expression to examine, and return value in case of failing
 #define _VERIFY_ERR(_exp) \
     do { \
         uint32_t _err = (_exp); \
-        if (NRFX_SUCCESS != _err) { \
+        while (NRFX_SUCCESS != _err) { \
             mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("error = 0x%08lX"), _err); \
         } \
     } while (0)
@@ -35,6 +35,17 @@ static nrfx_uarte_t nrfx_uartes[] = {
     NRFX_UARTE_INSTANCE(1),
     #endif
 };
+
+static void *irq_handlers[] = {
+    #if NRFX_CHECK(NRFX_UARTE0_ENABLED)
+    NRFX_UARTE_INST_HANDLER_GET(0),
+    #endif
+    #if NRFX_CHECK(NRFX_UARTE1_ENABLED)
+    NRFX_UARTE_INST_HANDLER_GET(1),
+    #endif
+};
+
+
 
 static bool never_reset[NRFX_UARTE0_ENABLED + NRFX_UARTE1_ENABLED];
 
@@ -80,8 +91,8 @@ static void uart_callback_irq(const nrfx_uarte_event_t *event, void *context) {
 
     switch (event->type) {
         case NRFX_UARTE_EVT_RX_DONE:
-            if (ringbuf_num_empty(&self->ringbuf) >= event->data.rxtx.bytes) {
-                ringbuf_put_n(&self->ringbuf, event->data.rxtx.p_data, event->data.rxtx.bytes);
+            if (ringbuf_num_empty(&self->ringbuf) >= event->data.rx.length) {
+                ringbuf_put_n(&self->ringbuf, event->data.rx.p_buffer, event->data.rx.length);
                 // keep receiving
                 (void)nrfx_uarte_rx(self->uarte, &self->rx_char, 1);
             } else {
@@ -100,7 +111,7 @@ static void uart_callback_irq(const nrfx_uarte_event_t *event, void *context) {
             // Possible Error source is Overrun, Parity, Framing, Break
             // uint32_t errsrc = event->data.error.error_mask;
 
-            ringbuf_put_n(&self->ringbuf, event->data.error.rxtx.p_data, event->data.error.rxtx.bytes);
+            ringbuf_put_n(&self->ringbuf, event->data.error.rx.p_buffer, event->data.error.rx.length);
 
             // Keep receiving
             (void)nrfx_uarte_rx(self->uarte, &self->rx_char, 1);
@@ -151,9 +162,11 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
 
     // Find a free UART peripheral.
     self->uarte = NULL;
+    void *handler = NULL;
     for (size_t i = 0; i < MP_ARRAY_SIZE(nrfx_uartes); i++) {
         if ((nrfx_uartes[i].p_reg->ENABLE & UARTE_ENABLE_ENABLE_Msk) == 0) {
             self->uarte = &nrfx_uartes[i];
+            handler = irq_handlers[i];
             break;
         }
     }
@@ -173,18 +186,24 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
     bool hwfc = rts != NULL || cts != NULL;
 
     nrfx_uarte_config_t config = {
-        .pseltxd = (tx == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : tx->number,
-        .pselrxd = (rx == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : rx->number,
-        .pselcts = (cts == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : cts->number,
-        .pselrts = (rts == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : rts->number,
+        .txd_pin = (tx == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : tx->number,
+        .rxd_pin = (rx == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : rx->number,
+        .cts_pin = (cts == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : cts->number,
+        .rts_pin = (rts == NULL) ? NRF_UARTE_PSEL_DISCONNECTED : rts->number,
+        .skip_gpio_cfg = false,
+        .skip_psel_cfg = false,
         .p_context = self,
         .baudrate = get_nrf_baud(baudrate),
         .interrupt_priority = NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY,
-        .hal_cfg = {
+        .config = {
             .hwfc = hwfc ? NRF_UARTE_HWFC_ENABLED : NRF_UARTE_HWFC_DISABLED,
             .parity = (parity == BUSIO_UART_PARITY_NONE) ? NRF_UARTE_PARITY_EXCLUDED : NRF_UARTE_PARITY_INCLUDED
         }
     };
+
+    // Manually connect the UART IRQ through Zephyr.
+    irq_connect_dynamic(nrfx_get_irq_number(self->uarte->p_reg), NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY,
+        nrfx_isr, handler, 0);
 
     _VERIFY_ERR(nrfx_uarte_init(self->uarte, &config, uart_callback_irq));
 
@@ -337,7 +356,7 @@ size_t common_hal_busio_uart_write(busio_uart_obj_t *self, const uint8_t *data, 
         RUN_BACKGROUND_TASKS;
     }
 
-    (*errcode) = nrfx_uarte_tx(self->uarte, tx_buf, len);
+    (*errcode) = nrfx_uarte_tx(self->uarte, tx_buf, len, 0);
     _VERIFY_ERR(*errcode);
     (*errcode) = 0;
 
