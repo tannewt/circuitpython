@@ -21,7 +21,7 @@
 #define DEFAULT_UART_BUS_RX         (&pin_P1_01)
 #define DEFAULT_UART_BUS_TX         (&pin_P1_02)
 
-#define CIRCUITPY_CONSOLE_UART_TX (&pin_P0_06)
+#define CIRCUITPY_CONSOLE_UART_TX (&pin_P1_01)
 #define CIRCUITPY_CONSOLE_UART_RX (&pin_P0_08)
 
 // Flash operation mode is determined by MICROPY_QSPI_DATAn pin configuration.

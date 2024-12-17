@@ -7,7 +7,7 @@
 #include "shared-bindings/digitalio/DigitalInOut.h"
 #include "py/runtime.h"
 
-#include "nrf_gpio.h"
+#include <hal/nrf_gpio.h>
 
 void common_hal_digitalio_digitalinout_never_reset(
     digitalio_digitalinout_obj_t *self) {

@@ -204,6 +204,7 @@ async def build_circuitpython():
         f"ports/{port}/common-hal/os/__init__.c",
         "supervisor/stub/misc.c",
         "shared/readline/readline.c",
+        "shared/runtime/context_manager_helpers.c",
         "shared/runtime/pyexec.c",
         "shared/runtime/interrupt_char.c",
         "shared/runtime/stdout_helpers.c",
@@ -211,6 +212,7 @@ async def build_circuitpython():
         "shared-bindings/board/__init__.c",
         "shared-bindings/supervisor/Runtime.c",
         "shared-bindings/microcontroller/Pin.c",
+        "shared-bindings/util.c",
         "shared-module/board/__init__.c",
         "extmod/vfs_reader.c",
         "extmod/vfs_blockdev.c",
@@ -227,6 +229,7 @@ async def build_circuitpython():
     # Load the toml settings
     kwargs = {}
     kwargs["busio"] = True
+    kwargs["digitalio"] = True
     with open(srcdir / "boards" / board / "mpconfigboard.toml", "rb") as f:
         mpconfigboard = tomllib.load(f)
     if usb_num_endpoint_pairs > 0:
