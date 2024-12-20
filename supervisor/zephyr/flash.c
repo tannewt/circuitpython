@@ -21,6 +21,7 @@ static struct flash_area *filesystem_area = NULL;
 
 void supervisor_flash_init(void) {
     flash_area_open(FIXED_PARTITION_ID(storage_partition), &filesystem_area);
+    printk("flash area %d %d\n", filesystem_area->fa_id, filesystem_area->fa_size);
 }
 
 uint32_t supervisor_flash_get_block_size(void) {

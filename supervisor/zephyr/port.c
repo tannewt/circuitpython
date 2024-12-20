@@ -40,7 +40,6 @@ void port_heap_init(void) {
 
 // Get stack limit address
 uint32_t *port_stack_get_limit(void) {
-    k_tid_t current_thread_id = k_current_get();
     return NULL;
 }
 
@@ -68,10 +67,7 @@ uint32_t port_get_saved_word(void) {
 }
 
 uint64_t port_get_raw_ticks(uint8_t *subticks) {
-    #if CONFIG_SYS_CLOCK_TICKS_PER_SEC != 32768
-    #error "This code assumes 32768 Hz system clock"
-    #endif
-    int64_t uptime = k_uptime_ticks();
+    int64_t uptime = k_uptime_ticks() * 32768 / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
     if (subticks != NULL) {
         *subticks = uptime % 32;
     }

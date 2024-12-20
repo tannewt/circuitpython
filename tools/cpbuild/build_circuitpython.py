@@ -5,8 +5,13 @@ import logging
 import os
 import pathlib
 import tomllib
+import yaml
+import pickle
 
 import cpbuild
+
+sys.path.append("/home/tannewt/repos/circuitpython/lib/zephyr/scripts/dts/python-devicetree/src/")
+from devicetree import dtlib
 
 print("hello zephyr", sys.argv)
 
@@ -145,10 +150,55 @@ async def generate_root_pointer_header(build_path):
     )
 
 
+CONNECTORS = {
+    "mikro-bus": [
+        "AN",
+        "RST",
+        "CS",
+        "SCK",
+        "MISO",
+        "MOSI",
+        "PWM",
+        "INT",
+        "RX",
+        "TX",
+        "SCL",
+        "SDA",
+    ],
+    "arduino-header-r3": [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10",
+        "D11",
+        "D12",
+        "D13",
+        "D14",
+        "D15",
+    ],
+}
+
+
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
     soc_directory = pathlib.Path(cmake_args["SOC_DIRECTORIES"])
-    port = VENDOR_TO_PORT[soc_directory.name]
+    while soc_directory.parent.name != "soc":
+        soc_directory = soc_directory.parent
+    # port = VENDOR_TO_PORT.get(soc_directory.name, "zephyr")
+    port = "zephyr"
     port_flags = []
     # usb_num_endpoint_pairs = 8
     usb_num_endpoint_pairs = 0
@@ -156,7 +206,9 @@ async def build_circuitpython():
     full_build = False
     usb_host = False
     tusb_mem_align = 4
-    board = cmake_args.get("BOARD_ALIAS", cmake_args["BOARD"])
+    board = cmake_args["BOARD_ALIAS"]
+    if not board:
+        board = cmake_args["BOARD"]
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
     circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_num_endpoint_pairs > 0 else 0}")
@@ -173,8 +225,128 @@ async def build_circuitpython():
     circuitpython_flags.extend(("-I", srcdir / "supervisor/shared/usb"))
     circuitpython_flags.extend(("-I", builddir))
     circuitpython_flags.extend(("-I", srcdir / "ports" / port))
-    circuitpython_flags.extend(("-I", srcdir / "ports" / port / "peripherals"))
-    circuitpython_flags.extend(("-I", srcdir / "boards" / board))
+    # circuitpython_flags.extend(("-I", srcdir / "ports" / port / "peripherals"))
+
+    board_dir = srcdir / "boards" / board
+    if not board_dir.exists():
+        print("Generating board info")
+        board_dir = builddir / "board"
+        # Auto generate board files from device tree.
+
+        runners = srcdir / "build" / "zephyr" / "runners.yaml"
+        runners = yaml.safe_load(runners.read_text())
+        zephyr_board_dir = pathlib.Path(runners["config"]["board_dir"])
+        board_yaml = zephyr_board_dir / "board.yml"
+        board_yaml = yaml.safe_load(board_yaml.read_text())
+        print(board_yaml)
+        soc_name = board_yaml["board"]["socs"][0]["name"]
+        board_name = board_yaml["board"]["full_name"]
+        # board_id_yaml = zephyr_board_dir / (zephyr_board_dir.name + ".yaml")
+        # board_id_yaml = yaml.safe_load(board_id_yaml.read_text())
+        # print(board_id_yaml)
+        # board_name = board_id_yaml["name"]
+
+        dts = srcdir / "build" / "zephyr" / "zephyr.dts"
+        edt_pickle = dtlib.DT(dts)
+        ioports = {}
+        board_names = {}
+        remaining_nodes = set([edt_pickle.root])
+        while remaining_nodes:
+            node = remaining_nodes.pop()
+            remaining_nodes.update(node.nodes.values())
+            gpio = node.props.get("gpio-controller", False)
+            gpio_map = node.props.get("gpio-map", [])
+
+            compatible = []
+            if "compatible" in node.props:
+                compatible = node.props["compatible"].to_strings()
+            if gpio:
+                if "ngpios" in node.props:
+                    ngpios = node.props["ngpios"].to_num()
+                else:
+                    ngpios = 32
+                ioports[node.labels[0]] = set(range(0, ngpios))
+            if gpio_map:
+                print("markers", compatible)
+                i = 0
+                for offset, t, label in gpio_map._markers:
+                    if not label:
+                        continue
+                    num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
+                    print(label, num)
+                    board_names[(label, num)] = CONNECTORS[compatible[0]][i]
+                    i += 1
+            if "gpio-leds" in compatible:
+                for led in node.nodes:
+                    props = node.nodes[led].props
+                    ioport = props["gpios"]._markers[1][2]
+                    num = int.from_bytes(props["gpios"].value[4:8], "big")
+                    board_names[(ioport, num)] = props["label"].to_string()
+
+        print(ioports)
+        a, b = list(ioports.keys())[:2]
+        i = 0
+        while a[i] == b[i]:
+            i += 1
+        shared_prefix = a[:i]
+        for ioport in ioports:
+            if not ioport.startswith(shared_prefix):
+                shared_prefix = ""
+                break
+        print("prefix", repr(shared_prefix))
+        print(board_names)
+
+        pins = []
+        for ioport in sorted(ioports.keys()):
+            for num in ioports[ioport]:
+                pin_object_name = f"P{ioport[len(shared_prefix):].upper()}_{num:02d}"
+                print(pin_object_name)
+                board_name = board_names.get((ioport, num), None)
+                if board_name:
+                    print(" ", board_name)
+
+        board_dir.mkdir(exist_ok=True, parents=True)
+        toml = board_dir / "mpconfigboard.toml"
+        toml.write_text("")
+        header = board_dir / "mpconfigboard.h"
+        header.write_text(
+            f"""#pragma once
+
+#define MICROPY_HW_BOARD_NAME       "{board_name}"
+#define MICROPY_HW_MCU_NAME         "{soc_name}"
+            """
+        )
+        pins = board_dir / "pins.c"
+        pins.write_text(
+            """
+        // This file is autogenerated by build_circuitpython.py
+
+#include "shared-bindings/board/__init__.h"
+
+#include "py/obj.h"
+#include "py/mphal.h"
+
+// const mcu_pin_obj_t pin_P0_00 = PIN(P0_00, 0, 0, 0);
+
+
+static const mp_rom_map_elem_t mcu_pin_globals_table[] = {
+    // { MP_ROM_QSTR(MP_QSTR_P0_00), MP_ROM_PTR(&pin_P0_00) },
+};
+MP_DEFINE_CONST_DICT(mcu_pin_globals, mcu_pin_globals_table);
+
+static const mp_rom_map_elem_t board_module_globals_table[] = {
+    CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
+
+    // { MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&board_uart_obj) },
+};
+
+MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
+"""
+        )
+    else:
+        print(board_dir, "exists")
+
+    circuitpython_flags.extend(("-I", board_dir))
     # circuitpython_flags.extend(("-I", build_path / board_id))
 
     genhdr = builddir / "genhdr"
@@ -217,7 +389,7 @@ async def build_circuitpython():
         "extmod/vfs_reader.c",
         "extmod/vfs_blockdev.c",
         "extmod/vfs_fat_file.c",
-        f"boards/{board}/pins.c",
+        board_dir / "pins.c",
     ]
     top = srcdir
     supervisor_source = [pathlib.Path(p) for p in supervisor_source]
@@ -230,7 +402,7 @@ async def build_circuitpython():
     kwargs = {}
     kwargs["busio"] = True
     kwargs["digitalio"] = True
-    with open(srcdir / "boards" / board / "mpconfigboard.toml", "rb") as f:
+    with open(board_dir / "mpconfigboard.toml", "rb") as f:
         mpconfigboard = tomllib.load(f)
     if usb_num_endpoint_pairs > 0:
         for macro in ("USB_PID", "USB_VID"):
@@ -267,7 +439,7 @@ async def build_circuitpython():
             continue
         enabled = kwargs.get(module.name, module.name in DEFAULT_MODULES)
         kwargs[module.name] = enabled
-        print(f"Module {module.name} enabled: {enabled}")
+        # print(f"Module {module.name} enabled: {enabled}")
         circuitpython_flags.append(
             f"-DCIRCUITPY_{module.name.upper()}={1 if kwargs[module.name] else 0}"
         )
@@ -279,7 +451,6 @@ async def build_circuitpython():
     for mpflag in MPCONFIG_FLAGS:
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}=0")
 
-    print(hal_source)
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
     for file in top.glob("py/*.c"):
         source_files.append(file)
@@ -321,7 +492,7 @@ async def build_circuitpython():
     source_files.append(srcdir / "shared-module/time/__init__.c")
     source_files.append(srcdir / "shared-module/os/__init__.c")
     source_files.append(srcdir / "shared-module/supervisor/__init__.c")
-    source_files.append(srcdir / "ports" / port / "peripherals" / "nrf" / "nrf52840" / "pins.c")
+    # source_files.append(srcdir / "ports" / port / "peripherals" / "nrf" / "nrf52840" / "pins.c")
 
     assembly_files = []
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")

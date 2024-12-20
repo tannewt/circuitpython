@@ -55,5 +55,5 @@ add_dependencies(
   circuitpython
   )
 set_target_properties(circuitpython_wrapper PROPERTIES IMPORTED_LOCATION             ${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a)
-
-target_link_libraries(app PUBLIC circuitpython_wrapper)
+target_link_libraries(circuitpython_wrapper INTERFACE kernel)
+target_link_libraries(app PRIVATE circuitpython_wrapper)
