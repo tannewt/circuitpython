@@ -8,9 +8,12 @@
 
 #include "py/mphal.h"
 
+#include <zephyr/drivers/gpio.h>
+
 typedef struct {
     mp_obj_base_t base;
-    uint8_t number;
+    const struct device *port;
+    gpio_pin_t pin;
 } mcu_pin_obj_t;
 
 #define NO_PIN 0xff
