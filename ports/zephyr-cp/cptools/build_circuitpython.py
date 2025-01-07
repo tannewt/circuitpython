@@ -254,14 +254,20 @@ async def build_circuitpython():
         # print(board_id_yaml)
         # board_name = board_id_yaml["name"]
 
-        dts = srcdir / "build" / "zephyr" / "zephyr.dts"
+        dts = portdir / "build" / "zephyr" / "zephyr.dts"
         edt_pickle = dtlib.DT(dts)
+        node2alias = {}
+        for alias in edt_pickle.alias2node:
+            node = edt_pickle.alias2node[alias]
+            if node not in node2alias:
+                node2alias[node] = []
+            node2alias[node].append(alias)
         ioports = {}
         board_names = {}
+        status_led = None
         remaining_nodes = set([edt_pickle.root])
         while remaining_nodes:
             node = remaining_nodes.pop()
-            print(node.name, node.unit_addr, node.path)
             remaining_nodes.update(node.nodes.values())
             gpio = node.props.get("gpio-controller", False)
             gpio_map = node.props.get("gpio-map", [])
@@ -291,8 +297,23 @@ async def build_circuitpython():
                     ioport = props["gpios"]._markers[1][2]
                     num = int.from_bytes(props["gpios"].value[4:8], "big")
                     board_names[(ioport, num)] = props["label"].to_string()
+                    if led in node2alias:
+                        if "led0" in node2alias[led]:
+                            board_names[(ioport, num)] = "LED"
+                            board_names[(ioport, num)] = "LED0"
+                            status_led = (ioport, num)
 
-        print(ioports)
+            if "gpio-keys" in compatible:
+                for key in node.nodes:
+                    props = node.nodes[key].props
+                    ioport = props["gpios"]._markers[1][2]
+                    num = int.from_bytes(props["gpios"].value[4:8], "big")
+                    board_names[(ioport, num)] = props["label"].to_string()
+                    if key in node2alias:
+                        if "sw0" in node2alias[key]:
+                            board_names[(ioport, num)] = "BUTTON"
+                            board_names[(ioport, num)] = "SW0"
+
         a, b = list(ioports.keys())[:2]
         i = 0
         while a[i] == b[i]:
@@ -302,8 +323,6 @@ async def build_circuitpython():
             if not ioport.startswith(shared_prefix):
                 shared_prefix = ""
                 break
-        print("prefix", repr(shared_prefix))
-        print(board_names)
 
         pin_defs = []
         mcu_pin_mapping = []
@@ -311,9 +330,10 @@ async def build_circuitpython():
         for ioport in sorted(ioports.keys()):
             for num in ioports[ioport]:
                 pin_object_name = f"P{ioport[len(shared_prefix):].upper()}_{num:02d}"
-                print(pin_object_name)
+                if status_led and (ioport, num) == status_led:
+                    status_led = pin_object_name
                 pin_defs.append(
-                    f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = , port = , pin = }};"
+                    f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = &mcu_pin_type, .port = DEVICE_DT_GET(DT_NODELABEL({ioport})), .number = {num}}};"
                 )
                 mcu_pin_mapping.append(
                     f"{{ MP_ROM_QSTR(MP_QSTR_{pin_object_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
@@ -328,18 +348,23 @@ async def build_circuitpython():
                     print(" ", board_pin_name)
 
         pin_defs = "\n".join(pin_defs)
-        board_pin_mapping = "\n".join(board_pin_mapping)
-        mcu_pin_mapping = "\n".join(mcu_pin_mapping)
+        board_pin_mapping = "\n    ".join(board_pin_mapping)
+        mcu_pin_mapping = "\n    ".join(mcu_pin_mapping)
 
         board_dir.mkdir(exist_ok=True, parents=True)
         toml = board_dir / "mpconfigboard.toml"
         toml.write_text("")
         header = board_dir / "mpconfigboard.h"
+        if status_led:
+            status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
+        else:
+            status_led = ""
         header.write_text(
             f"""#pragma once
 
 #define MICROPY_HW_BOARD_NAME       "{board_name}"
 #define MICROPY_HW_MCU_NAME         "{soc_name}"
+{status_led}
             """
         )
         pins = board_dir / "pins.c"
@@ -351,8 +376,6 @@ async def build_circuitpython():
 
 #include "py/obj.h"
 #include "py/mphal.h"
-
-// const mcu_pin_obj_t pin_P0_00 = PIN(P0_00, 0, 0, 0);
 
 {pin_defs}
 

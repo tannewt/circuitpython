@@ -12,6 +12,9 @@
 
 #define MICROPY_PY_SYS_PLATFORM "Zephyr"
 
+#define CIRCUITPY_DIGITALIO_HAVE_INVALID_PULL (1)
+#define DIGITALINOUT_INVALID_DRIVE_MODE (1)
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // This also includes mpconfigboard.h.

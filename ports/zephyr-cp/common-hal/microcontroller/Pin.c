@@ -30,10 +30,7 @@ void reset_all_pins(void) {
 }
 
 // Mark pin as free and return it to a quiescent state.
-void reset_pin_number(uint8_t pin_number) {
-    if (pin_number == NO_PIN) {
-        return;
-    }
+void reset_pin(const mcu_pin_obj_t *pin) {
 
     // Clear claimed bit.
     // claimed_pins[nrf_pin_port(pin_number)] &= ~(1 << nrf_relative_pin_number(pin_number));
@@ -42,9 +39,6 @@ void reset_pin_number(uint8_t pin_number) {
 
 
 void never_reset_pin_number(uint8_t pin_number) {
-    if (pin_number == NO_PIN) {
-        return;
-    }
     // never_reset_pins[nrf_pin_port(pin_number)] |= 1 << nrf_relative_pin_number(pin_number);
 }
 
@@ -56,7 +50,7 @@ void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
     if (pin == NULL) {
         return;
     }
-    reset_pin_number(pin->number);
+    reset_pin(pin);
 }
 
 void claim_pin(const mcu_pin_obj_t *pin) {
@@ -70,18 +64,10 @@ bool pin_number_is_free(uint8_t pin_number) {
 }
 
 bool common_hal_mcu_pin_is_free(const mcu_pin_obj_t *pin) {
-    return pin_number_is_free(pin->number);
+    return true;
 
-}
-
-uint8_t common_hal_mcu_pin_number(const mcu_pin_obj_t *pin) {
-    return pin->number;
 }
 
 void common_hal_mcu_pin_claim(const mcu_pin_obj_t *pin) {
     claim_pin(pin);
-}
-
-void common_hal_mcu_pin_reset_number(uint8_t pin_no) {
-    reset_pin_number(pin_no);
 }
