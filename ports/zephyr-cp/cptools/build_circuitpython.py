@@ -10,6 +10,8 @@ import pickle
 
 import cpbuild
 
+from compat2driver import COMPAT_TO_DRIVER
+
 print("hello zephyr", sys.argv)
 
 # print(os.environ)
@@ -198,6 +200,33 @@ CONNECTORS = {
         "D14",
         "D15",
     ],
+    "adafruit-feather-header": [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "SCK",
+        "MOSI",
+        "MISO",
+        "RX",
+        "TX",
+        "D4",
+        "SDA",
+        "SCL",
+        "D5",
+        "D6",
+        "D9",
+        "D10",
+        "D11",
+        "D12",
+        "D13",
+    ],
+}
+
+MANUAL_COMPAT_TO_DRIVER = {
+    "renesas_ra_nv_flash": "flash",
 }
 
 
@@ -264,6 +293,7 @@ async def build_circuitpython():
             node2alias[node].append(alias)
         ioports = {}
         board_names = {}
+        flashes = []
         status_led = None
         remaining_nodes = set([edt_pickle.root])
         while remaining_nodes:
@@ -271,16 +301,35 @@ async def build_circuitpython():
             remaining_nodes.update(node.nodes.values())
             gpio = node.props.get("gpio-controller", False)
             gpio_map = node.props.get("gpio-map", [])
+            status = node.props.get("status", None)
+            if status is None:
+                status = "okay"
+            else:
+                status = status.to_string()
 
             compatible = []
             if "compatible" in node.props:
                 compatible = node.props["compatible"].to_strings()
+            if compatible:
+                print(node.name, status)
+            for c in compatible:
+                underscored = c.replace(",", "_").replace("-", "_")
+                driver = COMPAT_TO_DRIVER.get(underscored, None)
+                if not driver:
+                    driver = MANUAL_COMPAT_TO_DRIVER.get(underscored, None)
+                print(" ", underscored, driver)
+                if not driver:
+                    continue
+                if driver == "flash" and status == "okay":
+                    flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
+
             if gpio:
                 if "ngpios" in node.props:
                     ngpios = node.props["ngpios"].to_num()
                 else:
                     ngpios = 32
-                ioports[node.labels[0]] = set(range(0, ngpios))
+                if status == "okay":
+                    ioports[node.labels[0]] = set(range(0, ngpios))
             if gpio_map:
                 print("markers", compatible)
                 i = 0
@@ -288,7 +337,8 @@ async def build_circuitpython():
                     if not label:
                         continue
                     num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
-                    print(label, num)
+                    print(label, num, i)
+                    print(CONNECTORS[compatible[0]][i])
                     board_names[(label, num)] = CONNECTORS[compatible[0]][i]
                     i += 1
             if "gpio-leds" in compatible:
@@ -359,6 +409,7 @@ async def build_circuitpython():
             status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
         else:
             status_led = ""
+        print(flashes)
         header.write_text(
             f"""#pragma once
 
@@ -376,6 +427,9 @@ async def build_circuitpython():
 
 #include "py/obj.h"
 #include "py/mphal.h"
+
+const struct device* const flashes[] = {{ {", ".join(flashes)} }};
+const int circuitpy_flash_device_count = {len(flashes)};
 
 {pin_defs}
 

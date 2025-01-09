@@ -25,7 +25,8 @@ repos:
             tests/unicode/data/utf-8_invalid.txt|
             tests/extmod/data/qr.pgm|
             tests/basics/bytearray_byte_operations.py|
-            ports/raspberrypi/sdk
+            ports/raspberrypi/sdk|
+            ports/zephyr-cp/cptools/compat2driver.py
           )
 -   repo: local
     hooks:

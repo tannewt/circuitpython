@@ -16,8 +16,8 @@
 
 
 void common_hal_busio_i2c_never_reset(busio_i2c_obj_t *self) {
-    never_reset_pin_number(self->scl_pin_number);
-    never_reset_pin_number(self->sda_pin_number);
+    // never_reset_pin_number(self->scl_pin_number);
+    // never_reset_pin_number(self->sda_pin_number);
 }
 
 void common_hal_busio_i2c_construct(busio_i2c_obj_t *self, const mcu_pin_obj_t *scl, const mcu_pin_obj_t *sda, uint32_t frequency, uint32_t timeout) {
@@ -25,7 +25,8 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self, const mcu_pin_obj_t *
 }
 
 bool common_hal_busio_i2c_deinited(busio_i2c_obj_t *self) {
-    return self->sda_pin_number == NO_PIN;
+    // return self->sda_pin_number == NO_PIN;
+    return true;
 }
 
 void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
@@ -43,7 +44,7 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
 }
 
 void common_hal_busio_i2c_mark_deinit(busio_i2c_obj_t *self) {
-    self->sda_pin_number = NO_PIN;
+    // self->sda_pin_number = NO_PIN;
 }
 
 // nrfx_twim_tx doesn't support 0-length data so we fall back to the hal API

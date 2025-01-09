@@ -40,22 +40,14 @@ void port_heap_init(void) {
 
 // Get stack limit address
 uint32_t *port_stack_get_limit(void) {
-    return NULL;
+    return k_current_get()->stack_info.start;
 }
 
 // Get stack top address
 uint32_t *port_stack_get_top(void) {
-    return NULL;
-}
+    _thread_stack_info_t stack_info = k_current_get()->stack_info;
 
-// Get heap bottom address
-uint32_t *port_heap_get_bottom(void) {
-    return NULL;
-}
-
-// Get heap top address
-uint32_t *port_heap_get_top(void) {
-    return NULL;
+    return stack_info.start + stack_info.size - stack_info.delta;
 }
 
 // Save and retrieve a word from memory that is preserved over reset. Used for safe mode.
@@ -101,4 +93,11 @@ void port_free(void *ptr) {
 
 void *port_realloc(void *ptr, size_t size) {
     return k_realloc(ptr, size);
+}
+
+extern struct k_heap _system_heap;
+size_t port_heap_get_largest_free_size(void) {
+    struct sys_memory_stats stats;
+    sys_heap_runtime_stats_get(&_system_heap.heap, &stats);
+    return stats.free_bytes;
 }
