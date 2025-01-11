@@ -229,6 +229,20 @@ MANUAL_COMPAT_TO_DRIVER = {
     "renesas_ra_nv_flash": "flash",
 }
 
+TINYUSB_SETTINGS = {
+    "": {
+        "CFG_TUSB_MCU": "OPT_MCU_MIMXRT10XX",
+        "CFG_TUD_CDC_RX_BUFSIZE": 640,
+        "CFG_TUD_CDC_TX_BUFSIZE": 512,
+    },
+    "stm32u575xx": {"CFG_TUSB_MCU": "OPT_MCU_STM32U5"},
+    # ifeq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),MIMXRT1011 MIMXRT1015))
+    # CFLAGS += -DCFG_TUD_MIDI_RX_BUFSIZE=512 -DCFG_TUD_MIDI_TX_BUFSIZE=64 -DCFG_TUD_MSC_BUFSIZE=512
+    # else
+    # CFLAGS += -DCFG_TUD_MIDI_RX_BUFSIZE=512 -DCFG_TUD_MIDI_TX_BUFSIZE=512 -DCFG_TUD_MSC_BUFSIZE=1024
+    # endif
+}
+
 
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
@@ -247,8 +261,6 @@ async def build_circuitpython():
         board = cmake_args["BOARD"]
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
-    circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_num_endpoint_pairs > 0 else 0}")
-    circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_num_endpoint_pairs > 0 else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_ENABLE_MPY_NATIVE={1 if enable_mpy_native else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_FULL_BUILD={1 if full_build else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_USB_HOST={1 if usb_host else 0}")
@@ -263,6 +275,7 @@ async def build_circuitpython():
     circuitpython_flags.extend(("-I", portdir))
     # circuitpython_flags.extend(("-I", srcdir / "ports" / port / "peripherals"))
 
+    kwargs = {}
     board_dir = srcdir / "boards" / board
     if not board_dir.exists():
         print("Generating board info")
@@ -322,6 +335,13 @@ async def build_circuitpython():
                     continue
                 if driver == "flash" and status == "okay":
                     flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
+                if driver == "usb/udc" and status == "okay":
+                    print("found usb!")
+                    if soc_name not in TINYUSB_SETTINGS:
+                        print(f"Missing tinyusb settings for {soc_name}")
+                    else:
+                        kwargs["usb_device"] = True
+                        usb_num_endpoint_pairs = node.props["num-bidir-endpoints"].to_num()
 
             if gpio:
                 if "ngpios" in node.props:
@@ -401,9 +421,18 @@ async def build_circuitpython():
         board_pin_mapping = "\n    ".join(board_pin_mapping)
         mcu_pin_mapping = "\n    ".join(mcu_pin_mapping)
 
+        usb_settings = ""
+        if usb_num_endpoint_pairs > 0:
+            usb_settings = f"""
+            USB_VID = 0x239A
+            USB_PID = 0x0013
+            USB_PRODUCT = "{board_name}"
+            USB_MANUFACTURER = "TODO"
+            """
+
         board_dir.mkdir(exist_ok=True, parents=True)
         toml = board_dir / "mpconfigboard.toml"
-        toml.write_text("")
+        toml.write_text(usb_settings)
         header = board_dir / "mpconfigboard.h"
         if status_led:
             status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
@@ -505,12 +534,17 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     #     supervisor_source.extend(top.glob("supervisor/shared/web_workflow/*.c"))
 
     # Load the toml settings
-    kwargs = {}
     kwargs["busio"] = True
     kwargs["digitalio"] = True
     with open(board_dir / "mpconfigboard.toml", "rb") as f:
         mpconfigboard = tomllib.load(f)
+
+    circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_num_endpoint_pairs > 0 else 0}")
+    circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_num_endpoint_pairs > 0 else 0}")
+    tinyusb_files = []
     if usb_num_endpoint_pairs > 0:
+        for setting in TINYUSB_SETTINGS[soc_name]:
+            circuitpython_flags.append(f"-D{setting}={TINYUSB_SETTINGS[soc_name][setting]}")
         for macro in ("USB_PID", "USB_VID"):
             circuitpython_flags.append(f"-D{macro}=0x{mpconfigboard.get(macro):04x}")
         for macro, limit in (("USB_PRODUCT", 16), ("USB_MANUFACTURER", 8)):
@@ -518,26 +552,122 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             circuitpython_flags.append(
                 f"-D{macro}_{limit}='\"{mpconfigboard.get(macro[:limit])}\"'"
             )
+
+        usb_interface_name = "CircuitPython"
+
+        circuitpython_flags.append(f"-DUSB_INTERFACE_NAME='\"{usb_interface_name}\"'")
         circuitpython_flags.append(f"-DUSB_NUM_ENDPOINT_PAIRS={usb_num_endpoint_pairs}")
         for direction in ("IN", "OUT"):
             circuitpython_flags.append(f"-DUSB_NUM_{direction}_ENDPOINTS={usb_num_endpoint_pairs}")
         # USB is special because it doesn't have a matching module.
-        msc_enabled = False
+        msc_enabled = True
         if msc_enabled:
             # force storage on
             kwargs["storage"] = True
+            kwargs["usb_msc"] = True
+            circuitpython_flags.append("-DCFG_TUD_MSC_BUFSIZE=1024")
         circuitpython_flags.append(f"-DCIRCUITPY_USB_MSC={1 if msc_enabled else 0}")
-        # if "usb_cdc" not in kwargs:
-        #   kwargs["usb_cdc"] = True
-        # if "usb_hid_enabled_default" not in kwargs:
-        #   kwargs["usb_hid_enabled_default"] = usb_num_endpoint_pairs >= 5
-        # if "usb_midi_enabled_default" not in kwargs:
-        #   kwargs["usb_midi_enabled_default"] = usb_num_endpoint_pairs >= 8
-        # supervisor_source.extend(top.glob("supervisor/shared/usb/*.c"))
-        # if not usb_host_keyboard:
-        #     supervisor_source.remove(top / "supervisor/shared/usb/host_keyboard.c")
-    # if flash_filesystem == "external":
-    #     supervisor_source.extend(top.glob("supervisor/shared/usb/*.c"))
+        if "usb_cdc" not in kwargs:
+            kwargs["usb_cdc"] = True
+        if kwargs["usb_cdc"]:
+            tinyusb_files.extend(top.glob("lib/tinyusb/*.c"))
+            circuitpython_flags.append("-DCFG_TUD_CDC_RX_BUFSIZE=640")
+            circuitpython_flags.append("-DCFG_TUD_CDC_TX_BUFSIZE=512")
+            circuitpython_flags.append("-DCFG_TUD_CDC=2")
+            circuitpython_flags.append("-DCIRCUITPY_USB_CDC_CONSOLE_ENABLED_DEFAULT=1")
+            circuitpython_flags.append("-DCIRCUITPY_USB_CDC_DATA_ENABLED_DEFAULT=0")
+
+        if "usb_hid_enabled_default" not in kwargs:
+            kwargs["usb_hid_enabled_default"] = usb_num_endpoint_pairs >= 5
+        if "usb_midi_enabled_default" not in kwargs:
+            kwargs["usb_midi_enabled_default"] = usb_num_endpoint_pairs >= 8
+
+        tinyusb_files.extend(
+            (top / "lib/tinyusb/src/common/tusb_fifo.c", top / "lib/tinyusb/src/tusb.c")
+        )
+        supervisor_source.extend(
+            (portdir / "supervisor/usb.c", top / "supervisor/shared/usb/usb.c")
+        )
+
+    if kwargs["usb_device"]:
+        tinyusb_files.extend(
+            (
+                top / "lib/tinyusb/src/class/cdc/cdc_device.c",
+                top / "lib/tinyusb/src/device/usbd.c",
+                top / "lib/tinyusb/src/device/usbd_control.c",
+            )
+        )
+        supervisor_source.extend(
+            (top / "supervisor/shared/usb/usb_desc.c", top / "supervisor/shared/usb/usb_device.c")
+        )
+
+    if kwargs["usb_cdc"]:
+        supervisor_source.extend(
+            (
+                top / "shared-bindings/usb_cdc/__init__.c",
+                top / "shared-bindings/usb_cdc/Serial.c",
+                top / "shared-module/usb_cdc/__init__.c",
+                top / "shared-module/usb_cdc/Serial.c",
+            )
+        )
+
+    # ifeq ($(CIRCUITPY_USB_HID), 1)
+    #   SRC_SUPERVISOR += \
+    #     lib/tinyusb/src/class/hid/hid_device.c \
+    #     shared-bindings/usb_hid/__init__.c \
+    #     shared-bindings/usb_hid/Device.c \
+    #     shared-module/usb_hid/__init__.c \
+    #     shared-module/usb_hid/Device.c \
+
+    # endif
+
+    # ifeq ($(CIRCUITPY_USB_MIDI), 1)
+    #   SRC_SUPERVISOR += \
+    #     lib/tinyusb/src/class/midi/midi_device.c \
+    #     shared-bindings/usb_midi/__init__.c \
+    #     shared-bindings/usb_midi/PortIn.c \
+    #     shared-bindings/usb_midi/PortOut.c \
+    #     shared-module/usb_midi/__init__.c \
+    #     shared-module/usb_midi/PortIn.c \
+    #     shared-module/usb_midi/PortOut.c \
+
+    # endif
+
+    if kwargs["usb_msc"]:
+        tinyusb_files.append(top / "lib/tinyusb/src/class/msc/msc_device.c")
+        supervisor_source.append(top / "supervisor/shared/usb/usb_msc_flash.c")
+
+    # ifeq ($(CIRCUITPY_USB_VIDEO), 1)
+    #   SRC_SUPERVISOR += \
+    #     shared-bindings/usb_video/__init__.c \
+    #     shared-module/usb_video/__init__.c \
+    #     shared-bindings/usb_video/USBFramebuffer.c \
+    #     shared-module/usb_video/USBFramebuffer.c \
+    #     lib/tinyusb/src/class/video/video_device.c \
+
+    #   CFLAGS += -DCFG_TUD_VIDEO=1 -DCFG_TUD_VIDEO_STREAMING=1 -DCFG_TUD_VIDEO_STREAMING_EP_BUFSIZE=256 -DCFG_TUD_VIDEO_STREAMING_BULK=1
+    # endif
+
+    # ifeq ($(CIRCUITPY_USB_VENDOR), 1)
+    #   SRC_SUPERVISOR += \
+    #     lib/tinyusb/src/class/vendor/vendor_device.c \
+
+    # endif
+
+    # ifeq ($(CIRCUITPY_TINYUSB_HOST), 1)
+    #   SRC_SUPERVISOR += \
+    #     lib/tinyusb/src/host/hub.c \
+    #     lib/tinyusb/src/host/usbh.c \
+
+    # endif
+
+    # ifeq ($(CIRCUITPY_USB_KEYBOARD_WORKFLOW), 1)
+    #   SRC_SUPERVISOR += \
+    #     lib/tinyusb/src/class/hid/hid_host.c \
+    #     supervisor/shared/usb/host_keyboard.c \
+
+    # endif
+
     # Make sure all modules have a setting by filling in defaults.
     hal_source = []
     for module in top.glob("shared-bindings/*"):
@@ -604,6 +734,8 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")
 
     source_files.extend(assembly_files)
+
+    source_files.extend(tinyusb_files)
 
     objects = []
     async with asyncio.TaskGroup() as tg:
