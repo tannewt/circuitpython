@@ -243,6 +243,15 @@ TINYUSB_SETTINGS = {
     # endif
 }
 
+TINYUSB_SOURCE = {
+    "stm32u575xx": [
+        "src/portable/st/stm32_fsdev/dcd_stm32_fsdev.c",
+        "src/portable/synopsys/dwc2/dcd_dwc2.c",
+        "src/portable/synopsys/dwc2/hcd_dwc2.c",
+        "src/portable/synopsys/dwc2/dwc2_common.c",
+    ]
+}
+
 
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
@@ -545,6 +554,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     if usb_num_endpoint_pairs > 0:
         for setting in TINYUSB_SETTINGS[soc_name]:
             circuitpython_flags.append(f"-D{setting}={TINYUSB_SETTINGS[soc_name][setting]}")
+        tinyusb_files.extend((top / "lib" / "tinyusb" / path for path in TINYUSB_SOURCE[soc_name]))
         for macro in ("USB_PID", "USB_VID"):
             circuitpython_flags.append(f"-D{macro}=0x{mpconfigboard.get(macro):04x}")
         for macro, limit in (("USB_PRODUCT", 16), ("USB_MANUFACTURER", 8)):
@@ -555,6 +565,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 
         usb_interface_name = "CircuitPython"
 
+        circuitpython_flags.append("-DCFG_TUSB_OS=OPT_OS_ZEPHYR")
         circuitpython_flags.append(f"-DUSB_INTERFACE_NAME='\"{usb_interface_name}\"'")
         circuitpython_flags.append(f"-DUSB_NUM_ENDPOINT_PAIRS={usb_num_endpoint_pairs}")
         for direction in ("IN", "OUT"):
@@ -566,6 +577,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             kwargs["storage"] = True
             kwargs["usb_msc"] = True
             circuitpython_flags.append("-DCFG_TUD_MSC_BUFSIZE=1024")
+            circuitpython_flags.append("-DCIRCUITPY_USB_MSC_ENABLED_DEFAULT=1")
         circuitpython_flags.append(f"-DCIRCUITPY_USB_MSC={1 if msc_enabled else 0}")
         if "usb_cdc" not in kwargs:
             kwargs["usb_cdc"] = True
@@ -683,6 +695,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         if enabled:
             hal_source.extend(top.glob(f"ports/zephyr-cp/common-hal/{module.name}/*.c"))
             hal_source.extend(top.glob(f"shared-bindings/{module.name}/*.c"))
+            hal_source.extend(top.glob(f"shared-module/{module.name}/*.c"))
 
     for mpflag in MPCONFIG_FLAGS:
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}=0")

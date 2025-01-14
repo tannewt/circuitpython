@@ -23,6 +23,9 @@ void reset_port(void) {
 
 }
 
+void reset_to_bootloader(void) {
+}
+
 void port_wake_main_task(void) {
 }
 
