@@ -236,6 +236,7 @@ TINYUSB_SETTINGS = {
         "CFG_TUD_CDC_TX_BUFSIZE": 512,
     },
     "stm32u575xx": {"CFG_TUSB_MCU": "OPT_MCU_STM32U5"},
+    "nrf52840": {"CFG_TUSB_MCU": "OPT_MCU_NRF5X"},
     # ifeq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),MIMXRT1011 MIMXRT1015))
     # CFLAGS += -DCFG_TUD_MIDI_RX_BUFSIZE=512 -DCFG_TUD_MIDI_TX_BUFSIZE=64 -DCFG_TUD_MSC_BUFSIZE=512
     # else
@@ -249,7 +250,10 @@ TINYUSB_SOURCE = {
         "src/portable/synopsys/dwc2/dcd_dwc2.c",
         "src/portable/synopsys/dwc2/hcd_dwc2.c",
         "src/portable/synopsys/dwc2/dwc2_common.c",
-    ]
+    ],
+    "nrf52840": [
+        "src/portable/nordic/nrf5x/dcd_nrf5x.c",
+    ],
 }
 
 
@@ -298,6 +302,13 @@ async def build_circuitpython():
         board_yaml = zephyr_board_dir / "board.yml"
         board_yaml = yaml.safe_load(board_yaml.read_text())
         print(board_yaml)
+        vendor_index = zephyr_board_dir.parent / "index.rst"
+        if vendor_index.exists():
+            vendor_index = vendor_index.read_text()
+            vendor_index = vendor_index.split("\n")
+            vendor_name = vendor_index[2].strip()
+        else:
+            vendor_name = board_yaml["board"]["vendor"]
         soc_name = board_yaml["board"]["socs"][0]["name"]
         board_name = board_yaml["board"]["full_name"]
         # board_id_yaml = zephyr_board_dir / (zephyr_board_dir.name + ".yaml")
@@ -351,6 +362,13 @@ async def build_circuitpython():
                     else:
                         kwargs["usb_device"] = True
                         usb_num_endpoint_pairs = node.props["num-bidir-endpoints"].to_num()
+                        # Count separate in/out pairs as bidirectional.
+                        usb_num_endpoint_pairs += min(
+                            (
+                                node.props.get(f"num-{d}-endpoints", 0).to_num()
+                                for d in ("in", "out")
+                            )
+                        )
 
             if gpio:
                 if "ngpios" in node.props:
@@ -436,7 +454,7 @@ async def build_circuitpython():
             USB_VID = 0x239A
             USB_PID = 0x0013
             USB_PRODUCT = "{board_name}"
-            USB_MANUFACTURER = "TODO"
+            USB_MANUFACTURER = "{vendor_name}"
             """
 
         board_dir.mkdir(exist_ok=True, parents=True)
@@ -601,7 +619,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             (portdir / "supervisor/usb.c", top / "supervisor/shared/usb/usb.c")
         )
 
-    if kwargs["usb_device"]:
+    if kwargs.get("usb_device", False):
         tinyusb_files.extend(
             (
                 top / "lib/tinyusb/src/class/cdc/cdc_device.c",
@@ -613,7 +631,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             (top / "supervisor/shared/usb/usb_desc.c", top / "supervisor/shared/usb/usb_device.c")
         )
 
-    if kwargs["usb_cdc"]:
+    if kwargs.get("usb_cdc", False):
         supervisor_source.extend(
             (
                 top / "shared-bindings/usb_cdc/__init__.c",

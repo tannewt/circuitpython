@@ -1,6 +1,15 @@
 #include "supervisor/usb.h"
 
+#include "tusb_option.h"
+
+#if CFG_TUSB_MCU == OPT_MCU_STM32U5
 #include <stm32_ll_pwr.h>
+#endif
+
+#if CFG_TUSB_MCU == OPT_MCU_NRF5X
+#include <zephyr/dt-bindings/regulator/nrf5x.h>
+#include <nrfx_power.h>
+#endif
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -16,12 +25,46 @@
 
 #define USB_DEVICE DT_NODELABEL(zephyr_udc0)
 
+#ifdef UDC_IRQ_NAME
 #define UDC_IRQ       DT_IRQ_BY_NAME(USB_DEVICE, UDC_IRQ_NAME, irq)
 #define UDC_IRQ_PRI   DT_IRQ_BY_NAME(USB_DEVICE, UDC_IRQ_NAME, priority)
+#else
+#define UDC_IRQ       DT_IRQ(USB_DEVICE, irq)
+#define UDC_IRQ_PRI   DT_IRQ(USB_DEVICE, priority)
+#endif
 
 PINCTRL_DT_DEFINE(USB_DEVICE);
 static const struct pinctrl_dev_config *usb_pcfg =
     PINCTRL_DT_DEV_CONFIG_GET(USB_DEVICE);
+
+#if CFG_TUSB_MCU == OPT_MCU_NRF5X
+// Value is chosen to be as same as NRFX_POWER_USB_EVT_* in nrfx_power.h
+enum {
+    USB_EVT_DETECTED = 0,
+    USB_EVT_REMOVED = 1,
+    USB_EVT_READY = 2
+};
+
+#ifdef NRF5340_XXAA
+  #define LFCLK_SRC_RC CLOCK_LFCLKSRC_SRC_LFRC
+  #define VBUSDETECT_Msk USBREG_USBREGSTATUS_VBUSDETECT_Msk
+  #define OUTPUTRDY_Msk USBREG_USBREGSTATUS_OUTPUTRDY_Msk
+  #define GPIOTE_IRQn GPIOTE1_IRQn
+#else
+  #define LFCLK_SRC_RC CLOCK_LFCLKSRC_SRC_RC
+  #define VBUSDETECT_Msk POWER_USBREGSTATUS_VBUSDETECT_Msk
+  #define OUTPUTRDY_Msk POWER_USBREGSTATUS_OUTPUTRDY_Msk
+#endif
+
+// tinyusb function that handles power event (detected, ready, removed)
+// We must call it within SD's SOC event handler, or set it as power event handler if SD is not enabled.
+extern void tusb_hal_nrf_power_event(uint32_t event);
+
+// nrf power callback, could be unused if SD is enabled or usb is disabled (board_test example)
+TU_ATTR_UNUSED static void power_event_handler(nrfx_power_usb_evt_t event) {
+    tusb_hal_nrf_power_event((uint32_t)event);
+}
+#endif
 
 void init_usb_hardware(void) {
     IRQ_CONNECT(UDC_IRQ, UDC_IRQ_PRI, usb_irq_handler, 0, 0);
@@ -45,7 +88,7 @@ void init_usb_hardware(void) {
 
 // #endif
 
-    #ifdef USB_OTG_FS
+    #if CFG_TUSB_MCU == OPT_MCU_STM32U5 && defined(USB_OTG_FS)
     /* Enable USB power on Pwrctrl CR2 register */
     // HAL_PWREx_EnableVddUSB();
     LL_PWR_EnableVddUSB();
@@ -81,5 +124,48 @@ void init_usb_hardware(void) {
 //   USB_OTG_HS->GCCFG |= USB_OTG_GCCFG_VBVALEXTOEN;
 //   USB_OTG_HS->GCCFG |= USB_OTG_GCCFG_VBVALOVAL;
 // #endif // USB_OTG_FS
+
+
+    #if CFG_TUSB_MCU == OPT_MCU_NRF5X
+    // USB power may already be ready at this time -> no event generated
+    // We need to invoke the handler based on the status initially
+    uint32_t usb_reg;
+    {
+        // Power module init
+        static const nrfx_power_config_t pwr_cfg = {
+            .dcdcen = (DT_PROP(DT_INST(0, nordic_nrf5x_regulator), regulator_initial_mode)
+                == NRF5X_REG_MODE_DCDC),
+            #if NRFX_POWER_SUPPORTS_DCDCEN_VDDH
+            .dcdcenhv = COND_CODE_1(CONFIG_SOC_SERIES_NRF52X,
+                (DT_NODE_HAS_STATUS_OKAY(DT_INST(0, nordic_nrf52x_regulator_hv))),
+                (DT_NODE_HAS_STATUS_OKAY(DT_INST(0, nordic_nrf53x_regulator_hv)))),
+            #endif
+        };
+        nrfx_power_init(&pwr_cfg);
+
+        // Register tusb function as USB power handler
+        // cause cast-function-type warning
+        const nrfx_power_usbevt_config_t config = {.handler = power_event_handler};
+        nrfx_power_usbevt_init(&config);
+        nrfx_power_usbevt_enable();
+
+        // USB power may already be ready at this time -> no event generated
+        // We need to invoke the handler based on the status initially
+        #ifdef NRF5340_XXAA
+        usb_reg = NRF_USBREGULATOR->USBREGSTATUS;
+        #else
+        usb_reg = NRF_POWER->USBREGSTATUS;
+        #endif
+    }
+
+    if (usb_reg & VBUSDETECT_Msk) {
+        tusb_hal_nrf_power_event(USB_EVT_DETECTED);
+    }
+    if (usb_reg & OUTPUTRDY_Msk) {
+        tusb_hal_nrf_power_event(USB_EVT_READY);
+    }
+
+    printk("usb started hopefully\n");
+    #endif
 
 }

@@ -55,7 +55,11 @@ extern "C" {
 // When debugging TinyUSB, only output to the console UART link.
 #if CIRCUITPY_DEBUG_TINYUSB > 0 && defined(CIRCUITPY_CONSOLE_UART)
 #define CFG_TUSB_DEBUG              CIRCUITPY_DEBUG_TINYUSB
+#if __ZEPHYR__
+#define CFG_TUSB_DEBUG_PRINTF       zephyr_printk
+#else
 #define CFG_TUSB_DEBUG_PRINTF       console_uart_printf
+#endif
 
 // Raise the device log level to 3 so we can debug host-only at level 2.
 #define CFG_TUD_LOG_LEVEL           3

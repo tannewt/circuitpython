@@ -15,6 +15,8 @@
 #define CIRCUITPY_DIGITALIO_HAVE_INVALID_PULL (1)
 #define DIGITALINOUT_INVALID_DRIVE_MODE (1)
 
+#define CIRCUITPY_DEBUG_TINYUSB 0
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // This also includes mpconfigboard.h.
