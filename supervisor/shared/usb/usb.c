@@ -53,9 +53,9 @@ int CFG_TUSB_DEBUG_PRINTF(const char *format, ...) {
 }
 
 #ifdef CFG_TUSB_DEBUG
-  #define USBD_STACK_SIZE     (3 * CONFIG_IDLE_STACK_SIZE)
+  #define USBD_STACK_SIZE     (5 * CONFIG_IDLE_STACK_SIZE)
 #else
-  #define USBD_STACK_SIZE     (3 * CONFIG_IDLE_STACK_SIZE / 2)
+  #define USBD_STACK_SIZE     (5 * CONFIG_IDLE_STACK_SIZE / 2)
 #endif
 
 struct k_thread tinyusb_thread_data;

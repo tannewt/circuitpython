@@ -117,6 +117,9 @@ void supervisor_flash_init(void) {
         }
         size_t page_count = flash_get_page_count(d);
         printk("  %d pages\n", page_count);
+        if (page_count == 0) {
+            continue;
+        }
         struct flash_pages_info first_info;
         flash_get_page_info_by_idx(d, 0, &first_info);
         printk("  page 0: %lx %x\n", first_info.start_offset, first_info.size);
@@ -164,6 +167,11 @@ void supervisor_flash_init(void) {
         _page_size = FILESYSTEM_BLOCK_SIZE;
     }
     printk("  erase page size %d\n", _page_size);
+    // Makes sure that a cached page has 32 or fewer rows. Our dirty mask is
+    // only 32 bits.
+    while (_page_size / _row_size > 32) {
+        _row_size *= 2;
+    }
     printk("  write row size %d\n", _row_size);
     _blocks_per_page = _page_size / FILESYSTEM_BLOCK_SIZE;
     _rows_per_block = FILESYSTEM_BLOCK_SIZE / _row_size;

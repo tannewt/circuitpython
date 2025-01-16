@@ -9,6 +9,10 @@
 #include <zephyr/autoconf.h>
 #include <zephyr/kernel.h>
 
+#include "lib/tlsf/tlsf.h"
+
+static tlsf_t heap;
+
 safe_mode_t port_init(void) {
     return SAFE_MODE_NONE;
 }
@@ -36,9 +40,6 @@ void port_yield(void) {
 }
 
 void port_boot_info(void) {
-}
-
-void port_heap_init(void) {
 }
 
 // Get stack limit address
@@ -85,22 +86,45 @@ void port_interrupt_after_ticks(uint32_t ticks) {
 void port_idle_until_interrupt(void) {
 }
 
+extern uint32_t z_mapped_end;
+
+// Zephyr doesn't maintain one multi-heap. So, make our own using TLSF.
+void port_heap_init(void) {
+    #if DT_CHOSEN_zephyr_sram_EXISTS
+    uint32_t *heap_bottom = &z_mapped_end;
+    uint32_t *heap_top = (uint32_t *)(DT_REG_ADDR(DT_CHOSEN(zephyr_sram)) + DT_REG_SIZE(DT_CHOSEN(zephyr_sram)));
+    size_t size = (heap_top - heap_bottom) * sizeof(uint32_t);
+    printk("Init heap at %p - %p with size %d\n", heap_bottom, heap_top, size);
+    heap = tlsf_create_with_pool(heap_bottom, size, size);
+    #else
+    #error "No SRAM!"
+    #endif
+}
+
 void *port_malloc(size_t size, bool dma_capable) {
-    void *block = k_malloc(size);
+    void *block = tlsf_malloc(heap, size);
     return block;
 }
 
 void port_free(void *ptr) {
-    k_free(ptr);
+    tlsf_free(heap, ptr);
 }
 
 void *port_realloc(void *ptr, size_t size) {
-    return k_realloc(ptr, size);
+    return tlsf_realloc(heap, ptr, size);
 }
 
-extern struct k_heap _system_heap;
+static bool max_size_walker(void *ptr, size_t size, int used, void *user) {
+    size_t *max_size = (size_t *)user;
+    if (!used && *max_size < size) {
+        *max_size = size;
+    }
+    return true;
+}
+
 size_t port_heap_get_largest_free_size(void) {
-    struct sys_memory_stats stats;
-    sys_heap_runtime_stats_get(&_system_heap.heap, &stats);
-    return stats.free_bytes;
+    size_t max_size = 0;
+    tlsf_walk_pool(tlsf_get_pool(heap), max_size_walker, &max_size);
+    // IDF does this. Not sure why.
+    return tlsf_fit_size(heap, max_size);
 }

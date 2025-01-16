@@ -237,6 +237,7 @@ TINYUSB_SETTINGS = {
     },
     "stm32u575xx": {"CFG_TUSB_MCU": "OPT_MCU_STM32U5"},
     "nrf52840": {"CFG_TUSB_MCU": "OPT_MCU_NRF5X"},
+    "nrf5340": {"CFG_TUSB_MCU": "OPT_MCU_NRF5X"},
     # ifeq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),MIMXRT1011 MIMXRT1015))
     # CFLAGS += -DCFG_TUD_MIDI_RX_BUFSIZE=512 -DCFG_TUD_MIDI_TX_BUFSIZE=64 -DCFG_TUD_MSC_BUFSIZE=512
     # else
@@ -254,14 +255,14 @@ TINYUSB_SOURCE = {
     "nrf52840": [
         "src/portable/nordic/nrf5x/dcd_nrf5x.c",
     ],
+    "nrf5340": [
+        "src/portable/nordic/nrf5x/dcd_nrf5x.c",
+    ],
 }
 
 
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
-    soc_directory = pathlib.Path(cmake_args["SOC_DIRECTORIES"])
-    while soc_directory.parent.name != "soc":
-        soc_directory = soc_directory.parent
     port_flags = []
     # usb_num_endpoint_pairs = 8
     usb_num_endpoint_pairs = 0
@@ -393,7 +394,8 @@ async def build_circuitpython():
                     props = node.nodes[led].props
                     ioport = props["gpios"]._markers[1][2]
                     num = int.from_bytes(props["gpios"].value[4:8], "big")
-                    board_names[(ioport, num)] = props["label"].to_string()
+                    if "label" in props:
+                        board_names[(ioport, num)] = props["label"].to_string()
                     if led in node2alias:
                         if "led0" in node2alias[led]:
                             board_names[(ioport, num)] = "LED"
@@ -663,7 +665,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 
     # endif
 
-    if kwargs["usb_msc"]:
+    if kwargs.get("usb_msc", False):
         tinyusb_files.append(top / "lib/tinyusb/src/class/msc/msc_device.c")
         supervisor_source.append(top / "supervisor/shared/usb/usb_msc_flash.c")
 

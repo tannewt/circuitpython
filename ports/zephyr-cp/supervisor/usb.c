@@ -127,6 +127,15 @@ void init_usb_hardware(void) {
 
 
     #if CFG_TUSB_MCU == OPT_MCU_NRF5X
+    #ifdef CONFIG_HAS_HW_NRF_USBREG
+    /* Use CLOCK/POWER priority for compatibility with other series where
+     * USB events are handled by CLOCK interrupt handler.
+     */
+    IRQ_CONNECT(USBREGULATOR_IRQn,
+        DT_IRQ(DT_INST(0, nordic_nrf_clock), priority),
+        nrfx_isr, nrfx_usbreg_irq_handler, 0);
+    irq_enable(USBREGULATOR_IRQn);
+    #endif
     // USB power may already be ready at this time -> no event generated
     // We need to invoke the handler based on the status initially
     uint32_t usb_reg;
