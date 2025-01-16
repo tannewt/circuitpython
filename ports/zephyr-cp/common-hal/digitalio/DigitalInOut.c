@@ -73,7 +73,8 @@ bool common_hal_digitalio_digitalinout_get_value(
 digitalinout_result_t common_hal_digitalio_digitalinout_set_drive_mode(
     digitalio_digitalinout_obj_t *self,
     digitalio_drive_mode_t drive_mode) {
-    gpio_flags_t flags = GPIO_OUTPUT;
+    // Also INPUT so we can read the value back.
+    gpio_flags_t flags = GPIO_OUTPUT | GPIO_INPUT;
     if (drive_mode == DRIVE_MODE_OPEN_DRAIN) {
         flags |= GPIO_OPEN_DRAIN;
     }

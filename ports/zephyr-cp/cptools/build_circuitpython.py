@@ -37,8 +37,8 @@ from devicetree import dtlib
 
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)
 
-ALWAYS_ON_MODULES = ["sys"]
-DEFAULT_MODULES = []
+ALWAYS_ON_MODULES = ["sys", "collections"]
+DEFAULT_MODULES = ["time"]
 MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm", "array", "json"]
 
 
@@ -281,6 +281,7 @@ async def build_circuitpython():
     circuitpython_flags.append(f'-DCIRCUITPY_BOARD_ID=\\"{board}\\"')
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
     circuitpython_flags.append("-DINTERNAL_FLASH_FILESYSTEM")
+    circuitpython_flags.append("-DLONGINT_IMPL_MPZ")
     circuitpython_flags.append('-DFFCONF_H=\\"lib/oofatfs/ffconf.h\\"')
     circuitpython_flags.extend(("-I", srcdir))
     circuitpython_flags.extend(("-I", srcdir / "lib/tinyusb/src"))
@@ -387,31 +388,41 @@ async def build_circuitpython():
                     num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
                     print(label, num, i)
                     print(CONNECTORS[compatible[0]][i])
-                    board_names[(label, num)] = CONNECTORS[compatible[0]][i]
+                    if (label, num) not in board_names:
+                        board_names[(label, num)] = []
+                    board_names[(label, num)].append(CONNECTORS[compatible[0]][i])
                     i += 1
             if "gpio-leds" in compatible:
                 for led in node.nodes:
-                    props = node.nodes[led].props
+                    led = node.nodes[led]
+                    props = led.props
                     ioport = props["gpios"]._markers[1][2]
                     num = int.from_bytes(props["gpios"].value[4:8], "big")
                     if "label" in props:
-                        board_names[(ioport, num)] = props["label"].to_string()
+                        if (ioport, num) not in board_names:
+                            board_names[(ioport, num)] = []
+                        board_names[(ioport, num)].append(props["label"].to_string())
                     if led in node2alias:
+                        if (ioport, num) not in board_names:
+                            board_names[(ioport, num)] = []
                         if "led0" in node2alias[led]:
-                            board_names[(ioport, num)] = "LED"
-                            board_names[(ioport, num)] = "LED0"
+                            board_names[(ioport, num)].append("LED")
                             status_led = (ioport, num)
+                        board_names[(ioport, num)].extend(node2alias[led])
 
             if "gpio-keys" in compatible:
                 for key in node.nodes:
                     props = node.nodes[key].props
                     ioport = props["gpios"]._markers[1][2]
                     num = int.from_bytes(props["gpios"].value[4:8], "big")
-                    board_names[(ioport, num)] = props["label"].to_string()
+
+                    if (ioport, num) not in board_names:
+                        board_names[(ioport, num)] = []
+                    board_names[(ioport, num)].append(props["label"].to_string())
                     if key in node2alias:
                         if "sw0" in node2alias[key]:
-                            board_names[(ioport, num)] = "BUTTON"
-                            board_names[(ioport, num)] = "SW0"
+                            board_names[(ioport, num)].append("BUTTON")
+                        board_names[(ioport, num)].extend(node2alias[key])
 
         a, b = list(ioports.keys())[:2]
         i = 0
@@ -424,6 +435,7 @@ async def build_circuitpython():
                 break
 
         pin_defs = []
+        pin_declarations = ["#pragma once"]
         mcu_pin_mapping = []
         board_pin_mapping = []
         for ioport in sorted(ioports.keys()):
@@ -434,19 +446,21 @@ async def build_circuitpython():
                 pin_defs.append(
                     f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = &mcu_pin_type, .port = DEVICE_DT_GET(DT_NODELABEL({ioport})), .number = {num}}};"
                 )
+                pin_declarations.append(f"extern const mcu_pin_obj_t pin_{pin_object_name};")
                 mcu_pin_mapping.append(
                     f"{{ MP_ROM_QSTR(MP_QSTR_{pin_object_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
                 )
-                board_pin_name = board_names.get((ioport, num), None)
+                board_pin_names = board_names.get((ioport, num), [])
 
-                if board_pin_name:
-                    board_pin_name = board_pin_name.upper().replace(" ", "_")
+                for board_pin_name in board_pin_names:
+                    board_pin_name = board_pin_name.upper().replace(" ", "_").replace("-", "_")
                     board_pin_mapping.append(
                         f"{{ MP_ROM_QSTR(MP_QSTR_{board_pin_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
                     )
                     print(" ", board_pin_name)
 
         pin_defs = "\n".join(pin_defs)
+        pin_declarations = "\n".join(pin_declarations)
         board_pin_mapping = "\n    ".join(board_pin_mapping)
         mcu_pin_mapping = "\n    ".join(mcu_pin_mapping)
 
@@ -476,6 +490,9 @@ async def build_circuitpython():
 {status_led}
             """
         )
+        pins = board_dir / "autogen-pins.h"
+        pins.write_text(pin_declarations)
+
         pins = board_dir / "pins.c"
         pins.write_text(
             f"""

@@ -8,6 +8,7 @@
 
 #include <zephyr/autoconf.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/reboot.h>
 
 #include "lib/tlsf/tlsf.h"
 
@@ -19,6 +20,11 @@ safe_mode_t port_init(void) {
 
 // Reset the microcontroller completely.
 void reset_cpu(void) {
+    // Try a warm reboot first. It won't return if it works but isn't always
+    // implemented.
+    sys_reboot(SYS_REBOOT_WARM);
+    sys_reboot(SYS_REBOOT_COLD);
+    printk("Failed to reboot. Looping.\n");
     while (true) {
     }
 }

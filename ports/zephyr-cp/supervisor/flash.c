@@ -51,11 +51,14 @@ static uint32_t _scratch_page_address;
 // Track which blocks (up to 32) in the current sector currently live in the
 // cache.
 static uint32_t _dirty_mask;
+static uint32_t _loaded_mask;
 
 // Table of pointers to each cached block. Should be zero'd after allocation.
 #define FLASH_CACHE_TABLE_NUM_ENTRIES (_blocks_per_page * _rows_per_block)
 #define FLASH_CACHE_TABLE_SIZE (FLASH_CACHE_TABLE_NUM_ENTRIES * sizeof (uint8_t *))
 static uint8_t **flash_cache_table = NULL;
+
+static K_MUTEX_DEFINE(_mutex);
 
 static void fa_cb(const struct flash_area *fa, void *user_data) {
     bool *covered_by_areas = user_data;
@@ -78,7 +81,7 @@ static void fa_cb(const struct flash_area *fa, void *user_data) {
     uint32_t count = 10;
     struct flash_sector sectors[count];
     if (flash_area_get_sectors(fa->fa_id, &count, sectors) != 0) {
-        printk("  Unable to get sectors\n");
+        printk("Unable to get sectors\n");
     } else {
         for (int i = 0; i < count; i++) {
             printk("  0x%lx 0x%x\n", sectors[i].fs_off, sectors[i].fs_size);
@@ -174,10 +177,12 @@ void supervisor_flash_init(void) {
     }
     printk("  write row size %d\n", _row_size);
     _blocks_per_page = _page_size / FILESYSTEM_BLOCK_SIZE;
+    printk("  blocks per page %d\n", _blocks_per_page);
     _rows_per_block = FILESYSTEM_BLOCK_SIZE / _row_size;
     _page_mask = ~(_page_size - 1);
     // The last page is the scratch sector.
     _scratch_page_address = last_info.start_offset;
+    _current_page_address = NO_PAGE_LOADED;
 }
 
 uint32_t supervisor_flash_get_block_size(void) {
@@ -191,7 +196,12 @@ uint32_t supervisor_flash_get_block_count(void) {
 
 // Read data_length's worth of bytes starting at address into data.
 static bool read_flash(uint32_t address, uint8_t *data, uint32_t data_length) {
-    return flash_area_read(filesystem_area, address, data, data_length) == 0;
+    int res = flash_area_read(filesystem_area, address, data, data_length);
+    if (res != 0) {
+        printk("flash read failed: %d\n", res);
+        printk("  address %x length %d\n", address, data_length);
+    }
+    return res == 0;
 }
 
 // Writes data_length's worth of bytes starting at address from data. Assumes
@@ -235,7 +245,11 @@ static bool block_erased(uint32_t sector_address) {
 // Erases the given sector. Make sure you copied all of the data out of it you
 // need! Also note, sector_address is really 24 bits.
 static bool erase_page(uint32_t sector_address) {
-    return flash_area_erase(filesystem_area, sector_address, _page_size) == 0;
+    int res = flash_area_erase(filesystem_area, sector_address, _page_size);
+    if (res != 0) {
+        printk("Erase of %d failed: %d\n", sector_address, res);
+    }
+    return res == 0;
 }
 
 // Sector is really 24 bits.
@@ -268,6 +282,7 @@ static bool flush_scratch_flash(void) {
                 copy_block(_current_page_address + i * FILESYSTEM_BLOCK_SIZE,
                 _scratch_page_address + i * FILESYSTEM_BLOCK_SIZE);
         }
+        _loaded_mask |= (1 << i);
     }
     if (!copy_to_scratch_ok) {
         // TODO(tannewt): Do more here. We opted to not erase and copy bad data
@@ -299,6 +314,8 @@ static void release_ram_cache(void) {
     }
     port_free(flash_cache_table);
     flash_cache_table = NULL;
+    _current_page_address = NO_PAGE_LOADED;
+    _loaded_mask = 0;
 }
 
 // Attempts to allocate a new set of page buffers for caching a full sector in
@@ -330,7 +347,8 @@ static bool allocate_ram_cache(void) {
     if (!success) {
         release_ram_cache();
     }
-    printk("Allocated ram cache\n");
+    _loaded_mask = 0;
+    _current_page_address = NO_PAGE_LOADED;
     return success;
 }
 
@@ -342,7 +360,7 @@ static bool flush_ram_cache(bool keep_cache) {
         return true;
     }
 
-    if (_current_page_address == NO_PAGE_LOADED) {
+    if (_current_page_address == NO_PAGE_LOADED || _dirty_mask == 0) {
         if (!keep_cache) {
             release_ram_cache();
         }
@@ -353,7 +371,7 @@ static bool flush_ram_cache(bool keep_cache) {
     // erase below.
     bool copy_to_ram_ok = true;
     for (size_t i = 0; i < _blocks_per_page; i++) {
-        if ((_dirty_mask & (1 << i)) == 0) {
+        if ((_loaded_mask & (1 << i)) == 0) {
             for (size_t j = 0; j < _rows_per_block; j++) {
                 copy_to_ram_ok = read_flash(
                     _current_page_address + (i * _rows_per_block + j) * _row_size,
@@ -367,6 +385,7 @@ static bool flush_ram_cache(bool keep_cache) {
         if (!copy_to_ram_ok) {
             break;
         }
+        _loaded_mask |= (1 << i);
     }
 
     if (!copy_to_ram_ok) {
@@ -382,6 +401,9 @@ static bool flush_ram_cache(bool keep_cache) {
                 _row_size);
         }
     }
+    // Nothing is dirty anymore. Some may already be in the cache cleanly.
+    _dirty_mask = 0;
+
     // We're done with the cache for now so give it back.
     if (!keep_cache) {
         release_ram_cache();
@@ -401,7 +423,6 @@ static void _flush_keep_cache(bool keep_cache) {
     } else {
         flush_ram_cache(keep_cache);
     }
-    _current_page_address = NO_PAGE_LOADED;
     #ifdef MICROPY_HW_LED_MSC
     port_pin_set_output_level(MICROPY_HW_LED_MSC, false);
     #endif
@@ -411,14 +432,18 @@ void port_internal_flash_flush(void) {
     if (filesystem_area == NULL) {
         return;
     }
+    k_mutex_lock(&_mutex, K_FOREVER);
     _flush_keep_cache(true);
+    k_mutex_unlock(&_mutex);
 }
 
 void supervisor_flash_release_cache(void) {
     if (filesystem_area == NULL) {
         return;
     }
+    k_mutex_lock(&_mutex, K_FOREVER);
     _flush_keep_cache(false);
+    k_mutex_unlock(&_mutex);
 }
 
 static int32_t convert_block_to_flash_addr(uint32_t block) {
@@ -442,7 +467,7 @@ static bool _flash_read_block(uint8_t *dest, uint32_t block) {
     size_t block_index = (address / FILESYSTEM_BLOCK_SIZE) % _blocks_per_page;
     uint32_t mask = 1 << (block_index);
     // We're reading from the currently cached sector.
-    if (_current_page_address == page_address && (mask & _dirty_mask) > 0) {
+    if (_current_page_address == page_address && (mask & _loaded_mask) > 0) {
         if (flash_cache_table != NULL) {
             for (int i = 0; i < _rows_per_block; i++) {
                 memcpy(dest + i * _row_size,
@@ -450,10 +475,9 @@ static bool _flash_read_block(uint8_t *dest, uint32_t block) {
                     _row_size);
             }
             return true;
-        } else {
-            uint32_t scratch_block_address = _scratch_page_address + block_index * FILESYSTEM_BLOCK_SIZE;
-            return read_flash(scratch_block_address, dest, FILESYSTEM_BLOCK_SIZE);
         }
+        uint32_t scratch_block_address = _scratch_page_address + block_index * FILESYSTEM_BLOCK_SIZE;
+        return read_flash(scratch_block_address, dest, FILESYSTEM_BLOCK_SIZE);
     }
     return read_flash(address, dest, FILESYSTEM_BLOCK_SIZE);
 }
@@ -469,13 +493,11 @@ static bool _flash_write_block(const uint8_t *data, uint32_t block) {
     uint32_t page_address = address & _page_mask;
     size_t block_index = (address / FILESYSTEM_BLOCK_SIZE) % _blocks_per_page;
     uint32_t mask = 1 << (block_index);
-    bool rewrite_dirty = (mask & _dirty_mask) != 0;
-    // Flush the cache if we're moving onto a sector or we're writing the
-    // same block again.
-    if (_current_page_address != page_address || rewrite_dirty) {
+    // Flush the cache if we're moving onto a different page.
+    if (_current_page_address != page_address) {
         // Check to see if we'd write to an erased block and aren't writing to
         // our cache. In that case we can write directly.
-        if (block_erased(address) && !rewrite_dirty) {
+        if (block_erased(address)) {
             return write_flash(address, data, FILESYSTEM_BLOCK_SIZE);
         }
         if (_current_page_address != NO_PAGE_LOADED) {
@@ -486,8 +508,11 @@ static bool _flash_write_block(const uint8_t *data, uint32_t block) {
         }
         _current_page_address = page_address;
         _dirty_mask = 0;
+        _loaded_mask = 0;
     }
     _dirty_mask |= mask;
+    _loaded_mask |= mask;
+
     // Copy the block to the appropriate cache.
     if (flash_cache_table != NULL) {
         for (int i = 0; i < _rows_per_block; i++) {
@@ -506,12 +531,15 @@ mp_uint_t supervisor_flash_read_blocks(uint8_t *dest, uint32_t block, uint32_t n
     if (filesystem_area == NULL) {
         return 1;
     }
-    printk("hello from flash read %d\n", block);
+    k_mutex_lock(&_mutex, K_FOREVER);
     for (size_t i = 0; i < num_blocks; i++) {
         if (!_flash_read_block(dest + i * FILESYSTEM_BLOCK_SIZE, block + i)) {
+            k_mutex_unlock(&_mutex);
+            printk("error reading block %04d\n", block + i);
             return 1; // error
         }
     }
+    k_mutex_unlock(&_mutex);
     return 0; // success
 }
 
@@ -519,12 +547,14 @@ mp_uint_t supervisor_flash_write_blocks(const uint8_t *src, uint32_t block, uint
     if (filesystem_area == NULL) {
         return 1;
     }
-    printk("hello from flash write %d num_blocks %d\n", block, num_blocks);
+    k_mutex_lock(&_mutex, K_FOREVER);
     for (size_t i = 0; i < num_blocks; i++) {
         if (!_flash_write_block(src + i * FILESYSTEM_BLOCK_SIZE, block + i)) {
-            printk("error writing block %d\n", block + i);
+            printk("error writing block %04d\n", block + i);
+            k_mutex_unlock(&_mutex);
             return 1; // error
         }
     }
+    k_mutex_unlock(&_mutex);
     return 0; // success
 }

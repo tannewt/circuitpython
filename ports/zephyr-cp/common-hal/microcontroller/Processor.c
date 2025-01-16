@@ -11,6 +11,9 @@
 
 #include "shared-bindings/microcontroller/ResetReason.h"
 
+#include <sys/types.h>
+#include <zephyr/drivers/hwinfo.h>
+
 
 float common_hal_mcu_processor_get_temperature(void) {
     return 0.0;
@@ -26,6 +29,10 @@ float common_hal_mcu_processor_get_voltage(void) {
 }
 
 void common_hal_mcu_processor_get_uid(uint8_t raw_id[]) {
+    ssize_t len = hwinfo_get_device_id(raw_id, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH);
+    if (len < COMMON_HAL_MCU_PROCESSOR_UID_LENGTH) {
+        printk("UID shorter %d than defined length %d\n", len, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH);
+    }
 }
 
 mcu_reset_reason_t common_hal_mcu_processor_get_reset_reason(void) {
