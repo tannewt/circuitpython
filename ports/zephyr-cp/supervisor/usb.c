@@ -14,6 +14,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/irq.h>
+#include <zephyr/kernel.h>
 
 #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs)
 #define UDC_IRQ_NAME     otghs
@@ -21,9 +22,17 @@
 #define UDC_IRQ_NAME     otgfs
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_usb)
 #define UDC_IRQ_NAME     usb
+#elif DT_HAS_COMPAT_STATUS_OKAY(renesas_ra_usb)
+#define UDC_IRQ_NAME     usbhs_ir
 #endif
 
-#define USB_DEVICE DT_NODELABEL(zephyr_udc0)
+#if DT_HAS_COMPAT_STATUS_OKAY(renesas_ra_usb)
+#define USB_NAME usbhs
+#else
+#define USB_NAME zephyr_udc0
+#endif
+
+#define USB_DEVICE DT_NODELABEL(USB_NAME)
 
 #ifdef UDC_IRQ_NAME
 #define UDC_IRQ       DT_IRQ_BY_NAME(USB_DEVICE, UDC_IRQ_NAME, irq)
@@ -67,6 +76,19 @@ TU_ATTR_UNUSED static void power_event_handler(nrfx_power_usb_evt_t event) {
 #endif
 
 void init_usb_hardware(void) {
+    #if CFG_TUSB_MCU == OPT_MCU_RAXXX
+    #if !USBHS_PHY_CLOCK_SOURCE_IS_XTAL
+    if (data->udc_cfg.usb_speed == USBD_SPEED_HS) {
+        LOG_ERR("High-speed operation is not supported in case PHY clock source is not "
+            "XTAL");
+        return;
+    }
+    #endif
+
+    R_ICU->IELSR[UDC_IRQ] = ELC_EVENT_USBHS_USB_INT_RESUME;
+    #endif
+
+
     IRQ_CONNECT(UDC_IRQ, UDC_IRQ_PRI, usb_irq_handler, 0, 0);
 
     /* Configure USB GPIOs */

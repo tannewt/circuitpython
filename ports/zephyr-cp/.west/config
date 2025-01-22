@@ -1,3 +1,6 @@
 [manifest]
 path = lib/zephyr
 file = west.yml
+
+[build]
+sysbuild = True

@@ -27,6 +27,7 @@ static struct flash_area *filesystem_area = NULL;
 static struct flash_area _dynamic_area;
 #endif
 
+// Auto generated in pins.c
 extern const struct device *const flashes[];
 extern const int circuitpy_flash_device_count;
 

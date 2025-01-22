@@ -412,4 +412,5 @@
 	url = https://github.com/analogdevicesinc/msdk.git
 [submodule "lib/zephyr"]
 	path = ports/zephyr-cp/lib/zephyr
-	url = https://github.com/zephyrproject-rtos/zephyr.git
+	url = https://github.com/renesas/zephyr.git
+	branch = support_renesas_ra8_ospi

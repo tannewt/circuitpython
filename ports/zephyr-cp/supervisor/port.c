@@ -6,13 +6,23 @@
 
 #include "supervisor/port.h"
 
+#include "mpconfigboard.h"
+
 #include <zephyr/autoconf.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/reboot.h>
 
 #include "lib/tlsf/tlsf.h"
+#include "ports/zephyr-cp/lib/zephyr/include/zephyr/device.h"
 
 static tlsf_t heap;
+
+// Auto generated in pins.c
+extern const struct device *const rams[];
+extern const uint32_t *const ram_bounds[];
+extern const size_t circuitpy_max_ram_size;
+
+static pool_t pools[CIRCUITPY_RAM_DEVICE_COUNT];
 
 safe_mode_t port_init(void) {
     return SAFE_MODE_NONE;
@@ -34,6 +44,7 @@ void reset_port(void) {
 }
 
 void reset_to_bootloader(void) {
+    reset_cpu();
 }
 
 void port_wake_main_task(void) {
@@ -92,17 +103,26 @@ void port_interrupt_after_ticks(uint32_t ticks) {
 void port_idle_until_interrupt(void) {
 }
 
-extern uint32_t z_mapped_end;
-
 // Zephyr doesn't maintain one multi-heap. So, make our own using TLSF.
 void port_heap_init(void) {
-    #if DT_CHOSEN_zephyr_sram_EXISTS
-    uint32_t *heap_bottom = &z_mapped_end;
-    uint32_t *heap_top = (uint32_t *)(DT_REG_ADDR(DT_CHOSEN(zephyr_sram)) + DT_REG_SIZE(DT_CHOSEN(zephyr_sram)));
-    size_t size = (heap_top - heap_bottom) * sizeof(uint32_t);
-    printk("Init heap at %p - %p with size %d\n", heap_bottom, heap_top, size);
-    heap = tlsf_create_with_pool(heap_bottom, size, size);
-    #else
+    for (size_t i = 0; i < CIRCUITPY_RAM_DEVICE_COUNT; i++) {
+        if (!device_is_ready(rams[i])) {
+            printk("RAM %d is not ready\n", i);
+            continue;
+        }
+        uint32_t *heap_bottom = ram_bounds[2 * i];
+        uint32_t *heap_top = ram_bounds[2 * i + 1];
+        size_t size = (heap_top - heap_bottom) * sizeof(uint32_t);
+
+        printk("Init heap at %p - %p with size %d\n", heap_bottom, heap_top, size);
+        if (i == 0) {
+            heap = tlsf_create_with_pool(heap_bottom, size, circuitpy_max_ram_size);
+            pools[i] = tlsf_get_pool(heap);
+        } else {
+            pools[i] = tlsf_add_pool(heap, heap_bottom + 1, size - sizeof(uint32_t));
+        }
+    }
+    #if !DT_HAS_CHOSEN(zephyr_sram)
     #error "No SRAM!"
     #endif
 }
@@ -130,7 +150,9 @@ static bool max_size_walker(void *ptr, size_t size, int used, void *user) {
 
 size_t port_heap_get_largest_free_size(void) {
     size_t max_size = 0;
-    tlsf_walk_pool(tlsf_get_pool(heap), max_size_walker, &max_size);
+    for (size_t i = 0; i < CIRCUITPY_RAM_DEVICE_COUNT; i++) {
+        tlsf_walk_pool(pools[i], max_size_walker, &max_size);
+    }
     // IDF does this. Not sure why.
     return tlsf_fit_size(heap, max_size);
 }

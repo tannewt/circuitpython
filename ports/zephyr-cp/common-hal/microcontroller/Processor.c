@@ -30,8 +30,13 @@ float common_hal_mcu_processor_get_voltage(void) {
 
 void common_hal_mcu_processor_get_uid(uint8_t raw_id[]) {
     ssize_t len = hwinfo_get_device_id(raw_id, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH);
+    if (len < 0) {
+        printk("UID retrieval failed: %d\n", len);
+        len = 0;
+    }
     if (len < COMMON_HAL_MCU_PROCESSOR_UID_LENGTH) {
         printk("UID shorter %d than defined length %d\n", len, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH);
+        memset(raw_id + len, 0, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH - len);
     }
 }
 
