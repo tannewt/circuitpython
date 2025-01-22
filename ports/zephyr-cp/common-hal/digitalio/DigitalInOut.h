@@ -15,4 +15,7 @@ typedef struct {
     mp_obj_base_t base;
     const mcu_pin_obj_t *pin;
     digitalio_direction_t direction;
+    bool value;
+    digitalio_drive_mode_t drive_mode;
+    digitalio_pull_t pull;
 } digitalio_digitalinout_obj_t;

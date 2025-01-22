@@ -132,17 +132,34 @@ void supervisor_flash_init(void) {
         printk("  page %d: %lx %x\n", page_count - 1, last_info.start_offset, last_info.size);
 
         // Assume uniform page sizes if the first and last are the same size.
+        size_t uniform_page_count;
         if (first_info.size == last_info.size) {
-            _page_size = first_info.size;
-
-            _dynamic_area.fa_dev = d;
-            _dynamic_area.fa_id = 0;
-            _dynamic_area.fa_off = 0;
-            _dynamic_area.fa_size = page_count * first_info.size;
-            filesystem_area = &_dynamic_area;
-            printk("setup flash\n");
-            break;
+            uniform_page_count = page_count;
+        } else {
+            for (size_t i = 1; i < page_count; i++) {
+                struct flash_pages_info info;
+                flash_get_page_info_by_idx(d, i, &info);
+                if (info.size != first_info.size) {
+                    uniform_page_count = i;
+                    break;
+                }
+            }
         }
+        if (uniform_page_count * first_info.size < 64 * 1024) {
+            printk("Uniform region too small\n");
+            continue;
+        }
+
+        printk("  %d uniform pages\n", uniform_page_count);
+        _page_size = first_info.size;
+
+        _dynamic_area.fa_dev = d;
+        _dynamic_area.fa_id = 0;
+        _dynamic_area.fa_off = 0;
+        _dynamic_area.fa_size = uniform_page_count * first_info.size;
+        filesystem_area = &_dynamic_area;
+        printk("setup flash\n");
+        break;
     }
     #endif
     if (filesystem_area == NULL) {

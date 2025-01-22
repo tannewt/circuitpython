@@ -38,7 +38,7 @@ from devicetree import dtlib
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)
 
 ALWAYS_ON_MODULES = ["sys", "collections"]
-DEFAULT_MODULES = ["time"]
+DEFAULT_MODULES = ["time", "os", "microcontroller"]
 MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm", "array", "json"]
 
 
@@ -396,7 +396,14 @@ async def build_circuitpython():
                 print(" ", underscored, driver)
                 if not driver:
                     continue
-                if driver == "flash" and status == "okay":
+                if (
+                    driver == "flash"
+                    and status == "okay"
+                    and not chosen
+                    and "write-block-size" in node.props
+                ):
+                    # Skip chosen nodes because they are used by Zephyr.
+                    # Skip nodes without "write-block-size" because it could be a controller.
                     flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
                 if driver == "usb/udc" and status == "okay":
                     print("found usb!")
@@ -534,7 +541,6 @@ async def build_circuitpython():
         print(rams)
         ram_list = []
         ram_externs = []
-        ram_devices = []
         max_size = 0
         for ram in rams:
             device, start, end, size, path = ram
@@ -545,7 +551,6 @@ async def build_circuitpython():
             else:
                 start = f"(uint32_t*) 0x{start:08x}"
             ram_list.append(f"    {start}, (uint32_t*) 0x{end:08x}, // {path}")
-            ram_devices.append(f"DEVICE_DT_GET(DT_NODELABEL({device}))")
         ram_list = "\n".join(ram_list)
         ram_externs = "\n".join(ram_externs)
         header.write_text(
@@ -576,7 +581,6 @@ const struct device* const flashes[] = {{ {", ".join(flashes)} }};
 const int circuitpy_flash_device_count = {len(flashes)};
 
 {ram_externs}
-const struct device* const rams[] = {{ {", ".join(ram_devices)} }};
 const uint32_t* const ram_bounds[] = {{
 {ram_list}
 }};

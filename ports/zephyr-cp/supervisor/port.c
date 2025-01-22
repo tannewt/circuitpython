@@ -106,15 +106,12 @@ void port_idle_until_interrupt(void) {
 // Zephyr doesn't maintain one multi-heap. So, make our own using TLSF.
 void port_heap_init(void) {
     for (size_t i = 0; i < CIRCUITPY_RAM_DEVICE_COUNT; i++) {
-        if (!device_is_ready(rams[i])) {
-            printk("RAM %d is not ready\n", i);
-            continue;
-        }
         uint32_t *heap_bottom = ram_bounds[2 * i];
         uint32_t *heap_top = ram_bounds[2 * i + 1];
         size_t size = (heap_top - heap_bottom) * sizeof(uint32_t);
 
         printk("Init heap at %p - %p with size %d\n", heap_bottom, heap_top, size);
+        // If this crashes, then make sure you've enabled all of the Kconfig needed for the drivers.
         if (i == 0) {
             heap = tlsf_create_with_pool(heap_bottom, size, circuitpy_max_ram_size);
             pools[i] = tlsf_get_pool(heap);
