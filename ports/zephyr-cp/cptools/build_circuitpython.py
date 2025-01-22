@@ -38,7 +38,7 @@ from devicetree import dtlib
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)
 
 ALWAYS_ON_MODULES = ["sys", "collections"]
-DEFAULT_MODULES = ["time", "os", "microcontroller"]
+DEFAULT_MODULES = ["time", "os", "microcontroller", "struct", "array", "json", "random"]
 MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm", "array", "json"]
 
 
@@ -817,7 +817,8 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             hal_source.extend(top.glob(f"shared-module/{module.name}/*.c"))
 
     for mpflag in MPCONFIG_FLAGS:
-        circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}=0")
+        enabled = mpflag in DEFAULT_MODULES
+        circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}={1 if enabled else 0}")
 
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
     for file in top.glob("py/*.c"):
