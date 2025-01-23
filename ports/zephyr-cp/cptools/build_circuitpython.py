@@ -342,6 +342,7 @@ async def build_circuitpython():
                 node2alias[node] = []
             node2alias[node].append(alias)
         ioports = {}
+        all_ioports = []
         board_names = {}
         flashes = []
         rams = []
@@ -414,7 +415,9 @@ async def build_circuitpython():
                         props = node.props
                         if "usb-num-endpoint-pairs" not in props:
                             props = node.parent.props
-                        usb_num_endpoint_pairs = props["num-bidir-endpoints"].to_num()
+                        usb_num_endpoint_pairs = 0
+                        if "num-bidir-endpoints" in props:
+                            usb_num_endpoint_pairs = props["num-bidir-endpoints"].to_num()
                         single_direction_endpoints = []
                         for d in ("in", "out"):
                             eps = f"num-{d}-endpoints"
@@ -433,6 +436,7 @@ async def build_circuitpython():
                     ngpios = node.props["ngpios"].to_num()
                 else:
                     ngpios = 32
+                all_ioports.append(node.labels[0])
                 if status == "okay":
                     ioports[node.labels[0]] = set(range(0, ngpios))
             if gpio_map:
@@ -480,7 +484,7 @@ async def build_circuitpython():
                             board_names[(ioport, num)].append("BUTTON")
                         board_names[(ioport, num)].extend(node2alias[key])
 
-        a, b = list(ioports.keys())[:2]
+        a, b = all_ioports[:2]
         i = 0
         while a[i] == b[i]:
             i += 1
@@ -798,6 +802,22 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     #     supervisor/shared/usb/host_keyboard.c \
 
     # endif
+
+    if kwargs.get("ssl", False):
+        # TODO: Figure out how to get these paths from zephyr
+        circuitpython_flags.append('-DMBEDTLS_CONFIG_FILE=\\"config-tls-generic.h\\"')
+        circuitpython_flags.extend(
+            ("-isystem", portdir / "modules" / "crypto" / "tinycrypt" / "lib" / "include")
+        )
+        circuitpython_flags.extend(
+            ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "include")
+        )
+        circuitpython_flags.extend(
+            ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "configs")
+        )
+        circuitpython_flags.extend(
+            ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "include")
+        )
 
     # Make sure all modules have a setting by filling in defaults.
     hal_source = []
