@@ -20,10 +20,14 @@
 #include "supervisor/port.h"
 #include "supervisor/shared/safe_mode.h"
 
+#include <zephyr/kernel.h>
+
 // This routine should work even when interrupts are disabled. Used by OneWire
 // for precise timing.
 void common_hal_mcu_delay_us(uint32_t delay) {
 }
+
+static uint32_t _irq_key;
 
 static volatile uint32_t nesting_count = 0;
 void common_hal_mcu_disable_interrupts() {
@@ -37,6 +41,10 @@ void common_hal_mcu_disable_interrupts() {
         // and 4, are exclusive to softdevice and should never be used, so
         // this limitation is not important.
         // sd_nvic_critical_region_enter(&is_nested_critical_region);
+        if (!k_is_in_isr()) {
+            k_sched_lock();
+        }
+        _irq_key = irq_lock();
     }
     nesting_count++;
 }
@@ -49,6 +57,10 @@ void common_hal_mcu_enable_interrupts() {
     nesting_count--;
     if (nesting_count > 0) {
         return;
+    }
+    irq_unlock(_irq_key);
+    if (!k_is_in_isr()) {
+        k_sched_unlock();
     }
 }
 

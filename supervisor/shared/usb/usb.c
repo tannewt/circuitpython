@@ -140,6 +140,7 @@ void usb_init(void) {
         tinyusb_thread,
         NULL, NULL, NULL,
         CONFIG_MAIN_THREAD_PRIORITY - 1, 0, K_NO_WAIT);
+    k_thread_name_set(_tinyusb_tid, "tinyusb");
     #endif
 }
 

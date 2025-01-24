@@ -245,7 +245,7 @@ TINYUSB_SETTINGS = {
     "stm32u575xx": {"CFG_TUSB_MCU": "OPT_MCU_STM32U5"},
     "nrf52840": {"CFG_TUSB_MCU": "OPT_MCU_NRF5X"},
     "nrf5340": {"CFG_TUSB_MCU": "OPT_MCU_NRF5X"},
-    # "r7fa8d1bhecbd": {"CFG_TUSB_MCU": "OPT_MCU_RAXXX", "USB_HIGHSPEED": "1", "USBHS_USB_INT_RESUME_IRQn": "54", "USBFS_INT_IRQn": "54"},
+    # "r7fa8d1bhecbd": {"CFG_TUSB_MCU": "OPT_MCU_RAXXX", "USB_HIGHSPEED": "1", "USBHS_USB_INT_RESUME_IRQn": "54", "USBFS_INT_IRQn": "54", "CIRCUITPY_USB_DEVICE_INSTANCE": "1"},
     # ifeq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),MIMXRT1011 MIMXRT1015))
     # CFLAGS += -DCFG_TUD_MIDI_RX_BUFSIZE=512 -DCFG_TUD_MIDI_TX_BUFSIZE=64 -DCFG_TUD_MSC_BUFSIZE=512
     # else
@@ -348,9 +348,11 @@ async def build_circuitpython():
         rams = []
         status_led = None
         path2chosen = {}
+        chosen2path = {}
         for k in edt_pickle.root.nodes["chosen"].props:
             value = edt_pickle.root.nodes["chosen"].props[k]
             path2chosen[value.to_path()] = k
+            chosen2path[k] = value.to_path()
         remaining_nodes = set([edt_pickle.root])
         while remaining_nodes:
             node = remaining_nodes.pop()
@@ -366,8 +368,7 @@ async def build_circuitpython():
             compatible = []
             if "compatible" in node.props:
                 compatible = node.props["compatible"].to_strings()
-            if compatible:
-                print(node.name, status)
+            print(node.name, status)
             chosen = None
             if node in path2chosen:
                 chosen = path2chosen[node]
@@ -378,13 +379,24 @@ async def build_circuitpython():
                 if "mmio" in c:
                     print(" ", c, node.labels, node.props)
                     address, size = node.props["reg"].to_nums()
+                    end = address + size
                     if chosen == "zephyr,sram":
                         start = "z_mapped_end"
                     elif "zephyr,memory-region" in node.props:
                         start = "__" + node.props["zephyr,memory-region"].to_string() + "_end"
                     else:
-                        start = address
-                    end = address + size
+                        # Check to see if the chosen sram is a subset of this region. If it is,
+                        # then do as above for a smaller region and assume the rest is reserved.
+                        chosen_sram = chosen2path["zephyr,sram"]
+                        chosen_address, chosen_size = chosen_sram.props["reg"].to_nums()
+                        chosen_end = chosen_address + chosen_size
+                        if address <= chosen_address <= end and address <= chosen_end <= end:
+                            start = "z_mapped_end"
+                            address = chosen_address
+                            size = chosen_size
+                            end = chosen_end
+                        else:
+                            start = address
                     print(node.props["reg"])
                     print("  bounds", start, hex(end))
                     info = (node.labels[0], start, end, size, node.path)
@@ -401,7 +413,7 @@ async def build_circuitpython():
                     driver == "flash"
                     and status == "okay"
                     and not chosen
-                    and "write-block-size" in node.props
+                    and ("write-block-size" in node.props or "sfdp-bfp" in node.props)
                 ):
                     # Skip chosen nodes because they are used by Zephyr.
                     # Skip nodes without "write-block-size" because it could be a controller.
@@ -413,7 +425,7 @@ async def build_circuitpython():
                     else:
                         kwargs["usb_device"] = True
                         props = node.props
-                        if "usb-num-endpoint-pairs" not in props:
+                        if "num-bidir-endpoints" not in props:
                             props = node.parent.props
                         usb_num_endpoint_pairs = 0
                         if "num-bidir-endpoints" in props:
@@ -671,8 +683,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 
     circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_num_endpoint_pairs > 0 else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_num_endpoint_pairs > 0 else 0}")
-    # For RA8
-    circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE_INSTANCE=1")
+
     tinyusb_files = []
     if usb_num_endpoint_pairs > 0:
         for setting in TINYUSB_SETTINGS[soc_name]:
@@ -818,6 +829,10 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         circuitpython_flags.extend(
             ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "include")
         )
+        circuitpython_flags.extend(
+            ("-isystem", portdir / "lib" / "zephyr" / "modules" / "mbedtls" / "configs")
+        )
+        supervisor_source.append(top / "lib" / "mbedtls_config" / "crt_bundle.c")
 
     # Make sure all modules have a setting by filling in defaults.
     hal_source = []
@@ -841,6 +856,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}={1 if enabled else 0}")
 
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
+    assembly_files = []
     for file in top.glob("py/*.c"):
         source_files.append(file)
     qstr_flags = "-DNO_QSTR"
@@ -856,6 +872,26 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
                 ),
                 name=f"Split defs {source_file}",
             )
+
+        if kwargs.get("ssl", False):
+            crt_bundle = builddir / "x509_crt_bundle.S"
+            roots_pem = srcdir / "lib/certificates/data/roots.pem"
+            generator = srcdir / "tools/gen_crt_bundle.py"
+            tg.create_task(
+                cpbuild.run_command(
+                    [
+                        "python",
+                        generator,
+                        "-i",
+                        roots_pem,
+                        "-o",
+                        crt_bundle,
+                        "--asm",
+                    ],
+                    srcdir,
+                )
+            )
+            assembly_files.append(crt_bundle)
 
     async with asyncio.TaskGroup() as tg:
         board_build = builddir
@@ -883,7 +919,6 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     source_files.append(srcdir / "shared-module/supervisor/__init__.c")
     # source_files.append(srcdir / "ports" / port / "peripherals" / "nrf" / "nrf52840" / "pins.c")
 
-    assembly_files = []
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")
 
     source_files.extend(assembly_files)
