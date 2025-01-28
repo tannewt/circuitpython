@@ -3,3 +3,5 @@ bootloader
 build
 modules
 tools
+zephyr
+.west

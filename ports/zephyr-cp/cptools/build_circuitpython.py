@@ -32,7 +32,7 @@ builddir = pathlib.Path.cwd()
 # Path to where CMake puts Zephyr's build output.
 zephyrbuilddir = builddir / ".." / ".." / ".." / "zephyr"
 
-sys.path.append(str(portdir / "lib/zephyr/scripts/dts/python-devicetree/src/"))
+sys.path.append(str(portdir / "zephyr/scripts/dts/python-devicetree/src/"))
 from devicetree import dtlib
 
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)

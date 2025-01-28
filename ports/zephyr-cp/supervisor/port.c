@@ -13,7 +13,7 @@
 #include <zephyr/sys/reboot.h>
 
 #include "lib/tlsf/tlsf.h"
-#include "ports/zephyr-cp/lib/zephyr/include/zephyr/device.h"
+#include <zephyr/device.h>
 
 static tlsf_t heap;
 

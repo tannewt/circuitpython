@@ -410,7 +410,3 @@
 [submodule "ports/analog/msdk"]
 	path = ports/analog/msdk
 	url = https://github.com/analogdevicesinc/msdk.git
-[submodule "lib/zephyr"]
-	path = ports/zephyr-cp/lib/zephyr
-	url = https://github.com/adafruit/zephyr.git
-	branch = circuitpython
