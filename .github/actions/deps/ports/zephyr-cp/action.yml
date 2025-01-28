@@ -7,4 +7,5 @@ runs:
       uses: zephyrproject-rtos/action-zephyr-setup@v1
       with:
         app-path: ports/zephyr-cp/zephyr-config
+        base-path: ports/zephyr-cp
         toolchains: arm-zephyr-eabi
