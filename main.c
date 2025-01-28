@@ -997,8 +997,6 @@ int __attribute__((used)) main(void) {
     common_hal_nvm_bytearray_set_bytes(&common_hal_mcu_nvm_obj, 0, &value_out, 1);
     #endif
 
-    printk("serial_early_init\r\n");
-
     // Start the debug serial
     serial_early_init();
 
@@ -1008,8 +1006,6 @@ int __attribute__((used)) main(void) {
     if (get_safe_mode() == SAFE_MODE_NONE) {
         set_safe_mode(wait_for_safe_mode_reset());
     }
-    printk("safe_mode: %d\r\n", get_safe_mode());
-
 
     stack_init();
 
