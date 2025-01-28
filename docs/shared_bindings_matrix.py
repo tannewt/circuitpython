@@ -131,9 +131,15 @@ def get_board_mapping():
     boards = {}
     for port in SUPPORTED_PORTS:
         board_path = root_dir / "ports" / port / "boards"
-        for board_path in os.scandir(board_path):
+        # Zephyr port has vendor specific subdirectories to match zephyr (and
+        # clean up the boards folder.)
+        g = "*/*" if port == "zephyr-cp" else "*"
+        for board_path in board_path.glob(g):
             if board_path.is_dir():
                 board_id = board_path.name
+                if port == "zephyr-cp":
+                    vendor = board_path.parent.name
+                    board_id = f"{vendor}_{board_id}"
                 aliases = ALIASES_BY_BOARD.get(board_path.name, [])
                 boards[board_id] = {
                     "port": port,
@@ -296,15 +302,6 @@ def lookup_setting(settings, key, default=""):
     return value
 
 
-def all_ports_all_boards(ports=SUPPORTED_PORTS):
-    for port in ports:
-        port_dir = get_circuitpython_root_dir() / "ports" / port
-        for entry in (port_dir / "boards").iterdir():
-            if not entry.is_dir():
-                continue
-            yield (port, entry)
-
-
 def support_matrix_by_board(use_branded_name=True, withurl=True,
                             add_port=False, add_chips=False,
                             add_pins=False, add_branded_name=False):
@@ -451,8 +448,14 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
 
         return board_matrix  # this is now a list of (board,modules)
 
+
+    board_mapping = get_board_mapping()
+    real_boards = []
+    for board in board_mapping:
+        if not board_mapping[board].get("alias", False):
+            real_boards.append((board, board_mapping[board]["port"]))
     executor = ThreadPoolExecutor(max_workers=os.cpu_count())
-    mapped_exec = executor.map(support_matrix, all_ports_all_boards())
+    mapped_exec = executor.map(support_matrix, real_boards)
     # flatmap with comprehensions
     boards = dict(
         sorted(

@@ -39,7 +39,6 @@ import build_board_info
 from shared_bindings_matrix import (
     get_settings_from_makefile,
     SUPPORTED_PORTS,
-    all_ports_all_boards,
 )
 
 # Files that never influence board builds

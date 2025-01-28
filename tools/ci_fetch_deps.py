@@ -104,6 +104,11 @@ PORT_DEPS = {
         "lib/tlsf",
         "data/nvm.toml/",
     ],
+    "zephyr-cp": [
+        "lib/certificates/",
+        "lib/tinyusb/",
+        "lib/tlsf",
+    ],
     # omit unix which is part of the "test" target below
 }
 
