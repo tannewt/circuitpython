@@ -233,9 +233,16 @@ def set_boards(build_all: bool):
         # A board can appear due to its _deletion_ (rare)
         # if this happens it's not in `board_to_port`.
         if not port:
+            print("skip", board)
             continue
         port_to_boards_to_build.setdefault(port, []).append(board)
         print(" ", board)
+
+    # Only build one board from other ports.
+    for port in port_to_boards_to_build:
+        if port == "zephyr-cp":
+            continue
+        port_to_boards_to_build[port] = port_to_boards_to_build[port][:1]
 
     if port_to_boards_to_build:
         port_to_boards_to_build["ports"] = sorted(list(port_to_boards_to_build.keys()))
