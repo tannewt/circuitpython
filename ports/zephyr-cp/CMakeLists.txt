@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.20.0)
 
-set(ZEPHYR_BOARD_ALIASES boards/board_aliases.cmake)
-
-find_package(Zephyr REQUIRED HINTS ../../lib/zephyr)
+find_package(Zephyr REQUIRED HINTS lib/zephyr)
 project(circuitpython)
 
 target_sources(app PRIVATE zephyr_main.c)

@@ -43,6 +43,7 @@ SUPPORTED_PORTS = [
     "renode",
     "silabs",
     "stm",
+    "zephyr-cp",
 ]
 
 ALIASES_BY_BOARD = {
