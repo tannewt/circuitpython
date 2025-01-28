@@ -1,0 +1,9 @@
+name: Fetch Zephyr port deps
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Zephyr project
+      uses: zephyrproject-rtos/action-zephyr-setup@v1
+      with:
+        toolchains: arm-zephyr-eabi
