@@ -6,11 +6,10 @@
 
 #pragma once
 
+#include "py/mpconfig.h"
 #include "py/obj.h"
 
-#include <zephyr/net/wifi_mgmt.h>
+#include "common-hal/zephyr_kernel/__init__.h"
 
-typedef struct {
-    mp_obj_base_t base;
-    struct wifi_scan_result scan_result;
-} wifi_network_obj_t;
+void raise_zephyr_error(int err);
+#define CHECK_ZEPHYR_RESULT(x) do { int res = (x); if (res < 0) raise_zephyr_error(res); } while (0)

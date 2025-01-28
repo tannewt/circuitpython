@@ -307,17 +307,14 @@ async def build_circuitpython():
     kwargs = {}
     board_dir = srcdir / "boards" / board
     if not board_dir.exists():
-        print("Generating board info")
         board_dir = builddir / "board"
         # Auto generate board files from device tree.
 
         runners = zephyrbuilddir / "runners.yaml"
         runners = yaml.safe_load(runners.read_text())
-        print(runners)
         zephyr_board_dir = pathlib.Path(runners["config"]["board_dir"])
         board_yaml = zephyr_board_dir / "board.yml"
         board_yaml = yaml.safe_load(board_yaml.read_text())
-        print(board_yaml)
         vendor_index = zephyr_board_dir.parent / "index.rst"
         if vendor_index.exists():
             vendor_index = vendor_index.read_text()
@@ -333,7 +330,6 @@ async def build_circuitpython():
         # board_name = board_id_yaml["name"]
 
         dts = zephyrbuilddir / "zephyr.dts"
-        print(dts)
         edt_pickle = dtlib.DT(dts)
         node2alias = {}
         for alias in edt_pickle.alias2node:
@@ -368,16 +364,16 @@ async def build_circuitpython():
             compatible = []
             if "compatible" in node.props:
                 compatible = node.props["compatible"].to_strings()
-            print(node.name, status)
+            # print(node.name, status)
             chosen = None
             if node in path2chosen:
                 chosen = path2chosen[node]
-                print(" chosen:", chosen)
+                # print(" chosen:", chosen)
             for c in compatible:
                 underscored = c.replace(",", "_").replace("-", "_")
                 driver = COMPAT_TO_DRIVER.get(underscored, None)
                 if "mmio" in c:
-                    print(" ", c, node.labels, node.props)
+                    # print(" ", c, node.labels, node.props)
                     address, size = node.props["reg"].to_nums()
                     end = address + size
                     if chosen == "zephyr,sram":
@@ -397,8 +393,6 @@ async def build_circuitpython():
                             end = chosen_end
                         else:
                             start = address
-                    print(node.props["reg"])
-                    print("  bounds", start, hex(end))
                     info = (node.labels[0], start, end, size, node.path)
                     if chosen == "zephyr,sram":
                         rams.insert(0, info)
@@ -406,7 +400,7 @@ async def build_circuitpython():
                         rams.append(info)
                 if not driver:
                     driver = MANUAL_COMPAT_TO_DRIVER.get(underscored, None)
-                print(" ", underscored, driver)
+                # print(" ", underscored, driver)
                 if not driver:
                     continue
                 if (
@@ -452,14 +446,11 @@ async def build_circuitpython():
                 if status == "okay":
                     ioports[node.labels[0]] = set(range(0, ngpios))
             if gpio_map:
-                print("markers", compatible)
                 i = 0
                 for offset, t, label in gpio_map._markers:
                     if not label:
                         continue
                     num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
-                    print(label, num, i)
-                    print(CONNECTORS[compatible[0]][i])
                     if (label, num) not in board_names:
                         board_names[(label, num)] = []
                     board_names[(label, num)].append(CONNECTORS[compatible[0]][i])
@@ -529,7 +520,6 @@ async def build_circuitpython():
                     board_pin_mapping.append(
                         f"{{ MP_ROM_QSTR(MP_QSTR_{board_pin_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
                     )
-                    print(" ", board_pin_name)
 
         pin_defs = "\n".join(pin_defs)
         pin_declarations = "\n".join(pin_declarations)
@@ -553,8 +543,6 @@ async def build_circuitpython():
             status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
         else:
             status_led = ""
-        print(flashes)
-        print(rams)
         ram_list = []
         ram_externs = []
         max_size = 0
@@ -841,7 +829,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             continue
         enabled = kwargs.get(module.name, module.name in DEFAULT_MODULES)
         kwargs[module.name] = enabled
-        print(f"Module {module.name} enabled: {enabled}")
+        # print(f"Module {module.name} enabled: {enabled}")
         circuitpython_flags.append(
             f"-DCIRCUITPY_{module.name.upper()}={1 if kwargs[module.name] else 0}"
         )
@@ -917,6 +905,8 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     source_files.append(srcdir / "shared-module/time/__init__.c")
     source_files.append(srcdir / "shared-module/os/__init__.c")
     source_files.append(srcdir / "shared-module/supervisor/__init__.c")
+    source_files.append(portdir / "bindings/zephyr_kernel/__init__.c")
+    source_files.append(portdir / "common-hal/zephyr_kernel/__init__.c")
     # source_files.append(srcdir / "ports" / port / "peripherals" / "nrf" / "nrf52840" / "pins.c")
 
     assembly_files.append(srcdir / "ports/nordic/supervisor/cpu.s")

@@ -4,13 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-#pragma once
-
 #include "py/obj.h"
+#include "py/runtime.h"
+#include "py/mphal.h"
 
-#include <zephyr/net/wifi_mgmt.h>
 
-typedef struct {
-    mp_obj_base_t base;
-    struct wifi_scan_result scan_result;
-} wifi_network_obj_t;
+#include "bindings/zephyr_kernel/__init__.h"

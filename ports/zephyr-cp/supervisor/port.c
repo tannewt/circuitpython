@@ -24,6 +24,8 @@ extern const size_t circuitpy_max_ram_size;
 
 static pool_t pools[CIRCUITPY_RAM_DEVICE_COUNT];
 
+static K_EVENT_DEFINE(main_needed);
+
 safe_mode_t port_init(void) {
     return SAFE_MODE_NONE;
 }
@@ -48,12 +50,15 @@ void reset_to_bootloader(void) {
 }
 
 void port_wake_main_task(void) {
+    k_event_set(&main_needed, 1);
 }
 
 void port_wake_main_task_from_isr(void) {
+    k_event_set(&main_needed, 1);
 }
 
 void port_yield(void) {
+    k_yield();
 }
 
 void port_boot_info(void) {
@@ -97,10 +102,23 @@ void port_disable_tick(void) {
 
 }
 
+static k_timeout_t next_timeout;
+static k_timepoint_t next_timepoint;
+
 void port_interrupt_after_ticks(uint32_t ticks) {
+    size_t zephyr_ticks = ticks * CONFIG_SYS_CLOCK_TICKS_PER_SEC / 1024;
+    k_timeout_t maybe_next_timeout = K_TIMEOUT_ABS_TICKS(k_uptime_ticks() + zephyr_ticks);
+    k_timepoint_t maybe_next_timepoint = sys_timepoint_calc(maybe_next_timeout);
+    if (sys_timepoint_cmp(maybe_next_timepoint, next_timepoint) < 0) {
+        next_timeout = maybe_next_timeout;
+        next_timepoint = maybe_next_timepoint;
+    }
 }
 
 void port_idle_until_interrupt(void) {
+    k_event_wait(&main_needed, 0xffffffff, true, next_timeout);
+    next_timeout = K_FOREVER;
+    next_timepoint = sys_timepoint_calc(next_timeout);
 }
 
 // Zephyr doesn't maintain one multi-heap. So, make our own using TLSF.

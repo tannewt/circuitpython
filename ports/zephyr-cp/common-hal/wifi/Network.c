@@ -10,25 +10,20 @@
 #include "shared-bindings/wifi/AuthMode.h"
 
 mp_obj_t common_hal_wifi_network_get_ssid(wifi_network_obj_t *self) {
-    const char *cstr = "";//  (const char *)self->record.ssid;
-    return mp_obj_new_str(cstr, strlen(cstr));
+    const char *cstr = (const char *)self->scan_result.ssid;
+    return mp_obj_new_str(cstr, self->scan_result.ssid_length);
 }
 
-#define MAC_ADDRESS_LENGTH 6
-
 mp_obj_t common_hal_wifi_network_get_bssid(wifi_network_obj_t *self) {
-    // return mp_obj_new_bytes(self->record.bssid, MAC_ADDRESS_LENGTH);
-    return mp_const_none;
+    return mp_obj_new_bytes(self->scan_result.mac, self->scan_result.mac_length);
 }
 
 mp_obj_t common_hal_wifi_network_get_rssi(wifi_network_obj_t *self) {
-    // return mp_obj_new_int(self->record.rssi);
-    return mp_const_none;
+    return mp_obj_new_int(self->scan_result.rssi);
 }
 
 mp_obj_t common_hal_wifi_network_get_channel(wifi_network_obj_t *self) {
-    // return mp_obj_new_int(self->record.primary);
-    return mp_const_none;
+    return mp_obj_new_int(self->scan_result.channel);
 }
 
 mp_obj_t common_hal_wifi_network_get_country(wifi_network_obj_t *self) {

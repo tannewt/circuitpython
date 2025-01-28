@@ -11,6 +11,8 @@
 #include "shared-bindings/wifi/ScannedNetworks.h"
 #include "shared-bindings/wifi/Network.h"
 
+#include <zephyr/net/net_if.h>
+
 // Event bits for the Radio event group.
 #define WIFI_SCAN_DONE_BIT BIT0
 #define WIFI_CONNECTED_BIT BIT1
@@ -18,8 +20,6 @@
 
 typedef struct {
     mp_obj_base_t base;
-    // esp_event_handler_instance_t handler_instance_all_wifi;
-    // esp_event_handler_instance_t handler_instance_got_ip;
     wifi_scannednetworks_obj_t *current_scan;
     // StaticEventGroup_t event_group;
     // EventGroupHandle_t event_group_handle;
@@ -27,11 +27,11 @@ typedef struct {
     // wifi_network_obj_t ap_info;
     // esp_netif_ip_info_t ip_info;
     // esp_netif_dns_info_t dns_info;
-    // esp_netif_t *netif;
+    struct net_if *sta_netif;
     // uint32_t ping_elapsed_time;
     // wifi_config_t ap_config;
     // esp_netif_ip_info_t ap_ip_info;
-    // esp_netif_t *ap_netif;
+    struct net_if *ap_netif;
     bool started;
     bool ap_mode;
     bool sta_mode;

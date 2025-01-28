@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "shared-bindings/wifi/Radio.h"
+#include "ports/zephyr-cp/common-hal/wifi/ScannedNetworks.h"
 #include "shared-bindings/wifi/Network.h"
 
 #include <string.h>
@@ -21,6 +22,12 @@
 #include "shared-module/ipaddress/__init__.h"
 #include "common-hal/socketpool/__init__.h"
 
+#include "bindings/zephyr_kernel/__init__.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/net/hostname.h>
+#include <zephyr/net/wifi.h>
+#include <zephyr/net/wifi_mgmt.h>
 
 #if CIRCUITPY_MDNS
 #include "common-hal/mdns/Server.h"
@@ -71,37 +78,37 @@ bool common_hal_wifi_radio_get_enabled(wifi_radio_obj_t *self) {
 }
 
 void common_hal_wifi_radio_set_enabled(wifi_radio_obj_t *self, bool enabled) {
-    // if (self->started && !enabled) {
-    //     if (self->current_scan != NULL) {
-    //         common_hal_wifi_radio_stop_scanning_networks(self);
-    //     }
-    //     #if CIRCUITPY_MDNS
-    //     mdns_server_deinit_singleton();
-    //     #endif
-    //     ESP_ERROR_CHECK(esp_wifi_stop());
-    //     self->started = false;
-    //     return;
-    // }
-    // if (!self->started && enabled) {
-    //     ESP_ERROR_CHECK(esp_wifi_start());
-    //     self->started = true;
-    //     common_hal_wifi_radio_set_tx_power(self, CIRCUITPY_WIFI_DEFAULT_TX_POWER);
-    //     return;
-    // }
+    if (self->started && !enabled) {
+        if (self->current_scan != NULL) {
+            common_hal_wifi_radio_stop_scanning_networks(self);
+        }
+        //     #if CIRCUITPY_MDNS
+        //     mdns_server_deinit_singleton();
+        //     #endif
+        printk("net_if_down\n");
+        CHECK_ZEPHYR_RESULT(net_if_down(self->sta_netif));
+        self->started = false;
+        return;
+    }
+    if (!self->started && enabled) {
+        printk("net_if_up\n");
+        CHECK_ZEPHYR_RESULT(net_if_up(self->sta_netif));
+        self->started = true;
+        self->current_scan = NULL;
+        // common_hal_wifi_radio_set_tx_power(self, CIRCUITPY_WIFI_DEFAULT_TX_POWER);
+        return;
+    }
 }
 
 mp_obj_t common_hal_wifi_radio_get_hostname(wifi_radio_obj_t *self) {
-    // const char *hostname = NULL;
-    // esp_netif_get_hostname(self->netif, &hostname);
-    // if (hostname == NULL) {
-    return mp_const_none;
-    // }
-    // return mp_obj_new_str(hostname, strlen(hostname));
+    const char *hostname = net_hostname_get();
+    return mp_obj_new_str(hostname, strlen(hostname));
 }
 
 void common_hal_wifi_radio_set_hostname(wifi_radio_obj_t *self, const char *hostname) {
-    // esp_netif_set_hostname(self->netif, hostname);
-    // esp_netif_set_hostname(self->ap_netif, hostname);
+    if (net_hostname_set((char *)hostname, strlen(hostname)) != 0) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("Failed to set hostname"));
+    }
 }
 
 mp_obj_t common_hal_wifi_radio_get_mac_address(wifi_radio_obj_t *self) {
@@ -167,34 +174,51 @@ void common_hal_wifi_radio_set_mac_address_ap(wifi_radio_obj_t *self, const uint
 }
 
 mp_obj_t common_hal_wifi_radio_start_scanning_networks(wifi_radio_obj_t *self, uint8_t start_channel, uint8_t stop_channel) {
+    printk("common_hal_wifi_radio_start_scanning_networks\n");
     if (self->current_scan != NULL) {
+        printk("Already scanning for wifi networks\n");
         mp_raise_RuntimeError(MP_ERROR_TEXT("Already scanning for wifi networks"));
     }
     if (!common_hal_wifi_radio_get_enabled(self)) {
+        printk("wifi is not enabled\n");
         mp_raise_RuntimeError(MP_ERROR_TEXT("wifi is not enabled"));
     }
-    // set_mode_station(self, true);
 
     wifi_scannednetworks_obj_t *scan = mp_obj_malloc(wifi_scannednetworks_obj_t, &wifi_scannednetworks_type);
-    // self->current_scan = scan;
-    // scan->current_channel_index = 0;
-    // scan->start_channel = start_channel;
-    // scan->end_channel = stop_channel;
-    // scan->radio_event_group = self->event_group_handle;
-    // scan->done = false;
-    // scan->channel_scan_in_progress = false;
-    // wifi_scannednetworks_scan_next_channel(scan);
+    self->current_scan = scan;
+    scan->current_channel_index = 0;
+    scan->start_channel = start_channel;
+    scan->end_channel = stop_channel;
+    scan->done = false;
+    scan->channel_scan_in_progress = false;
+    scan->netif = self->sta_netif;
+
+    k_msgq_init(&scan->msgq, scan->msgq_buffer, sizeof(struct wifi_scan_result), MAX_BUFFERED_SCAN_RESULTS);
+    k_fifo_init(&scan->fifo);
+
+    k_poll_event_init(&scan->events[0],
+        K_POLL_TYPE_SEM_AVAILABLE,
+        K_POLL_MODE_NOTIFY_ONLY,
+        &mp_interrupt_sem);
+
+    k_poll_event_init(&scan->events[1],
+        K_POLL_TYPE_MSGQ_DATA_AVAILABLE,
+        K_POLL_MODE_NOTIFY_ONLY,
+        &scan->msgq);
+    wifi_scannednetworks_scan_next_channel(scan);
+    printk("common_hal_wifi_radio_start_scanning_networks done %p\n", scan);
     return scan;
 }
 
 void common_hal_wifi_radio_stop_scanning_networks(wifi_radio_obj_t *self) {
+    printk("common_hal_wifi_radio_stop_scanning_networks\n");
     // Return early if self->current_scan is NULL to avoid hang
     if (self->current_scan == NULL) {
         return;
     }
     // Free the memory used to store the found aps.
-    // wifi_scannednetworks_deinit(self->current_scan);
-    // self->current_scan = NULL;
+    wifi_scannednetworks_deinit(self->current_scan);
+    self->current_scan = NULL;
 }
 
 void common_hal_wifi_radio_start_station(wifi_radio_obj_t *self) {
@@ -676,7 +700,7 @@ mp_int_t common_hal_wifi_radio_ping(wifi_radio_obj_t *self, mp_obj_t ip_address,
 
 void common_hal_wifi_radio_gc_collect(wifi_radio_obj_t *self) {
     // Only bother to scan the actual object references.
-    // gc_collect_ptr(self->current_scan);
+    gc_collect_ptr(self->current_scan);
 }
 
 mp_obj_t common_hal_wifi_radio_get_dns(wifi_radio_obj_t *self) {

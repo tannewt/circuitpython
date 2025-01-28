@@ -17,97 +17,62 @@
 #include "shared-bindings/wifi/Radio.h"
 #include "shared-bindings/wifi/ScannedNetworks.h"
 
+#include <zephyr/kernel.h>
+#include <zephyr/net/wifi_mgmt.h>
+
+
+void wifi_scannednetworks_scan_result(wifi_scannednetworks_obj_t *self, struct wifi_scan_result *result) {
+    if (k_msgq_put(&self->msgq, result, K_NO_WAIT) != 0) {
+        printk("Dropping scan result!\n");
+    }
+}
+
 static void wifi_scannednetworks_done(wifi_scannednetworks_obj_t *self) {
     self->done = true;
-    // if (self->results != NULL) {
-    //     // Check to see if the heap is still active. If not, it'll be freed automatically.
-    //     if (gc_alloc_possible()) {
-    //         m_free(self->results);
-    //     }
-    //     self->results = NULL;
-    // }
 }
 
 static bool wifi_scannednetworks_wait_for_scan(wifi_scannednetworks_obj_t *self) {
-    // EventBits_t bits = xEventGroupWaitBits(self->radio_event_group,
-    //     WIFI_SCAN_DONE_BIT,
-    //     pdTRUE,
-    //     pdTRUE,
-    //     0);
-    // while ((bits & WIFI_SCAN_DONE_BIT) == 0 && !mp_hal_is_interrupted()) {
-    //     RUN_BACKGROUND_TASKS;
-    //     bits = xEventGroupWaitBits(self->radio_event_group,
-    //         WIFI_SCAN_DONE_BIT,
-    //         pdTRUE,
-    //         pdTRUE,
-    //         0);
-    // }
-    // return !mp_hal_is_interrupted();
-    return false;
+
+    return !mp_hal_is_interrupted();
 }
 
 mp_obj_t common_hal_wifi_scannednetworks_next(wifi_scannednetworks_obj_t *self) {
     if (self->done) {
         return mp_const_none;
     }
-    // If we are scanning, wait and then load them.
-    if (self->channel_scan_in_progress) {
-        // We may have to scan more than one channel to get a result.
-        while (!self->done) {
-            if (!wifi_scannednetworks_wait_for_scan(self)) {
-                wifi_scannednetworks_done(self);
-                return mp_const_none;
-            }
-
-            // esp_wifi_scan_get_ap_num(&self->total_results);
-            self->channel_scan_in_progress = false;
-            if (self->total_results > 0) {
-                break;
-            }
-            // If total_results is zero then we need to start a scan and wait again.
+    // If we don't have any results queued, then wait until we do.
+    while (k_fifo_is_empty(&self->fifo) && k_msgq_num_used_get(&self->msgq) == 0) {
+        k_poll(self->events, ARRAY_SIZE(self->events), K_FOREVER);
+        if (mp_hal_is_interrupted()) {
+            wifi_scannednetworks_done(self);
+        }
+        if (k_msgq_num_used_get(&self->msgq) > 0) {
+            // We found something.
+            break;
+        }
+        int signaled;
+        int result;
+        k_poll_signal_check(&self->channel_done, &signaled, &result);
+        if (signaled) {
             wifi_scannednetworks_scan_next_channel(self);
         }
-        // We not have found any more results so we're done.
         if (self->done) {
             return mp_const_none;
         }
-        // If we need more space than we have, realloc.
-        if (self->total_results > self->max_results) {
-            // wifi_ap_record_t *results = m_renew_maybe(wifi_ap_record_t,
-            //     self->results,
-            //     self->max_results,
-            //     self->total_results,
-            //     true /* allow move */);
-            // if (results != NULL) {
-            //     self->results = results;
-            //     self->max_results = self->total_results;
-            // } else {
-            //     if (self->max_results == 0) {
-            //         // No room for any results should error.
-            //         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate wifi scan memory"));
-            //     }
-            //     // Unable to allocate more results, so load what we can.
-            //     self->total_results = self->max_results;
-            // }
-        }
-        // esp_wifi_scan_get_ap_records(&self->total_results, self->results);
-        self->channel_scan_in_progress = false;
+    }
+    // Copy everything out of the message queue into the FIFO because it's a
+    // fixed size.
+    while (k_msgq_num_used_get(&self->msgq) > 0) {
+        wifi_network_obj_t *entry = mp_obj_malloc(wifi_network_obj_t, &wifi_network_type);
+        k_msgq_get(&self->msgq, &entry->scan_result, K_NO_WAIT);
+        // This will use the base python object space for the linked list. We
+        // need to reset it before returning this memory as a Python object.
+        k_fifo_put(&self->fifo, entry);
     }
 
-    // wifi_network_obj_t *entry = mp_obj_malloc(wifi_network_obj_t, &wifi_network_type);
-    // memcpy(&entry->record, &self->results[self->current_result], sizeof(wifi_ap_record_t));
-    self->current_result++;
-
-    // If we're returning our last network then start the next channel scan or
-    // be done.
-    if (self->current_result >= self->total_results) {
-        wifi_scannednetworks_scan_next_channel(self);
-        self->total_results = 0;
-        self->current_result = 0;
-    }
-
-    // return MP_OBJ_FROM_PTR(entry);
-    return mp_const_none;
+    wifi_network_obj_t *entry = k_fifo_get(&self->fifo, K_NO_WAIT);
+    entry->base.type = &wifi_network_type;
+    return MP_OBJ_FROM_PTR(entry);
 }
 
 // We don't do a linear scan so that we look at a variety of spectrum up front.
@@ -124,37 +89,34 @@ void wifi_scannednetworks_scan_next_channel(wifi_scannednetworks_obj_t *self) {
             break;
         }
     }
-    // wifi_scan_config_t config = { 0 };
-    // config.channel = next_channel;
+    k_poll_signal_init(&self->channel_done);
+    k_poll_event_init(&self->events[2],
+        K_POLL_TYPE_SIGNAL,
+        K_POLL_MODE_NOTIFY_ONLY,
+        &self->channel_done);
+
+    struct wifi_scan_params params = { 0 };
+    params.band_chan[0].band = WIFI_FREQ_BAND_2_4_GHZ;
+    params.band_chan[0].channel = next_channel;
     if (next_channel == 0) {
         wifi_scannednetworks_done(self);
     } else {
-        // esp_err_t result = esp_wifi_scan_start(&config, false);
-        // if (result != ESP_OK) {
-        //     wifi_scannednetworks_done(self);
-        // } else {
-        self->channel_scan_in_progress = true;
-        // }
+        int res = net_mgmt(NET_REQUEST_WIFI_SCAN, self->netif, &params, sizeof(params));
+        if (res != 0) {
+            printk("Failed to start wifi scan %d\n", res);
+            raise_zephyr_error(res);
+            wifi_scannednetworks_done(self);
+        } else {
+            self->channel_scan_in_progress = true;
+        }
     }
 }
 
 void wifi_scannednetworks_deinit(wifi_scannednetworks_obj_t *self) {
-    // if a scan is active, make sure and clean up the idf's buffer of results.
-    // if (self->channel_scan_in_progress) {
-    //     esp_wifi_scan_stop();
-    //     if (wifi_scannednetworks_wait_for_scan(self)) {
-    //         // Discard the scanned records, one at a time, to avoid memory leaks.
-    //         uint16_t number;
-    //         do {
-    //             number = 1;
-    //             wifi_ap_record_t record;
-    //             esp_wifi_scan_get_ap_records(&number, &record);
-    //         } while (number > 0);
-    //         // TODO: available in ESP-IDF v5.0; do instead of the above.
-    //         // Discard scan results.
-    //         // esp_wifi_clear_ap_list();
-    //         self->channel_scan_in_progress = false;
-    //     }
-    // }
+    // Free any results we don't need.
+    while (!k_fifo_is_empty(&self->fifo)) {
+        wifi_network_obj_t *entry = k_fifo_get(&self->fifo, K_NO_WAIT);
+        m_free(entry);
+    }
     wifi_scannednetworks_done(self);
 }
