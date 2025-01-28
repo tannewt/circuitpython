@@ -197,8 +197,12 @@ def cat_together():
     all_lines = []
     # CIRCUITPY-CHANGE: added
     outf = open(args.output_dir + "/out", "wb")
+    for fname in glob.glob(args.output_dir + "/*." + args.mode):
+        with open(fname, "rb") as f:
+            lines = f.readlines()
+            all_lines += lines
+    # CIRCUITPY-CHANGE: Check for subdirectories as well.
     for fname in glob.glob(args.output_dir + "/**/*." + args.mode):
-        print(fname)
         with open(fname, "rb") as f:
             lines = f.readlines()
             all_lines += lines
@@ -288,6 +292,8 @@ if __name__ == "__main__":
     args.input_filename = sys.argv[3]  # Unused for command=cat
     args.output_dir = sys.argv[4]
     args.output_file = None if len(sys.argv) == 5 else sys.argv[5]  # Unused for command=split
+    if args.output_file == "_":
+        args.output_file = None
 
     if args.mode not in (_MODE_QSTR, _MODE_COMPRESS, _MODE_MODULE, _MODE_ROOT_POINTER):
         print("error: mode %s unrecognised" % sys.argv[2])
