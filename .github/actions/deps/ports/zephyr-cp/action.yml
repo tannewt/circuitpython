@@ -12,3 +12,4 @@ runs:
     - name: Export cmake info
       run: west zephyr-export
       shell: bash
+      working-directory: ports/zephyr-cp
