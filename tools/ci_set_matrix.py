@@ -150,7 +150,7 @@ def set_boards(build_all: bool):
 
     if not build_all:
         pattern_port = re.compile(r"^ports/([^/]+)/")
-        pattern_board = re.compile(r"^ports/[^/]+/boards/([^/]+)/")
+        pattern_board = re.compile(r"^ports/([^/]+)/boards/([^/]+)/")
         pattern_module = re.compile(
             r"^(ports/[^/]+/(?:common-hal|bindings)|shared-bindings|shared-module)/([^/]+)/"
         )
@@ -165,7 +165,14 @@ def set_boards(build_all: bool):
             # See if it is board specific
             board_matches = pattern_board.search(file)
             if board_matches:
-                boards_to_build.add(board_matches.group(1))
+                port = board_matches.group(1)
+                board = board_matches.group(2)
+                if port == "zephyr-cp":
+                    p = pathlib.Path(file)
+                    board_id = p.parent.name
+                    vendor_id = p.parent.parent.name
+                    board = f"{vendor_id}_{board_id}"
+                boards_to_build.add(board)
                 continue
 
             # See if it is port specific
