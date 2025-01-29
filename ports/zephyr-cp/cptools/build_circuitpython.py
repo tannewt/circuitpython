@@ -89,22 +89,10 @@ async def collect_defs(mode, build_path):
 
 async def generate_qstr_headers(build_path, compiler, flags, translation):
     collected = await collect_defs("qstr", build_path)
-    strings = build_path / "genhdr" / "qstrdefs.str.h"
-    preprocessed_strings = build_path / "genhdr" / "qstrdefs.str.preprocessed.h"
-    preprocessed = build_path / "genhdr" / "qstrdefs.preprocessed.h"
     generated = build_path / "genhdr" / "qstrdefs.generated.h"
 
     await cpbuild.run_command(
-        ["cat", srcdir / "py" / "qstrdefs.h", "|", "sed", "'s/^Q(.*)/\"&\"/'", ">", strings],
-        srcdir,
-    )
-    await compiler.preprocess(strings, preprocessed_strings, flags)
-    await cpbuild.run_command(
-        ["cat", preprocessed_strings, "|", "sed", "'s/^\"\\(Q(.*)\\)\"/\1/'", ">", preprocessed],
-        srcdir,
-    )
-    await cpbuild.run_command(
-        ["python", srcdir / "py" / "makeqstrdata.py", collected, preprocessed, ">", generated],
+        ["python", srcdir / "py" / "makeqstrdata.py", collected, ">", generated],
         srcdir,
     )
 
