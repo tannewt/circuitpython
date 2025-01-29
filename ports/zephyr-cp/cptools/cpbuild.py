@@ -112,7 +112,7 @@ tracks = []
 max_track = 0
 
 
-async def run_command(command, working_directory, description=None, check_hash=[]):
+async def run_command(command, working_directory, description=None, check_hash=[], extradeps=[]):
     """
     Runs a command asynchronously. The command should ideally be a list of strings
     and pathlib.Path objects. If all of the paths haven't been modified since the last
@@ -151,9 +151,18 @@ async def run_command(command, working_directory, description=None, check_hash=[
 
     # If the path inputs are all older than the last time we ran them, then we don't have anything to do.
     if command_hash in LAST_BUILD_TIMES and all((p.exists() for p in paths)):
-        newest_file = max((p.stat().st_mtime_ns for p in paths))
         last_build_time = LAST_BUILD_TIMES[command_hash]
-        if newest_file <= last_build_time:
+        # Check all paths in the command because one must be modified by the command.
+        newest_file = max((p.stat().st_mtime_ns for p in paths))
+        nothing_newer = newest_file <= last_build_time
+        if nothing_newer:
+            # Escape early if an extra dep is newer.
+            for p in extradeps:
+                if p.stat().st_mtime_ns > last_build_time:
+                    logger.info("%s is newer", p)
+                    nothing_newer = False
+                    break
+        if nothing_newer:
             ALREADY_RUN[command_hash].set()
             return
     else:
@@ -207,6 +216,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
         old_newest_file = newest_file
         newest_file = max((p.stat().st_mtime_ns for p in paths))
         LAST_BUILD_TIMES[command_hash] = newest_file
+        ALREADY_RUN[command_hash].set()
 
         for path in check_hash:
             if path not in file_hashes:
@@ -229,7 +239,6 @@ async def run_command(command, working_directory, description=None, check_hash=[
         if old_newest_file == newest_file:
             logger.error("No files were modified by the command.")
             raise RuntimeError()
-        ALREADY_RUN[command_hash].set()
     else:
         if command_hash in LAST_BUILD_TIMES:
             del LAST_BUILD_TIMES[command_hash]
@@ -291,6 +300,18 @@ def run_in_thread(function):
 cwd = pathlib.Path.cwd()
 
 
+def parse_depfile(f):
+    depfile_contents = f.read_text().split()
+    extradeps = []
+    for dep in depfile_contents:
+        if dep == "\\" or dep[-1] == ":":
+            continue
+        if dep.startswith("/"):
+            extradeps.append(pathlib.Path(dep))
+        else:
+            extradeps.append(self.srcdir / dep)
+
+
 class Compiler:
     def __init__(self, srcdir: pathlib.Path, builddir: pathlib.Path, cmake_args):
         self.c_compiler = cmake_args["CC"]
@@ -304,11 +325,16 @@ class Compiler:
         self, source_file: pathlib.Path, output_file: pathlib.Path, flags: list[pathlib.Path]
     ):
         output_file.parent.mkdir(parents=True, exist_ok=True)
+        depfile = output_file.parent / (output_file.name + ".d")
+        if depfile.exists():
+            pass
         await run_command(
             [
                 self.c_compiler,
                 "-E",
                 "-MMD",
+                "-MF",
+                depfile,
                 "-c",
                 source_file,
                 self.cflags,
@@ -329,10 +355,22 @@ class Compiler:
         if isinstance(output_file, str):
             output_file = self.builddir / output_file
         output_file.parent.mkdir(parents=True, exist_ok=True)
+        depfile = output_file.with_suffix(".d")
+        extradeps = []
+        if depfile.exists():
+            depfile_contents = depfile.read_text().split()
+            for dep in depfile_contents:
+                if dep == "\\" or dep[-1] == ":":
+                    continue
+                if dep.startswith("/"):
+                    extradeps.append(pathlib.Path(dep))
+                else:
+                    extradeps.append(self.srcdir / dep)
         await run_command(
             [self.c_compiler, self.cflags, "-MMD", "-c", source_file, *flags, "-o", output_file],
             description=f"Compile {source_file.relative_to(self.srcdir)} -> {output_file.relative_to(self.builddir)}",
             working_directory=self.srcdir,
+            extradeps=extradeps,
         )
 
     async def archive(self, objects: list[pathlib.Path], output_file: pathlib.Path):
