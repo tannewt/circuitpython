@@ -9,3 +9,6 @@ runs:
         app-path: zephyr-config
         base-path: ports/zephyr-cp
         toolchains: arm-zephyr-eabi
+    - name: Export cmake info
+      run: west zephyr-export
+      shell: bash
