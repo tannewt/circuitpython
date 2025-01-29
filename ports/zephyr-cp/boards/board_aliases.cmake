@@ -1,2 +1,3 @@
 set(pca10056_BOARD_ALIAS nrf52840dk/nrf52840)
+set(renesas_ek_ra6m5_BOARD_ALIAS ek_ra6m5)
 set(renesas_ek_ra8d1_BOARD_ALIAS ek_ra8d1)

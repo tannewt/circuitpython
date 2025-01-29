@@ -10,7 +10,7 @@ import pickle
 
 import cpbuild
 
-from compat2driver import COMPAT_TO_DRIVER
+logger = logging.getLogger(__name__)
 
 print("hello zephyr", sys.argv)
 
@@ -33,12 +33,22 @@ builddir = pathlib.Path.cwd()
 zephyrbuilddir = builddir / ".." / ".." / ".." / "zephyr"
 
 sys.path.append(str(portdir / "zephyr/scripts/dts/python-devicetree/src/"))
-from devicetree import dtlib
+from zephyr2cp import zephyr_dts_to_cp_board
 
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)
 
 ALWAYS_ON_MODULES = ["sys", "collections"]
-DEFAULT_MODULES = ["time", "os", "microcontroller", "struct", "array", "json", "random"]
+DEFAULT_MODULES = [
+    "time",
+    "os",
+    "microcontroller",
+    "struct",
+    "array",
+    "json",
+    "random",
+    "digitalio",
+    "busio",
+]
 MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm", "array", "json"]
 
 
@@ -77,7 +87,7 @@ async def collect_defs(mode, build_path):
     return output_file
 
 
-async def generate_qstr_headers(build_path, compiler, flags):
+async def generate_qstr_headers(build_path, compiler, flags, translation):
     collected = await collect_defs("qstr", build_path)
     strings = build_path / "genhdr" / "qstrdefs.str.h"
     preprocessed_strings = build_path / "genhdr" / "qstrdefs.str.preprocessed.h"
@@ -98,7 +108,6 @@ async def generate_qstr_headers(build_path, compiler, flags):
         srcdir,
     )
 
-    translation = "en_US"
     compression_level = 9
 
     # TODO: Do this alongside qstr stuff above.
@@ -161,81 +170,6 @@ async def generate_root_pointer_header(build_path):
     )
 
 
-CONNECTORS = {
-    "mikro-bus": [
-        "AN",
-        "RST",
-        "CS",
-        "SCK",
-        "MISO",
-        "MOSI",
-        "PWM",
-        "INT",
-        "RX",
-        "TX",
-        "SCL",
-        "SDA",
-    ],
-    "arduino-header-r3": [
-        "A0",
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "D0",
-        "D1",
-        "D2",
-        "D3",
-        "D4",
-        "D5",
-        "D6",
-        "D7",
-        "D8",
-        "D9",
-        "D10",
-        "D11",
-        "D12",
-        "D13",
-        "D14",
-        "D15",
-    ],
-    "adafruit-feather-header": [
-        "A0",
-        "A1",
-        "A2",
-        "A3",
-        "A4",
-        "A5",
-        "SCK",
-        "MOSI",
-        "MISO",
-        "RX",
-        "TX",
-        "D4",
-        "SDA",
-        "SCL",
-        "D5",
-        "D6",
-        "D9",
-        "D10",
-        "D11",
-        "D12",
-        "D13",
-    ],
-    "renesas,ra-gpio-mipi-header": [
-        "IIC_SDA",
-        "DISP_BLEN",
-        "IIC_SCL",
-        "DISP_INT",
-        "DISP_RST",
-    ],
-}
-
-MANUAL_COMPAT_TO_DRIVER = {
-    "renesas_ra_nv_flash": "flash",
-}
-
 TINYUSB_SETTINGS = {
     "": {
         "CFG_TUSB_MCU": "OPT_MCU_MIMXRT10XX",
@@ -274,11 +208,21 @@ TINYUSB_SOURCE = {
 }
 
 
+def find_mpconfigboard(board_id):
+    next_underscore = board_id.find("_")
+    while next_underscore != -1:
+        vendor = board_id[:next_underscore]
+        board = board_id[next_underscore + 1 :]
+        p = portdir / f"boards/{vendor}/{board}/circuitpython.toml"
+        if p.exists():
+            return p
+        next_underscore = board_id.find("_", next_underscore + 1)
+    return None
+
+
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
     port_flags = []
-    # usb_num_endpoint_pairs = 8
-    usb_num_endpoint_pairs = 0
     enable_mpy_native = False
     full_build = False
     usb_host = False
@@ -286,13 +230,16 @@ async def build_circuitpython():
     board = cmake_args["BOARD_ALIAS"]
     if not board:
         board = cmake_args["BOARD"]
+    translation = cmake_args["TRANSLATION"]
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
+    lto = cmake_args.get("LTO", "n") == "y"
     circuitpython_flags.append(f"-DCIRCUITPY_ENABLE_MPY_NATIVE={1 if enable_mpy_native else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_FULL_BUILD={1 if full_build else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_USB_HOST={1 if usb_host else 0}")
     circuitpython_flags.append(f'-DCIRCUITPY_BOARD_ID=\\"{board}\\"')
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
+    circuitpython_flags.append(f"-DCIRCUITPY_TRANSLATE_OBJECT={1 if lto else 0}")
     circuitpython_flags.append("-DINTERNAL_FLASH_FILESYSTEM")
     circuitpython_flags.append("-DLONGINT_IMPL_MPZ")
     circuitpython_flags.append("-DCIRCUITPY_SSL_MBEDTLS")
@@ -304,332 +251,51 @@ async def build_circuitpython():
     circuitpython_flags.extend(("-I", portdir))
     # circuitpython_flags.extend(("-I", srcdir / "ports" / port / "peripherals"))
 
-    kwargs = {}
-    board_dir = srcdir / "boards" / board
-    if not board_dir.exists():
-        board_dir = builddir / "board"
-        # Auto generate board files from device tree.
-
-        runners = zephyrbuilddir / "runners.yaml"
-        runners = yaml.safe_load(runners.read_text())
-        zephyr_board_dir = pathlib.Path(runners["config"]["board_dir"])
-        board_yaml = zephyr_board_dir / "board.yml"
-        board_yaml = yaml.safe_load(board_yaml.read_text())
-        vendor_index = zephyr_board_dir.parent / "index.rst"
-        if vendor_index.exists():
-            vendor_index = vendor_index.read_text()
-            vendor_index = vendor_index.split("\n")
-            vendor_name = vendor_index[2].strip()
-        else:
-            vendor_name = board_yaml["board"]["vendor"]
-        soc_name = board_yaml["board"]["socs"][0]["name"]
-        board_name = board_yaml["board"]["full_name"]
-        # board_id_yaml = zephyr_board_dir / (zephyr_board_dir.name + ".yaml")
-        # board_id_yaml = yaml.safe_load(board_id_yaml.read_text())
-        # print(board_id_yaml)
-        # board_name = board_id_yaml["name"]
-
-        dts = zephyrbuilddir / "zephyr.dts"
-        edt_pickle = dtlib.DT(dts)
-        node2alias = {}
-        for alias in edt_pickle.alias2node:
-            node = edt_pickle.alias2node[alias]
-            if node not in node2alias:
-                node2alias[node] = []
-            node2alias[node].append(alias)
-        ioports = {}
-        all_ioports = []
-        board_names = {}
-        flashes = []
-        rams = []
-        status_led = None
-        path2chosen = {}
-        chosen2path = {}
-        for k in edt_pickle.root.nodes["chosen"].props:
-            value = edt_pickle.root.nodes["chosen"].props[k]
-            path2chosen[value.to_path()] = k
-            chosen2path[k] = value.to_path()
-        remaining_nodes = set([edt_pickle.root])
-        while remaining_nodes:
-            node = remaining_nodes.pop()
-            remaining_nodes.update(node.nodes.values())
-            gpio = node.props.get("gpio-controller", False)
-            gpio_map = node.props.get("gpio-map", [])
-            status = node.props.get("status", None)
-            if status is None:
-                status = "okay"
-            else:
-                status = status.to_string()
-
-            compatible = []
-            if "compatible" in node.props:
-                compatible = node.props["compatible"].to_strings()
-            # print(node.name, status)
-            chosen = None
-            if node in path2chosen:
-                chosen = path2chosen[node]
-                # print(" chosen:", chosen)
-            for c in compatible:
-                underscored = c.replace(",", "_").replace("-", "_")
-                driver = COMPAT_TO_DRIVER.get(underscored, None)
-                if "mmio" in c:
-                    # print(" ", c, node.labels, node.props)
-                    address, size = node.props["reg"].to_nums()
-                    end = address + size
-                    if chosen == "zephyr,sram":
-                        start = "z_mapped_end"
-                    elif "zephyr,memory-region" in node.props:
-                        start = "__" + node.props["zephyr,memory-region"].to_string() + "_end"
-                    else:
-                        # Check to see if the chosen sram is a subset of this region. If it is,
-                        # then do as above for a smaller region and assume the rest is reserved.
-                        chosen_sram = chosen2path["zephyr,sram"]
-                        chosen_address, chosen_size = chosen_sram.props["reg"].to_nums()
-                        chosen_end = chosen_address + chosen_size
-                        if address <= chosen_address <= end and address <= chosen_end <= end:
-                            start = "z_mapped_end"
-                            address = chosen_address
-                            size = chosen_size
-                            end = chosen_end
-                        else:
-                            start = address
-                    info = (node.labels[0], start, end, size, node.path)
-                    if chosen == "zephyr,sram":
-                        rams.insert(0, info)
-                    else:
-                        rams.append(info)
-                if not driver:
-                    driver = MANUAL_COMPAT_TO_DRIVER.get(underscored, None)
-                # print(" ", underscored, driver)
-                if not driver:
-                    continue
-                if (
-                    driver == "flash"
-                    and status == "okay"
-                    and not chosen
-                    and ("write-block-size" in node.props or "sfdp-bfp" in node.props)
-                ):
-                    # Skip chosen nodes because they are used by Zephyr.
-                    # Skip nodes without "write-block-size" because it could be a controller.
-                    flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
-                if driver == "usb/udc" and status == "okay":
-                    print("found usb!")
-                    if soc_name not in TINYUSB_SETTINGS:
-                        print(f"Missing tinyusb settings for {soc_name}")
-                    else:
-                        kwargs["usb_device"] = True
-                        props = node.props
-                        if "num-bidir-endpoints" not in props:
-                            props = node.parent.props
-                        usb_num_endpoint_pairs = 0
-                        if "num-bidir-endpoints" in props:
-                            usb_num_endpoint_pairs = props["num-bidir-endpoints"].to_num()
-                        single_direction_endpoints = []
-                        for d in ("in", "out"):
-                            eps = f"num-{d}-endpoints"
-                            single_direction_endpoints.append(
-                                props[eps].to_num() if eps in props else 0
-                            )
-                        # Count separate in/out pairs as bidirectional.
-                        usb_num_endpoint_pairs += min(single_direction_endpoints)
-                if driver.startswith("wifi") and status == "okay":
-                    kwargs["wifi"] = True
-                    kwargs["socketpool"] = True
-                    kwargs["ssl"] = True
-
-            if gpio:
-                if "ngpios" in node.props:
-                    ngpios = node.props["ngpios"].to_num()
-                else:
-                    ngpios = 32
-                all_ioports.append(node.labels[0])
-                if status == "okay":
-                    ioports[node.labels[0]] = set(range(0, ngpios))
-            if gpio_map:
-                i = 0
-                for offset, t, label in gpio_map._markers:
-                    if not label:
-                        continue
-                    num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
-                    if (label, num) not in board_names:
-                        board_names[(label, num)] = []
-                    board_names[(label, num)].append(CONNECTORS[compatible[0]][i])
-                    i += 1
-            if "gpio-leds" in compatible:
-                for led in node.nodes:
-                    led = node.nodes[led]
-                    props = led.props
-                    ioport = props["gpios"]._markers[1][2]
-                    num = int.from_bytes(props["gpios"].value[4:8], "big")
-                    if "label" in props:
-                        if (ioport, num) not in board_names:
-                            board_names[(ioport, num)] = []
-                        board_names[(ioport, num)].append(props["label"].to_string())
-                    if led in node2alias:
-                        if (ioport, num) not in board_names:
-                            board_names[(ioport, num)] = []
-                        if "led0" in node2alias[led]:
-                            board_names[(ioport, num)].append("LED")
-                            status_led = (ioport, num)
-                        board_names[(ioport, num)].extend(node2alias[led])
-
-            if "gpio-keys" in compatible:
-                for key in node.nodes:
-                    props = node.nodes[key].props
-                    ioport = props["gpios"]._markers[1][2]
-                    num = int.from_bytes(props["gpios"].value[4:8], "big")
-
-                    if (ioport, num) not in board_names:
-                        board_names[(ioport, num)] = []
-                    board_names[(ioport, num)].append(props["label"].to_string())
-                    if key in node2alias:
-                        if "sw0" in node2alias[key]:
-                            board_names[(ioport, num)].append("BUTTON")
-                        board_names[(ioport, num)].extend(node2alias[key])
-
-        a, b = all_ioports[:2]
-        i = 0
-        while a[i] == b[i]:
-            i += 1
-        shared_prefix = a[:i]
-        for ioport in ioports:
-            if not ioport.startswith(shared_prefix):
-                shared_prefix = ""
-                break
-
-        pin_defs = []
-        pin_declarations = ["#pragma once"]
-        mcu_pin_mapping = []
-        board_pin_mapping = []
-        for ioport in sorted(ioports.keys()):
-            for num in ioports[ioport]:
-                pin_object_name = f"P{ioport[len(shared_prefix):].upper()}_{num:02d}"
-                if status_led and (ioport, num) == status_led:
-                    status_led = pin_object_name
-                pin_defs.append(
-                    f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = &mcu_pin_type, .port = DEVICE_DT_GET(DT_NODELABEL({ioport})), .number = {num}}};"
-                )
-                pin_declarations.append(f"extern const mcu_pin_obj_t pin_{pin_object_name};")
-                mcu_pin_mapping.append(
-                    f"{{ MP_ROM_QSTR(MP_QSTR_{pin_object_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
-                )
-                board_pin_names = board_names.get((ioport, num), [])
-
-                for board_pin_name in board_pin_names:
-                    board_pin_name = board_pin_name.upper().replace(" ", "_").replace("-", "_")
-                    board_pin_mapping.append(
-                        f"{{ MP_ROM_QSTR(MP_QSTR_{board_pin_name}), MP_ROM_PTR(&pin_{pin_object_name}) }},"
-                    )
-
-        pin_defs = "\n".join(pin_defs)
-        pin_declarations = "\n".join(pin_declarations)
-        board_pin_mapping = "\n    ".join(board_pin_mapping)
-        mcu_pin_mapping = "\n    ".join(mcu_pin_mapping)
-
-        usb_settings = ""
-        if usb_num_endpoint_pairs > 0:
-            usb_settings = f"""
-            USB_VID = 0x239A
-            USB_PID = 0x0013
-            USB_PRODUCT = "{board_name}"
-            USB_MANUFACTURER = "{vendor_name}"
-            """
-
-        board_dir.mkdir(exist_ok=True, parents=True)
-        toml = board_dir / "mpconfigboard.toml"
-        toml.write_text(usb_settings)
-        header = board_dir / "mpconfigboard.h"
-        if status_led:
-            status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
-        else:
-            status_led = ""
-        ram_list = []
-        ram_externs = []
-        max_size = 0
-        for ram in rams:
-            device, start, end, size, path = ram
-            max_size = max(max_size, size)
-            if isinstance(start, str):
-                ram_externs.append(f"extern uint32_t {start};")
-                start = "&" + start
-            else:
-                start = f"(uint32_t*) 0x{start:08x}"
-            ram_list.append(f"    {start}, (uint32_t*) 0x{end:08x}, // {path}")
-        ram_list = "\n".join(ram_list)
-        ram_externs = "\n".join(ram_externs)
-        header.write_text(
-            f"""#pragma once
-
-#define MICROPY_HW_BOARD_NAME       "{board_name}"
-#define MICROPY_HW_MCU_NAME         "{soc_name}"
-#define CIRCUITPY_RAM_DEVICE_COUNT  {len(rams)}
-{status_led}
-            """
-        )
-        pins = board_dir / "autogen-pins.h"
-        pins.write_text(pin_declarations)
-
-        pins = board_dir / "pins.c"
-        pins.write_text(
-            f"""
-        // This file is autogenerated by build_circuitpython.py
-
-#include "shared-bindings/board/__init__.h"
-
-#include <stdint.h>
-
-#include "py/obj.h"
-#include "py/mphal.h"
-
-const struct device* const flashes[] = {{ {", ".join(flashes)} }};
-const int circuitpy_flash_device_count = {len(flashes)};
-
-{ram_externs}
-const uint32_t* const ram_bounds[] = {{
-{ram_list}
-}};
-const size_t circuitpy_max_ram_size = {max_size};
-
-{pin_defs}
-
-static const mp_rom_map_elem_t mcu_pin_globals_table[] = {{
-    {mcu_pin_mapping}
-}};
-MP_DEFINE_CONST_DICT(mcu_pin_globals, mcu_pin_globals_table);
-
-static const mp_rom_map_elem_t board_module_globals_table[] = {{
-    CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
-
-    {board_pin_mapping}
-
-    // {{ MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&board_uart_obj) }},
-}};
-
-MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
-"""
-        )
-    else:
-        print(board_dir, "exists")
-
-    circuitpython_flags.extend(("-I", board_dir))
     # circuitpython_flags.extend(("-I", build_path / board_id))
 
     genhdr = builddir / "genhdr"
     genhdr.mkdir(exist_ok=True, parents=True)
     version_header = genhdr / "mpversion.h"
-    await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "makeversionhdr.py",
-            version_header,
-            "&&",
-            "touch",
-            version_header,
-        ],
-        srcdir,
-        check_hash=[version_header],
-    )
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(
+            cpbuild.run_command(
+                [
+                    "python",
+                    srcdir / "py" / "makeversionhdr.py",
+                    version_header,
+                    "&&",
+                    "touch",
+                    version_header,
+                ],
+                srcdir,
+                check_hash=[version_header],
+            )
+        )
 
+        board_autogen_task = tg.create_task(zephyr_dts_to_cp_board(builddir, zephyrbuilddir))
+    board_info = board_autogen_task.result()
+    mpconfigboard_fn = find_mpconfigboard(board)
+    mpconfigboard = {}
+    if mpconfigboard_fn is None:
+        logging.warning(
+            f"Could not find board config at: boards/{board_info['vendor_id']}/{board}"
+        )
+    elif mpconfigboard_fn.exists():
+        with mpconfigboard_fn.open("rb") as f:
+            mpconfigboard = tomllib.load(f)
+
+    enabled_modules = set(DEFAULT_MODULES)
+    if board_info["wifi"]:
+        enabled_modules.add("wifi")
+
+    if board_info["flash_count"] > 0:
+        enabled_modules.add("storage")
+
+    if "wifi" in enabled_modules:
+        enabled_modules.add("socketpool")
+        enabled_modules.add("ssl")
+
+    circuitpython_flags.extend(board_info["cflags"])
     supervisor_source = [
         "main.c",
         "extmod/vfs_fat.c",
@@ -654,36 +320,34 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         "extmod/vfs_reader.c",
         "extmod/vfs_blockdev.c",
         "extmod/vfs_fat_file.c",
-        board_dir / "pins.c",
     ]
     top = srcdir
     supervisor_source = [pathlib.Path(p) for p in supervisor_source]
+    supervisor_source.extend(board_info["source_files"])
     supervisor_source.extend(top.glob("supervisor/shared/*.c"))
     supervisor_source.append(top / "supervisor/shared/translate/translate.c")
     # if web_workflow:
     #     supervisor_source.extend(top.glob("supervisor/shared/web_workflow/*.c"))
 
-    # Load the toml settings
-    kwargs["busio"] = True
-    kwargs["digitalio"] = True
-    with open(board_dir / "mpconfigboard.toml", "rb") as f:
-        mpconfigboard = tomllib.load(f)
-
-    circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_num_endpoint_pairs > 0 else 0}")
-    circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_num_endpoint_pairs > 0 else 0}")
+    usb_num_endpoint_pairs = board_info.get("usb_num_endpoint_pairs", 0)
+    soc = board_info["soc"]
+    usb_ok = usb_num_endpoint_pairs > 0 and soc in TINYUSB_SETTINGS
+    circuitpython_flags.append(f"-DCIRCUITPY_TINYUSB={1 if usb_ok else 0}")
+    circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_ok else 0}")
 
     tinyusb_files = []
-    if usb_num_endpoint_pairs > 0:
-        for setting in TINYUSB_SETTINGS[soc_name]:
-            circuitpython_flags.append(f"-D{setting}={TINYUSB_SETTINGS[soc_name][setting]}")
-        tinyusb_files.extend((top / "lib" / "tinyusb" / path for path in TINYUSB_SOURCE[soc_name]))
+    if usb_ok:
+        for setting in TINYUSB_SETTINGS[soc]:
+            circuitpython_flags.append(f"-D{setting}={TINYUSB_SETTINGS[soc][setting]}")
+        tinyusb_files.extend((top / "lib" / "tinyusb" / path for path in TINYUSB_SOURCE[soc]))
         for macro in ("USB_PID", "USB_VID"):
             circuitpython_flags.append(f"-D{macro}=0x{mpconfigboard.get(macro):04x}")
-        for macro, limit in (("USB_PRODUCT", 16), ("USB_MANUFACTURER", 8)):
-            circuitpython_flags.append(f"-D{macro}='\"{mpconfigboard.get(macro)}\"'")
-            circuitpython_flags.append(
-                f"-D{macro}_{limit}='\"{mpconfigboard.get(macro[:limit])}\"'"
-            )
+        for macro, limit, value in (
+            ("USB_PRODUCT", 16, board_info["name"]),
+            ("USB_MANUFACTURER", 8, board_info["vendor"]),
+        ):
+            circuitpython_flags.append(f"-D{macro}='\"{value}\"'")
+            circuitpython_flags.append(f"-D{macro}_{limit}='\"{value[:limit]}\"'")
 
         usb_interface_name = "CircuitPython"
 
@@ -695,15 +359,12 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         # USB is special because it doesn't have a matching module.
         msc_enabled = True
         if msc_enabled:
-            # force storage on
-            kwargs["storage"] = True
-            kwargs["usb_msc"] = True
             circuitpython_flags.append("-DCFG_TUD_MSC_BUFSIZE=1024")
             circuitpython_flags.append("-DCIRCUITPY_USB_MSC_ENABLED_DEFAULT=1")
+            tinyusb_files.append(top / "lib/tinyusb/src/class/msc/msc_device.c")
+            supervisor_source.append(top / "supervisor/shared/usb/usb_msc_flash.c")
         circuitpython_flags.append(f"-DCIRCUITPY_USB_MSC={1 if msc_enabled else 0}")
-        if "usb_cdc" not in kwargs:
-            kwargs["usb_cdc"] = True
-        if kwargs["usb_cdc"]:
+        if "usb_cdc" in enabled_modules:
             tinyusb_files.extend(top.glob("lib/tinyusb/*.c"))
             circuitpython_flags.append("-DCFG_TUD_CDC_RX_BUFSIZE=640")
             circuitpython_flags.append("-DCFG_TUD_CDC_TX_BUFSIZE=512")
@@ -711,10 +372,10 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             circuitpython_flags.append("-DCIRCUITPY_USB_CDC_CONSOLE_ENABLED_DEFAULT=1")
             circuitpython_flags.append("-DCIRCUITPY_USB_CDC_DATA_ENABLED_DEFAULT=0")
 
-        if "usb_hid_enabled_default" not in kwargs:
-            kwargs["usb_hid_enabled_default"] = usb_num_endpoint_pairs >= 5
-        if "usb_midi_enabled_default" not in kwargs:
-            kwargs["usb_midi_enabled_default"] = usb_num_endpoint_pairs >= 8
+        if "usb_hid_enabled_default" not in mpconfigboard:
+            mpconfigboard["usb_hid_enabled_default"] = usb_num_endpoint_pairs >= 5
+        if "usb_midi_enabled_default" not in mpconfigboard:
+            mpconfigboard["usb_midi_enabled_default"] = usb_num_endpoint_pairs >= 8
 
         tinyusb_files.extend(
             (top / "lib/tinyusb/src/common/tusb_fifo.c", top / "lib/tinyusb/src/tusb.c")
@@ -723,7 +384,6 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
             (portdir / "supervisor/usb.c", top / "supervisor/shared/usb/usb.c")
         )
 
-    if kwargs.get("usb_device", False):
         tinyusb_files.extend(
             (
                 top / "lib/tinyusb/src/class/cdc/cdc_device.c",
@@ -733,16 +393,6 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         )
         supervisor_source.extend(
             (top / "supervisor/shared/usb/usb_desc.c", top / "supervisor/shared/usb/usb_device.c")
-        )
-
-    if kwargs.get("usb_cdc", False):
-        supervisor_source.extend(
-            (
-                top / "shared-bindings/usb_cdc/__init__.c",
-                top / "shared-bindings/usb_cdc/Serial.c",
-                top / "shared-module/usb_cdc/__init__.c",
-                top / "shared-module/usb_cdc/Serial.c",
-            )
         )
 
     # ifeq ($(CIRCUITPY_USB_HID), 1)
@@ -766,10 +416,6 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     #     shared-module/usb_midi/PortOut.c \
 
     # endif
-
-    if kwargs.get("usb_msc", False):
-        tinyusb_files.append(top / "lib/tinyusb/src/class/msc/msc_device.c")
-        supervisor_source.append(top / "supervisor/shared/usb/usb_msc_flash.c")
 
     # ifeq ($(CIRCUITPY_USB_VIDEO), 1)
     #   SRC_SUPERVISOR += \
@@ -802,7 +448,7 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 
     # endif
 
-    if kwargs.get("ssl", False):
+    if "ssl" in enabled_modules:
         # TODO: Figure out how to get these paths from zephyr
         circuitpython_flags.append('-DMBEDTLS_CONFIG_FILE=\\"config-tls-generic.h\\"')
         circuitpython_flags.extend(
@@ -827,12 +473,9 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     for module in sorted(top.glob("shared-bindings/*")):
         if not module.is_dir():
             continue
-        enabled = kwargs.get(module.name, module.name in DEFAULT_MODULES)
-        kwargs[module.name] = enabled
+        enabled = module.name in enabled_modules
         # print(f"Module {module.name} enabled: {enabled}")
-        circuitpython_flags.append(
-            f"-DCIRCUITPY_{module.name.upper()}={1 if kwargs[module.name] else 0}"
-        )
+        circuitpython_flags.append(f"-DCIRCUITPY_{module.name.upper()}={1 if enabled else 0}")
 
         if enabled:
             hal_source.extend(top.glob(f"ports/zephyr-cp/common-hal/{module.name}/*.c"))
@@ -857,11 +500,10 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
                     top / source_file,
                     builddir,
                     [qstr_flags, *circuitpython_flags, *port_flags],
-                ),
-                name=f"Split defs {source_file}",
+                )
             )
 
-        if kwargs.get("ssl", False):
+        if "ssl" in enabled_modules:
             crt_bundle = builddir / "x509_crt_bundle.S"
             roots_pem = srcdir / "lib/certificates/data/roots.pem"
             generator = srcdir / "tools/gen_crt_bundle.py"
@@ -885,14 +527,13 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
         board_build = builddir
         tg.create_task(
             generate_qstr_headers(
-                board_build, compiler, [qstr_flags, *circuitpython_flags, *port_flags]
+                board_build, compiler, [qstr_flags, *circuitpython_flags, *port_flags], translation
             )
         )
         tg.create_task(generate_module_header(board_build))
         tg.create_task(generate_root_pointer_header(board_build))
 
     # This file is generated by the QSTR/translation process.
-    translation = "en_US"
     source_files.append(builddir / f"translations-{translation}.c")
     # These files don't include unique QSTRs. They just need to be compiled.
     source_files.append(portdir / "supervisor" / "flash.c")

@@ -27,6 +27,9 @@ set(external_project_cflags
   "${target_flag} ${includes} ${definitions} ${options} ${system_includes}"
   )
 
+zephyr_get(TRANSLATION SYSBUILD GLOBAL)
+zephyr_get(CONFIG_LTO SYSBUILD GLOBAL)
+
 ExternalProject_Add(circuitpython
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
@@ -41,6 +44,8 @@ ExternalProject_Add(circuitpython
     SOC_DIRECTORIES=${SOC_DIRECTORIES}
     OUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
     PORT_SRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+    TRANSLATION=${TRANSLATION}
+    LTO=${CONFIG_LTO}
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
     BUILD_JOB_SERVER_AWARE TRUE
     BUILD_ALWAYS TRUE

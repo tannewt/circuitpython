@@ -149,23 +149,30 @@ async def run_command(command, working_directory, description=None, check_hash=[
         return
     ALREADY_RUN[command_hash] = asyncio.Event()
 
+    run_reason = None
     # If the path inputs are all older than the last time we ran them, then we don't have anything to do.
     if command_hash in LAST_BUILD_TIMES and all((p.exists() for p in paths)):
         last_build_time = LAST_BUILD_TIMES[command_hash]
         # Check all paths in the command because one must be modified by the command.
-        newest_file = max((p.stat().st_mtime_ns for p in paths))
+        newest_file = max((0 if p.is_dir() else p.stat().st_mtime_ns for p in paths))
         nothing_newer = newest_file <= last_build_time
         if nothing_newer:
             # Escape early if an extra dep is newer.
             for p in extradeps:
                 if p.stat().st_mtime_ns > last_build_time:
-                    logger.info("%s is newer", p)
+                    run_reason = f"{p.relative_to(working_directory, walk_up=True)} is newer"
                     nothing_newer = False
+                    break
+        else:
+            for p in paths:
+                if p.stat().st_mtime_ns == newest_file:
+                    run_reason = f"{p.relative_to(working_directory, walk_up=True)} is newer"
                     break
         if nothing_newer:
             ALREADY_RUN[command_hash].set()
             return
     else:
+        run_reason = "no previous build time"
         newest_file = 0
 
     file_hashes = {}
@@ -232,10 +239,10 @@ async def run_command(command, working_directory, description=None, check_hash=[
         if cancellation:
             raise cancellation
         if description:
-            logger.info(description)
+            logger.info(f"{description} ({run_reason})")
             logger.debug(command)
         else:
-            logger.info(command)
+            logger.info(f"{command} ({run_reason})")
         if old_newest_file == newest_file:
             logger.error("No files were modified by the command.")
             raise RuntimeError()

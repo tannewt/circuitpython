@@ -202,16 +202,14 @@ def main(target):
             target
         ]
     else:
-        p = list(pathlib.Path(TOP).glob(f"ports/*/boards/{target}/mpconfigboard.mk"))
+        p = list(TOP.glob(f"ports/*/boards/{target}/mpconfigboard.mk"))
         # Check to see if the board is nested under vendor.
         if not p:
             next_underscore = target.find("_")
             while next_underscore != -1:
                 vendor = target[:next_underscore]
-                target = target[next_underscore + 1 :]
-                p = list(
-                    pathlib.Path(TOP).glob(f"ports/*/boards/{vendor}/{target}/circuitpython.toml")
-                )
+                board = target[next_underscore + 1 :]
+                p = list(TOP.glob(f"ports/*/boards/{vendor}/{board}/circuitpython.toml"))
                 if p:
                     break
                 next_underscore = target.find("_", next_underscore + 1)

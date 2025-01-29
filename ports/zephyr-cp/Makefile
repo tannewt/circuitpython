@@ -6,5 +6,18 @@ VALID_BOARD :=$(filter $(BOARD),$(ALL_BOARDS_IN_PORT))
 # If the build directory is not given, make it reflect the board name.
 BUILD ?= build-$(BOARD)
 
-all:
-	west build -b $(BOARD) -d $(BUILD) -- -DZEPHYR_BOARD_ALIASES=$(shell pwd)/boards/board_aliases.cmake
+TRANSLATION ?= en_US
+
+.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash clean
+
+$(BUILD)/zephyr-cp/zephyr/zephyr.elf:
+	west build -b $(BOARD) -d $(BUILD) --sysbuild -- -DZEPHYR_BOARD_ALIASES=$(shell pwd)/boards/board_aliases.cmake -Dzephyr-cp_TRANSLATION=$(TRANSLATION)
+
+$(BUILD)/firmware.elf: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
+	cp $^ $@
+
+flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
+	west flash --sysbuild -d $(BUILD)
+
+clean:
+	rm -rf $(BUILD)
