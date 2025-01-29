@@ -193,6 +193,9 @@ def main(target):
             submodules.extend(PORT_DEPS[port])
         unique_submodules = set(submodules)
         submodules = list(unique_submodules)
+    elif target == "windows-zephyr":
+        submodules.append("ports/zephyr-cp")
+        submodules.extend(PORT_DEPS["zephyr-cp"])
     elif target == "website":
         submodules = ["tools/adabot", "frozen"]
     elif target == "pre-commit":
