@@ -311,6 +311,9 @@ jobs:
         show-progress: false
         fetch-depth: 1
         persist-credentials: false
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
     - name: Set up Zephyr
       uses: ./.github/actions/deps/ports/zephyr-cp
     - name: Set up submodules
