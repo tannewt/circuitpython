@@ -52,7 +52,7 @@ runs:
 
     # common
     - name: Cache python dependencies
-      if: inputs.port != 'espressif'
+      if: inputs.port != 'espressif' && inputs.port != 'zephyr-cp'
       uses: ./.github/actions/deps/python
       with:
         action: ${{ inputs.action }}
