@@ -32,8 +32,6 @@ from docutils import nodes
 from sphinx import addnodes
 from sphinx.ext import intersphinx
 
-tools_describe = str(pathlib.Path(__file__).parent / "tools/describe")
-
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -145,7 +143,7 @@ copyright = f'2014-{current_date.tm_year}, MicroPython & CircuitPython contribut
 
 final_version = ""
 git_describe = subprocess.run(
-    [tools_describe],
+    ["python", "py/version.py"],
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     encoding="utf-8"
