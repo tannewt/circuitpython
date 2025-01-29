@@ -300,7 +300,6 @@ jobs:
   windows-zephyr:
     runs-on: windows-2025
     needs: scheduler
-    if: needs.scheduler.outputs.windows == 'True'
     env:
       CP_VERSION: ${{ needs.scheduler.outputs.cp-version }}
     steps:
