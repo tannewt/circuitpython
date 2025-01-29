@@ -543,8 +543,6 @@ def parse_input_headers(infiles):
         with open(infile, "rt") as f:
             for line in f:
                 line = line.strip()
-                if line.startswith("TRANSL"):
-                    print(line)
                 match = re.match(r'^TRANSLAT(E|ION)\("(.*)"(, \d+)?\)$', line)
                 if match:
                     i18ns.add(match.group(2))
@@ -650,9 +648,7 @@ if __name__ == "__main__":
     qstrs = parse_qstrs(args.qstrdefs_filename)
     i18ns = parse_input_headers(args.infiles)
     i18ns = sorted(i18ns)
-    print("i18ns", i18ns)
     translations = translate(args.translation, i18ns)
-    print(translations)
     encoding_table = compute_huffman_coding(
         qstrs, args.translation, translations, args.compression_filename, args.compression_level
     )

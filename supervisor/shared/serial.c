@@ -113,29 +113,6 @@ MP_WEAK void board_serial_write_substring(const char *text, uint32_t length) {
     (void)length;
 }
 
-// MP_WEAK void port_serial_early_init(void) {
-// }
-
-// MP_WEAK void port_serial_init(void) {
-// }
-
-// MP_WEAK bool port_serial_connected(void) {
-//     return false;
-// }
-
-// MP_WEAK char port_serial_read(void) {
-//     return -1;
-// }
-
-// MP_WEAK uint32_t port_serial_bytes_available(void) {
-//     return 0;
-// }
-
-// MP_WEAK void port_serial_write_substring(const char *text, uint32_t length) {
-//     (void)text;
-//     (void)length;
-// }
-
 void serial_early_init(void) {
     // Set up console UART, if enabled.
 
@@ -152,11 +129,13 @@ void serial_early_init(void) {
 
     // Do an initial print so that we can confirm the serial output is working.
     console_uart_printf("Serial console setup\r\n");
-    printk("Serial console setup\r\n");
     #endif
 
     board_serial_early_init();
+
+    #if CIRCUITPY_PORT_SERIAL
     port_serial_early_init();
+    #endif
 }
 
 void serial_init(void) {
@@ -165,7 +144,10 @@ void serial_init(void) {
     #endif
 
     board_serial_init();
+
+    #if CIRCUITPY_PORT_SERIAL
     port_serial_init();
+    #endif
 }
 
 bool serial_connected(void) {
@@ -212,9 +194,12 @@ bool serial_connected(void) {
         return true;
     }
 
+
+    #if CIRCUITPY_PORT_SERIAL
     if (port_serial_connected()) {
         return true;
     }
+    #endif
 
     return false;
 }
@@ -262,9 +247,12 @@ char serial_read(void) {
         return board_serial_read();
     }
 
+
+    #if CIRCUITPY_PORT_SERIAL
     if (port_serial_bytes_available() > 0) {
         return port_serial_read();
     }
+    #endif
 
     #if CIRCUITPY_USB_DEVICE && CIRCUITPY_USB_CDC
     if (!usb_cdc_console_enabled()) {
@@ -313,8 +301,10 @@ uint32_t serial_bytes_available(void) {
     // Board-specific serial input.
     count += board_serial_bytes_available();
 
+    #if CIRCUITPY_PORT_SERIAL
     // Port-specific serial input.
     count += port_serial_bytes_available();
+    #endif
 
     return count;
 }
@@ -390,7 +380,10 @@ uint32_t serial_write_substring(const char *text, uint32_t length) {
     #endif
 
     board_serial_write_substring(text, length);
+
+    #if CIRCUITPY_PORT_SERIAL
     port_serial_write_substring(text, length);
+    #endif
 
     return length_sent;
 }

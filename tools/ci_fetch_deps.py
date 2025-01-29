@@ -203,27 +203,48 @@ def main(target):
         ]
     else:
         p = list(pathlib.Path(TOP).glob(f"ports/*/boards/{target}/mpconfigboard.mk"))
+        # Check to see if the board is nested under vendor.
+        if not p:
+            next_underscore = target.find("_")
+            while next_underscore != -1:
+                vendor = target[:next_underscore]
+                target = target[next_underscore + 1 :]
+                p = list(
+                    pathlib.Path(TOP).glob(f"ports/*/boards/{vendor}/{target}/circuitpython.toml")
+                )
+                if p:
+                    break
+                next_underscore = target.find("_", next_underscore + 1)
+
         if not p:
             raise RuntimeError(f"Unsupported target: {target}")
 
         config = p[0]
         # Add the ports folder to init submodules
-        port_folder = config.parents[2]
+
+        if config.suffix == ".mk":
+            port_folder = config.parents[2]
+        else:
+            port_folder = config.parents[3]
         port = port_folder.name
         submodules.append(f"ports/{port}")
         submodules.append("tools/")  # for huffman
         submodules.extend(PORT_DEPS[port])
-        with config.open() as f:
-            for line in f.readlines():
-                prefix = "FROZEN_MPY_DIRS += $(TOP)/"
-                if line.startswith(prefix):
-                    lib_folder = line.strip()[len(prefix) :]
-                    # Drop everything after the second folder because the frozen
-                    # folder may be inside the submodule.
-                    if lib_folder.count("/") > 1:
-                        lib_folder = lib_folder.split("/", maxsplit=2)
-                        lib_folder = "/".join(lib_folder[:2])
-                    submodules.append(lib_folder)
+        if config.suffix == ".mk":
+            with config.open() as f:
+                for line in f.readlines():
+                    prefix = "FROZEN_MPY_DIRS += $(TOP)/"
+                    if line.startswith(prefix):
+                        lib_folder = line.strip()[len(prefix) :]
+                        # Drop everything after the second folder because the frozen
+                        # folder may be inside the submodule.
+                        if lib_folder.count("/") > 1:
+                            lib_folder = lib_folder.split("/", maxsplit=2)
+                            lib_folder = "/".join(lib_folder[:2])
+                        submodules.append(lib_folder)
+        else:
+            # TODO: Add a way to specify frozen modules in circuitpython.toml
+            pass
 
     print("Submodules:", " ".join(submodules))
 
