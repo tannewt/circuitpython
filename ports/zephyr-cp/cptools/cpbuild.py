@@ -386,6 +386,7 @@ class Compiler:
         # should skip unchanged files ok.
         input_files = output_file.with_suffix(output_file.suffix + ".input_files")
         input_file_content = "\n".join(str(p) for p in objects)
+        input_file_content = input_file_content.replace("\\", "/")
         print("input_file_content", repr(input_file_content))
         input_files.write_text(input_file_content)
         await run_command(
