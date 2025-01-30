@@ -37,3 +37,6 @@ colorama
 
 # for silabs builds
 setuptools
+
+# For zephyr port
+tomlkit
