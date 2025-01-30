@@ -298,7 +298,10 @@ jobs:
     # https://github.com/espressif/esp-idf/issues/7062
 
   windows-zephyr:
-    runs-on: windows-2025
+    strategy:
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     needs: scheduler
     env:
       CP_VERSION: ${{ needs.scheduler.outputs.cp-version }}
