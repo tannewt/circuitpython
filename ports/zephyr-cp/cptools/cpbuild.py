@@ -382,8 +382,12 @@ class Compiler:
 
     async def archive(self, objects: list[pathlib.Path], output_file: pathlib.Path):
         output_file.parent.mkdir(parents=True, exist_ok=True)
+        # Do one file at a time so that we don't have a long command line. run_command
+        # should skip unchanged files ok.
+        input_files = output_file.with_suffix(output_file.suffix + ".input_files")
+        input_files.write_text("\n".join(str(p) for p in objects))
         await run_command(
-            [self.ar, "rvs", output_file, *objects],
+            [self.ar, "rvs", output_file, f"@{input_files}"],
             description=f"Create archive {output_file.relative_to(self.srcdir)}",
             working_directory=self.srcdir,
         )
