@@ -115,6 +115,8 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):
     # print(board_id_yaml)
     # board_name = board_id_yaml["name"]
 
+    enabled_modules = []
+
     dts = zephyrbuilddir / "zephyr.dts"
     edt_pickle = dtlib.DT(dts)
     node2alias = {}

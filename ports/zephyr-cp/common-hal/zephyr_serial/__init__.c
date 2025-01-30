@@ -4,4 +4,4 @@
 //
 // SPDX-License-Identifier: MIT
 
-// No busio module functions.
+// No zephyr_serial module functions.

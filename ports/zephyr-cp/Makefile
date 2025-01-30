@@ -11,6 +11,7 @@ TRANSLATION ?= en_US
 .PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash debug clean
 
 $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
+	python cptools/pre_zephyr_build_prep.py $(BOARD)
 	west build -b $(BOARD) -d $(BUILD) --sysbuild -- -DZEPHYR_BOARD_ALIASES=$(CURDIR)/boards/board_aliases.cmake -Dzephyr-cp_TRANSLATION=$(TRANSLATION)
 
 $(BUILD)/firmware.elf: $(BUILD)/zephyr-cp/zephyr/zephyr.elf

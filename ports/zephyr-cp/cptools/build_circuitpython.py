@@ -9,6 +9,7 @@ import yaml
 import pickle
 
 import cpbuild
+import board_tools
 
 logger = logging.getLogger(__name__)
 
@@ -198,18 +199,6 @@ TINYUSB_SOURCE = {
 }
 
 
-def find_mpconfigboard(board_id):
-    next_underscore = board_id.find("_")
-    while next_underscore != -1:
-        vendor = board_id[:next_underscore]
-        board = board_id[next_underscore + 1 :]
-        p = portdir / f"boards/{vendor}/{board}/circuitpython.toml"
-        if p.exists():
-            return p
-        next_underscore = board_id.find("_", next_underscore + 1)
-    return None
-
-
 async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
     port_flags = []
@@ -264,7 +253,7 @@ async def build_circuitpython():
 
         board_autogen_task = tg.create_task(zephyr_dts_to_cp_board(builddir, zephyrbuilddir))
     board_info = board_autogen_task.result()
-    mpconfigboard_fn = find_mpconfigboard(board)
+    mpconfigboard_fn = board_tools.find_mpconfigboard(portdir, board)
     mpconfigboard = {
         "USB_VID": 0x1209,
         "USB_PID": 0x000C,
@@ -330,6 +319,7 @@ async def build_circuitpython():
 
     tinyusb_files = []
     if usb_ok:
+        enabled_modules.add("usb_cdc")
         for setting in TINYUSB_SETTINGS[soc]:
             circuitpython_flags.append(f"-D{setting}={TINYUSB_SETTINGS[soc][setting]}")
         tinyusb_files.extend((top / "lib" / "tinyusb" / path for path in TINYUSB_SOURCE[soc]))
@@ -359,6 +349,7 @@ async def build_circuitpython():
         circuitpython_flags.append(f"-DCIRCUITPY_USB_MSC={1 if msc_enabled else 0}")
         if "usb_cdc" in enabled_modules:
             tinyusb_files.extend(top.glob("lib/tinyusb/*.c"))
+            tinyusb_files.append(top / "lib/tinyusb/src/class/cdc/cdc_device.c")
             circuitpython_flags.append("-DCFG_TUD_CDC_RX_BUFSIZE=640")
             circuitpython_flags.append("-DCFG_TUD_CDC_TX_BUFSIZE=512")
             circuitpython_flags.append("-DCFG_TUD_CDC=2")
@@ -379,7 +370,6 @@ async def build_circuitpython():
 
         tinyusb_files.extend(
             (
-                top / "lib/tinyusb/src/class/cdc/cdc_device.c",
                 top / "lib/tinyusb/src/device/usbd.c",
                 top / "lib/tinyusb/src/device/usbd_control.c",
             )
