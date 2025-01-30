@@ -192,11 +192,12 @@ def set_boards(build_all: bool):
                 # Zephyr boards don't use make, so build them and don't compute their settings.
                 for board in port_to_board["zephyr-cp"]:
                     if board in boards:
-                        boards.remove(board)
                         boards_to_build.add(board)
                 compute_board_settings(boards)
 
                 for board in boards:
+                    if board in boards_to_build:
+                        continue
                     settings = board_setting[board]
 
                     # Check frozen files to see if they are in each board
