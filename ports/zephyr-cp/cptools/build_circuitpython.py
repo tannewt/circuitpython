@@ -12,7 +12,7 @@ import cpbuild
 
 logger = logging.getLogger(__name__)
 
-print("hello zephyr", sys.argv)
+# print("hello zephyr", sys.argv)
 
 # print(os.environ)
 cmake_args = {}
@@ -28,6 +28,8 @@ srcdir = portdir.parent.parent
 
 # Path to where CMake wants to put our build output.
 builddir = pathlib.Path.cwd()
+
+zephyrdir = portdir / "zephyr"
 
 # Path to where CMake puts Zephyr's build output.
 zephyrbuilddir = builddir / ".." / ".." / ".." / "zephyr"
@@ -263,7 +265,10 @@ async def build_circuitpython():
         board_autogen_task = tg.create_task(zephyr_dts_to_cp_board(builddir, zephyrbuilddir))
     board_info = board_autogen_task.result()
     mpconfigboard_fn = find_mpconfigboard(board)
-    mpconfigboard = {}
+    mpconfigboard = {
+        "USB_VID": 0x1209,
+        "USB_PID": 0x000C,
+    }
     if mpconfigboard_fn is None:
         logging.warning(
             f"Could not find board config at: boards/{board_info['vendor_id']}/{board}"
@@ -451,9 +456,7 @@ async def build_circuitpython():
         circuitpython_flags.extend(
             ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "include")
         )
-        circuitpython_flags.extend(
-            ("-isystem", portdir / "lib" / "zephyr" / "modules" / "mbedtls" / "configs")
-        )
+        circuitpython_flags.extend(("-isystem", zephyrdir / "modules" / "mbedtls" / "configs"))
         supervisor_source.append(top / "lib" / "mbedtls_config" / "crt_bundle.c")
 
     # Make sure all modules have a setting by filling in defaults.

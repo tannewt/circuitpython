@@ -8,7 +8,7 @@ BUILD ?= build-$(BOARD)
 
 TRANSLATION ?= en_US
 
-.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash clean
+.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash debug clean
 
 $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
 	west build -b $(BOARD) -d $(BUILD) --sysbuild -- -DZEPHYR_BOARD_ALIASES=$(CURDIR)/boards/board_aliases.cmake -Dzephyr-cp_TRANSLATION=$(TRANSLATION)
@@ -18,6 +18,9 @@ $(BUILD)/firmware.elf: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 
 flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	west flash --sysbuild -d $(BUILD)
+
+debug: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
+	west debug --sysbuild -d $(BUILD)
 
 clean:
 	rm -rf $(BUILD)

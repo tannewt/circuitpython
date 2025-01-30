@@ -29,6 +29,7 @@ set(external_project_cflags
 
 zephyr_get(TRANSLATION SYSBUILD GLOBAL)
 zephyr_get(CONFIG_LTO SYSBUILD GLOBAL)
+zephyr_get(BOARD_ALIAS SYSBUILD GLOBAL)
 
 ExternalProject_Add(circuitpython
     DOWNLOAD_COMMAND ""
