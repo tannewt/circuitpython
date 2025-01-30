@@ -385,7 +385,7 @@ class Compiler:
         # Do one file at a time so that we don't have a long command line. run_command
         # should skip unchanged files ok.
         input_files = output_file.with_suffix(output_file.suffix + ".input_files")
-        input_files.write_text("\n".join(str(p) for p in objects))
+        input_files.write_text(" ".join(str(p) for p in objects))
         await run_command(
             [self.ar, "rvs", output_file, f"@{input_files}"],
             description=f"Create archive {output_file.relative_to(self.srcdir)}",
