@@ -10,8 +10,8 @@
 #include "py/runtime.h"
 
 #include "shared-bindings/microcontroller/Pin.h"
-#include "shared-bindings/zephyr_serial/__init__.h"
-#include "shared-bindings/zephyr_serial/UART.h"
+#include "bindings/zephyr_serial/__init__.h"
+#include "bindings/zephyr_serial/UART.h"
 
 #include "py/runtime.h"
 

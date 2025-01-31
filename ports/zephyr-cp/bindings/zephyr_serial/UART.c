@@ -47,8 +47,8 @@ static void validate_timeout(mp_float_t timeout) {
 }
 
 // Helper to ensure we have the native super class instead of a subclass.
-static _zephyr_serial_uart_obj_t *native_uart(mp_obj_t uart_obj) {
-    mp_obj_t native_uart = mp_obj_cast_to_native_base(uart_obj, MP_OBJ_FROM_PTR(&_zephyr_serial_uart_type));
+static zephyr_serial_uart_obj_t *native_uart(mp_obj_t uart_obj) {
+    mp_obj_t native_uart = mp_obj_cast_to_native_base(uart_obj, MP_OBJ_FROM_PTR(&zephyr_serial_uart_type));
     if (native_uart == MP_OBJ_NULL) {
         mp_raise_ValueError_varg(MP_ERROR_TEXT("Must be a %q subclass."), MP_QSTR_UART);
     }
@@ -61,13 +61,13 @@ static _zephyr_serial_uart_obj_t *native_uart(mp_obj_t uart_obj) {
 //|         """Deinitialises the UART and releases any hardware resources for reuse."""
 //|         ...
 static mp_obj_t _zephyr_serial_uart_obj_deinit(mp_obj_t self_in) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     zephyr_serial_uart_deinit(self);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(_zephyr_serial_uart_deinit_obj, _zephyr_serial_uart_obj_deinit);
 
-static void check_for_deinit(_zephyr_serial_uart_obj_t *self) {
+static void check_for_deinit(zephyr_serial_uart_obj_t *self) {
     if (zephyr_serial_uart_deinited(self)) {
         raise_deinited_error();
     }
@@ -136,7 +136,7 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(_zephyr_serial_uart___exit___obj, 4, 
 // These three methods are used by the shared stream methods.
 static mp_uint_t _zephyr_serial_uart_read(mp_obj_t self_in, void *buf_in, mp_uint_t size, int *errcode) {
     STREAM_DEBUG("_zephyr_serial_uart_read stream %d\n", size);
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     byte *buf = buf_in;
 
@@ -149,7 +149,7 @@ static mp_uint_t _zephyr_serial_uart_read(mp_obj_t self_in, void *buf_in, mp_uin
 }
 
 static mp_uint_t _zephyr_serial_uart_write(mp_obj_t self_in, const void *buf_in, mp_uint_t size, int *errcode) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     const byte *buf = buf_in;
 
@@ -157,7 +157,7 @@ static mp_uint_t _zephyr_serial_uart_write(mp_obj_t self_in, const void *buf_in,
 }
 
 static mp_uint_t _zephyr_serial_uart_ioctl(mp_obj_t self_in, mp_uint_t request, mp_uint_t arg, int *errcode) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     mp_uint_t ret;
     if (request == MP_STREAM_POLL) {
@@ -179,14 +179,14 @@ static mp_uint_t _zephyr_serial_uart_ioctl(mp_obj_t self_in, mp_uint_t request, 
 //|     baudrate: int
 //|     """The current baudrate."""
 static mp_obj_t _zephyr_serial_uart_obj_get_baudrate(mp_obj_t self_in) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     return MP_OBJ_NEW_SMALL_INT(zephyr_serial_uart_get_baudrate(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(_zephyr_serial_uart_get_baudrate_obj, _zephyr_serial_uart_obj_get_baudrate);
 
 static mp_obj_t _zephyr_serial_uart_obj_set_baudrate(mp_obj_t self_in, mp_obj_t baudrate) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     zephyr_serial_uart_set_baudrate(self, mp_obj_get_int(baudrate));
     return mp_const_none;
@@ -201,7 +201,7 @@ MP_PROPERTY_GETSET(_zephyr_serial_uart_baudrate_obj,
 //|     in_waiting: int
 //|     """The number of bytes in the input buffer, available to be read"""
 static mp_obj_t _zephyr_serial_uart_obj_get_in_waiting(mp_obj_t self_in) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     return MP_OBJ_NEW_SMALL_INT(zephyr_serial_uart_rx_characters_available(self));
 }
@@ -213,14 +213,14 @@ MP_PROPERTY_GETTER(_zephyr_serial_uart_in_waiting_obj,
 //|     timeout: float
 //|     """The current timeout, in seconds (float)."""
 static mp_obj_t _zephyr_serial_uart_obj_get_timeout(mp_obj_t self_in) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     return mp_obj_new_float(zephyr_serial_uart_get_timeout(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(_zephyr_serial_uart_get_timeout_obj, _zephyr_serial_uart_obj_get_timeout);
 
 static mp_obj_t _zephyr_serial_uart_obj_set_timeout(mp_obj_t self_in, mp_obj_t timeout) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     mp_float_t timeout_float = mp_obj_get_float(timeout);
     validate_timeout(timeout_float);
@@ -239,7 +239,7 @@ MP_PROPERTY_GETSET(_zephyr_serial_uart_timeout_obj,
 //|         ...
 //|
 static mp_obj_t _zephyr_serial_uart_obj_reset_input_buffer(mp_obj_t self_in) {
-    _zephyr_serial_uart_obj_t *self = native_uart(self_in);
+    zephyr_serial_uart_obj_t *self = native_uart(self_in);
     check_for_deinit(self);
     zephyr_serial_uart_clear_rx_buffer(self);
     return mp_const_none;
@@ -278,7 +278,7 @@ static const mp_stream_p_t uart_stream_p = {
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
-    _zephyr_serial_uart_type,
+    zephyr_serial_uart_type,
     MP_QSTR_UART,
     MP_TYPE_FLAG_ITER_IS_ITERNEXT | MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
     locals_dict, &_zephyr_serial_uart_locals_dict,

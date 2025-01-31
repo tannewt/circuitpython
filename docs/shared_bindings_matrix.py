@@ -319,22 +319,30 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
         port_dir = board_directory.parent.parent
         if port != "zephyr-cp":
             settings = get_settings_from_makefile(str(port_dir), board_directory.name)
+            autogen_board_info = None
         else:
             circuitpython_toml_fn = board_directory / "circuitpython.toml"
             with circuitpython_toml_fn.open("rb") as f:
                 settings = tomllib.load(f)
 
+            autogen_board_info_fn = board_directory / "autogen_board_info.toml"
+            with autogen_board_info_fn.open("rb") as f:
+                autogen_board_info = tomllib.load(f)
+
         if use_branded_name or add_branded_name:
-            with open(board_directory / "mpconfigboard.h") as get_name:
-                board_contents = get_name.read()
-            board_name_re = re.search(
-                r"(?<=MICROPY_HW_BOARD_NAME)\s+(.+)", board_contents
-            )
-            if board_name_re:
-                branded_name = board_name_re.group(1).strip('"')
-                if '"' in branded_name:  # sometimes the closing " is not at line end
-                    branded_name = branded_name[:branded_name.index('"')]
-                board_name = branded_name
+            if autogen_board_info:
+                branded_name = autogen_board_info["name"]
+            else:
+                with open(board_directory / "mpconfigboard.h") as get_name:
+                    board_contents = get_name.read()
+                board_name_re = re.search(
+                    r"(?<=MICROPY_HW_BOARD_NAME)\s+(.+)", board_contents
+                )
+                if board_name_re:
+                    branded_name = board_name_re.group(1).strip('"')
+                    if '"' in branded_name:  # sometimes the closing " is not at line end
+                        branded_name = branded_name[:branded_name.index('"')]
+                    board_name = branded_name
 
         if use_branded_name:
             board_name = branded_name
@@ -383,18 +391,16 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
                         pins.append((board_pin, chip_pin))
 
         board_modules = []
-        if port != "zephyr-cp":
+        if autogen_board_info:
+            autogen_modules = autogen_board_info["modules"]
+            for k in autogen_modules:
+                if autogen_modules[k]:
+                    board_modules.append(k)
+        else:
             for module in base:
                 key = base[module]["key"]
                 if int(lookup_setting(settings, key, "0")):
                     board_modules.append(base[module]["name"])
-        else:
-            autogen_modules_fn = board_directory / "autogen_modules.toml"
-            with autogen_modules_fn.open("rb") as f:
-                autogen_modules = tomllib.load(f)
-            for k in autogen_modules:
-                if autogen_modules[k]:
-                    board_modules.append(k)
         board_modules.sort()
 
         if "CIRCUITPY_BUILD_EXTENSIONS" in settings:

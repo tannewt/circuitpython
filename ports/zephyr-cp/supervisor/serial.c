@@ -14,7 +14,7 @@ static uint8_t buffer[64];
 void port_serial_early_init(void) {
     #if CIRCUITPY_USB_DEVICE == 0
     zephyr_console.base.type = &zephyr_serial_uart_type;
-    zephyr_zephyr_serial_uart_construct(&zephyr_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(buffer), buffer);
+    zephyr_serial_uart_construct(&zephyr_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(buffer), buffer);
     #endif
 }
 

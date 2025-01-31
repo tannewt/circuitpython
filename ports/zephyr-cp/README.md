@@ -12,16 +12,17 @@ First, install Zephyr tools (see [Zephyr's Getting Started Guide](https://docs.z
 
 ```sh
 pip install west
+west init -l zephyr-config
 west update
 west zephyr-export
 pip install -r lib/zephyr/scripts/requirements.txt
-env ZEPHYR_BASE=lib/zephyr west sdk install
+west sdk install
 ```
 
 Now to build from the top level:
 
 ```sh
-west build -b pca10056 -o=-j32 -- -G'Unix Makefiles'
+make BOARD=nordic_nrf7002dk
 ```
 
 This uses Zephyr's cmake to generate Makefiles that then delegate to
