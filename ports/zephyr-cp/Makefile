@@ -18,10 +18,10 @@ $(BUILD)/firmware.elf: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $^ $@
 
 flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
-	west flash --sysbuild -d $(BUILD)
+	west flash -d $(BUILD)
 
 debug: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
-	west debug --sysbuild -d $(BUILD)
+	west debug -d $(BUILD)
 
 menuconfig:
 	west build --sysbuild -d $(BUILD) -t menuconfig

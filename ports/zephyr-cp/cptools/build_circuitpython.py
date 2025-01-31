@@ -211,6 +211,8 @@ async def build_circuitpython():
     if not board:
         board = cmake_args["BOARD"]
     translation = cmake_args["TRANSLATION"]
+    if not translation:
+        translation = "en_US"
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
     lto = cmake_args.get("LTO", "n") == "y"
@@ -351,7 +353,7 @@ async def build_circuitpython():
         for direction in ("IN", "OUT"):
             circuitpython_flags.append(f"-DUSB_NUM_{direction}_ENDPOINTS={usb_num_endpoint_pairs}")
         # USB is special because it doesn't have a matching module.
-        msc_enabled = True
+        msc_enabled = board_info["flash_count"] > 0
         if msc_enabled:
             circuitpython_flags.append("-DCFG_TUD_MSC_BUFSIZE=1024")
             circuitpython_flags.append("-DCIRCUITPY_USB_MSC_ENABLED_DEFAULT=1")
@@ -498,7 +500,7 @@ async def build_circuitpython():
             raise RuntimeError(
                 f"autogen_modules.toml is missing or out of date. Please run `make BOARD={board}` locally and commit {autogen_modules_fn}."
             )
-    else:
+    elif autogen_modules_fn.parent.exists():
         autogen_modules_fn.write_text(tomlkit.dumps(autogen_modules))
 
     for mpflag in MPCONFIG_FLAGS:

@@ -163,6 +163,7 @@ void supervisor_flash_init(void) {
     }
     #endif
     if (filesystem_area == NULL) {
+        printk("no flash found for filesystem\n");
         return;
     }
 
@@ -208,6 +209,9 @@ uint32_t supervisor_flash_get_block_size(void) {
 }
 
 uint32_t supervisor_flash_get_block_count(void) {
+    if (filesystem_area == NULL) {
+        return 0;
+    }
     return (_scratch_page_address - filesystem_area->fa_off) / 512;
 }
 

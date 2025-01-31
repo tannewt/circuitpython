@@ -1,14 +1,24 @@
+import logging
 import pathlib
-import yaml
 import cpbuild
 
 from devicetree import dtlib
+import yaml
 
 from compat2driver import COMPAT_TO_DRIVER
+
+logger = logging.getLogger(__name__)
 
 MANUAL_COMPAT_TO_DRIVER = {
     "renesas_ra_nv_flash": "flash",
 }
+
+# These are controllers, not the flash devices themselves.
+BLOCKED_FLASH_COMPAT = (
+    "renesas,ra-qspi",
+    "renesas,ra-ospi-b",
+    "nordic,nrf-spim",
+)
 
 CONNECTORS = {
     "mikro-bus": [
@@ -153,16 +163,16 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):
         compatible = []
         if "compatible" in node.props:
             compatible = node.props["compatible"].to_strings()
-        # print(node.name, status)
+        logger.debug(node.name, status)
         chosen = None
         if node in path2chosen:
             chosen = path2chosen[node]
-            # print(" chosen:", chosen)
+            logger.debug(" chosen:", chosen)
         for c in compatible:
             underscored = c.replace(",", "_").replace("-", "_")
             driver = COMPAT_TO_DRIVER.get(underscored, None)
             if "mmio" in c:
-                # print(" ", c, node.labels, node.props)
+                logger.debug(" ", c, node.labels, node.props)
                 address, size = node.props["reg"].to_nums()
                 end = address + size
                 if chosen == "zephyr,sram":
@@ -189,18 +199,15 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):
                     rams.append(info)
             if not driver:
                 driver = MANUAL_COMPAT_TO_DRIVER.get(underscored, None)
-            # print(" ", underscored, driver)
+            logger.debug(" ", underscored, driver)
             if not driver:
                 continue
-            if (
-                driver == "flash"
-                and status == "okay"
-                and not chosen
-                and ("write-block-size" in node.props or "sfdp-bfp" in node.props)
-            ):
-                # Skip chosen nodes because they are used by Zephyr.
-                # Skip nodes without "write-block-size" because it could be a controller.
-                flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
+            if driver == "flash" and status == "okay":
+                if not chosen and compatible[0] not in BLOCKED_FLASH_COMPAT:
+                    # Skip chosen nodes because they are used by Zephyr.
+                    flashes.append(f"DEVICE_DT_GET(DT_NODELABEL({node.labels[0]}))")
+                else:
+                    logger.debug("  skipping due to blocked compat")
             if driver == "usb/udc" and status == "okay":
                 board_info["usb_device"] = True
                 props = node.props

@@ -23,7 +23,6 @@ if _last_build_times.exists():
     with open(_last_build_times) as f:
         LAST_BUILD_TIMES = json.load(f)
     logger.info("Build times loaded.")
-    print("build times loaded")
 else:
     logger.warn(
         "No last build times found. This is normal if you're running this for the first time."
@@ -35,8 +34,8 @@ def save_trace():
         json.dump(trace_entries, f)
     with open("last_build_times.json", "w") as f:
         json.dump(LAST_BUILD_TIMES, f)
-    print("wrote trace", pathlib.Path(".").absolute() / "trace.json")
-    print("wrote build times", pathlib.Path(".").absolute() / "last_build_times.json")
+    logger.info("wrote trace %s", pathlib.Path(".").absolute() / "trace.json")
+    logger.info("wrote build times %s", pathlib.Path(".").absolute() / "last_build_times.json")
 
 
 atexit.register(save_trace)
@@ -144,7 +143,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
 
     # If a command is run multiple times, then wait for the first one to continue. Don't run it again.
     if command_hash in ALREADY_RUN:
-        logging.debug(f"Already running {command_hash} {command}")
+        logger.debug(f"Already running {command_hash} {command}")
         await ALREADY_RUN[command_hash].wait()
         return
     ALREADY_RUN[command_hash] = asyncio.Event()
@@ -156,6 +155,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
         # Check all paths in the command because one must be modified by the command.
         newest_file = max((0 if p.is_dir() else p.stat().st_mtime_ns for p in paths))
         nothing_newer = newest_file <= last_build_time
+        logger.debug(f"Last build time {last_build_time} Newest file {newest_file}")
         if nothing_newer:
             # Escape early if an extra dep is newer.
             for p in extradeps:
@@ -169,6 +169,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
                     run_reason = f"{p.relative_to(working_directory, walk_up=True)} is newer"
                     break
         if nothing_newer:
+            logger.debug(f"Nothing newer {command[-32:]}")
             ALREADY_RUN[command_hash].set()
             return
     else:
@@ -232,6 +233,7 @@ async def run_command(command, working_directory, description=None, check_hash=[
                 digest = hashlib.file_digest(f, "sha256")
                 old_digest, _, old_mtimes_ns = file_hashes[path]
                 if old_digest.digest() == digest.digest():
+                    logger.debug(f"{path} is unchanged")
                     os.utime(path, ns=old_mtimes_ns)
 
         # If something has failed and we've been canceled, hide our success so
@@ -393,6 +395,7 @@ class Compiler:
             [self.ar, "rvs", output_file, f"@{input_files}"],
             description=f"Create archive {output_file.relative_to(self.srcdir)}",
             working_directory=self.srcdir,
+            extradeps=objects,
         )
 
     async def link(
