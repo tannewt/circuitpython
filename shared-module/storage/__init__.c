@@ -24,6 +24,7 @@
 #endif
 
 #if CIRCUITPY_USB_DEVICE && CIRCUITPY_USB_MSC
+#include "tusb.h"
 
 // Is the MSC device enabled?
 bool storage_usb_is_enabled;

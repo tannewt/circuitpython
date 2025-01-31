@@ -17,6 +17,9 @@ $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
 $(BUILD)/firmware.elf: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $^ $@
 
+$(BUILD)/firmware.hex: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
+	cp $(BUILD)/zephyr-cp/zephyr/zephyr.hex $@
+
 flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	west flash -d $(BUILD)
 
