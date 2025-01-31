@@ -195,7 +195,8 @@ def set_boards(build_all: bool):
                         boards_to_build.add(board)
 
                 for board in boards_to_build:
-                    boards.remove(board)
+                    if board in boards:
+                        boards.remove(board)
                 compute_board_settings(boards)
 
                 for board in boards:
