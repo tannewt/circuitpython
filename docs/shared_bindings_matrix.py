@@ -26,7 +26,7 @@ import os
 import pathlib
 import re
 import subprocess
-
+import tomllib
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -145,6 +145,7 @@ def get_board_mapping():
                     "port": port,
                     "download_count": 0,
                     "aliases": aliases,
+                    "directory": board_path,
                 }
                 for alias in aliases:
                     boards[alias] = {
@@ -152,6 +153,7 @@ def get_board_mapping():
                         "download_count": 0,
                         "alias": True,
                         "aliases": [],
+                        "directory": board_path,
                     }
     return boards
 
@@ -311,12 +313,19 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
     base = build_module_map()
 
     def support_matrix(arg):
-        port, entry = arg
-        port_dir = get_circuitpython_root_dir() / "ports" / port
-        settings = get_settings_from_makefile(str(port_dir), entry.name)
+        board_id, board_info = arg
+        port = board_info["port"]
+        board_directory = board_info["directory"]
+        port_dir = board_directory.parent.parent
+        if port != "zephyr-cp":
+            settings = get_settings_from_makefile(str(port_dir), board_directory.name)
+        else:
+            circuitpython_toml_fn = board_directory / "circuitpython.toml"
+            with circuitpython_toml_fn.open("rb") as f:
+                settings = tomllib.load(f)
 
         if use_branded_name or add_branded_name:
-            with open(entry / "mpconfigboard.h") as get_name:
+            with open(board_directory / "mpconfigboard.h") as get_name:
                 board_contents = get_name.read()
             board_name_re = re.search(
                 r"(?<=MICROPY_HW_BOARD_NAME)\s+(.+)", board_contents
@@ -330,10 +339,10 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
         if use_branded_name:
             board_name = branded_name
         else:
-            board_name = entry.name
+            board_name = board_directory.name
 
         if add_chips:
-            with open(entry / "mpconfigboard.h") as get_name:
+            with open(board_directory / "mpconfigboard.h") as get_name:
                 board_contents = get_name.read()
             mcu_re = re.search(
                 r'(?<=MICROPY_HW_MCU_NAME)\s+(.+)', board_contents
@@ -344,7 +353,7 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
                     mcu = mcu[:mcu.index('"')]
             else:
                 mcu = ""
-            with open(entry / "mpconfigboard.mk") as get_name:
+            with open(board_directory / "mpconfigboard.mk") as get_name:
                 board_contents = get_name.read()
             flash_re = re.search(
                 r'(?<=EXTERNAL_FLASH_DEVICES)\s+=\s+(.+)', board_contents
@@ -361,7 +370,7 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
         if add_pins:
             pins = []
             try:
-                with open(entry / "pins.c") as get_name:
+                with open(board_directory / "pins.c") as get_name:
                     pin_lines = get_name.readlines()
             except FileNotFoundError:  # silabs boards have no pins.c
                 pass
@@ -374,17 +383,27 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
                         pins.append((board_pin, chip_pin))
 
         board_modules = []
-        for module in base:
-            key = base[module]["key"]
-            if int(lookup_setting(settings, key, "0")):
-                board_modules.append(base[module]["name"])
+        if port != "zephyr-cp":
+            for module in base:
+                key = base[module]["key"]
+                if int(lookup_setting(settings, key, "0")):
+                    board_modules.append(base[module]["name"])
+        else:
+            autogen_modules_fn = board_directory / "autogen_modules.toml"
+            with autogen_modules_fn.open("rb") as f:
+                autogen_modules = tomllib.load(f)
+            for k in autogen_modules:
+                if autogen_modules[k]:
+                    board_modules.append(k)
         board_modules.sort()
 
         if "CIRCUITPY_BUILD_EXTENSIONS" in settings:
-            board_extensions = [
-                extension.strip()
-                for extension in settings["CIRCUITPY_BUILD_EXTENSIONS"].split(",")
-            ]
+            board_extensions = settings["CIRCUITPY_BUILD_EXTENSIONS"]
+            if isinstance(board_extensions, str):
+                board_extensions = [
+                    extension.strip()
+                    for extension in board_extensions.split(",")
+                ]
         else:
             raise OSError(f"Board extensions undefined: {board_name}.")
 
@@ -418,8 +437,8 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
                 board_info
             )
         ]
-        if entry.name in ALIASES_BY_BOARD:
-            for alias in ALIASES_BY_BOARD[entry.name]:
+        if board_id in ALIASES_BY_BOARD:
+            for alias in ALIASES_BY_BOARD[board_id]:
                 if use_branded_name:
                     if alias in ALIASES_BRAND_NAMES:
                         alias = ALIASES_BRAND_NAMES[alias]
@@ -453,7 +472,7 @@ def support_matrix_by_board(use_branded_name=True, withurl=True,
     real_boards = []
     for board in board_mapping:
         if not board_mapping[board].get("alias", False):
-            real_boards.append((board, board_mapping[board]["port"]))
+            real_boards.append((board, board_mapping[board]))
     executor = ThreadPoolExecutor(max_workers=os.cpu_count())
     mapped_exec = executor.map(support_matrix, real_boards)
     # flatmap with comprehensions
