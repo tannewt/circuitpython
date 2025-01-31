@@ -8,7 +8,7 @@ BUILD ?= build-$(BOARD)
 
 TRANSLATION ?= en_US
 
-.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash debug clean
+.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash debug clean menuconfig
 
 $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
 	python cptools/pre_zephyr_build_prep.py $(BOARD)
@@ -22,6 +22,9 @@ flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 
 debug: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	west debug --sysbuild -d $(BUILD)
+
+menuconfig:
+	west build --sysbuild -d $(BUILD) -t menuconfig
 
 clean:
 	rm -rf $(BUILD)

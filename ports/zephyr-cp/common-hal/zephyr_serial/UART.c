@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "shared-bindings/microcontroller/__init__.h"
-#include "shared-bindings/zephyr_serial/UART.h"
+#include "bindings/zephyr_serial/UART.h"
 
 #include "shared/runtime/interrupt_char.h"
 #include "py/mpconfig.h"
@@ -24,7 +24,7 @@
  * data to the message queue.
  */
 static void serial_cb(const struct device *dev, void *user_data) {
-    busio_uart_obj_t *self = (busio_uart_obj_t *)user_data;
+    zephyr_serial_uart_obj_t *self = (zephyr_serial_uart_obj_t *)user_data;
 
     uint8_t c;
 
@@ -49,11 +49,11 @@ static void serial_cb(const struct device *dev, void *user_data) {
     }
 }
 
-void zephyr_serial_uart_never_reset(busio_uart_obj_t *self) {
+void zephyr_serial_uart_never_reset(zephyr_serial_uart_obj_t *self) {
 }
 
 
-void zephyr_serial_uart_construct(busio_uart_obj_t *self, const struct device *const uart_device, uint16_t receiver_buffer_size, byte *receiver_buffer) {
+void zephyr_serial_uart_construct(zephyr_serial_uart_obj_t *self, const struct device *const uart_device, uint16_t receiver_buffer_size, byte *receiver_buffer) {
     self->uart_device = uart_device;
     int ret = uart_irq_callback_user_data_set(uart_device, serial_cb, self);
 
@@ -74,26 +74,15 @@ void zephyr_serial_uart_construct(busio_uart_obj_t *self, const struct device *c
     uart_irq_rx_enable(uart_device);
 }
 
-void zephyr_serial_uart_construct(busio_uart_obj_t *self,
-    const mcu_pin_obj_t *tx, const mcu_pin_obj_t *rx,
-    const mcu_pin_obj_t *rts, const mcu_pin_obj_t *cts,
-    const mcu_pin_obj_t *rs485_dir, bool rs485_invert,
-    uint32_t baudrate, uint8_t bits, busio_uart_parity_t parity, uint8_t stop,
-    mp_float_t timeout, uint16_t receiver_buffer_size, byte *receiver_buffer,
-    bool sigint_enabled) {
-
-    mp_raise_NotImplementedError(MP_ERROR_TEXT("RS485"));
-}
-
-bool zephyr_serial_uart_deinited(busio_uart_obj_t *self) {
+bool zephyr_serial_uart_deinited(zephyr_serial_uart_obj_t *self) {
     return !device_is_ready(self->uart_device);
 }
 
-void zephyr_serial_uart_deinit(busio_uart_obj_t *self) {
+void zephyr_serial_uart_deinit(zephyr_serial_uart_obj_t *self) {
 }
 
 // Read characters.
-size_t zephyr_serial_uart_read(busio_uart_obj_t *self, uint8_t *data, size_t len, int *errcode) {
+size_t zephyr_serial_uart_read(zephyr_serial_uart_obj_t *self, uint8_t *data, size_t len, int *errcode) {
     size_t count = 0;
     while (count < len && k_msgq_get(&self->msgq, data + count, self->timeout) == 0) {
         count++;
@@ -106,7 +95,7 @@ size_t zephyr_serial_uart_read(busio_uart_obj_t *self, uint8_t *data, size_t len
 }
 
 // Write characters.
-size_t zephyr_serial_uart_write(busio_uart_obj_t *self, const uint8_t *data, size_t len, int *errcode) {
+size_t zephyr_serial_uart_write(zephyr_serial_uart_obj_t *self, const uint8_t *data, size_t len, int *errcode) {
     for (int i = 0; i < len; i++) {
         uart_poll_out(self->uart_device, data[i]);
     }
@@ -114,28 +103,28 @@ size_t zephyr_serial_uart_write(busio_uart_obj_t *self, const uint8_t *data, siz
     return len;
 }
 
-uint32_t zephyr_serial_uart_get_baudrate(busio_uart_obj_t *self) {
+uint32_t zephyr_serial_uart_get_baudrate(zephyr_serial_uart_obj_t *self) {
     return 0;
 }
 
-void zephyr_serial_uart_set_baudrate(busio_uart_obj_t *self, uint32_t baudrate) {
+void zephyr_serial_uart_set_baudrate(zephyr_serial_uart_obj_t *self, uint32_t baudrate) {
 }
 
-mp_float_t zephyr_serial_uart_get_timeout(busio_uart_obj_t *self) {
+mp_float_t zephyr_serial_uart_get_timeout(zephyr_serial_uart_obj_t *self) {
     return 0;
 }
 
-void zephyr_serial_uart_set_timeout(busio_uart_obj_t *self, mp_float_t timeout) {
+void zephyr_serial_uart_set_timeout(zephyr_serial_uart_obj_t *self, mp_float_t timeout) {
 }
 
-uint32_t zephyr_serial_uart_rx_characters_available(busio_uart_obj_t *self) {
+uint32_t zephyr_serial_uart_rx_characters_available(zephyr_serial_uart_obj_t *self) {
     return k_msgq_num_used_get(&self->msgq);
 }
 
-void zephyr_serial_uart_clear_rx_buffer(busio_uart_obj_t *self) {
+void zephyr_serial_uart_clear_rx_buffer(zephyr_serial_uart_obj_t *self) {
     k_msgq_purge(&self->msgq);
 }
 
-bool zephyr_serial_uart_ready_to_tx(busio_uart_obj_t *self) {
+bool zephyr_serial_uart_ready_to_tx(zephyr_serial_uart_obj_t *self) {
     return true;
 }
