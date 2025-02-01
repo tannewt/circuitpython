@@ -502,6 +502,7 @@ async def build_circuitpython():
             not autogen_board_info_fn.exists()
             or autogen_board_info_fn.read_text() != tomlkit.dumps(autogen_board_info)
         ):
+            logger.error(f"autogen_board_info.toml is out of date.")
             raise RuntimeError(
                 f"autogen_board_info.toml is missing or out of date. Please run `make BOARD={board}` locally and commit {autogen_board_info_fn}."
             )
@@ -600,6 +601,7 @@ async def main():
     try:
         await build_circuitpython()
     except* RuntimeError as e:
+        logger.error(e)
         sys.exit(len(e.exceptions))
 
 
