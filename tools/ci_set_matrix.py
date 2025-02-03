@@ -317,7 +317,7 @@ def set_windows(run: bool):
 
 
 def main():
-    run_all = not changed_files and not compute_diff
+    run_all = True  # not changed_files and not compute_diff
     print("Running: " + ("all" if run_all else "conditionally"))
     # Set jobs
     set_docs(run_all)
