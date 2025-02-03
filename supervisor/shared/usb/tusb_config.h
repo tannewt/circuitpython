@@ -200,6 +200,11 @@ extern "C" {
 
 #endif
 
+// Hack to work with older nrfx than what TinyUSB is designed for.
+#define nrf52_errata_187 errata_187
+#define nrf52_errata_171 errata_171
+#define nrf52_errata_166 errata_166
+
 #ifdef __cplusplus
 }
 #endif
