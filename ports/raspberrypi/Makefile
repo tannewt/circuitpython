@@ -556,6 +556,7 @@ ifeq ($(CIRCUITPY_PICODVI),1)
 SRC_C += \
 	bindings/picodvi/__init__.c \
 	bindings/picodvi/Framebuffer.c \
+	common-hal/picodvi/__init__.c \
 	common-hal/picodvi/Framebuffer_$(CHIP_VARIANT).c \
 
 ifeq ($(CHIP_VARIANT),RP2040)
