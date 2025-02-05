@@ -222,10 +222,13 @@ void common_hal_wifi_radio_stop_scanning_networks(wifi_radio_obj_t *self) {
 }
 
 void common_hal_wifi_radio_start_station(wifi_radio_obj_t *self) {
+    printk("common_hal_wifi_radio_start_station\n");
     // set_mode_station(self, true);
 }
 
 void common_hal_wifi_radio_stop_station(wifi_radio_obj_t *self) {
+    printk("common_hal_wifi_radio_stop_station\n");
+
     // set_mode_station(self, false);
 }
 
@@ -317,12 +320,38 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
     if (!common_hal_wifi_radio_get_enabled(self)) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("wifi is not enabled"));
     }
-    // wifi_config_t *config = &self->sta_config;
+    printk("common_hal_wifi_radio_connect\n");
+    printk("ssid: %s\n", ssid);
 
-    // size_t timeout_ms = timeout * 1000;
-    // uint32_t start_time = common_hal_time_monotonic_ms();
-    // uint32_t end_time = start_time + timeout_ms;
+    // k_poll_signal_init(&self->channel_done);
+    // k_poll_event_init(&self->events[2],
+    //     K_POLL_TYPE_SIGNAL,
+    //     K_POLL_MODE_NOTIFY_ONLY,
+    //     &self->channel_done);
 
+    struct wifi_connect_req_params params = {0};
+    params.ssid = ssid;
+    params.ssid_length = ssid_len;
+    params.psk = password;
+    params.psk_length = password_len;
+    params.timeout = (int)timeout;
+    if (channel > 0) {
+        params.band = WIFI_FREQ_BAND_2_4_GHZ;
+        params.channel = channel;
+    }
+    if (bssid_len > 0) {
+        memcpy(params.bssid, bssid, bssid_len);
+    }
+    int res = net_mgmt(NET_REQUEST_WIFI_CONNECT, self->sta_netif, &params, sizeof(params));
+    if (res != 0) {
+        printk("Failed to start connect to wifi %d\n", res);
+        return WIFI_RADIO_ERROR_AUTH_FAIL;
+    }
+    printk("sleeping past timeout %f\n", timeout);
+    k_sleep(K_SECONDS(timeout + 2));
+
+    printk("sleeping 30 more seconds\n");
+    k_sleep(K_SECONDS(30));
     // EventBits_t bits;
     // // can't block since both bits are false after wifi_init
     // // both bits are true after an existing connection stops
@@ -420,6 +449,7 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
 }
 
 bool common_hal_wifi_radio_get_connected(wifi_radio_obj_t *self) {
+    printk("common_hal_wifi_radio_get_connected\n");
     // return self->sta_mode && esp_netif_is_netif_up(self->netif);
     return false;
 }

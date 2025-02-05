@@ -107,6 +107,7 @@ void wifi_scannednetworks_scan_next_channel(wifi_scannednetworks_obj_t *self) {
             raise_zephyr_error(res);
             wifi_scannednetworks_done(self);
         } else {
+            printk("Scanning channel %d\n", next_channel);
             self->channel_scan_in_progress = true;
         }
     }

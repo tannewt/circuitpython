@@ -52,8 +52,11 @@ DEFAULT_MODULES = [
     "random",
     "digitalio",
     "zephyr_serial",
+    "errno",
+    "warnings",
+    "io"
 ]
-MPCONFIG_FLAGS = ["ulab", "nvm", "displayio", "warnings", "alarm", "array", "json"]
+MPCONFIG_FLAGS = ["ulab", "warnings", "alarm", "array", "json", "errno", "io"]
 
 
 async def preprocess_and_split_defs(compiler, source_file, build_path, flags):
@@ -204,7 +207,7 @@ async def build_circuitpython():
     circuitpython_flags = ["-DCIRCUITPY"]
     port_flags = []
     enable_mpy_native = False
-    full_build = False
+    full_build = True
     usb_host = False
     tusb_mem_align = 4
     board = cmake_args["BOARD_ALIAS"]
@@ -496,6 +499,9 @@ async def build_circuitpython():
             hal_source.extend(top.glob(f"shared-bindings/{module.name}/*.c"))
             hal_source.extend(top.glob(f"shared-module/{module.name}/*.c"))
 
+            if module.name == "os":
+                circuitpython_flags.append("-DCIRCUITPY_OS_GETENV=1")
+
     if os.environ.get("CI", "false") == "true":
         # Fail the build if it isn't up to date.
         if (
@@ -512,8 +518,12 @@ async def build_circuitpython():
     for mpflag in MPCONFIG_FLAGS:
         enabled = mpflag in DEFAULT_MODULES
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}={1 if enabled else 0}")
+        logger.info(f"CIRCUITPY_{mpflag} enabled: {enabled}")
+        if mpflag == "io":
+            enabled = enabled and "jpegio" in enabled_modules
+            circuitpython_flags.append(f"-DCIRCUITPY_IO_IOBASE={1 if enabled else 0}")
 
-    source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
+    source_files = supervisor_source + hal_source + ["extmod/vfs.c", "extmod/modjson.c"]
     assembly_files = []
     for file in top.glob("py/*.c"):
         source_files.append(file)
