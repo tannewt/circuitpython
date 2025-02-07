@@ -51,7 +51,7 @@ typedef enum {
     WIFI_RADIO_ERROR_HANDSHAKE_TIMEOUT           = 204,
     WIFI_RADIO_ERROR_CONNECTION_FAIL             = 205,
     WIFI_RADIO_ERROR_AP_TSF_RESET                = 206,
-    WIFI_RADIO_ERRROR_ROAMING                    = 207,
+    WIFI_RADIO_ERROR_ROAMING                     = 207,
     WIFI_RADIO_ASSOC_COMEBACK_TOO_LONG           = 208,
     WIFI_RADIO_SA_QUERY_TIMEOUT                  = 209,
     WIFI_RADIO_NO_AP_FOUND_W_COMPATIBLE_SECURITY = 210,  // collapsed to AUTH_FAIL

@@ -93,6 +93,7 @@ void common_hal_socketpool_socketpool_construct(socketpool_socketpool_obj_t *sel
 // }
 
 mp_obj_t common_hal_socketpool_getaddrinfo_raise(socketpool_socketpool_obj_t *self, const char *host, int port, int family, int type, int proto, int flags) {
+    printk("common_hal_socketpool_getaddrinfo_raise\n");
     // const struct addrinfo hints = {
     //     .ai_flags = flags,
     //     .ai_family = family,

@@ -69,6 +69,29 @@ static void _event_handler(struct net_mgmt_event_callback *cb, uint32_t mgmt_eve
             break;
         case NET_EVENT_WIFI_CONNECT_RESULT:
             printk("NET_EVENT_WIFI_CONNECT_RESULT\n");
+            const struct wifi_status *status = (const struct wifi_status *) cb->info;
+            printk("  wifi status %d\n", status);
+            switch (status->conn_status) {
+            case WIFI_STATUS_CONN_SUCCESS:
+                printk("  WIFI_STATUS_CONN_SUCCESS\n");
+                break;
+            case WIFI_STATUS_CONN_FAIL:
+                printk("  WIFI_STATUS_CONN_FAIL\n");
+                break;
+            case WIFI_STATUS_CONN_WRONG_PASSWORD:
+                printk("  WIFI_STATUS_CONN_WRONG_PASSWORD\n");
+                break;
+            case WIFI_STATUS_CONN_TIMEOUT:
+                printk("  WIFI_STATUS_CONN_TIMEOUT\n");
+                break;
+            case WIFI_STATUS_CONN_AP_NOT_FOUND:
+                printk("  WIFI_STATUS_CONN_AP_NOT_FOUND\n");
+                break;
+            default:
+                printk("  wifi status %d status %d not found %d timeout %d\n", status->conn_status, status->status, WIFI_STATUS_CONN_AP_NOT_FOUND, WIFI_STATUS_CONN_TIMEOUT);
+                break;
+            }
+            k_poll_signal_raise(&self->done, status->status);
             break;
         case NET_EVENT_WIFI_DISCONNECT_RESULT:
             printk("NET_EVENT_WIFI_DISCONNECT_RESULT\n");
@@ -105,6 +128,97 @@ static void _event_handler(struct net_mgmt_event_callback *cb, uint32_t mgmt_eve
             break;
         case NET_EVENT_WIFI_AP_STA_DISCONNECTED:
             printk("NET_EVENT_WIFI_AP_STA_DISCONNECTED\n");
+            break;
+        case NET_EVENT_IF_UP:
+            printk("NET_EVENT_IF_UP\n");
+            break;
+        case NET_EVENT_IF_DOWN:
+            printk("NET_EVENT_IF_DOWN\n");
+            break;
+        case NET_EVENT_L4_CONNECTED:
+            printk("NET_EVENT_L4_CONNECTED\n");
+            break;
+        case NET_EVENT_L4_DISCONNECTED:
+            printk("NET_EVENT_L4_DISCONNECTED\n");
+            break;
+        case NET_EVENT_IPV4_ADDR_ADD:
+            printk("NET_EVENT_IPV4_ADDR_ADD\n");
+            break;
+        case NET_EVENT_SUPPLICANT_READY:
+            printk("NET_EVENT_SUPPLICANT_READY\n");
+            break;
+        case NET_EVENT_SUPPLICANT_NOT_READY:
+            printk("NET_EVENT_SUPPLICANT_NOT_READY\n");
+            break;
+        case NET_EVENT_SUPPLICANT_IFACE_ADDED:
+            printk("NET_EVENT_SUPPLICANT_IFACE_ADDED\n");
+            break;
+        case NET_EVENT_SUPPLICANT_IFACE_REMOVED:
+            printk("NET_EVENT_SUPPLICANT_IFACE_REMOVED\n");
+            break;
+        case NET_EVENT_SUPPLICANT_IFACE_REMOVING:
+            printk("NET_EVENT_SUPPLICANT_IFACE_REMOVING\n");
+            break;
+        case NET_EVENT_SUPPLICANT_INT_EVENT:
+            printk("NET_EVENT_SUPPLICANT_INT_EVENT\n");
+            struct supplicant_int_event_data* event_data = (struct supplicant_int_event_data *)cb->info;
+            union supplicant_event_data* data = (union supplicant_event_data*) event_data->data;
+            switch (event_data->event) {
+            case    SUPPLICANT_EVENT_CONNECTED:
+                printk("  SUPPLICANT_EVENT_CONNECTED\n");
+                break;
+            case    SUPPLICANT_EVENT_DISCONNECTED:
+                printk("  SUPPLICANT_EVENT_DISCONNECTED\n");
+                break;
+            case    SUPPLICANT_EVENT_ASSOC_REJECT:
+                printk("  SUPPLICANT_EVENT_ASSOC_REJECT\n");
+                break;
+            case    SUPPLICANT_EVENT_AUTH_REJECT:
+                printk("  SUPPLICANT_EVENT_AUTH_REJECT\n");
+                break;
+            case    SUPPLICANT_EVENT_TERMINATING:
+                printk("  SUPPLICANT_EVENT_TERMINATING\n");
+                break;
+            case    SUPPLICANT_EVENT_SSID_TEMP_DISABLED:
+                printk("  SUPPLICANT_EVENT_SSID_TEMP_DISABLED\n");
+                break;
+            case    SUPPLICANT_EVENT_SSID_REENABLED:
+                printk("  SUPPLICANT_EVENT_SSID_REENABLED\n");
+                break;
+            case    SUPPLICANT_EVENT_SCAN_STARTED:
+                printk("  SUPPLICANT_EVENT_SCAN_STARTED\n");
+                break;
+            case    SUPPLICANT_EVENT_SCAN_RESULTS:
+                printk("  SUPPLICANT_EVENT_SCAN_RESULTS\n");
+                break;
+            case    SUPPLICANT_EVENT_SCAN_FAILED:
+                printk("  SUPPLICANT_EVENT_SCAN_FAILED\n");
+                break;
+            case    SUPPLICANT_EVENT_BSS_ADDED:
+                printk("  SUPPLICANT_EVENT_BSS_ADDED\n");
+                break;
+            case    SUPPLICANT_EVENT_BSS_REMOVED:
+                printk("  SUPPLICANT_EVENT_BSS_REMOVED\n");
+                break;
+            case    SUPPLICANT_EVENT_NETWORK_NOT_FOUND:
+                printk("  SUPPLICANT_EVENT_NETWORK_NOT_FOUND\n");
+                break;
+            case    SUPPLICANT_EVENT_NETWORK_ADDED:
+                printk("  SUPPLICANT_EVENT_NETWORK_ADDED\n");
+                break;
+            case    SUPPLICANT_EVENT_NETWORK_REMOVED:
+                printk("  SUPPLICANT_EVENT_NETWORK_REMOVED\n");
+                break;
+            case    SUPPLICANT_EVENT_DSCP_POLICY:
+                printk("  SUPPLICANT_EVENT_DSCP_POLICY\n");
+                break;
+            case    SUPPLICANT_EVENT_REGDOM_CHANGE:
+                printk("  SUPPLICANT_EVENT_REGDOM_CHANGE\n");
+                break;
+            default:
+                printk("  supplicant event %d\n", event_data->event);
+                break;
+            }
             break;
     }
 }
@@ -292,8 +406,8 @@ void common_hal_wifi_init(bool user_initiated) {
         NET_EVENT_SUPPLICANT_NOT_READY |
         NET_EVENT_SUPPLICANT_IFACE_ADDED |
         NET_EVENT_SUPPLICANT_IFACE_REMOVED |
-        NET_EVENT_SUPPLICANT_IFACE_REMOVING |
-        NET_EVENT_SUPPLICANT_INT_EVENT);
+        NET_EVENT_SUPPLICANT_IFACE_REMOVING); // |
+        // NET_EVENT_SUPPLICANT_INT_EVENT);
 
     net_mgmt_init_event_callback(&ipv4_cb, _event_handler, NET_EVENT_IPV4_ADDR_ADD);
 

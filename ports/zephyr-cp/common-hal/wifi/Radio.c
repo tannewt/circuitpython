@@ -334,7 +334,7 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
     params.ssid_length = ssid_len;
     params.psk = password;
     params.psk_length = password_len;
-    params.timeout = (int)timeout;
+    params.timeout = 5; // (int)timeout;
     params.channel = WIFI_CHANNEL_ANY;
     params.security = WIFI_SECURITY_TYPE_NONE;
     if (password_len > 0) {
@@ -352,6 +352,11 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
     if (bssid_len > 0) {
         memcpy(params.bssid, bssid, bssid_len);
     }
+    // Check to see if we're already connected
+    //   if we are to the network we want
+    //     then return immediately
+    //   if not
+    //     then disconnect.
     printk("net_mgmt\n");
     int res = net_mgmt(NET_REQUEST_WIFI_CONNECT, self->sta_netif, &params, sizeof(params));
     printk("net_mgmt returned\n");
@@ -359,111 +364,52 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
         printk("Failed to start connect to wifi %d\n", res);
         return WIFI_RADIO_ERROR_AUTH_FAIL;
     }
-    printk("sleeping past timeout %f\n", timeout);
-    k_sleep(K_SECONDS(timeout + 2));
 
-    printk("sleeping 30 more seconds\n");
-    k_sleep(K_SECONDS(30));
-    // EventBits_t bits;
-    // // can't block since both bits are false after wifi_init
-    // // both bits are true after an existing connection stops
-    // bits = xEventGroupWaitBits(self->event_group_handle,
-    //     WIFI_CONNECTED_BIT | WIFI_DISCONNECTED_BIT,
-    //     pdTRUE,
-    //     pdTRUE,
-    //     0);
-    // bool connected = ((bits & WIFI_CONNECTED_BIT) != 0) &&
-    //     !((bits & WIFI_DISCONNECTED_BIT) != 0);
-    // if (connected) {
-    //     // SSIDs are up to 32 bytes. Assume it is null terminated if it is less.
-    //     if (memcmp(ssid, config->sta.ssid, ssid_len) == 0 &&
-    //         (ssid_len == 32 || strlen((const char *)config->sta.ssid) == ssid_len)) {
-    //         // Already connected to the desired network.
-    //         return WIFI_RADIO_ERROR_NONE;
-    //     } else {
-    //         xEventGroupClearBits(self->event_group_handle, WIFI_DISCONNECTED_BIT);
-    //         // Trying to switch networks so disconnect first.
-    //         esp_wifi_disconnect();
-    //         do {
-    //             RUN_BACKGROUND_TASKS;
-    //             bits = xEventGroupWaitBits(self->event_group_handle,
-    //                 WIFI_DISCONNECTED_BIT,
-    //                 pdTRUE,
-    //                 pdTRUE,
-    //                 0);
-    //         } while ((bits & WIFI_DISCONNECTED_BIT) == 0 && !mp_hal_is_interrupted());
-    //     }
-    // }
-    // // explicitly clear bits since xEventGroupWaitBits may have timed out
-    // xEventGroupClearBits(self->event_group_handle, WIFI_CONNECTED_BIT);
-    // xEventGroupClearBits(self->event_group_handle, WIFI_DISCONNECTED_BIT);
-    // set_mode_station(self, true);
+    k_poll_event_init(&self->events[0],
+        K_POLL_TYPE_SEM_AVAILABLE,
+        K_POLL_MODE_NOTIFY_ONLY,
+        &mp_interrupt_sem);
 
-    // memcpy(&config->sta.ssid, ssid, ssid_len);
-    // if (ssid_len < 32) {
-    //     config->sta.ssid[ssid_len] = 0;
-    // }
-    // memcpy(&config->sta.password, password, password_len);
-    // config->sta.password[password_len] = 0;
-    // config->sta.channel = channel;
-    // // From esp_wifi_types.h:
-    // //   Generally, station_config.bssid_set needs to be 0; and it needs
-    // //   to be 1 only when users need to check the MAC address of the AP
-    // if (bssid_len > 0) {
-    //     memcpy(&config->sta.bssid, bssid, bssid_len);
-    //     config->sta.bssid[bssid_len] = 0;
-    //     config->sta.bssid_set = true;
-    // } else {
-    //     config->sta.bssid_set = false;
-    // }
-    // // If channel is 0 (default/unset) and BSSID is not given, do a full scan instead of fast scan
-    // // This will ensure that the best AP in range is chosen automatically
-    // if ((config->sta.bssid_set == 0) && (config->sta.channel == 0)) {
-    //     config->sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-    // } else {
-    //     config->sta.scan_method = WIFI_FAST_SCAN;
-    // }
-    // esp_wifi_set_config(ESP_IF_WIFI_STA, config);
-    // self->starting_retries = 5;
-    // self->retries_left = 5;
-    // esp_wifi_connect();
+    k_poll_signal_init(&self->done);
+    k_poll_event_init(&self->events[1],
+        K_POLL_TYPE_SIGNAL,
+        K_POLL_MODE_NOTIFY_ONLY,
+        &self->done);
 
-    // do {
-    //     RUN_BACKGROUND_TASKS;
-    //     bits = xEventGroupWaitBits(self->event_group_handle,
-    //         WIFI_CONNECTED_BIT | WIFI_DISCONNECTED_BIT,
-    //         pdTRUE,
-    //         pdTRUE,
-    //         0);
-    //     // Don't retry anymore if we're over our time budget.
-    //     if (self->retries_left > 0 && common_hal_time_monotonic_ms() > end_time) {
-    //         self->retries_left = 0;
-    //     }
-    // } while ((bits & (WIFI_CONNECTED_BIT | WIFI_DISCONNECTED_BIT)) == 0 && !mp_hal_is_interrupted());
+    k_poll(self->events, ARRAY_SIZE(self->events), K_FOREVER);
 
-    // if ((bits & WIFI_DISCONNECTED_BIT) != 0) {
-    //     if (
-    //         (self->last_disconnect_reason == WIFI_REASON_AUTH_FAIL) ||
-    //         (self->last_disconnect_reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT) ||
-    //         (self->last_disconnect_reason == WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY) ||
-    //         (self->last_disconnect_reason == WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD)
-    //         ) {
-    //         return WIFI_RADIO_ERROR_AUTH_FAIL;
-    //     } else if (self->last_disconnect_reason == WIFI_REASON_NO_AP_FOUND) {
-    //         return WIFI_RADIO_ERROR_NO_AP_FOUND;
-    //     }
-    //     return self->last_disconnect_reason;
-    // } else {
-    //     // We're connected, allow us to retry if we get disconnected.
-    //     self->retries_left = self->starting_retries;
-    // }
-    return WIFI_RADIO_ERROR_NONE;
+    if (mp_hal_is_interrupted()) {
+        // Do we need to disconnect here?
+        return WIFI_RADIO_ERROR_UNSPECIFIED;
+    }
+
+    int signaled;
+    int result;
+    k_poll_signal_check(&self->done, &signaled, &result);
+    if (!signaled) {
+        return WIFI_RADIO_ERROR_UNSPECIFIED;
+    }
+    printk("common_hal_wifi_radio_connect done: %d\n", result);
+    if (result == WIFI_STATUS_CONN_SUCCESS) {
+        printk("success!\n");
+        k_sleep(K_SECONDS(30));
+        return WIFI_RADIO_ERROR_NONE;
+    } else if (result == WIFI_STATUS_CONN_FAIL) {
+        return WIFI_RADIO_ERROR_UNSPECIFIED;
+    } else if (result == WIFI_STATUS_CONN_TIMEOUT) {
+        return WIFI_RADIO_ERROR_UNSPECIFIED;
+    } else if (result == WIFI_STATUS_CONN_WRONG_PASSWORD) {
+        return WIFI_RADIO_ERROR_AUTH_FAIL;
+    } else if (result == WIFI_STATUS_CONN_AP_NOT_FOUND) {
+        return WIFI_RADIO_ERROR_NO_AP_FOUND;
+    }
+
+    return WIFI_RADIO_ERROR_UNSPECIFIED;
 }
 
 bool common_hal_wifi_radio_get_connected(wifi_radio_obj_t *self) {
     printk("common_hal_wifi_radio_get_connected\n");
-    // return self->sta_mode && esp_netif_is_netif_up(self->netif);
-    return false;
+    return net_if_is_up(self->sta_netif);
 }
 
 mp_obj_t common_hal_wifi_radio_get_ap_info(wifi_radio_obj_t *self) {

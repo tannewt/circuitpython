@@ -21,6 +21,8 @@
 typedef struct {
     mp_obj_base_t base;
     wifi_scannednetworks_obj_t *current_scan;
+    struct k_poll_signal done;
+    struct k_poll_event events[2];
     // StaticEventGroup_t event_group;
     // EventGroupHandle_t event_group_handle;
     // wifi_config_t sta_config;
