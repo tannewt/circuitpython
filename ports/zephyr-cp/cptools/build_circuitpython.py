@@ -54,7 +54,7 @@ DEFAULT_MODULES = [
     "zephyr_serial",
     "errno",
     "warnings",
-    "io"
+    "io",
 ]
 MPCONFIG_FLAGS = ["ulab", "warnings", "alarm", "array", "json", "errno", "io"]
 

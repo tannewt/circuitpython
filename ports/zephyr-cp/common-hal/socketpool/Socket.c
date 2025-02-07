@@ -184,6 +184,8 @@ static bool _socketpool_socket(socketpool_socketpool_obj_t *self,
     socketpool_socketpool_addressfamily_t family, socketpool_socketpool_sock_t type,
     int proto,
     socketpool_socket_obj_t *sock) {
+    printk("socketpool_socket\n");
+
     int addr_family;
     int ipproto;
 
@@ -245,6 +247,9 @@ bool socketpool_socket(socketpool_socketpool_obj_t *self,
 
 socketpool_socket_obj_t *common_hal_socketpool_socket(socketpool_socketpool_obj_t *self,
     socketpool_socketpool_addressfamily_t family, socketpool_socketpool_sock_t type, int proto) {
+    printk("common_hal_socketpool_socket\n");
+
+
     switch (family) {
         #if CIRCUITPY_SOCKETPOOL_IPV6
         case SOCKETPOOL_AF_INET6:
@@ -343,6 +348,8 @@ socketpool_socket_obj_t *common_hal_socketpool_socket_accept(socketpool_socket_o
 
 size_t common_hal_socketpool_socket_bind(socketpool_socket_obj_t *self,
     const char *host, size_t hostlen, uint32_t port) {
+    printk("common_hal_socketpool_socket_bind\n");
+
     // struct sockaddr_storage bind_addr;
     const char *broadcast = "<broadcast>";
 

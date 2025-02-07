@@ -335,14 +335,26 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
     params.psk = password;
     params.psk_length = password_len;
     params.timeout = (int)timeout;
+    params.channel = WIFI_CHANNEL_ANY;
+    params.security = WIFI_SECURITY_TYPE_NONE;
+    if (password_len > 0) {
+        params.security = WIFI_SECURITY_TYPE_WPA_PSK;
+    }
+    params.mfp = WIFI_MFP_OPTIONAL;
+    params.eap_ver = 1;
+    params.ignore_broadcast_ssid = 0;
+    params.bandwidth = WIFI_FREQ_BANDWIDTH_20MHZ;
     if (channel > 0) {
         params.band = WIFI_FREQ_BAND_2_4_GHZ;
         params.channel = channel;
     }
+    printk("bssid_len: %d\n", bssid_len);
     if (bssid_len > 0) {
         memcpy(params.bssid, bssid, bssid_len);
     }
+    printk("net_mgmt\n");
     int res = net_mgmt(NET_REQUEST_WIFI_CONNECT, self->sta_netif, &params, sizeof(params));
+    printk("net_mgmt returned\n");
     if (res != 0) {
         printk("Failed to start connect to wifi %d\n", res);
         return WIFI_RADIO_ERROR_AUTH_FAIL;

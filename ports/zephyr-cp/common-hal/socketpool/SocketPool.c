@@ -15,6 +15,7 @@ void common_hal_socketpool_socketpool_construct(socketpool_socketpool_obj_t *sel
     if (radio != MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj)) {
         mp_raise_ValueError(MP_ERROR_TEXT("SocketPool can only be used with wifi.radio"));
     }
+    printk("common_hal_socketpool_socketpool_construct\n");
 }
 
 // common_hal_socketpool_socket is in socketpool/Socket.c to centralize open socket tracking.

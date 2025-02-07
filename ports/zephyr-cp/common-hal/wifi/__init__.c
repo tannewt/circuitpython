@@ -29,6 +29,8 @@ wifi_radio_obj_t common_hal_wifi_radio_obj;
 #include <zephyr/kernel.h>
 #include <zephyr/net/wifi_mgmt.h>
 
+#include <supp_events.h>
+
 #define MAC_ADDRESS_LENGTH 6
 
 static void schedule_background_on_cp_core(void *arg) {
@@ -43,6 +45,9 @@ static void schedule_background_on_cp_core(void *arg) {
 
 static struct net_mgmt_event_callback wifi_cb;
 static struct net_mgmt_event_callback ipv4_cb;
+static struct net_mgmt_event_callback supp_cb;
+static struct net_mgmt_event_callback iface_cb;
+static struct net_mgmt_event_callback l4_cb;
 
 static void _event_handler(struct net_mgmt_event_callback *cb, uint32_t mgmt_event, struct net_if *iface) {
     wifi_radio_obj_t *self = &common_hal_wifi_radio_obj;
@@ -276,10 +281,25 @@ void common_hal_wifi_init(bool user_initiated) {
         NET_EVENT_WIFI_AP_DISABLE_RESULT |
         NET_EVENT_WIFI_AP_STA_CONNECTED |
         NET_EVENT_WIFI_AP_STA_DISCONNECTED);
+    net_mgmt_init_event_callback(&iface_cb, _event_handler,
+        NET_EVENT_IF_UP |
+        NET_EVENT_IF_DOWN);
+    net_mgmt_init_event_callback(&l4_cb, _event_handler,
+        NET_EVENT_L4_CONNECTED |
+        NET_EVENT_L4_DISCONNECTED);
+    net_mgmt_init_event_callback(&supp_cb, _event_handler,
+        NET_EVENT_SUPPLICANT_READY |
+        NET_EVENT_SUPPLICANT_NOT_READY |
+        NET_EVENT_SUPPLICANT_IFACE_ADDED |
+        NET_EVENT_SUPPLICANT_IFACE_REMOVED |
+        NET_EVENT_SUPPLICANT_IFACE_REMOVING |
+        NET_EVENT_SUPPLICANT_INT_EVENT);
 
     net_mgmt_init_event_callback(&ipv4_cb, _event_handler, NET_EVENT_IPV4_ADDR_ADD);
 
     net_mgmt_add_event_callback(&wifi_cb);
+    net_mgmt_add_event_callback(&iface_cb);
+    net_mgmt_add_event_callback(&supp_cb);
     net_mgmt_add_event_callback(&ipv4_cb);
 
     // Set the default hostname capped at NET_HOSTNAME_MAX_LEN characters. We trim off
