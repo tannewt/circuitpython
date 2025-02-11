@@ -14,17 +14,17 @@
 
 #if defined(DEFAULT_USB_HOST_5V_POWER)
 bool board_reset_pin_number(uint8_t pin_number) {
-    // if (pin_number == DEFAULT_USB_HOST_5V_POWER->number) {
-    //     // doing this (rather than gpio_init) in this specific order ensures no
-    //     // glitch if pin was already configured as a high output. gpio_init() temporarily
-    //     // configures the pin as an input, so the power enable value would potentially
-    //     // glitch.
-    //     gpio_put(pin_number, 1);
-    //     gpio_set_dir(pin_number, GPIO_OUT);
-    //     gpio_set_function(pin_number, GPIO_FUNC_SIO);
+    if (pin_number == DEFAULT_USB_HOST_5V_POWER->number) {
+        // doing this (rather than gpio_init) in this specific order ensures no
+        // glitch if pin was already configured as a high output. gpio_init() temporarily
+        // configures the pin as an input, so the power enable value would potentially
+        // glitch.
+        gpio_put(pin_number, 1);
+        gpio_set_dir(pin_number, GPIO_OUT);
+        gpio_set_function(pin_number, GPIO_FUNC_SIO);
 
-    //     return true;
-    // }
+        return true;
+    }
     return false;
 }
 #endif
