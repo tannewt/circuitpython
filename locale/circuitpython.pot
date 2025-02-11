@@ -1248,9 +1248,12 @@ msgstr ""
 msgid "Invalid %q"
 msgstr ""
 
-#: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2350.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
 msgid "Invalid %q and %q"
+msgstr ""
+
+#: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2350.c
+msgid "Invalid %q and %q for color depth %d"
 msgstr ""
 
 #: ports/atmel-samd/common-hal/microcontroller/Pin.c
