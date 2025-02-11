@@ -13,6 +13,7 @@
 #include <zephyr/sys/reboot.h>
 
 #include "lib/tlsf/tlsf.h"
+#include "zephyr/bluetooth/bluetooth.h"
 #include <zephyr/device.h>
 
 static tlsf_t heap;
@@ -27,6 +28,12 @@ static pool_t pools[CIRCUITPY_RAM_DEVICE_COUNT];
 static K_EVENT_DEFINE(main_needed);
 
 safe_mode_t port_init(void) {
+
+    int ret = bt_enable(NULL);
+    if (ret != 0) {
+        printk("bt enable failed: %d\n", ret);
+    }
+
     return SAFE_MODE_NONE;
 }
 

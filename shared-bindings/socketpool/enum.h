@@ -6,8 +6,9 @@
 
 #pragma once
 
-// Note: This file must be designed so it be included by ssl
-// whether or not CIRCUITPY_SOCKETPOOL is set.
+// Note: This file must be designed so it be included by ssl whether or not
+// CIRCUITPY_SOCKETPOOL is set. Do NOT change these values because Python level
+// network providers may rely on them when interfacing with ssl.
 //
 typedef enum {
     SOCKETPOOL_SOCK_STREAM = 1,
