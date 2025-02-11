@@ -392,7 +392,12 @@ wifi_radio_error_t common_hal_wifi_radio_connect(wifi_radio_obj_t *self, uint8_t
     printk("common_hal_wifi_radio_connect done: %d\n", result);
     if (result == WIFI_STATUS_CONN_SUCCESS) {
         printk("success!\n");
-        k_sleep(K_SECONDS(30));
+        net_dhcpv4_start(self->sta_netif);
+
+        k_poll_signal_reset(&self->done);
+        self->events[1].state = K_POLL_STATE_NOT_READY;
+
+        k_poll(self->events, ARRAY_SIZE(self->events), K_SECONDS((int)10));
         return WIFI_RADIO_ERROR_NONE;
     } else if (result == WIFI_STATUS_CONN_FAIL) {
         return WIFI_RADIO_ERROR_UNSPECIFIED;

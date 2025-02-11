@@ -143,6 +143,7 @@ static void _event_handler(struct net_mgmt_event_callback *cb, uint32_t mgmt_eve
             break;
         case NET_EVENT_IPV4_ADDR_ADD:
             printk("NET_EVENT_IPV4_ADDR_ADD\n");
+            k_poll_signal_raise(&self->done, WIFI_STATUS_CONN_SUCCESS);
             break;
         case NET_EVENT_SUPPLICANT_READY:
             printk("NET_EVENT_SUPPLICANT_READY\n");

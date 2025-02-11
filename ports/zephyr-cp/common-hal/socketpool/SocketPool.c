@@ -37,6 +37,7 @@ int socketpool_getaddrinfo_common(const char *host, int service, const struct zs
 
     char service_buf[6];
     snprintf(service_buf, sizeof(service_buf), "%d", service);
+    printk("socketpool_getaddrinfo_common host %s service %s\n", host, service_buf);
 
     return zsock_getaddrinfo(host, service_buf, hints, res);
 }
@@ -85,13 +86,14 @@ static mp_obj_t convert_sockaddr(const struct zsock_addrinfo *ai, int port) {
 }
 
 static mp_obj_t convert_addrinfo(const struct addrinfo *ai, int port) {
-    MP_STATIC_ASSERT(AF_INET == SOCKETPOOL_AF_INET);
-    #if CIRCUITPY_SOCKETPOOL_IPV6
-    MP_STATIC_ASSERT(AF_INET6 == SOCKETPOOL_AF_INET6);
-    #endif
-    // MP_STATIC_ASSERT(AF_UNSPEC == SOCKETPOOL_AF_UNSPEC);
     mp_obj_tuple_t *result = MP_OBJ_TO_PTR(mp_obj_new_tuple(5, NULL));
-    result->items[0] = MP_OBJ_NEW_SMALL_INT(ai->ai_family);
+    int family = ai->ai_family;
+    if (ai->ai_family == AF_INET) {
+        family = SOCKETPOOL_AF_INET;
+    } else if (ai->ai_family == AF_INET6) {
+        family = SOCKETPOOL_AF_INET6;
+    }
+    result->items[0] = MP_OBJ_NEW_SMALL_INT(family);
     result->items[1] = MP_OBJ_NEW_SMALL_INT(ai->ai_socktype);
     result->items[2] = MP_OBJ_NEW_SMALL_INT(ai->ai_protocol);
     result->items[3] = ai->ai_canonname ? mp_obj_new_str(ai->ai_canonname, strlen(ai->ai_canonname)) : MP_OBJ_NEW_QSTR(MP_QSTR_);
@@ -100,6 +102,12 @@ static mp_obj_t convert_addrinfo(const struct addrinfo *ai, int port) {
 }
 
 mp_obj_t common_hal_socketpool_getaddrinfo_raise(socketpool_socketpool_obj_t *self, const char *host, int port, int family, int type, int proto, int flags) {
+    if (family == SOCKETPOOL_AF_INET) {
+        family = AF_INET;
+    } else if (family == SOCKETPOOL_AF_INET6) {
+        family = AF_INET6;
+    }
+    // Proto and type values match BSD.
     const struct zsock_addrinfo hints = {
         .ai_flags = flags,
         .ai_family = family,
@@ -110,7 +118,7 @@ mp_obj_t common_hal_socketpool_getaddrinfo_raise(socketpool_socketpool_obj_t *se
     struct addrinfo *res = NULL;
     int err = socketpool_getaddrinfo_common(host, port, &hints, &res);
     if (err != 0 || res == NULL) {
-        printk("common_hal_socketpool_getaddrinfo_raise\n");
+        printk("common_hal_socketpool_getaddrinfo_raise err %d res %p\n", err, res);
         common_hal_socketpool_socketpool_raise_gaierror_noname();
     }
 
