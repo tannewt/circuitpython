@@ -53,12 +53,12 @@ static void __not_in_flash_func(core1_main)(void) {
         (0x1b << MPU_RASR_SIZE_Pos);         // Size is 0x10000000 which masks up to SRAM region.
     MPU->RNR = 7;
     #endif
-    #if __CORTEX_M == 33
-    MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
-    MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
-    MPU->RBAR = XIP_BASE | MPU_RBAR_XN_Msk;
-    MPU->RLAR = XIP_SRAM_BASE | MPU_RLAR_EN_Msk;
-    #endif
+    // #if __CORTEX_M == 33
+    // MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
+    // MPU->RNR = 6; // 7 is used by pico-sdk stack protection.
+    // MPU->RBAR = XIP_BASE | MPU_RBAR_XN_Msk;
+    // MPU->RLAR = XIP_SRAM_BASE | MPU_RLAR_EN_Msk;
+    // #endif
 
     _core1_ready = true;
 

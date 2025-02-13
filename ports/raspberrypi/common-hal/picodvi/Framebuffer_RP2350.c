@@ -53,16 +53,17 @@
 #define SYNC_V1_H0 (TMDS_CTRL_10 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
 #define SYNC_V1_H1 (TMDS_CTRL_11 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
 
-#define MODE_800_H_SYNC_POLARITY 0
-#define MODE_800_H_FRONT_PORCH   24
-#define MODE_800_H_SYNC_WIDTH    72
-#define MODE_800_H_BACK_PORCH    96
-#define MODE_800_H_ACTIVE_PIXELS 800
+#define MODE_720_H_SYNC_POLARITY 0
+#define MODE_720_H_FRONT_PORCH   24
+#define MODE_720_H_SYNC_WIDTH    64
+#define MODE_720_H_BACK_PORCH    88
+#define MODE_720_H_ACTIVE_PIXELS 720
 
-#define MODE_800_V_SYNC_POLARITY 1
-#define MODE_800_V_FRONT_PORCH   3
-#define MODE_800_V_SYNC_WIDTH    10
-#define MODE_800_V_BACK_PORCH    7
+#define MODE_720_V_SYNC_POLARITY 0
+#define MODE_720_V_FRONT_PORCH   3
+#define MODE_720_V_SYNC_WIDTH    4
+#define MODE_720_V_BACK_PORCH    13
+#define MODE_720_V_ACTIVE_LINES  400
 
 #define MODE_640_H_SYNC_POLARITY 0
 #define MODE_640_H_FRONT_PORCH   16
@@ -74,15 +75,15 @@
 #define MODE_640_V_FRONT_PORCH   10
 #define MODE_640_V_SYNC_WIDTH    2
 #define MODE_640_V_BACK_PORCH    33
-#define MODE_V_ACTIVE_LINES  480
+#define MODE_640_V_ACTIVE_LINES  480
 
-#define MODE_800_V_TOTAL_LINES  ( \
-    MODE_800_V_FRONT_PORCH + MODE_800_V_SYNC_WIDTH + \
-    MODE_800_V_BACK_PORCH + MODE_V_ACTIVE_LINES \
+#define MODE_720_V_TOTAL_LINES  ( \
+    MODE_720_V_FRONT_PORCH + MODE_720_V_SYNC_WIDTH + \
+    MODE_720_V_BACK_PORCH + MODE_720_V_ACTIVE_LINES \
     )
 #define MODE_640_V_TOTAL_LINES  ( \
     MODE_640_V_FRONT_PORCH + MODE_640_V_SYNC_WIDTH + \
-    MODE_640_V_BACK_PORCH + MODE_V_ACTIVE_LINES \
+    MODE_640_V_BACK_PORCH + MODE_640_V_ACTIVE_LINES \
     )
 
 #define HSTX_CMD_RAW         (0x0u << 12)
@@ -124,34 +125,34 @@ static uint32_t vactive_line640[] = {
     HSTX_CMD_TMDS | MODE_640_H_ACTIVE_PIXELS
 };
 
-static uint32_t vblank_line800_vsync_off[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
-    SYNC_V0_H1,
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
-    SYNC_V0_H0,
-    HSTX_CMD_RAW_REPEAT | (MODE_800_H_BACK_PORCH + MODE_800_H_ACTIVE_PIXELS),
-    SYNC_V0_H1
-};
-
-static uint32_t vblank_line800_vsync_on[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
+static uint32_t vblank_line720_vsync_off[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_FRONT_PORCH,
     SYNC_V1_H1,
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_SYNC_WIDTH,
     SYNC_V1_H0,
-    HSTX_CMD_RAW_REPEAT | (MODE_800_H_BACK_PORCH + MODE_800_H_ACTIVE_PIXELS),
+    HSTX_CMD_RAW_REPEAT | (MODE_720_H_BACK_PORCH + MODE_720_H_ACTIVE_PIXELS),
     SYNC_V1_H1
 };
 
-static uint32_t vactive_line800[] = {
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_FRONT_PORCH,
+static uint32_t vblank_line720_vsync_on[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_FRONT_PORCH,
+    SYNC_V0_H1,
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_SYNC_WIDTH,
+    SYNC_V0_H0,
+    HSTX_CMD_RAW_REPEAT | (MODE_720_H_BACK_PORCH + MODE_720_H_ACTIVE_PIXELS),
+    SYNC_V0_H1
+};
+
+static uint32_t vactive_line720[] = {
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_FRONT_PORCH,
     SYNC_V1_H1,
     HSTX_CMD_NOP,
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_SYNC_WIDTH,
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_SYNC_WIDTH,
     SYNC_V1_H0,
     HSTX_CMD_NOP,
-    HSTX_CMD_RAW_REPEAT | MODE_800_H_BACK_PORCH,
+    HSTX_CMD_RAW_REPEAT | MODE_720_H_BACK_PORCH,
     SYNC_V1_H1,
-    HSTX_CMD_TMDS | MODE_800_H_ACTIVE_PIXELS
+    HSTX_CMD_TMDS | MODE_720_H_ACTIVE_PIXELS
 };
 
 picodvi_framebuffer_obj_t *active_picodvi = NULL;
@@ -171,10 +172,16 @@ static void __not_in_flash_func(dma_irq_handler)(void) {
 }
 
 static bool mode_ok(mp_uint_t width, mp_uint_t height, mp_uint_t color_depth) {
-    if ((width == 640 || width == 800) && height == 480 && (color_depth < 8)) {
+    if (width == 640 && height == 480 && (color_depth < 8)) {
         return true;
     }
-    if ((width == 320 || width == 400) && height == 240) {
+    if (width == 320 && height == 240) {
+        return true;
+    }
+    if (width == 720 && height == 400) {
+        return true;
+    }
+    if (width == 360 && height == 200) {
         return true;
     }
     return false;
@@ -195,7 +202,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q and %q for color depth %d"), MP_QSTR_width, MP_QSTR_height, color_depth);
     }
 
-    bool pixel_doubled = height == 240;
+    bool pixel_doubled = height <= 240;
 
     size_t all_allocated = 0;
     int8_t pins[8] = {
@@ -251,10 +258,9 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     }
 
     if (width % 320 == 0) {
-        self->dma_commands_len = (MODE_640_V_FRONT_PORCH + MODE_640_V_SYNC_WIDTH + MODE_640_V_BACK_PORCH + 2 * MODE_V_ACTIVE_LINES + 1) * dma_command_size;
+        self->dma_commands_len = (MODE_640_V_FRONT_PORCH + MODE_640_V_SYNC_WIDTH + MODE_640_V_BACK_PORCH + 2 * MODE_640_V_ACTIVE_LINES + 1) * dma_command_size;
     } else {
-
-        self->dma_commands_len = (MODE_800_V_FRONT_PORCH + MODE_800_V_SYNC_WIDTH + MODE_800_V_BACK_PORCH + 2 * MODE_V_ACTIVE_LINES + 1) * dma_command_size;
+        self->dma_commands_len = (MODE_720_V_FRONT_PORCH + MODE_720_V_SYNC_WIDTH + MODE_720_V_BACK_PORCH + 2 * MODE_720_V_ACTIVE_LINES + 1) * dma_command_size;
     }
     self->dma_commands = (uint32_t *)port_malloc(self->dma_commands_len * sizeof(uint32_t), true);
     if (self->dma_commands == NULL || ((size_t)self->framebuffer & 0xf0000000) == 0x10000000) {
@@ -290,27 +296,27 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     if (self->width % 320 == 0) {
         frontporch_start = MODE_640_V_TOTAL_LINES - MODE_640_V_FRONT_PORCH;
     } else {
-        frontporch_start = MODE_800_V_TOTAL_LINES - MODE_800_V_FRONT_PORCH;
+        frontporch_start = MODE_720_V_TOTAL_LINES - MODE_720_V_FRONT_PORCH;
     }
     size_t frontporch_end = frontporch_start;
     if (self->width % 320 == 0) {
         frontporch_end += MODE_640_V_FRONT_PORCH;
     } else {
-        frontporch_end += MODE_800_V_FRONT_PORCH;
+        frontporch_end += MODE_720_V_FRONT_PORCH;
     }
     size_t vsync_start = 0;
     size_t vsync_end = vsync_start;
     if (self->width % 320 == 0) {
         vsync_end += MODE_640_V_SYNC_WIDTH;
     } else {
-        vsync_end += MODE_800_V_SYNC_WIDTH;
+        vsync_end += MODE_720_V_SYNC_WIDTH;
     }
     size_t backporch_start = vsync_end;
     size_t backporch_end = backporch_start;
     if (self->width % 320 == 0) {
         backporch_end += MODE_640_V_BACK_PORCH;
     } else {
-        backporch_end += MODE_800_V_BACK_PORCH;
+        backporch_end += MODE_720_V_BACK_PORCH;
     }
     size_t active_start = backporch_end;
 
@@ -345,15 +351,15 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         dma_channel_hw_addr(self->dma_pixel_channel)->al1_write_addr = dma_write_addr;
     }
     bool is_640_based = (width == 320 || width == 640);
-    uint32_t *vblank_line_vsync_on = is_640_based ?  vblank_line640_vsync_on : vblank_line800_vsync_on;
-    uint32_t *vblank_line_vsync_off = is_640_based ?  vblank_line640_vsync_off : vblank_line800_vsync_off;
-    uint32_t *vactive_line = is_640_based ?  vactive_line640 : vactive_line800;
+    uint32_t *vblank_line_vsync_on = is_640_based ?  vblank_line640_vsync_on : vblank_line720_vsync_on;
+    uint32_t *vblank_line_vsync_off = is_640_based ?  vblank_line640_vsync_off : vblank_line720_vsync_off;
+    uint32_t *vactive_line = is_640_based ?  vactive_line640 : vactive_line720;
 
     size_t mode_v_total_lines;
     if (is_640_based) {
         mode_v_total_lines = MODE_640_V_TOTAL_LINES;
     } else {
-        mode_v_total_lines = MODE_800_V_TOTAL_LINES;
+        mode_v_total_lines = MODE_720_V_TOTAL_LINES;
     }
 
     for (size_t v_scanline = 0; v_scanline < mode_v_total_lines; v_scanline++) {
@@ -450,7 +456,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
             1 << HSTX_CTRL_EXPAND_SHIFT_RAW_N_SHIFTS_LSB |
             0 << HSTX_CTRL_EXPAND_SHIFT_RAW_SHIFT_LSB;
 
-    uint32_t clk_factor = is_640_based ? 5u : 4u;
+    uint32_t clk_factor = is_640_based ? 5u : 5u;
 
     // Serial output config: clock period of 4 or 5 cycles, pop from command
     // expander every 4 or 5 cycles, shift the output shiftreg by 2 every cycle.

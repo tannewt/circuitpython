@@ -149,6 +149,24 @@ static void console_uart_write_cb(void *env, const char *str, size_t len) {
 }
 
 const mp_print_t console_uart_print = {NULL, console_uart_write_cb};
+
+int console_uart_printf(const char *fmt, ...) {
+    #if CIRCUITPY_CONSOLE_UART
+    // Skip prints that occur before console serial is started. It's better than
+    // crashing.
+    if (common_hal_busio_uart_deinited(&console_uart)) {
+        return 0;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    int ret = mp_vprintf(&console_uart_print, fmt, ap);
+    va_end(ap);
+    return ret;
+    #else
+    return 0;
+    #endif
+}
+
 #endif
 
 MP_WEAK void board_serial_early_init(void) {
@@ -282,12 +300,12 @@ char serial_read(void) {
     #endif
 
     #if CIRCUITPY_CONSOLE_UART
-    if (common_hal_busio_uart_rx_characters_available(&console_uart)) {
-        int uart_errcode;
-        char text;
-        common_hal_busio_uart_read(&console_uart, (uint8_t *)&text, 1, &uart_errcode);
-        return text;
-    }
+    // if (common_hal_busio_uart_rx_characters_available(&console_uart)) {
+    //     int uart_errcode;
+    //     char text;
+    //     common_hal_busio_uart_read(&console_uart, (uint8_t *)&text, 1, &uart_errcode);
+    //     return text;
+    // }
     #endif
 
     #if CIRCUITPY_SERIAL_BLE
@@ -345,7 +363,7 @@ uint32_t serial_bytes_available(void) {
     #endif
 
     #if CIRCUITPY_CONSOLE_UART
-    count += common_hal_busio_uart_rx_characters_available(&console_uart);
+    // count += common_hal_busio_uart_rx_characters_available(&console_uart);
     #endif
 
     #if CIRCUITPY_SERIAL_BLE
@@ -406,7 +424,7 @@ uint32_t serial_write_substring(const char *text, uint32_t length) {
     #endif
 
     #if CIRCUITPY_CONSOLE_UART
-    length_sent = console_uart_write(text, length);
+    // length_sent = console_uart_write(text, length);
     #endif
 
     #if CIRCUITPY_SERIAL_BLE
