@@ -184,6 +184,9 @@ static bool mode_ok(mp_uint_t width, mp_uint_t height, mp_uint_t color_depth) {
     if (width == 360 && height == 200) {
         return true;
     }
+    if (width == 180 && height == 100) {
+        return true;
+    }
     return false;
 }
 
@@ -203,6 +206,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     }
 
     bool pixel_doubled = height <= 240;
+    bool pixel_quaded = height <= 100;
 
     size_t all_allocated = 0;
     int8_t pins[8] = {
@@ -385,6 +389,9 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
                 self->dma_commands[command_word++] = dma_pixel_ctrl;
                 self->dma_commands[command_word++] = dma_write_addr;
                 row /= 2;
+                if (pixel_quaded) {
+                    row /= 2;
+                }
                 // When pixel doubling, we do one transfer per pixel and it gets
                 // mirrored into the rest of the word.
                 transfer_count = self->width;
@@ -442,7 +449,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
                 rot << HSTX_CTRL_EXPAND_TMDS_L0_ROT_LSB;
     }
     size_t shifts_before_empty = ((32 / color_depth) % 32);
-    if (pixel_doubled && color_depth == 8) {
+    if (pixel_doubled && color_depth == 8 && !pixel_quaded) {
         // All but 320x240 at 8bits will shift through all 32 bits. We are only
         // doubling so we only need 16 bits (2 x 8) to get our doubled pixel.
         shifts_before_empty = 2;
