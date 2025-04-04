@@ -3024,6 +3024,10 @@ msgstr ""
 msgid "expected ':' after format specifier"
 msgstr ""
 
+#: shared-module/pathlib/PosixPath.c
+msgid "expected str or PosixPath"
+msgstr ""
+
 #: py/obj.c
 msgid "expected tuple/list"
 msgstr ""

@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2016-2017 Scott Shawcroft for Adafruit Industries
 //
 // SPDX-License-Identifier: MIT
+#include <stddef.h>
 #include <string.h>
 
 #include "py/obj.h"
@@ -57,6 +58,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(supervisor_reload_obj, supervisor_reload);
 //| def set_next_code_file(
 //|     filename: Optional[str],
 //|     *,
+//|     working_directory: Optional[str] = None,
 //|     reload_on_success: bool = False,
 //|     reload_on_error: bool = False,
 //|     sticky_on_success: bool = False,
@@ -99,6 +101,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(supervisor_reload_obj, supervisor_reload);
 static mp_obj_t supervisor_set_next_code_file(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_filename, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_rom_obj = mp_const_none} },
+        { MP_QSTR_working_directory, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = mp_const_none} },
         { MP_QSTR_reload_on_success, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = false} },
         { MP_QSTR_reload_on_error, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = false} },
         { MP_QSTR_sticky_on_success, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = false} },
@@ -107,6 +110,7 @@ static mp_obj_t supervisor_set_next_code_file(size_t n_args, const mp_obj_t *pos
     };
     struct {
         mp_arg_val_t filename;
+        mp_arg_val_t working_directory;
         mp_arg_val_t reload_on_success;
         mp_arg_val_t reload_on_error;
         mp_arg_val_t sticky_on_success;
@@ -117,6 +121,11 @@ static mp_obj_t supervisor_set_next_code_file(size_t n_args, const mp_obj_t *pos
     mp_obj_t filename_obj = args.filename.u_obj;
     if (!mp_obj_is_str_or_bytes(filename_obj) && filename_obj != mp_const_none) {
         mp_raise_TypeError_varg(MP_ERROR_TEXT("%q must be of type %q or %q, not %q"), MP_QSTR_filename, MP_QSTR_str, MP_QSTR_None, mp_obj_get_type(filename_obj)->name);
+    }
+
+    mp_obj_t working_directory_obj = args.working_directory.u_obj;
+    if (!mp_obj_is_str_or_bytes(working_directory_obj) && working_directory_obj != mp_const_none) {
+        mp_raise_TypeError_varg(MP_ERROR_TEXT("%q must be of type %q or %q, not %q"), MP_QSTR_working_directory, MP_QSTR_str, MP_QSTR_None, mp_obj_get_type(working_directory_obj)->name);
     }
     if (filename_obj == mp_const_none) {
         filename_obj = mp_const_empty_bytes;
@@ -144,13 +153,37 @@ static mp_obj_t supervisor_set_next_code_file(size_t n_args, const mp_obj_t *pos
         next_code_configuration = NULL;
     }
     if (options != 0 || len != 0) {
-        next_code_configuration = port_malloc(sizeof(supervisor_next_code_info_t) + len + 1, false);
+        size_t working_directory_len = 0;
+        if (working_directory_obj != mp_const_none) {
+            mp_obj_str_get_data(working_directory_obj, &working_directory_len);
+        }
+
+        size_t next_code_size = sizeof(supervisor_next_code_info_t) + len + 1;
+        if (working_directory_len > 0) {
+            next_code_size += working_directory_len + 1;
+        }
+        next_code_configuration = port_malloc(next_code_size, false);
         if (next_code_configuration == NULL) {
-            m_malloc_fail(sizeof(supervisor_next_code_info_t) + len + 1);
+            m_malloc_fail(next_code_size);
         }
         next_code_configuration->options = options | SUPERVISOR_NEXT_CODE_OPT_NEWLY_SET;
-        memcpy(&next_code_configuration->filename, filename, len);
-        next_code_configuration->filename[len] = '\0';
+
+        char *filename_ptr = (char *)next_code_configuration + sizeof(supervisor_next_code_info_t);
+        next_code_configuration->filename = filename_ptr;
+        next_code_configuration->working_directory = NULL;
+
+        // Copy filename
+        memcpy(filename_ptr, filename, len);
+        filename_ptr[len] = '\0';
+
+        // Copy working directory after filename if present
+        if (working_directory_len > 0) {
+            char *working_directory_ptr = filename_ptr + len + 1;
+            next_code_configuration->working_directory = working_directory_ptr;
+            const char *working_directory = mp_obj_str_get_data(working_directory_obj, &working_directory_len);
+            memcpy(working_directory_ptr, working_directory, working_directory_len);
+            working_directory_ptr[working_directory_len] = '\0';
+        }
     }
     return mp_const_none;
 }
