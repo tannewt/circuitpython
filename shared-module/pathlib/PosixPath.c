@@ -233,9 +233,10 @@ mp_obj_t common_hal_pathlib_posixpath_is_dir(pathlib_posixpath_obj_t *self) {
     if (nlr_push(&nlr) == 0) {
         const char *path = mp_obj_str_get_str(self->path_str);
         mp_obj_t stat_result = common_hal_os_stat(path);
+        mp_obj_tuple_t *stat_result_tpl = MP_OBJ_TO_PTR(stat_result);
 
         // Check if it's a directory (S_IFDIR flag in st_mode)
-        mp_obj_t mode_obj = mp_obj_dict_get(stat_result, MP_OBJ_NEW_QSTR(MP_QSTR_st_mode));
+        mp_obj_t mode_obj = stat_result_tpl->items[0];
         mp_int_t mode_val = mp_obj_get_int(mode_obj);
         nlr_pop();
 
@@ -254,9 +255,10 @@ mp_obj_t common_hal_pathlib_posixpath_is_file(pathlib_posixpath_obj_t *self) {
     if (nlr_push(&nlr) == 0) {
         const char *path = mp_obj_str_get_str(self->path_str);
         mp_obj_t stat_result = common_hal_os_stat(path);
+        mp_obj_tuple_t *stat_result_tpl = MP_OBJ_TO_PTR(stat_result);
 
         // Check if it's a regular file (S_IFREG flag in st_mode)
-        mp_obj_t mode_obj = mp_obj_dict_get(stat_result, MP_OBJ_NEW_QSTR(MP_QSTR_st_mode));
+        mp_obj_t mode_obj = stat_result_tpl->items[0];
         mp_int_t mode_val = mp_obj_get_int(mode_obj);
         nlr_pop();
 
