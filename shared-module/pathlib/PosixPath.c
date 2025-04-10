@@ -119,12 +119,12 @@ mp_obj_t common_hal_pathlib_posixpath_parent(pathlib_posixpath_obj_t *self) {
 
     // No slash found, return "."
     if (last_slash == -1) {
-        return pathlib_posixpath_from_str(MP_OBJ_NEW_QSTR(MP_QSTR_dot));
+        return pathlib_posixpath_from_str(MP_OBJ_NEW_QSTR(MP_QSTR__dot_));
     }
 
     // Root directory
     if (last_slash == 0) {
-        return pathlib_posixpath_from_str(MP_OBJ_NEW_QSTR(MP_QSTR_slash));
+        return pathlib_posixpath_from_str(MP_OBJ_NEW_QSTR(MP_QSTR__slash_));
     }
 
     // Create parent path

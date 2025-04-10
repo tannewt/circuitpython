@@ -16,16 +16,9 @@
 //| """Filesystem path operations"""
 //|
 
-//| class Path:
+//| def Path(path: Union[str, "PosixPath"]) -> "PosixPath":
 //|     """Factory function that returns a new PosixPath."""
-//|
-//|     def __new__(cls, *args) -> PosixPath:
-//|         """Create a new Path object.
-//|
-//|         :param args: Path components
-//|         :return: A new PosixPath object
-//|         """
-//|         ...
+//|     ...
 //|
 
 /* Path is just an alias for PosixPath in CircuitPython */
