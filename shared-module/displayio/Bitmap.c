@@ -31,7 +31,13 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
     self->stride = stride(width, bits_per_value);
     self->data_alloc = false;
     if (!data) {
-        data = m_malloc(self->stride * height * sizeof(uint32_t));
+        size_t bitmap_bytes = self->stride * height * sizeof(uint32_t);
+        data = port_malloc(bitmap_bytes, false);
+        if (data == NULL) {
+            m_malloc_fail(bitmap_bytes);
+        } else {
+            memset(data, 0x00, bitmap_bytes);
+        }
         self->data_alloc = true;
     }
     self->data = data;
@@ -64,7 +70,7 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
 
 void common_hal_displayio_bitmap_deinit(displayio_bitmap_t *self) {
     if (self->data_alloc) {
-        gc_free(self->data);
+        port_free(self->data);
     }
     self->data = NULL;
 }
