@@ -28,7 +28,7 @@
 static safe_mode_t _safe_mode;
 
 safe_mode_t get_safe_mode(void) {
-    return _safe_mode;
+    return SAFE_MODE_NONE;
 }
 
 void set_safe_mode(safe_mode_t safe_mode) {

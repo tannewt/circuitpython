@@ -1136,6 +1136,7 @@ int __attribute__((used)) main(void) {
 }
 
 void gc_collect(void) {
+    uint32_t start_time = supervisor_ticks_ms32();
     gc_collect_start();
 
     mp_uint_t regs[10];
@@ -1177,6 +1178,9 @@ void gc_collect(void) {
     // range.
     gc_collect_root((void **)sp, ((mp_uint_t)port_stack_get_top() - sp) / sizeof(mp_uint_t));
     gc_collect_end();
+    uint32_t end_time = supervisor_ticks_ms32();
+    uint32_t duration = end_time - start_time;
+    console_uart_printf("GC took %dms\r\n", duration);
 }
 
 // Ports may provide an implementation of this function if it is needed
@@ -1198,12 +1202,14 @@ static void NORETURN __fatal_error(const char *msg) {
     #if CIRCUITPY_DEBUG == 0
     reset_into_safe_mode(SAFE_MODE_HARD_FAULT);
     #endif
+    console_uart_printf(msg);
+    console_uart_printf("\r\n");
     while (true) {
     }
 }
 
 void MP_WEAK __assert_func(const char *file, int line, const char *func, const char *expr) {
-    mp_printf(&mp_plat_print, "Assertion '%s' failed, at file %s:%d\n", expr, file, line);
+    console_uart_printf("Assertion '%s' failed, at file %s:%d\r\n", expr, file, line);
     __fatal_error("Assertion failed");
 }
 #endif

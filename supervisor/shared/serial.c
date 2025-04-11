@@ -406,7 +406,7 @@ uint32_t serial_write_substring(const char *text, uint32_t length) {
     #endif
 
     #if CIRCUITPY_CONSOLE_UART
-    length_sent = console_uart_write(text, length);
+    // length_sent = console_uart_write(text, length);
     #endif
 
     #if CIRCUITPY_SERIAL_BLE

@@ -233,18 +233,22 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_siz
 
 bool tud_msc_is_writable_cb(uint8_t lun) {
     if (lun >= LUN_COUNT) {
+        console_uart_printf("lun %u out of bounds\n", lun);
         return false;
     }
 
     fs_user_mount_t *vfs = get_vfs(lun);
     if (vfs == NULL) {
+        console_uart_printf("lun %u has no mount\r\n", lun);
         return false;
     }
     if (vfs->blockdev.writeblocks[0] == MP_OBJ_NULL || !filesystem_is_writable_by_usb(vfs)) {
+        console_uart_printf("lun %u is not writable\r\n", lun);
         return false;
     }
     // Lock the blockdev once we say we're writable.
     if (!locked[lun] && !blockdev_lock(vfs)) {
+        console_uart_printf("lun %u could not be locked\r\n", lun);
         return false;
     }
     locked[lun] = true;
@@ -263,11 +267,10 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void *buff
     disk_ioctl(vfs, GET_SECTOR_COUNT, &disk_block_count);
 
     if (lba + block_count > disk_block_count) {
+        console_uart_printf("lba %u out of bounds\r\n", lba);
         return -1;
     }
-
     disk_read(vfs, buffer, lba, block_count);
-
     return block_count * MSC_FLASH_BLOCK_SIZE;
 }
 

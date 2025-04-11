@@ -438,8 +438,11 @@ void reset_to_bootloader(void) {
 }
 
 void reset_cpu(void) {
-    watchdog_reboot(0, SRAM_END, 0);
-    watchdog_start_tick(12);
+    console_uart_printf("reset cpu\n");
+    gpio_init(29);
+    gpio_set_dir(29, GPIO_OUT);
+    gpio_set_function(29, GPIO_FUNC_SIO);
+    gpio_put(29, 1);
 
     while (true) {
         __wfi();
@@ -570,7 +573,10 @@ __attribute__((used)) void __not_in_flash_func(isr_hardfault)(void) {
     // Only safe mode from core 0 which is running CircuitPython. Core 1 faulting
     // should not be fatal to CP. (Fingers crossed.)
     if (get_core_num() == 0) {
+        console_uart_printf("Hard fault on core 0\n");
         reset_into_safe_mode(SAFE_MODE_HARD_FAULT);
+    } else {
+        console_uart_printf("Core 1 faulting\n");
     }
     while (true) {
         asm ("nop;");
