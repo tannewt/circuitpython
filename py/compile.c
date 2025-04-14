@@ -221,7 +221,7 @@ static void mp_emit_common_start_pass(mp_emit_common_t *emit, pass_kind_t pass) 
         if (emit->ct_cur_child == 0) {
             emit->children = NULL;
         } else {
-            emit->children = m_new0(mp_raw_code_t *, emit->ct_cur_child);
+            emit->children = m_malloc_helper(sizeof(mp_raw_code_t *) * (emit->ct_cur_child), M_MALLOC_ENSURE_ZEROED | M_MALLOC_RAISE_ERROR | M_MALLOC_COLLECT);
         }
     }
     emit->ct_cur_child = 0;

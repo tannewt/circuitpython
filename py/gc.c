@@ -154,6 +154,8 @@ void __attribute__ ((noinline)) gc_log_change(uint32_t start_block, uint32_t len
 #pragma GCC pop_options
 #endif
 
+static bool debug_collect = false;
+
 // TODO waste less memory; currently requires that all entries in alloc_table have a corresponding block in pool
 static void gc_setup_area(mp_state_mem_area_t *area, void *start, void *end) {
     // calculate parameters for GC (T=total, A=alloc table, F=finaliser table, L=leaf table, P=pool; all in bytes):
@@ -486,7 +488,7 @@ static void MP_NO_INSTRUMENT PLACE_IN_ITCM(gc_mark_subtree)(size_t block)
         #endif
 
         // Only scan the block's children if it's not a leaf
-        if (true || should_scan) {
+        if (debug_collect || should_scan) {
             // console_uart_printf("scanning block %p[%d]\n", area, block);
             // check this block's children
             void **ptrs = (void **)PTR_FROM_BLOCK(area, block);
@@ -830,6 +832,8 @@ bool gc_alloc_possible(void) {
     return MP_STATE_MEM(area).gc_pool_start != 0;
 }
 
+static size_t count9be0 = 0;
+
 void *gc_alloc(size_t n_bytes, unsigned int alloc_flags) {
     bool has_finaliser = alloc_flags & GC_ALLOC_FLAG_HAS_FINALISER;
     size_t n_blocks = ((n_bytes + BYTES_PER_BLOCK - 1) & (~(BYTES_PER_BLOCK - 1))) / BYTES_PER_BLOCK;
@@ -1018,10 +1022,17 @@ found:
     memorymonitor_track_allocation(end_block - start_block + 1);
     #endif
 
-    // if ((size_t)ret_ptr == 0x11024380) {
-    //     console_uart_printf("gc_alloc(%d, %01x) = %p\n", n_bytes, alloc_flags, ret_ptr);
-    //     asm("bkpt");
-    // }
+    if (debug_collect) {
+        if ((size_t)ret_ptr == 0x1101b490) {
+            if (count9be0 == 1) {
+                asm ("bkpt");
+            }
+            console_uart_printf("count9be0 = %d\n", count9be0);
+            count9be0++;
+        }
+
+        console_uart_printf("gc_alloc(%d, %01x) = %p\n", n_bytes, alloc_flags, ret_ptr);
+    }
 
     return ret_ptr;
 }
@@ -1347,7 +1358,9 @@ void *gc_realloc(void *ptr_in, size_t n_bytes, bool allow_move) {
     // can't resize inplace; try to find a new contiguous chain
     void *ptr_out = gc_alloc(n_bytes, alloc_flags);
 
-    console_uart_printf("gc_realloc: moving %p -> %p, %d -> %d bytes\n", ptr_in, ptr_out, n_blocks * BYTES_PER_BLOCK, n_bytes);
+    if (debug_collect) {
+        console_uart_printf("gc_realloc: moving %p -> %p, %d -> %d bytes\n", ptr_in, ptr_out, n_blocks * BYTES_PER_BLOCK, n_bytes);
+    }
     // check that the alloc succeeded
     if (ptr_out == NULL) {
         return NULL;
