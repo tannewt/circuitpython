@@ -249,6 +249,8 @@ bool tud_msc_is_writable_cb(uint8_t lun) {
     // Lock the blockdev once we say we're writable.
     if (!locked[lun] && !blockdev_lock(vfs)) {
         console_uart_printf("lun %u could not be locked\r\n", lun);
+        console_uart_printf("locked[%u] = %d\r\n", lun, locked[lun]);
+        console_uart_printf("vfs %p\r\n", vfs);
         return false;
     }
     locked[lun] = true;

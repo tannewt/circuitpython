@@ -188,6 +188,8 @@ static void gc_setup_area(mp_state_mem_area_t *area, void *start, void *end) {
 
     // Total number of blocks in the pool
     size_t gc_pool_block_len = area->gc_alloc_table_byte_len * BLOCKS_PER_ATB;
+    console_uart_printf("gc_pool_block_len = %d\r\n", gc_pool_block_len);
+    console_uart_printf("total free %d\r\n", gc_pool_block_len * BYTES_PER_BLOCK);
 
     // Calculate table sizes and set start pointers
     #if MICROPY_ENABLE_FINALISER
@@ -294,6 +296,26 @@ void gc_add(void *start, void *end) {
 }
 
 #if MICROPY_GC_SPLIT_HEAP_AUTO
+static size_t compute_heap_size(size_t total_blocks) {
+    console_uart_printf("total_blocks = %d\r\n", total_blocks);
+    // Compute bytes needed to build a heap with total_blocks blocks.
+    size_t total_heap =
+        (total_blocks + BLOCKS_PER_ATB - 1) / BLOCKS_PER_ATB
+        #if MICROPY_ENABLE_FINALISER
+        + (total_blocks + BLOCKS_PER_FTB - 1) / BLOCKS_PER_FTB
+        #endif
+        #if MICROPY_ENABLE_SELECTIVE_COLLECT
+        + (total_blocks + BLOCKS_PER_CTB - 1) / BLOCKS_PER_CTB
+        #endif
+        + total_blocks * BYTES_PER_BLOCK
+        + ALLOC_TABLE_GAP_BYTE
+        + sizeof(mp_state_mem_area_t);
+
+    // Round up size to the nearest multiple of BYTES_PER_BLOCK.
+    total_heap = (total_heap + BYTES_PER_BLOCK - 1) / BYTES_PER_BLOCK;
+    return total_heap;
+}
+
 // Try to automatically add a heap area large enough to fulfill 'failed_alloc'.
 static bool gc_try_add_heap(size_t failed_alloc) {
     // 'needed' is the size of a heap large enough to hold failed_alloc, with
@@ -301,9 +323,9 @@ static bool gc_try_add_heap(size_t failed_alloc) {
     //
     // Rather than reproduce all of that logic here, we approximate that adding
     // (13/512) is enough overhead for sufficiently large heap areas (the
-    // overhead converges to 3/128, but there's some fixed overhead and some
+    // overhead converges to 12/512, but there's some fixed overhead and some
     // rounding up of partial block sizes).
-    size_t needed = failed_alloc + MAX(2048, failed_alloc * 13 / 512);
+    size_t needed = compute_heap_size((failed_alloc + BYTES_PER_BLOCK - 1) / BYTES_PER_BLOCK);
 
     size_t avail = gc_get_max_new_split();
 
@@ -312,6 +334,7 @@ static bool gc_try_add_heap(size_t failed_alloc) {
         failed_alloc,
         needed,
         avail);
+    console_uart_printf("gc_try_add_heap failed_alloc %d, needed %d, avail %d\r\n", failed_alloc, needed, avail);
 
     if (avail < needed) {
         // Can't fit this allocation, or system heap has nearly run out anyway
@@ -347,27 +370,18 @@ static bool gc_try_add_heap(size_t failed_alloc) {
         total_blocks += area->gc_alloc_table_byte_len * BLOCKS_PER_ATB;
     }
 
-    // Compute bytes needed to build a heap with total_blocks blocks.
-    size_t total_heap =
-        total_blocks / BLOCKS_PER_ATB
-        #if MICROPY_ENABLE_FINALISER
-        + total_blocks / BLOCKS_PER_FTB
-        #endif
-        + total_blocks * BYTES_PER_BLOCK
-        + ALLOC_TABLE_GAP_BYTE
-        + sizeof(mp_state_mem_area_t);
-
-    // Round up size to the nearest multiple of BYTES_PER_BLOCK.
-    total_heap = (total_heap + BYTES_PER_BLOCK - 1) & (~(BYTES_PER_BLOCK - 1));
+    size_t total_heap = compute_heap_size(total_blocks);
 
     DEBUG_printf("total_heap " UINT_FMT " bytes\n", total_heap);
 
     size_t to_alloc = MIN(avail, MAX(total_heap, needed));
 
+    console_uart_printf("avail = %d\r\n", avail);
+    console_uart_printf("to_alloc = %d\r\n", to_alloc);
+
     mp_state_mem_area_t *new_heap = MP_PLAT_ALLOC_HEAP(to_alloc);
 
-    DEBUG_printf("MP_PLAT_ALLOC_HEAP " UINT_FMT " = %p\n",
-        to_alloc, new_heap);
+    console_uart_printf("MP_PLAT_ALLOC_HEAP %d = %p\r\n", to_alloc, new_heap);
 
     if (new_heap == NULL) {
         // This should only fail:

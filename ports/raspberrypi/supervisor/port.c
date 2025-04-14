@@ -259,17 +259,23 @@ void *port_malloc(size_t size, bool dma_capable) {
     if (!dma_capable && _psram_size > 0) {
         void *block = tlsf_malloc(_psram_heap, size);
         if (block) {
+            console_uart_printf("port_malloc(%d) psram = %p\n", size, block);
             return block;
+        } else {
+            console_uart_printf("port_malloc(%d) psram failed\n", size);
         }
     }
     void *block = tlsf_malloc(_heap, size);
+    console_uart_printf("port_malloc(%d) = %p\n", size, block);
     return block;
 }
 
 void port_free(void *ptr) {
     if (((size_t)ptr) < SRAM_BASE) {
+        console_uart_printf("port_free(%p) psram\n", ptr);
         tlsf_free(_psram_heap, ptr);
     } else {
+        console_uart_printf("port_free(%p)\n", ptr);
         tlsf_free(_heap, ptr);
     }
 }
@@ -278,10 +284,13 @@ void *port_realloc(void *ptr, size_t size, bool dma_capable) {
     if (_psram_size > 0 && ((ptr != NULL && ((size_t)ptr) < SRAM_BASE) || (ptr == NULL && !dma_capable))) {
         void *block = tlsf_realloc(_psram_heap, ptr, size);
         if (block) {
+            console_uart_printf("port_realloc(%d) psram = %p\n", size, block);
             return block;
         }
     }
-    return tlsf_realloc(_heap, ptr, size);
+    void *block = tlsf_realloc(_heap, ptr, size);
+    console_uart_printf("port_realloc(%d) = %p\n", size, block);
+    return block;
 }
 
 static bool max_size_walker(void *ptr, size_t size, int used, void *user) {
