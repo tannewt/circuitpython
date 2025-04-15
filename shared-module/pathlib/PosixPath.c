@@ -26,8 +26,7 @@ typedef struct _mp_obj_path_dir_iter_t {
 } mp_obj_path_dir_iter_t;
 
 mp_obj_t pathlib_posixpath_from_str(mp_obj_t path_str) {
-    pathlib_posixpath_obj_t *self = m_new_obj(pathlib_posixpath_obj_t);
-    self->base.type = &pathlib_posixpath_type;
+    pathlib_posixpath_obj_t *self = mp_obj_malloc(pathlib_posixpath_obj_t, &pathlib_posixpath_type);
     self->path_str = path_str;
     return MP_OBJ_FROM_PTR(self);
 }
@@ -290,8 +289,10 @@ mp_obj_t common_hal_pathlib_posixpath_absolute(pathlib_posixpath_obj_t *self) {
 }
 
 mp_obj_t common_hal_pathlib_posixpath_resolve(pathlib_posixpath_obj_t *self) {
-    // For now, just call absolute() since CircuitPython doesn't support symlinks
-    return common_hal_pathlib_posixpath_absolute(self);
+    const char *path = mp_obj_str_get_str(self->path_str);
+    const char *abspath = common_hal_os_path_abspath(path);
+    mp_obj_t abspath_obj = mp_obj_new_str(abspath, strlen(abspath));
+    return pathlib_posixpath_from_str(abspath_obj);
 }
 
 // Iterator iternext function - called for each iteration
@@ -310,8 +311,7 @@ static mp_obj_t path_dir_iter_iternext(mp_obj_t self_in) {
 
 // Create a new path directory iterator
 mp_obj_t mp_obj_new_path_dir_iter(mp_obj_t path, mp_obj_t iter) {
-    mp_obj_path_dir_iter_t *o = m_new_obj(mp_obj_path_dir_iter_t);
-    o->base.type = &mp_type_polymorph_iter;
+    mp_obj_path_dir_iter_t *o = mp_obj_malloc(mp_obj_path_dir_iter_t, &mp_type_polymorph_iter);
     o->iternext = path_dir_iter_iternext;
     o->path = path;
     o->iter = iter;
