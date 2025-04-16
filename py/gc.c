@@ -471,6 +471,24 @@ static inline mp_state_mem_area_t *gc_get_ptr_area(const void *ptr) {
 #endif
 #endif
 
+// Use this to debug a specific pointer that should have been collected and break on the particular
+// allocation that returns the pointer.
+// Set debug_collect to true to perform the subtree scan for everything and print out any blocks that
+// have pointers that would have been collected. Then, set the block's ptr to target_ptr to print out
+// the allocation that returns the pointer. Set target_count to the number of allocations to skip
+// before breaking on the allocation (so you can get a backtrace.) This approach only works if the
+// code is deterministic. You may want to turn off USB host to make it so.
+//
+// Otherwise, you can inspect word 0 of the block to likely get the Python object type of the memory
+// that should have been collected. Compare that pointer to those in the matching firmware.elf.map.
+static bool debug_collect = false;
+static void *target_ptr = (void *)0x1101b8d0;
+
+#if MICROPY_ENABLE_SELECTIVE_COLLECT
+static uint32_t target_count = 100;
+static uint32_t current_count = 0;
+#endif
+
 // Take the given block as the topmost block on the stack. Check all it's
 // children: mark the unmarked child blocks and put those newly marked
 // blocks on the stack. When all children have been checked, pop off the
@@ -506,12 +524,14 @@ static void MP_NO_INSTRUMENT PLACE_IN_ITCM(gc_mark_subtree)(size_t block)
         #endif
 
         // Only scan the block's children if it's not a leaf
-        if (should_scan) {
+        if (debug_collect || should_scan) {
             // check this block's children
             void **ptrs = (void **)PTR_FROM_BLOCK(area, block);
             for (size_t i = n_blocks * BYTES_PER_BLOCK / sizeof(void *); i > 0; i--, ptrs++) {
                 MICROPY_GC_HOOK_LOOP(i);
                 void *ptr = *ptrs;
+                void **block_ptr = ptrs;
+                bool found_collect_candidate = false;
                 // If this is a heap pointer that hasn't been marked, mark it and push
                 // it's children to the stack.
                 #if MICROPY_GC_SPLIT_HEAP
@@ -526,6 +546,19 @@ static void MP_NO_INSTRUMENT PLACE_IN_ITCM(gc_mark_subtree)(size_t block)
                 }
                 mp_state_mem_area_t *ptr_area = area;
                 #endif
+                if (!should_scan) {
+                    if (!found_collect_candidate) {
+                        console_uart_printf("should have scanned %p\n", block_ptr);
+                        // This is often the pointer to the Python type in RAM.
+                        // It is helpful to know the allocation path that should use mp_obj_malloc.
+                        console_uart_printf("  [0] = %p\n", block_ptr[0]);
+                        console_uart_printf("  [1] = %p\n", block_ptr[1]);
+                    }
+                    console_uart_printf("  [%d] = %p\n", i, ptr);
+                    found_collect_candidate = true;
+                    ptr = NULL;
+                    continue;
+                }
                 size_t ptr_block = BLOCK_FROM_PTR(ptr_area, ptr);
                 if (ATB_GET_KIND(ptr_area, ptr_block) != AT_HEAD) {
                     // This block is already marked.
@@ -925,7 +958,7 @@ void *gc_alloc(size_t n_bytes, unsigned int alloc_flags) {
 
             // CIRCUITPY-CHANGE
             #if CIRCUITPY_DEBUG
-            gc_dump_alloc_table(&mp_plat_print);
+            // gc_dump_alloc_table(&mp_plat_print);
             #endif
             return NULL;
         }
@@ -1027,6 +1060,22 @@ found:
     memorymonitor_track_allocation(end_block - start_block + 1);
     #endif
 
+    #if MICROPY_ENABLE_SELECTIVE_COLLECT
+    if (debug_collect) {
+        if (ret_ptr == target_ptr) {
+            if (current_count == target_count && do_not_collect) {
+                asm ("bkpt");
+            }
+            console_uart_printf("target_count = %d\n", current_count);
+            current_count++;
+        }
+
+        if (target_ptr != NULL && ret_ptr == target_ptr) {
+            console_uart_printf("gc_alloc(%d, %01x) = %p\n", n_bytes, alloc_flags, ret_ptr);
+        }
+    }
+    #endif
+
     return ret_ptr;
 }
 
@@ -1058,6 +1107,10 @@ void gc_free(void *ptr) {
         // free(NULL) is a no-op
         GC_EXIT();
         return;
+    }
+
+    if (debug_collect && target_ptr != NULL && ptr == target_ptr) {
+        console_uart_printf("gc_free(%p)\n", ptr);
     }
 
     // get the GC block number corresponding to this pointer
@@ -1345,6 +1398,9 @@ void *gc_realloc(void *ptr_in, size_t n_bytes, bool allow_move) {
     // can't resize inplace; try to find a new contiguous chain
     void *ptr_out = gc_alloc(n_bytes, alloc_flags);
 
+    if (debug_collect && target_ptr != NULL && (ptr_out == target_ptr || ptr_in == target_ptr)) {
+        console_uart_printf("gc_realloc: moving %p -> %p, %d -> %d bytes\n", ptr_in, ptr_out, n_blocks * BYTES_PER_BLOCK, n_bytes);
+    }
     // check that the alloc succeeded
     if (ptr_out == NULL) {
         return NULL;
