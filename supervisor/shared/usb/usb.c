@@ -11,6 +11,8 @@
 #include "supervisor/usb.h"
 #include "shared/readline/readline.h"
 
+#include "hardware/gpio.h"
+
 #if CIRCUITPY_STATUS_BAR
 #include "supervisor/shared/status_bar.h"
 #endif
@@ -180,6 +182,7 @@ void usb_setup_with_vm(void) {
 
 void usb_background(void) {
     if (usb_enabled()) {
+        gpio_put(7, true);
         #if CFG_TUSB_OS == OPT_OS_NONE || CFG_TUSB_OS == OPT_OS_PICO
         tud_task();
         #if CIRCUITPY_USB_HOST || CIRCUITPY_MAX3421E
@@ -200,6 +203,7 @@ void usb_background(void) {
         #if CIRCUITPY_USB_DEVICE && CIRCUITPY_USB_VIDEO
         usb_video_task();
         #endif
+        gpio_put(7, false);
     }
 }
 

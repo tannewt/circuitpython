@@ -398,6 +398,18 @@ safe_mode_t port_init(void) {
         return SAFE_MODE_USER;
     }
 
+    gpio_init(6);
+    gpio_put(6, false);
+    gpio_set_dir(6, GPIO_OUT);
+
+    gpio_init(7);
+    gpio_put(7, false);
+    gpio_set_dir(7, GPIO_OUT);
+
+    gpio_init(45);
+    gpio_put(45, false);
+    gpio_set_dir(45, GPIO_OUT);
+
     return SAFE_MODE_NONE;
 }
 

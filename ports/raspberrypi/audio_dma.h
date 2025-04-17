@@ -20,13 +20,15 @@ typedef enum {
 
 typedef struct {
     mp_obj_t sample;
-    uint8_t *buffer[2]; // Allocated through port_malloc so they are dma-able
+    uint8_t **read_addr_buffer;
+    uint8_t **buffer; // Allocated through port_malloc so they are dma-able. 8 byte aligned pointer into read_addr_buffer
     size_t buffer_length[2];
-    uint32_t channels_to_load_mask;
     uint32_t output_register_address;
     background_callback_t callback;
-    uint8_t channel[2];
+    uint8_t control_channel;
+    uint8_t data_channel;
     uint8_t audio_channel;
+    uint8_t next_buffer;
     uint8_t output_size;
     uint8_t sample_spacing;
     uint8_t output_resolution; // in bits

@@ -17,6 +17,15 @@
 #define I2S_RESET_PIN_NUMBER 22
 
 bool board_reset_pin_number(uint8_t pin_number) {
+    if (pin_number == 45) {
+        return true;
+    }
+    if (pin_number == 6) {
+        return true;
+    }
+    if (pin_number == 7) {
+        return true;
+    }
     #if defined(DEFAULT_USB_HOST_5V_POWER)
     if (pin_number == DEFAULT_USB_HOST_5V_POWER->number) {
         // doing this (rather than gpio_init) in this specific order ensures no

@@ -118,8 +118,7 @@ static size_t audio_dma_convert_samples(audio_dma_t *dma, uint8_t *input, uint32
 
 // buffer_idx is 0 or 1.
 static void audio_dma_load_next_block(audio_dma_t *dma, size_t buffer_idx) {
-    assert(dma->channel[buffer_idx] < NUM_DMA_CHANNELS);
-    size_t dma_channel = dma->channel[buffer_idx];
+    assert(dma->data_channel < NUM_DMA_CHANNELS);
 
     audioio_get_buffer_result_t get_buffer_result;
     uint8_t *sample_buffer;
@@ -141,22 +140,20 @@ static void audio_dma_load_next_block(audio_dma_t *dma, size_t buffer_idx) {
         dma, sample_buffer, sample_buffer_length,
         dma->buffer[buffer_idx], dma->buffer_length[buffer_idx]);
 
-    dma_channel_set_read_addr(dma_channel, dma->buffer[buffer_idx], false /* trigger */);
-    dma_channel_set_trans_count(dma_channel, output_length_used / dma->output_size, false /* trigger */);
+    // We're setting this early. It gets loaded when the buffer we're filling is triggered.
+    dma_channel_set_trans_count(dma->data_channel, output_length_used / dma->output_size, false /* trigger */);
 
     if (get_buffer_result == GET_BUFFER_DONE) {
         if (dma->loop) {
             audiosample_reset_buffer(dma->sample, dma->single_channel_output, dma->audio_channel);
         } else {
             // Set channel trigger to ourselves so we don't keep going.
-            dma_channel_hw_t *c = &dma_hw->ch[dma_channel];
+            dma_channel_hw_t *c = &dma_hw->ch[dma->data_channel];
             c->al1_ctrl =
                 (c->al1_ctrl & ~DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS) |
-                (dma_channel << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB);
+                (dma->data_channel << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB);
 
-            if (output_length_used == 0 &&
-                !dma_channel_is_busy(dma->channel[0]) &&
-                !dma_channel_is_busy(dma->channel[1])) {
+            if (output_length_used == 0 && !dma_channel_is_busy(dma->data_channel)) {
                 // No data has been read, and both DMA channels have now finished, so it's safe to stop.
                 audio_dma_stop(dma);
             }
@@ -180,19 +177,19 @@ audio_dma_result audio_dma_setup_playback(
 
     // Use two DMA channels to play because the DMA can't wrap to itself without the
     // buffer being power of two aligned.
-    int dma_channel_0_maybe = dma_claim_unused_channel(false);
-    if (dma_channel_0_maybe < 0) {
+    int control_channel_maybe = dma_claim_unused_channel(false);
+    if (control_channel_maybe < 0) {
         return AUDIO_DMA_DMA_BUSY;
     }
 
-    int dma_channel_1_maybe = dma_claim_unused_channel(false);
-    if (dma_channel_1_maybe < 0) {
-        dma_channel_unclaim((uint)dma_channel_0_maybe);
+    int data_channel_maybe = dma_claim_unused_channel(false);
+    if (data_channel_maybe < 0) {
+        dma_channel_unclaim((uint)control_channel_maybe);
         return AUDIO_DMA_DMA_BUSY;
     }
 
-    dma->channel[0] = (uint8_t)dma_channel_0_maybe;
-    dma->channel[1] = (uint8_t)dma_channel_1_maybe;
+    dma->control_channel = (uint8_t)control_channel_maybe;
+    dma->data_channel = (uint8_t)data_channel_maybe;
 
     dma->sample = sample;
     dma->loop = loop;
@@ -262,24 +259,20 @@ audio_dma_result audio_dma_setup_playback(
         dma_size = DMA_SIZE_32;
     }
 
-    for (size_t i = 0; i < 2; i++) {
-        dma_channel_config c = dma_channel_get_default_config(dma->channel[i]);
-        channel_config_set_transfer_data_size(&c, dma_size);
-        channel_config_set_dreq(&c, dma_trigger_source);
-        channel_config_set_read_increment(&c, true);
-        channel_config_set_write_increment(&c, false);
+    // Setup the data channel
+    dma_channel_config c = dma_channel_get_default_config(dma->data_channel);
+    channel_config_set_transfer_data_size(&c, dma_size);
+    channel_config_set_dreq(&c, dma_trigger_source);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
 
-        // Chain to the other channel by default.
-        channel_config_set_chain_to(&c, dma->channel[(i + 1) % 2]);
-        dma_channel_set_config(dma->channel[i], &c, false /* trigger */);
-
-        dma_channel_set_write_addr(dma->channel[i], (void *)output_register_address, false /* trigger */);
-    }
+    channel_config_set_chain_to(&c, dma->control_channel);
+    dma_channel_set_config(dma->data_channel, &c, false /* trigger */);
+    dma_channel_set_write_addr(dma->data_channel, (void *)output_register_address, false /* trigger */);
 
     // We keep the audio_dma_t for internal use and the sample as a root pointer because it
     // contains the audiodma structure.
-    MP_STATE_PORT(playing_audio)[dma->channel[0]] = dma;
-    MP_STATE_PORT(playing_audio)[dma->channel[1]] = dma;
+    MP_STATE_PORT(playing_audio)[dma->data_channel] = dma;
 
     // Load the first two blocks up front.
     audio_dma_load_next_block(dma, 0);
@@ -293,32 +286,40 @@ audio_dma_result audio_dma_setup_playback(
         }
     }
 
+    c = dma_channel_get_default_config(dma->control_channel);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_dreq(&c, 0x3f); // dma as fast as possible
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    if (single_buffer) {
+        // Wrap every 4 bytes, aka one word/transaction.
+        channel_config_set_ring(&c, false, 2);
+    } else {
+        // Wrap every 16 bytes, aka two words/transactions.
+        channel_config_set_ring(&c, false, 3);
+    }
+    channel_config_set_chain_to(&c, dma->control_channel); // Chain to ourselves so we stop.
+    dma_channel_configure(dma->control_channel, &c,
+        &dma_hw->ch[dma->data_channel].al3_read_addr_trig, // write address
+        dma->buffer, // read address
+        1, // transaction count
+        false); // trigger
+
     // Special case the DMA for a single buffer. It's commonly used for a single wave length of sound
     // and may be short. Therefore, we use DMA chaining to loop quickly without involving interrupts.
     // On the RP2040 we chain by having a second DMA writing to the config registers of the first.
     // Read and write addresses change with DMA so we need to reset the read address back to the
     // start of the sample.
-    if (single_buffer) {
-        dma_channel_config c = dma_channel_get_default_config(dma->channel[1]);
-        channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-        channel_config_set_dreq(&c, 0x3f); // dma as fast as possible
-        channel_config_set_read_increment(&c, false);
-        channel_config_set_write_increment(&c, false);
-        channel_config_set_chain_to(&c, dma->channel[1]); // Chain to ourselves so we stop.
-        dma_channel_configure(dma->channel[1], &c,
-            &dma_hw->ch[dma->channel[0]].al3_read_addr_trig, // write address
-            &dma->buffer[0], // read address
-            1, // transaction count
-            false); // trigger
-    } else {
+    if (!single_buffer) {
         // Enable our DMA channels on DMA_IRQ_0 to the CPU. This will wake us up when
         // we're WFI.
-        dma_hw->inte0 |= (1 << dma->channel[0]) | (1 << dma->channel[1]);
+        dma_hw->inte0 |= 1 << dma->data_channel;
         irq_set_mask_enabled(1 << DMA_IRQ_0, true);
     }
 
     dma->playing_in_progress = true;
-    dma_channel_start(dma->channel[0]);
+    dma->next_buffer = 0;
+    dma_channel_start(dma->control_channel);
 
     return AUDIO_DMA_OK;
 }
@@ -326,11 +327,8 @@ audio_dma_result audio_dma_setup_playback(
 void audio_dma_stop(audio_dma_t *dma) {
     // Disable our interrupts.
     uint32_t channel_mask = 0;
-    if (dma->channel[0] < NUM_DMA_CHANNELS) {
-        channel_mask |= 1 << dma->channel[0];
-    }
-    if (dma->channel[1] < NUM_DMA_CHANNELS) {
-        channel_mask |= 1 << dma->channel[1];
+    if (dma->data_channel < NUM_DMA_CHANNELS) {
+        channel_mask |= 1 << dma->data_channel;
     }
     dma_hw->inte0 &= ~channel_mask;
     if (!dma_hw->inte0) {
@@ -341,57 +339,51 @@ void audio_dma_stop(audio_dma_t *dma) {
     // playing_audio.
     RUN_BACKGROUND_TASKS;
 
-    for (size_t i = 0; i < 2; i++) {
-        size_t channel = dma->channel[i];
-        if (channel == NUM_DMA_CHANNELS) {
-            // Channel not in use.
-            continue;
-        }
+    dma_channel_config c = dma_channel_get_default_config(dma->data_channel);
+    channel_config_set_enable(&c, false);
+    dma_channel_set_config(dma->data_channel, &c, false /* trigger */);
+    dma_channel_set_config(dma->control_channel, &c, false /* trigger */);
 
-        dma_channel_config c = dma_channel_get_default_config(dma->channel[i]);
-        channel_config_set_enable(&c, false);
-        dma_channel_set_config(channel, &c, false /* trigger */);
-
-        if (dma_channel_is_busy(channel)) {
-            dma_channel_abort(channel);
-        }
-
-        dma_channel_set_read_addr(channel, NULL, false /* trigger */);
-        dma_channel_set_write_addr(channel, NULL, false /* trigger */);
-        dma_channel_set_trans_count(channel, 0, false /* trigger */);
-        dma_channel_unclaim(channel);
-        MP_STATE_PORT(playing_audio)[channel] = NULL;
-        dma->channel[i] = NUM_DMA_CHANNELS;
+    if (dma_channel_is_busy(dma->data_channel)) {
+        dma_channel_abort(dma->data_channel);
     }
+    if (dma_channel_is_busy(dma->control_channel)) {
+        dma_channel_abort(dma->control_channel);
+    }
+
+    dma_channel_set_read_addr(dma->data_channel, NULL, false /* trigger */);
+    dma_channel_set_write_addr(dma->data_channel, NULL, false /* trigger */);
+    dma_channel_set_trans_count(dma->data_channel, 0, false /* trigger */);
+    dma_channel_unclaim(dma->data_channel);
+
+    dma_channel_set_read_addr(dma->control_channel, NULL, false /* trigger */);
+    dma_channel_set_write_addr(dma->control_channel, NULL, false /* trigger */);
+    dma_channel_set_trans_count(dma->control_channel, 0, false /* trigger */);
+    dma_channel_unclaim(dma->control_channel);
+
+    MP_STATE_PORT(playing_audio)[dma->data_channel] = NULL;
+    dma->data_channel = NUM_DMA_CHANNELS;
+    dma->control_channel = NUM_DMA_CHANNELS;
     dma->playing_in_progress = false;
 
     // Hold onto our buffers.
 }
 
-// To pause we simply stop the DMA. It is the responsibility of the output peripheral
-// to hold the previous value.
+// To pause we simply stop the data DMA channel. It is the responsibility of the
+// output peripheral to hold the previous value.
 void audio_dma_pause(audio_dma_t *dma) {
-    dma_hw->ch[dma->channel[0]].al1_ctrl &= ~DMA_CH0_CTRL_TRIG_EN_BITS;
-    dma_hw->ch[dma->channel[1]].al1_ctrl &= ~DMA_CH1_CTRL_TRIG_EN_BITS;
+    dma_hw->ch[dma->data_channel].al1_ctrl &= ~DMA_CH0_CTRL_TRIG_EN_BITS;
 }
 
 void audio_dma_resume(audio_dma_t *dma) {
-    // Always re-enable the non-busy channel first so it's ready to continue when the busy channel
-    // finishes and chains to it. (An interrupt could make the time between enables long.)
-    if (dma_channel_is_busy(dma->channel[0])) {
-        dma_hw->ch[dma->channel[1]].al1_ctrl |= DMA_CH1_CTRL_TRIG_EN_BITS;
-        dma_hw->ch[dma->channel[0]].al1_ctrl |= DMA_CH0_CTRL_TRIG_EN_BITS;
-    } else {
-        dma_hw->ch[dma->channel[0]].al1_ctrl |= DMA_CH0_CTRL_TRIG_EN_BITS;
-        dma_hw->ch[dma->channel[1]].al1_ctrl |= DMA_CH1_CTRL_TRIG_EN_BITS;
-    }
+    dma_hw->ch[dma->data_channel].al1_ctrl |= DMA_CH0_CTRL_TRIG_EN_BITS;
 }
 
 bool audio_dma_get_paused(audio_dma_t *dma) {
-    if (dma->channel[0] >= NUM_DMA_CHANNELS) {
+    if (dma->data_channel >= NUM_DMA_CHANNELS) {
         return false;
     }
-    uint32_t control = dma_hw->ch[dma->channel[0]].ctrl_trig;
+    uint32_t control = dma_hw->ch[dma->data_channel].ctrl_trig;
 
     return (control & DMA_CH0_CTRL_TRIG_EN_BITS) == 0;
 }
@@ -418,14 +410,24 @@ void audio_dma_unpause_mask(uint32_t channel_mask) {
 }
 
 void audio_dma_init(audio_dma_t *dma) {
+    // We allocate four pointers worth so that we can align to a 8 byte boundary.
+    dma->read_addr_buffer = port_malloc(4 * sizeof(uint32_t *), true);
+    mp_printf(&mp_plat_print, "read_addr_buffer: %p\n", dma->read_addr_buffer);
+    if ((size_t)dma->read_addr_buffer % 8 == 4) {
+        // Pointer math! So, + 1 is + sizeof(uint32_t *).
+        dma->buffer = dma->read_addr_buffer + 1;
+    } else {
+        dma->buffer = dma->read_addr_buffer;
+    }
+    mp_printf(&mp_plat_print, "buffer: %p\n", dma->buffer);
     dma->buffer[0] = NULL;
     dma->buffer[1] = NULL;
 
     dma->buffer_length[0] = 0;
     dma->buffer_length[1] = 0;
 
-    dma->channel[0] = NUM_DMA_CHANNELS;
-    dma->channel[1] = NUM_DMA_CHANNELS;
+    dma->data_channel = NUM_DMA_CHANNELS;
+    dma->control_channel = NUM_DMA_CHANNELS;
 }
 
 void audio_dma_deinit(audio_dma_t *dma) {
@@ -436,10 +438,14 @@ void audio_dma_deinit(audio_dma_t *dma) {
     port_free(dma->buffer[1]);
     dma->buffer[1] = NULL;
     dma->buffer_length[1] = 0;
+
+    port_free(dma->read_addr_buffer);
+    dma->read_addr_buffer = NULL;
+    dma->buffer = NULL;
 }
 
 bool audio_dma_get_playing(audio_dma_t *dma) {
-    if (dma->channel[0] == NUM_DMA_CHANNELS) {
+    if (dma->data_channel == NUM_DMA_CHANNELS) {
         return false;
     }
     return dma->playing_in_progress;
@@ -455,25 +461,13 @@ static void dma_callback_fun(void *arg) {
         return;
     }
 
+    gpio_put(6, true);
     common_hal_mcu_disable_interrupts();
-    uint32_t channels_to_load_mask = dma->channels_to_load_mask;
-    dma->channels_to_load_mask = 0;
+    uint8_t next_buffer = dma->next_buffer;
     common_hal_mcu_enable_interrupts();
 
-    // Load the blocks for the requested channels.
-    uint32_t channel = 0;
-    while (channels_to_load_mask) {
-        if (channels_to_load_mask & 1) {
-            if (dma->channel[0] == channel) {
-                audio_dma_load_next_block(dma, 0);
-            }
-            if (dma->channel[1] == channel) {
-                audio_dma_load_next_block(dma, 1);
-            }
-        }
-        channels_to_load_mask >>= 1;
-        channel++;
-    }
+    audio_dma_load_next_block(dma, next_buffer);
+    gpio_put(6, false);
 }
 
 void __not_in_flash_func(isr_dma_0)(void) {
@@ -488,10 +482,12 @@ void __not_in_flash_func(isr_dma_0)(void) {
         // affected PIO continuous write more than audio.
         dma_hw->ints0 = mask;
         if (MP_STATE_PORT(playing_audio)[i] != NULL) {
+            gpio_put(45, true);
             audio_dma_t *dma = MP_STATE_PORT(playing_audio)[i];
-            // Record all channels whose DMA has completed; they need loading.
-            dma->channels_to_load_mask |= mask;
+            // Next buffer is the one we just completed playing and can now load.
+            dma->next_buffer = dma->next_buffer % 2;
             background_callback_add(&dma->callback, dma_callback_fun, (void *)dma);
+            gpio_put(45, false);
         }
         if (MP_STATE_PORT(background_pio_read)[i] != NULL) {
             rp2pio_statemachine_obj_t *pio = MP_STATE_PORT(background_pio_read)[i];
