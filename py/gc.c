@@ -481,8 +481,8 @@ static inline mp_state_mem_area_t *gc_get_ptr_area(const void *ptr) {
 //
 // Otherwise, you can inspect word 0 of the block to likely get the Python object type of the memory
 // that should have been collected. Compare that pointer to those in the matching firmware.elf.map.
-static bool debug_collect = false;
-static void *target_ptr = (void *)0x1101b8d0;
+static bool debug_collect = true;
+static void *target_ptr = (void *)0x7ffff7ec00d0;
 
 #if MICROPY_ENABLE_SELECTIVE_COLLECT
 static uint32_t target_count = 100;
@@ -548,13 +548,13 @@ static void MP_NO_INSTRUMENT PLACE_IN_ITCM(gc_mark_subtree)(size_t block)
                 #endif
                 if (!should_scan) {
                     if (!found_collect_candidate) {
-                        console_uart_printf("should have scanned %p\n", block_ptr);
+                        mp_printf(&mp_plat_print, "should have scanned %p\n", block_ptr);
                         // This is often the pointer to the Python type in RAM.
                         // It is helpful to know the allocation path that should use mp_obj_malloc.
-                        console_uart_printf("  [0] = %p\n", block_ptr[0]);
-                        console_uart_printf("  [1] = %p\n", block_ptr[1]);
+                        mp_printf(&mp_plat_print, "  [0] = %p\n", block_ptr[0]);
+                        mp_printf(&mp_plat_print, "  [1] = %p\n", block_ptr[1]);
                     }
-                    console_uart_printf("  [%d] = %p\n", i, ptr);
+                    mp_printf(&mp_plat_print, "  [%d] = %p\n", i, ptr);
                     found_collect_candidate = true;
                     ptr = NULL;
                     continue;
@@ -1064,14 +1064,14 @@ found:
     if (debug_collect) {
         if (ret_ptr == target_ptr) {
             if (current_count == target_count && do_not_collect) {
-                asm ("bkpt");
+                __builtin_trap();
             }
-            console_uart_printf("target_count = %d\n", current_count);
+            mp_printf(&mp_plat_print, "target_count = %d\n", current_count);
             current_count++;
         }
 
         if (target_ptr != NULL && ret_ptr == target_ptr) {
-            console_uart_printf("gc_alloc(%d, %01x) = %p\n", n_bytes, alloc_flags, ret_ptr);
+            mp_printf(&mp_plat_print, "gc_alloc(%d, %01x) = %p\n", n_bytes, alloc_flags, ret_ptr);
         }
     }
     #endif
@@ -1110,7 +1110,7 @@ void gc_free(void *ptr) {
     }
 
     if (debug_collect && target_ptr != NULL && ptr == target_ptr) {
-        console_uart_printf("gc_free(%p)\n", ptr);
+        mp_printf(&mp_plat_print, "gc_free(%p)\n", ptr);
     }
 
     // get the GC block number corresponding to this pointer
@@ -1399,7 +1399,7 @@ void *gc_realloc(void *ptr_in, size_t n_bytes, bool allow_move) {
     void *ptr_out = gc_alloc(n_bytes, alloc_flags);
 
     if (debug_collect && target_ptr != NULL && (ptr_out == target_ptr || ptr_in == target_ptr)) {
-        console_uart_printf("gc_realloc: moving %p -> %p, %d -> %d bytes\n", ptr_in, ptr_out, n_blocks * BYTES_PER_BLOCK, n_bytes);
+        mp_printf(&mp_plat_print, "gc_realloc: moving %p -> %p, %d -> %d bytes\n", ptr_in, ptr_out, n_blocks * BYTES_PER_BLOCK, n_bytes);
     }
     // check that the alloc succeeded
     if (ptr_out == NULL) {
