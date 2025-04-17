@@ -87,7 +87,7 @@ static size_t get_hash_alloc_greater_or_equal_to(size_t x) {
 /* map                                                                        */
 
 // CIRCUITPY-CHANGE: Helper for allocating tables of elements
-#define malloc_table(num) m_malloc_helper(sizeof(mp_map_elem_t) * (num), M_MALLOC_COLLECT)
+#define malloc_table(num) m_malloc_helper(sizeof(mp_map_elem_t) * (num), M_MALLOC_COLLECT | M_MALLOC_RAISE_ERROR | M_MALLOC_ENSURE_ZEROED)
 
 void mp_map_init(mp_map_t *map, size_t n) {
     if (n == 0) {
