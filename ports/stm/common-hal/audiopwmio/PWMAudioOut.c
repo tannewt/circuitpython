@@ -342,7 +342,6 @@ void common_hal_audiopwmio_pwmaudioout_stop(audiopwmio_pwmaudioout_obj_t *self) 
     tim_handle.Instance->CR1 &= ~TIM_CR1_CEN;
     stm_peripherals_timer_free(tim_handle.Instance);
 
-    active_audio = NULL;
     self->stopping = false;
     self->paused = false;
 
@@ -351,6 +350,8 @@ void common_hal_audiopwmio_pwmaudioout_stop(audiopwmio_pwmaudioout_obj_t *self) 
     if (self->pin[1]) {
         set_pin(1, GPIO_PIN_RESET);
     }
+
+    active_audio = NULL;
 
     // Cannot free buffers here because we may be called from
     // the interrupt handler, and the heap is not reentrant.

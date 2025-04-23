@@ -11,20 +11,25 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared/runtime/interrupt_char.h"
 #include "py/runtime.h"
-#include "src/rp2_common/hardware_adc/include/hardware/adc.h"
-#include "src/rp2_common/hardware_dma/include/hardware/dma.h"
-#include "src/common/pico_stdlib_headers/include/pico/stdlib.h"
-
-#define ADC_FIRST_PIN_NUMBER 26
-#define ADC_PIN_COUNT 4
+#include "hardware/adc.h"
+#include "hardware/dma.h"
+#include "pico/stdlib.h"
 
 #define ADC_CLOCK_INPUT 48000000
 #define ADC_MAX_CLOCK_DIV (1 << (ADC_DIV_INT_MSB - ADC_DIV_INT_LSB + 1))
 
 void common_hal_analogbufio_bufferedin_construct(analogbufio_bufferedin_obj_t *self, const mcu_pin_obj_t *pin, uint32_t sample_rate) {
     // Make sure pin number is in range for ADC
-    if (pin->number < ADC_FIRST_PIN_NUMBER || pin->number >= (ADC_FIRST_PIN_NUMBER + ADC_PIN_COUNT)) {
-        raise_ValueError_invalid_pins();
+    if ((pin->number < ADC_BASE_PIN)
+        || (pin->number > ADC_BASE_PIN + NUM_ADC_CHANNELS - 1)
+        // On many boards with a CYW43 radio co-processor, CYW43_DEFAULT_PIN_WL_CLOCK (usually GPIO29),
+        // is both a voltage monitor and also SPI SCK to the CYW43.
+        // Disallow its use for BufferedIn.
+        #if defined(CIRCUITPY_CYW43) && defined(CYW43_DEFAULT_PIN_WL_CLOCK)
+        || (pin->number == CYW43_DEFAULT_PIN_WL_CLOCK)
+        #endif
+        ) {
+        raise_ValueError_invalid_pin();
     }
 
     // Validate sample rate here
@@ -35,7 +40,7 @@ void common_hal_analogbufio_bufferedin_construct(analogbufio_bufferedin_obj_t *s
     claim_pin(pin);
 
     // TODO: find a way to accept ADC4 for temperature
-    self->chan = pin->number - ADC_FIRST_PIN_NUMBER;
+    self->chan = pin->number - ADC_BASE_PIN;
 
     // Init GPIO for analogue use: hi-Z, no pulls, disable digital input buffer.
     // TODO: Make sure we share the ADC well. Right now we just assume it is

@@ -30,7 +30,7 @@ typedef struct {
 // Timer Peripheral
 
 typedef struct {
-    uint8_t tim_index : 4;
+    uint8_t tim_index : 5;
     uint8_t altfn_index : 4;
     uint8_t channel_index : 4;
     const mcu_pin_obj_t *pin;
@@ -82,6 +82,13 @@ typedef struct {
 #define HAS_TRNG 1
 #define HAS_BASIC_TIM 1
 #include "stm32l4/stm32l4r5xx/periph.h"
+#endif
+
+#ifdef STM32L433xx
+#define HAS_DAC 1
+#define HAS_TRNG 1
+#define HAS_BASIC_TIM 1
+#include "stm32l4/stm32l433xx/periph.h"
 #endif
 
 #ifdef STM32F405xx
@@ -136,4 +143,8 @@ typedef struct {
 #define HAS_TRNG 1
 #define HAS_BASIC_TIM 1
 #include "stm32h7/stm32h750xx/periph.h"
+#endif
+
+#if !defined(HAS_DAC)
+#error Unknown MCU
 #endif

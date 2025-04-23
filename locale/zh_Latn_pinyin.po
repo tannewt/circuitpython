@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: circuitpython-cn\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-01-04 12:55-0600\n"
-"PO-Revision-Date: 2025-02-24 05:02+0000\n"
+"PO-Revision-Date: 2025-04-10 22:01+0000\n"
 "Last-Translator: hexthat <hexthat@gmail.com>\n"
 "Language-Team: Chinese Hanyu Pinyin\n"
 "Language: zh_Latn_pinyin\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 5.10.1-dev\n"
+"X-Generator: Weblate 5.11-dev\n"
 
 #: main.c
 msgid ""
@@ -96,7 +96,7 @@ msgstr ""
 msgid "%q and %q contain duplicate pins"
 msgstr "%q hé %q bāo hán chóng fù yǐn jiǎo"
 
-#: ports/atmel-samd/common-hal/audioio/AudioOut.c
+#: shared-bindings/audioio/AudioOut.c
 msgid "%q and %q must be different"
 msgstr "%q hé %q bìxū bùtóng"
 
@@ -115,6 +115,10 @@ msgstr "%q bāo hán chóng fù de yǐn jiǎo"
 #: ports/atmel-samd/common-hal/sdioio/SDCard.c
 msgid "%q failure: %d"
 msgstr "%q Shībài: %d"
+
+#: shared-module/audiodelays/MultiTapDelay.c
+msgid "%q in %q must be of type %q or %q, not %q"
+msgstr ""
 
 #: py/argcheck.c shared-module/audiofilters/Filter.c
 msgid "%q in %q must be of type %q, not %q"
@@ -168,7 +172,7 @@ msgstr "%q chángdù bìxū <= %d"
 msgid "%q length must be >= %d"
 msgstr "%q chángdù bìxū >= %d"
 
-#: py/modsys.c py/objmodule.c py/runtime.c
+#: py/modsys.c py/runtime.c
 msgid "%q moved from %q to %q"
 msgstr "%q cóng %q yídòngdào %q"
 
@@ -230,7 +234,7 @@ msgstr "%q bìxū shì 8 debèishù."
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
 #: shared-bindings/digitalio/Pull.c shared-bindings/supervisor/__init__.c
 #: shared-module/audiofilters/Filter.c shared-module/displayio/__init__.c
-#: shared-module/synthio/Biquad.c shared-module/synthio/Synthesizer.c
+#: shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q de lèi xíng bì xū shì %q huò %q, ér bù shì %q"
 
@@ -239,6 +243,7 @@ msgid "%q must be of type %q, %q, or %q, not %q"
 msgstr "%q bìxūshì %q, %q huò %q lèixíng, érbùshì %q"
 
 #: py/argcheck.c py/runtime.c shared-bindings/bitmapfilter/__init__.c
+#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
 #: shared-module/synthio/__init__.c
 msgid "%q must be of type %q, not %q"
 msgstr "%q de lèi xíng bì xū shì %q, ér bù shì %q"
@@ -809,8 +814,8 @@ msgid "Cannot record to a file"
 msgstr "Wúfǎ jìlù dào wénjiàn"
 
 #: shared-module/storage/__init__.c
-msgid "Cannot remount '/' when visible via USB."
-msgstr "tōngguò USB kějiàn shí wúfǎ chóngxīn ānzhuāng '/'."
+msgid "Cannot remount path when visible via USB."
+msgstr "tōngguò USB kějiàn shí wúfǎ chóngxīn guàzǎi lùjìng."
 
 #: shared-bindings/digitalio/DigitalInOut.c
 msgid "Cannot set value when direction is input."
@@ -1061,7 +1066,7 @@ msgstr "Wúfǎ shìfàng mutex, err 0x%04x"
 
 #: ports/zephyr-cp/common-hal/wifi/Radio.c
 msgid "Failed to set hostname"
-msgstr ""
+msgstr "wúfǎ shèzhì zhǔjīmíng"
 
 #: ports/espressif/common-hal/audioio/AudioOut.c
 msgid "Failed to start async audio"
@@ -1075,7 +1080,7 @@ msgstr "Wúfǎ xiě rù nèibù shǎncún."
 msgid "File exists"
 msgstr "Wénjiàn cúnzài"
 
-#: shared-module/os/getenv.c
+#: shared-module/lvfontio/OnDiskFont.c shared-module/os/getenv.c
 msgid "File not found"
 msgstr "zhǎo bú dào wén jiàn"
 
@@ -1280,6 +1285,7 @@ msgstr "bèi shūchū gōngnéng zhōngduàn"
 #: shared-bindings/digitalio/DigitalInOut.c
 #: shared-bindings/epaperdisplay/EPaperDisplay.c shared-bindings/pwmio/PWMOut.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
+#: shared-module/lvfontio/OnDiskFont.c
 msgid "Invalid %q"
 msgstr "wú xiào %q"
 
@@ -1400,6 +1406,11 @@ msgstr "MAC dì zhǐ wú xiào"
 #: ports/espressif/common-hal/_bleio/Descriptor.c
 msgid "MITM security not supported"
 msgstr "bù zhīchí MITM ānquánxìng"
+
+#: ports/stm/common-hal/sdioio/SDCard.c
+#, c-format
+msgid "MMC/SDIO Clock Error %x"
+msgstr "MMC/SDIO shízhōngcuòwù %x"
 
 #: shared-bindings/is31fl3741/IS31FL3741.c
 msgid "Mapping must be a tuple"
@@ -1586,6 +1597,10 @@ msgstr "zài SDA huò SCL shàng wèi zhǎo dào shàng lā; jiǎn chá nín de 
 #: shared-module/touchio/TouchIn.c
 msgid "No pulldown on pin; 1Mohm recommended"
 msgstr "Yǐn jiǎo shàng méiyǒu xiàlā; 1Mohm tuījiàn"
+
+#: shared-module/touchio/TouchIn.c
+msgid "No pullup on pin; 1Mohm recommended"
+msgstr "Yǐn jiǎo shàng wú shàng lā diànzǔ; jiànyì shǐyòng 1Mohm"
 
 #: py/moderrno.c
 msgid "No space left on device"
@@ -2017,6 +2032,7 @@ msgstr "Qiēpiàn hé zhí bùtóng chángdù."
 #: shared-bindings/displayio/TileGrid.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
 msgid "Slices not supported"
 msgstr "Qiēpiàn bù shòu zhīchí"
 
@@ -2086,7 +2102,9 @@ msgstr ""
 msgid "Tile height must exactly divide bitmap height"
 msgstr "Píng pū gāodù bìxū huàfēn wèi tú gāodù"
 
-#: shared-bindings/displayio/TileGrid.c shared-module/displayio/TileGrid.c
+#: shared-bindings/displayio/TileGrid.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-module/displayio/TileGrid.c
 msgid "Tile index out of bounds"
 msgstr "Píng pū zhǐshù chāochū fànwéi"
 
@@ -2624,8 +2642,15 @@ msgstr "wèi tú dà xiǎo bì xū pǐ pèi"
 msgid "bits must be 32 or less"
 msgstr "wèi bì xū shì 32 huò gèng shǎo"
 
-#: shared-bindings/audiodelays/Echo.c shared-bindings/audiodelays/PitchShift.c
+#: shared-bindings/audiodelays/Chorus.c shared-bindings/audiodelays/Echo.c
+#: shared-bindings/audiodelays/MultiTapDelay.c
+#: shared-bindings/audiodelays/PitchShift.c
 #: shared-bindings/audiofilters/Distortion.c
+#: shared-bindings/audiodelays/Reverb.c
+msgid "bits_per_sample must be 16"
+msgstr ""
+
+#: shared-bindings/audiodelays/Echo.c shared-bindings/audiofilters/Distortion.c
 #: shared-bindings/audiofilters/Filter.c shared-bindings/audiomixer/Mixer.c
 msgid "bits_per_sample must be 8 or 16"
 msgstr "měi jiàn yàngběn bìxū wèi 8 huò 16"
@@ -4050,6 +4075,10 @@ msgstr "gǔn dòng cān shù bì xū shì ndarray"
 msgid "rsplit(None,n)"
 msgstr "Rchāifēn(wú,N)"
 
+#: shared-bindings/audiodelays/Reverb.c
+msgid "samples_signed must be true"
+msgstr ""
+
 #: ports/atmel-samd/common-hal/audiobusio/PDMIn.c
 #: ports/raspberrypi/common-hal/audiobusio/PDMIn.c
 msgid "sampling rate out of range"
@@ -4338,7 +4367,9 @@ msgstr "gé shì bù pǐ pèi de '%c'"
 msgid "unreadable attribute"
 msgstr "bùkě dú shǔxìng"
 
-#: shared-bindings/displayio/TileGrid.c shared-bindings/vectorio/VectorShape.c
+#: shared-bindings/displayio/TileGrid.c shared-bindings/terminalio/Terminal.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-bindings/vectorio/VectorShape.c
 msgid "unsupported %q type"
 msgstr "bù zhīchí %q lèixíng"
 
@@ -4486,6 +4517,9 @@ msgstr "zi bìxū wèi fú diǎn xíng"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "zi bìxū jùyǒu xíngzhuàng (n_section,2)"
+
+#~ msgid "Cannot remount '/' when visible via USB."
+#~ msgstr "tōngguò USB kějiàn shí wúfǎ chóngxīn ānzhuāng '/'."
 
 #~ msgid "%q must be a %q object, %q, or %q"
 #~ msgstr "%q bìxū shì %q duìxiàng, %q huò %q"

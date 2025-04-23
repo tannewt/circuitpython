@@ -12,6 +12,7 @@
 #include "extmod/vfs_fat.h"
 #include "lib/oofatfs/diskio.h"
 #include "lib/oofatfs/ff.h"
+#include "py/gc.h"
 #include "py/mpstate.h"
 
 #include "shared-module/storage/__init__.h"
@@ -21,15 +22,28 @@
 #define MSC_FLASH_BLOCK_SIZE    512
 
 #if CIRCUITPY_SAVES_PARTITION_SIZE > 0
-#define LUN_COUNT 2
+#define SAVES_COUNT 1
+#define SAVES_LUN (1)
 #else
-#define LUN_COUNT 1
+#define SAVES_COUNT 0
 #endif
+
+#if CIRCUITPY_SDCARDIO
+#include "shared-module/sdcardio/__init__.h"
+
+#define SDCARD_COUNT 1
+#define SDCARD_LUN (1 + SAVES_COUNT)
+#else
+#define SDCARD_COUNT 0
+#endif
+
+#define LUN_COUNT (1 + SAVES_COUNT + SDCARD_COUNT)
 
 // The ellipsis range in the designated initializer of `ejected` is not standard C,
 // but it works in both gcc and clang.
 static bool ejected[LUN_COUNT] = { [0 ... (LUN_COUNT - 1)] = true};
-static bool locked[LUN_COUNT] = {false};
+static bool eject_once[LUN_COUNT] = { [0 ... (LUN_COUNT - 1)] = false};
+static bool locked[LUN_COUNT] = { [0 ... (LUN_COUNT - 1)] = false};
 
 #include "tusb.h"
 
@@ -105,24 +119,38 @@ size_t usb_msc_add_descriptor(uint8_t *descriptor_buf, descriptor_counts_t *desc
     return sizeof(usb_msc_descriptor_template);
 }
 
-// The root FS is always at the end of the list.
+// We hardcode LUN -> mount mapping so that it doesn't changes with saves and
+// SD card appearing and disappearing.
 static fs_user_mount_t *get_vfs(int lun) {
-    // Keep a history of the mounts we pass so we can search back.
-    mp_vfs_mount_t *mounts[LUN_COUNT];
-    mp_vfs_mount_t *current_mount = MP_STATE_VM(vfs_mount_table);
-    if (current_mount == NULL) {
-        return NULL;
+    fs_user_mount_t *root = filesystem_circuitpy();
+    if (lun == 0) {
+        return root;
     }
-    // i is the last entry filled
-    size_t i = 0;
-    mounts[i] = current_mount;
-    while (current_mount->next != NULL) {
-        current_mount = current_mount->next;
-        i = (i + 1) % LUN_COUNT;
-        mounts[i] = current_mount;
+    // Other filesystems must be native because we don't guard against exceptions.
+    // They must also be off the VM heap so they don't disappear on autoreload.
+    #ifdef SAVES_LUN
+    if (lun == SAVES_LUN) {
+        const char *path_under_mount;
+        fs_user_mount_t *saves = filesystem_for_path("/saves", &path_under_mount);
+        if (saves != root && (saves->blockdev.flags & MP_BLOCKDEV_FLAG_NATIVE) != 0 && gc_nbytes(saves) == 0) {
+            return saves;
+        }
     }
-    fs_user_mount_t *vfs = mounts[(i - lun) % LUN_COUNT]->obj;
-    return vfs;
+    #endif
+    #ifdef SDCARD_LUN
+    if (lun == SDCARD_LUN) {
+        const char *path_under_mount;
+        fs_user_mount_t *sdcard = filesystem_for_path("/sd", &path_under_mount);
+        if (sdcard != root && (sdcard->blockdev.flags & MP_BLOCKDEV_FLAG_NATIVE) != 0 && gc_nbytes(sdcard) == 0) {
+            return sdcard;
+        } else {
+            // Clear any ejected state so that a re-insert causes it to reappear.
+            ejected[SDCARD_LUN] = false;
+            locked[SDCARD_LUN] = false;
+        }
+    }
+    #endif
+    return NULL;
 }
 
 static void _usb_msc_uneject(void) {
@@ -138,7 +166,7 @@ void usb_msc_mount(void) {
 
 void usb_msc_umount(void) {
     for (uint8_t i = 0; i < LUN_COUNT; i++) {
-        fs_user_mount_t *vfs = get_vfs(i + 1);
+        fs_user_mount_t *vfs = get_vfs(i);
         if (vfs == NULL) {
             continue;
         }
@@ -147,12 +175,15 @@ void usb_msc_umount(void) {
     }
 }
 
-bool usb_msc_ejected(void) {
-    bool all_ejected = true;
+void usb_msc_remount(fs_user_mount_t *fs_mount) {
     for (uint8_t i = 0; i < LUN_COUNT; i++) {
-        all_ejected &= ejected[i];
+        fs_user_mount_t *vfs = get_vfs(i);
+        if (vfs == NULL || vfs != fs_mount) {
+            continue;
+        }
+        ejected[i] = false;
+        eject_once[i] = true;
     }
-    return all_ejected;
 }
 
 uint8_t tud_msc_get_maxlun_cb(void) {
@@ -297,11 +328,18 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) {
         return false;
     }
 
+    #if CIRCUITPY_SDCARDIO
+    if (lun == SDCARD_LUN) {
+        automount_sd_card();
+    }
+    #endif
+
     fs_user_mount_t *current_mount = get_vfs(lun);
     if (current_mount == NULL) {
         return false;
     }
-    if (ejected[lun]) {
+    if (ejected[lun] || eject_once[lun]) {
+        eject_once[lun] = false;
         // Set 0x3a for media not present.
         tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x3A, 0x00);
         return false;

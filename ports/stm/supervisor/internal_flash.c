@@ -75,11 +75,17 @@ static const flash_layout_t flash_layout[] = {
 #endif
 static uint8_t _flash_cache[0x20000] __attribute__((aligned(4)));
 
-#elif defined(STM32L4)
+#elif defined(STM32L4R5xx)
 static const flash_layout_t flash_layout[] = {
     { 0x08100000, 0x1000, 256 },
 };
 static uint8_t _flash_cache[0x1000] __attribute__((aligned(4)));
+
+#elif defined(STM32L433xx)
+static const flash_layout_t flash_layout[] = {
+    { 0x08000000, 0x0800, 128 },
+};
+static uint8_t _flash_cache[0x0800] __attribute__((aligned(4)));
 
 #else
     #error Unsupported processor
@@ -185,8 +191,13 @@ void port_internal_flash_flush(void) {
     // set up for erase
     FLASH_EraseInitTypeDef EraseInitStruct = {};
     #if CPY_STM32L4
+    #if defined(STM32L4R5xx)
     EraseInitStruct.TypeErase = TYPEERASE_PAGES;
-    EraseInitStruct.Banks = FLASH_BANK_2;       // filesystem stored in upper 1MB of flash in dual bank mode
+    EraseInitStruct.Banks = FLASH_BANK_2;           // filesystem stored in upper 1MB of flash in dual bank mode
+    #elif defined(STM32L433xx)
+    EraseInitStruct.TypeErase = TYPEERASE_PAGES;
+    EraseInitStruct.Banks = FLASH_BANK_1;
+    #endif
     #else
     EraseInitStruct.TypeErase = TYPEERASE_SECTORS;
     EraseInitStruct.VoltageRange = VOLTAGE_RANGE_3; // voltage range needs to be 2.7V to 3.6V

@@ -95,7 +95,7 @@ msgstr "%dアドレスピン、%dRGBピン、%dタイルは%dの高さを指示�
 msgid "%q and %q contain duplicate pins"
 msgstr "%q と %q に重複するピンがあります"
 
-#: ports/atmel-samd/common-hal/audioio/AudioOut.c
+#: shared-bindings/audioio/AudioOut.c
 msgid "%q and %q must be different"
 msgstr "%qと%qが必ず異なるのは必要"
 
@@ -114,6 +114,10 @@ msgstr "%q に重複するピンがあります"
 #: ports/atmel-samd/common-hal/sdioio/SDCard.c
 msgid "%q failure: %d"
 msgstr "%q 失敗: %d"
+
+#: shared-module/audiodelays/MultiTapDelay.c
+msgid "%q in %q must be of type %q or %q, not %q"
+msgstr ""
 
 #: py/argcheck.c shared-module/audiofilters/Filter.c
 msgid "%q in %q must be of type %q, not %q"
@@ -167,7 +171,7 @@ msgstr "%q の長さは <= %d である必要があります"
 msgid "%q length must be >= %d"
 msgstr "%q の長さは >= %d である必要があります"
 
-#: py/modsys.c py/objmodule.c py/runtime.c
+#: py/modsys.c py/runtime.c
 msgid "%q moved from %q to %q"
 msgstr "%q は %q から %q へ移動しました"
 
@@ -229,7 +233,7 @@ msgstr "%q は 8 の倍数である必要があります"
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
 #: shared-bindings/digitalio/Pull.c shared-bindings/supervisor/__init__.c
 #: shared-module/audiofilters/Filter.c shared-module/displayio/__init__.c
-#: shared-module/synthio/Biquad.c shared-module/synthio/Synthesizer.c
+#: shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q は %q 型か %q 型である必要があります、 %q 型は使用できません"
 
@@ -239,6 +243,7 @@ msgstr ""
 "%q は %q 型や %q 型または %q 型である必要があります、 %q 型は使用できません"
 
 #: py/argcheck.c py/runtime.c shared-bindings/bitmapfilter/__init__.c
+#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
 #: shared-module/synthio/__init__.c
 msgid "%q must be of type %q, not %q"
 msgstr "%q は %q 型である必要があります、 %q 型は使用できません"
@@ -808,7 +813,7 @@ msgid "Cannot record to a file"
 msgstr "ファイルへ記録できません"
 
 #: shared-module/storage/__init__.c
-msgid "Cannot remount '/' when visible via USB."
+msgid "Cannot remount path when visible via USB."
 msgstr ""
 
 #: shared-bindings/digitalio/DigitalInOut.c
@@ -1070,7 +1075,7 @@ msgstr "内部フラッシュ書き込みに失敗"
 msgid "File exists"
 msgstr "ファイルが存在します"
 
-#: shared-module/os/getenv.c
+#: shared-module/lvfontio/OnDiskFont.c shared-module/os/getenv.c
 msgid "File not found"
 msgstr ""
 
@@ -1266,6 +1271,7 @@ msgstr ""
 #: shared-bindings/digitalio/DigitalInOut.c
 #: shared-bindings/epaperdisplay/EPaperDisplay.c shared-bindings/pwmio/PWMOut.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
+#: shared-module/lvfontio/OnDiskFont.c
 msgid "Invalid %q"
 msgstr "不正な %q"
 
@@ -1385,6 +1391,11 @@ msgstr ""
 #: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/espressif/common-hal/_bleio/Descriptor.c
 msgid "MITM security not supported"
+msgstr ""
+
+#: ports/stm/common-hal/sdioio/SDCard.c
+#, c-format
+msgid "MMC/SDIO Clock Error %x"
 msgstr ""
 
 #: shared-bindings/is31fl3741/IS31FL3741.c
@@ -1572,6 +1583,10 @@ msgstr ""
 #: shared-module/touchio/TouchIn.c
 msgid "No pulldown on pin; 1Mohm recommended"
 msgstr "ピンにプルダウンがありません。1Mオーム推奨"
+
+#: shared-module/touchio/TouchIn.c
+msgid "No pullup on pin; 1Mohm recommended"
+msgstr ""
 
 #: py/moderrno.c
 msgid "No space left on device"
@@ -1999,6 +2014,7 @@ msgstr "スライスと値の長さが一致しません"
 #: shared-bindings/displayio/TileGrid.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
 msgid "Slices not supported"
 msgstr "スライスは対応していません"
 
@@ -2066,7 +2082,9 @@ msgstr ""
 msgid "Tile height must exactly divide bitmap height"
 msgstr "タイルの高さはビットマップの高さを割り切れる値でなければなりません"
 
-#: shared-bindings/displayio/TileGrid.c shared-module/displayio/TileGrid.c
+#: shared-bindings/displayio/TileGrid.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-module/displayio/TileGrid.c
 msgid "Tile index out of bounds"
 msgstr "タイルのインデクスが範囲外"
 
@@ -2598,8 +2616,15 @@ msgstr ""
 msgid "bits must be 32 or less"
 msgstr ""
 
-#: shared-bindings/audiodelays/Echo.c shared-bindings/audiodelays/PitchShift.c
+#: shared-bindings/audiodelays/Chorus.c shared-bindings/audiodelays/Echo.c
+#: shared-bindings/audiodelays/MultiTapDelay.c
+#: shared-bindings/audiodelays/PitchShift.c
 #: shared-bindings/audiofilters/Distortion.c
+#: shared-bindings/audiodelays/Reverb.c
+msgid "bits_per_sample must be 16"
+msgstr ""
+
+#: shared-bindings/audiodelays/Echo.c shared-bindings/audiofilters/Distortion.c
 #: shared-bindings/audiofilters/Filter.c shared-bindings/audiomixer/Mixer.c
 msgid "bits_per_sample must be 8 or 16"
 msgstr "bits_per_sampleは8または16でなければなりません"
@@ -4022,6 +4047,10 @@ msgstr ""
 msgid "rsplit(None,n)"
 msgstr "rsplit(None,n)"
 
+#: shared-bindings/audiodelays/Reverb.c
+msgid "samples_signed must be true"
+msgstr ""
+
 #: ports/atmel-samd/common-hal/audiobusio/PDMIn.c
 #: ports/raspberrypi/common-hal/audiobusio/PDMIn.c
 msgid "sampling rate out of range"
@@ -4307,7 +4336,9 @@ msgstr ""
 msgid "unreadable attribute"
 msgstr "読み込み不可能な属性"
 
-#: shared-bindings/displayio/TileGrid.c shared-bindings/vectorio/VectorShape.c
+#: shared-bindings/displayio/TileGrid.c shared-bindings/terminalio/Terminal.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-bindings/vectorio/VectorShape.c
 msgid "unsupported %q type"
 msgstr "非対応の型 %q"
 

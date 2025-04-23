@@ -15,7 +15,7 @@
 #include "py/mpstate.h"
 #include "py/runtime.h"
 
-#include "src/rp2_common/hardware_irq/include/hardware/irq.h"
+#include "hardware/irq.h"
 #include "hardware/regs/intctrl.h" // For isr_ macro.
 
 
@@ -159,9 +159,13 @@ static void audio_dma_load_next_block(audio_dma_t *dma, size_t buffer_idx) {
                 !dma_channel_is_busy(dma->channel[1])) {
                 // No data has been read, and both DMA channels have now finished, so it's safe to stop.
                 audio_dma_stop(dma);
+                dma->dma_result = AUDIO_DMA_OK;
+                return;
             }
         }
     }
+    // Enable the channel so that it can be played.
+    dma_hw->ch[dma_channel].al1_ctrl |= DMA_CH1_CTRL_TRIG_EN_BITS;
     dma->dma_result = AUDIO_DMA_OK;
 }
 
@@ -227,12 +231,15 @@ audio_dma_result audio_dma_setup_playback(
         max_buffer_length /= dma->sample_spacing;
     }
 
+    #ifdef PICO_RP2350
+    dma->buffer[0] = (uint8_t *)port_realloc(dma->buffer[0], max_buffer_length, true);
+    #else
     dma->buffer[0] = (uint8_t *)m_realloc(dma->buffer[0],
         #if MICROPY_MALLOC_USES_ALLOCATED_SIZE
         dma->buffer_length[0], // Old size
         #endif
         max_buffer_length);
-
+    #endif
     dma->buffer_length[0] = max_buffer_length;
 
     if (dma->buffer[0] == NULL) {
@@ -240,12 +247,16 @@ audio_dma_result audio_dma_setup_playback(
     }
 
     if (!single_buffer) {
+        #ifdef PICO_RP2350
+        dma->buffer[1] = (uint8_t *)port_realloc(dma->buffer[1], max_buffer_length, true);
+        #else
         dma->buffer[1] = (uint8_t *)m_realloc(dma->buffer[1],
             #if MICROPY_MALLOC_USES_ALLOCATED_SIZE
             dma->buffer_length[1], // Old size
             #endif
             max_buffer_length);
-
+        #endif
+        dma->buffer[1] = (uint8_t *)port_realloc(dma->buffer[1], max_buffer_length, true);
         dma->buffer_length[1] = max_buffer_length;
 
         if (dma->buffer[1] == NULL) {
@@ -439,21 +450,27 @@ void audio_dma_init(audio_dma_t *dma) {
 }
 
 void audio_dma_deinit(audio_dma_t *dma) {
+    #ifdef PICO_RP2350
+    port_free(dma->buffer[0]);
+    #else
     #if MICROPY_MALLOC_USES_ALLOCATED_SIZE
     m_free(dma->buffer[0], dma->buffer_length[0]);
     #else
     m_free(dma->buffer[0]);
     #endif
-
+    #endif
     dma->buffer[0] = NULL;
     dma->buffer_length[0] = 0;
 
+    #ifdef PICO_RP2350
+    port_free(dma->buffer[1]);
+    #else
     #if MICROPY_MALLOC_USES_ALLOCATED_SIZE
     m_free(dma->buffer[1], dma->buffer_length[1]);
     #else
     m_free(dma->buffer[1]);
     #endif
-
+    #endif
     dma->buffer[1] = NULL;
     dma->buffer_length[1] = 0;
 }
@@ -482,17 +499,25 @@ static void dma_callback_fun(void *arg) {
 
     // Load the blocks for the requested channels.
     uint32_t channel = 0;
+    size_t filled_count = 0;
     while (channels_to_load_mask) {
         if (channels_to_load_mask & 1) {
             if (dma->channel[0] == channel) {
                 audio_dma_load_next_block(dma, 0);
+                filled_count++;
             }
             if (dma->channel[1] == channel) {
                 audio_dma_load_next_block(dma, 1);
+                filled_count++;
             }
         }
         channels_to_load_mask >>= 1;
         channel++;
+    }
+    // If we had to fill both buffers, then we missed the trigger from the other
+    // buffer. So restart the DMA.
+    if (filled_count == 2) {
+        dma_channel_start(dma->channel[0]);
     }
 }
 
@@ -511,6 +536,8 @@ void __not_in_flash_func(isr_dma_0)(void) {
             audio_dma_t *dma = MP_STATE_PORT(playing_audio)[i];
             // Record all channels whose DMA has completed; they need loading.
             dma->channels_to_load_mask |= mask;
+            // Disable the channel so that we don't play it without filling it.
+            dma_hw->ch[i].al1_ctrl &= ~DMA_CH0_CTRL_TRIG_EN_BITS;
             background_callback_add(&dma->callback, dma_callback_fun, (void *)dma);
         }
         if (MP_STATE_PORT(background_pio_read)[i] != NULL) {

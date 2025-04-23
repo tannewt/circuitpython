@@ -139,23 +139,44 @@ void common_hal_wifi_radio_set_tx_power(wifi_radio_obj_t *self, const mp_float_t
     esp_wifi_set_max_tx_power(tx_power * 4.0f);
 }
 
-mp_int_t common_hal_wifi_radio_get_listen_interval(wifi_radio_obj_t *self) {
-    wifi_config_t *config = &self->sta_config;
-    return config->sta.listen_interval;
+wifi_power_management_t common_hal_wifi_radio_get_power_management(wifi_radio_obj_t *self) {
+    wifi_ps_type_t ps;
+    esp_err_t ret = esp_wifi_get_ps(&ps);
+    if (ret == ESP_OK) {
+        switch (ps) {
+            case WIFI_PS_MIN_MODEM:
+                return POWER_MANAGEMENT_MIN;
+            case WIFI_PS_MAX_MODEM:
+                return POWER_MANAGEMENT_MAX;
+            case WIFI_PS_NONE:
+                return POWER_MANAGEMENT_NONE;
+        }
+    }
+    return POWER_MANAGEMENT_MIN;
 }
 
-void common_hal_wifi_radio_set_listen_interval(wifi_radio_obj_t *self, const mp_int_t listen_interval) {
-    wifi_config_t *config = &self->sta_config;
-    config->sta.listen_interval = listen_interval;
-    if (listen_interval == 1) {
-        esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-    } else if (listen_interval > 1) {
-        esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
-    } else {
-        esp_wifi_set_ps(WIFI_PS_NONE);
-    }
 
-    esp_wifi_set_config(ESP_IF_WIFI_STA, config);
+void common_hal_wifi_radio_set_power_management(wifi_radio_obj_t *self, wifi_power_management_t power_management) {
+    switch (power_management) {
+        case POWER_MANAGEMENT_MIN:
+            esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+            break;
+        case POWER_MANAGEMENT_MAX: {
+            // listen_interval is only used in this case.
+            wifi_config_t *config = &self->sta_config;
+            // This is a typical value seen in various examples.
+            config->sta.listen_interval = 3;
+            esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+            esp_wifi_set_config(ESP_IF_WIFI_STA, config);
+        }
+        break;
+        case POWER_MANAGEMENT_NONE:
+            esp_wifi_set_ps(WIFI_PS_NONE);
+            break;
+        case POWER_MANAGEMENT_UNKNOWN:
+            // This should be prevented in shared-bindings.
+            break;
+    }
 }
 
 mp_obj_t common_hal_wifi_radio_get_mac_address_ap(wifi_radio_obj_t *self) {

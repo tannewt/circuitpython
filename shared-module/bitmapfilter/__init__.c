@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #define port_free free
 #define port_malloc(sz, hint) (malloc(sz))
-#define port_realloc realloc
+#define port_realloc(ptr, size, dma_capable) realloc(ptr, size)
 #else
 #include "supervisor/port_heap.h"
 #endif
@@ -48,7 +48,7 @@ static void *scratchpad_alloc(size_t sz) {
     } else {
         if (scratchpad) {
             if (sz > scratchpad_size) {
-                void *tmp = port_realloc(scratchpad, sz);
+                void *tmp = port_realloc(scratchpad, sz, false);
                 if (!tmp) {
                     port_free(scratchpad);
                     scratchpad = NULL;

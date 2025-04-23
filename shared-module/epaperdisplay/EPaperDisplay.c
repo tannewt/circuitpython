@@ -360,8 +360,11 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
             self->bus.send(self->bus.bus, DISPLAY_DATA, self->chip_select, (uint8_t *)buffer, subrectangle_size_bytes);
             displayio_display_bus_end_transaction(&self->bus);
 
-            // TODO(tannewt): Make refresh displays faster so we don't starve other
-            // background tasks.
+            // Run background tasks so they can run during an explicit refresh.
+            // Auto-refresh won't run background tasks here because it is a background task itself.
+            RUN_BACKGROUND_TASKS;
+
+            // Run USB background tasks so they can run during an implicit refresh.
             #if CIRCUITPY_TINYUSB
             usb_background();
             #endif

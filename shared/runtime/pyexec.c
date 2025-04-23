@@ -91,7 +91,7 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
     nlr_buf_t nlr;
     nlr.ret_val = NULL;
     if (nlr_push(&nlr) == 0) {
-        mp_obj_t module_fun;
+        mp_obj_t module_fun = mp_const_none;
         // CIRCUITPY-CHANGE
         #if CIRCUITPY_ATEXIT
         if (!(exec_flags & EXEC_FLAG_SOURCE_IS_ATEXIT))
@@ -157,7 +157,7 @@ static int parse_compile_execute(const void *source, mp_parse_input_kind_t input
             mp_call_function_n_kw(callback->func, callback->n_pos, callback->n_kw, callback->args);
         } else
         #endif
-        {
+        if (module_fun != mp_const_none) {
             mp_call_function_0(module_fun);
         }
         mp_hal_set_interrupt_char(-1); // disable interrupt

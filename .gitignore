@@ -97,3 +97,8 @@ TAGS
 # clangd cache
 ##############
 .cache
+
+**/CLAUDE.local.md
+
+# windsurf rules
+.windsurfrules

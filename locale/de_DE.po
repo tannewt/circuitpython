@@ -94,7 +94,7 @@ msgstr ""
 msgid "%q and %q contain duplicate pins"
 msgstr "%q und %q enthalten doppelte Pins"
 
-#: ports/atmel-samd/common-hal/audioio/AudioOut.c
+#: shared-bindings/audioio/AudioOut.c
 msgid "%q and %q must be different"
 msgstr "%q und %q müssen unterschiedlich sein"
 
@@ -114,6 +114,10 @@ msgstr "%q enthält doppelte Pins"
 #: ports/atmel-samd/common-hal/sdioio/SDCard.c
 msgid "%q failure: %d"
 msgstr "%q Fehler: %d"
+
+#: shared-module/audiodelays/MultiTapDelay.c
+msgid "%q in %q must be of type %q or %q, not %q"
+msgstr ""
 
 #: py/argcheck.c shared-module/audiofilters/Filter.c
 msgid "%q in %q must be of type %q, not %q"
@@ -167,7 +171,7 @@ msgstr "%q länge muss kleiner oder gleich %d sein"
 msgid "%q length must be >= %d"
 msgstr "%q länge muss größer oder gleich %d sein"
 
-#: py/modsys.c py/objmodule.c py/runtime.c
+#: py/modsys.c py/runtime.c
 msgid "%q moved from %q to %q"
 msgstr "%q von %q nach %q versetzt"
 
@@ -229,7 +233,7 @@ msgstr "%q muss ein Vielfaches von 8 sein."
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
 #: shared-bindings/digitalio/Pull.c shared-bindings/supervisor/__init__.c
 #: shared-module/audiofilters/Filter.c shared-module/displayio/__init__.c
-#: shared-module/synthio/Biquad.c shared-module/synthio/Synthesizer.c
+#: shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q muss von Typ %q oder %q sein, nicht %q"
 
@@ -238,6 +242,7 @@ msgid "%q must be of type %q, %q, or %q, not %q"
 msgstr "%q muss vom Typ %q, %q oder %q sein, und nicht %q"
 
 #: py/argcheck.c py/runtime.c shared-bindings/bitmapfilter/__init__.c
+#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
 #: shared-module/synthio/__init__.c
 msgid "%q must be of type %q, not %q"
 msgstr "%q muss von Typ %q sein, nicht %q"
@@ -809,8 +814,8 @@ msgid "Cannot record to a file"
 msgstr "Aufnahme in eine Datei nicht möglich"
 
 #: shared-module/storage/__init__.c
-msgid "Cannot remount '/' when visible via USB."
-msgstr "'/' kann nicht wiedereingehängt werden, wenn per USB sichtbar."
+msgid "Cannot remount path when visible via USB."
+msgstr ""
 
 #: shared-bindings/digitalio/DigitalInOut.c
 msgid "Cannot set value when direction is input."
@@ -1076,7 +1081,7 @@ msgstr "Interner Flash konnte nicht geschrieben werden."
 msgid "File exists"
 msgstr "Datei existiert"
 
-#: shared-module/os/getenv.c
+#: shared-module/lvfontio/OnDiskFont.c shared-module/os/getenv.c
 msgid "File not found"
 msgstr "Datei nicht gefunden"
 
@@ -1278,6 +1283,7 @@ msgstr "Unterbrochen durch Ausgabefunktion"
 #: shared-bindings/digitalio/DigitalInOut.c
 #: shared-bindings/epaperdisplay/EPaperDisplay.c shared-bindings/pwmio/PWMOut.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
+#: shared-module/lvfontio/OnDiskFont.c
 msgid "Invalid %q"
 msgstr "Ungültiger %q"
 
@@ -1398,6 +1404,11 @@ msgstr "MAC Adresse war ungültig"
 #: ports/espressif/common-hal/_bleio/Descriptor.c
 msgid "MITM security not supported"
 msgstr "MITM-Sicherheit wird nicht unterstützt"
+
+#: ports/stm/common-hal/sdioio/SDCard.c
+#, c-format
+msgid "MMC/SDIO Clock Error %x"
+msgstr ""
 
 #: shared-bindings/is31fl3741/IS31FL3741.c
 msgid "Mapping must be a tuple"
@@ -1584,6 +1595,10 @@ msgstr "Kein Pull-up gefunden an SDA oder SCL; Verkabelung prüfen"
 #: shared-module/touchio/TouchIn.c
 msgid "No pulldown on pin; 1Mohm recommended"
 msgstr "Kein Pulldown-Widerstand am Pin; 1 MOhm wird vorgeschlagen"
+
+#: shared-module/touchio/TouchIn.c
+msgid "No pullup on pin; 1Mohm recommended"
+msgstr ""
 
 #: py/moderrno.c
 msgid "No space left on device"
@@ -2018,6 +2033,7 @@ msgstr "Slice und Wert (value) haben unterschiedliche Längen."
 #: shared-bindings/displayio/TileGrid.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
 msgid "Slices not supported"
 msgstr "Slices werden nicht unterstützt"
 
@@ -2090,7 +2106,9 @@ msgstr ""
 msgid "Tile height must exactly divide bitmap height"
 msgstr "Die Kachelhöhe muss die Bitmaphöhe genau teilen"
 
-#: shared-bindings/displayio/TileGrid.c shared-module/displayio/TileGrid.c
+#: shared-bindings/displayio/TileGrid.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-module/displayio/TileGrid.c
 msgid "Tile index out of bounds"
 msgstr "Kachelindex außerhalb der Grenzen"
 
@@ -2634,8 +2652,15 @@ msgstr "Bitmap-Größen müssen übereinstimmen"
 msgid "bits must be 32 or less"
 msgstr "bits müssen 32 oder kleiner sein"
 
-#: shared-bindings/audiodelays/Echo.c shared-bindings/audiodelays/PitchShift.c
+#: shared-bindings/audiodelays/Chorus.c shared-bindings/audiodelays/Echo.c
+#: shared-bindings/audiodelays/MultiTapDelay.c
+#: shared-bindings/audiodelays/PitchShift.c
 #: shared-bindings/audiofilters/Distortion.c
+#: shared-bindings/audiodelays/Reverb.c
+msgid "bits_per_sample must be 16"
+msgstr ""
+
+#: shared-bindings/audiodelays/Echo.c shared-bindings/audiofilters/Distortion.c
 #: shared-bindings/audiofilters/Filter.c shared-bindings/audiomixer/Mixer.c
 msgid "bits_per_sample must be 8 or 16"
 msgstr "Es müssen 8 oder 16 bits_per_sample sein"
@@ -4079,6 +4104,10 @@ msgstr "Roll-Argument muss ein ndarray sein"
 msgid "rsplit(None,n)"
 msgstr "rsplit(None,n)"
 
+#: shared-bindings/audiodelays/Reverb.c
+msgid "samples_signed must be true"
+msgstr ""
+
 #: ports/atmel-samd/common-hal/audiobusio/PDMIn.c
 #: ports/raspberrypi/common-hal/audiobusio/PDMIn.c
 msgid "sampling rate out of range"
@@ -4366,7 +4395,9 @@ msgstr "'%c' in Format konnte nicht zugeordnet werden"
 msgid "unreadable attribute"
 msgstr "nicht lesbares Attribut"
 
-#: shared-bindings/displayio/TileGrid.c shared-bindings/vectorio/VectorShape.c
+#: shared-bindings/displayio/TileGrid.c shared-bindings/terminalio/Terminal.c
+#: shared-bindings/tilepalettemapper/TilePaletteMapper.c
+#: shared-bindings/vectorio/VectorShape.c
 msgid "unsupported %q type"
 msgstr "Nicht unterstützter %q-Typ"
 
@@ -4513,6 +4544,9 @@ msgstr "zi muss eine Gleitkommazahl sein"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "zi muss die Form (n_section, 2) haben"
+
+#~ msgid "Cannot remount '/' when visible via USB."
+#~ msgstr "'/' kann nicht wiedereingehängt werden, wenn per USB sichtbar."
 
 #~ msgid "%q must be a %q object, %q, or %q"
 #~ msgstr "%q muss ein %q Objekt, %q, oder %q sein"

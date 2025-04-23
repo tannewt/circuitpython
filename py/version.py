@@ -9,15 +9,17 @@ def get_version_info_from_git(repo_path, extra_args=[]):
         # Note: git describe doesn't work if no tag is available
         try:
             git_tag = subprocess.check_output(
-                # CIRCUITPY-CHANGE
+                # CIRCUITPY-CHANGE: Ignore MicroPython tags that start with v.
+                # Also ignore tags that are on merged in branches.
                 [
                     "git",
                     "describe",
                     "--dirty",
                     "--tags",
                     "--always",
+                    "--first-parent",
                     "--match",
-                    "[1-9].*",
+                    "[!v]*",  # This is a glob, not a regex
                     *extra_args,
                 ],
                 cwd=repo_path,

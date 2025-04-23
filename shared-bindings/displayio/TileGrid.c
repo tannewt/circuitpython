@@ -62,7 +62,8 @@ void displayio_tilegrid_validate_pixel_shader(mp_obj_t pixel_shader) {
 //|         convert the value and its location to a display native pixel color. This may be a simple color
 //|         palette lookup, a gradient, a pattern or a color transformer.
 //|
-//|         To save RAM usage, tile values are only allowed in the range from 0 to 255 inclusive (single byte values).
+//|         When the total number of tiles is 256 or less, tile values are stored as single bytes (uint8_t).
+//|         When the total number of tiles is more than 256, tile values are stored as double bytes (uint16_t).
 //|
 //|         tile_width and tile_height match the height of the bitmap by default.
 //|
@@ -316,7 +317,7 @@ MP_PROPERTY_GETSET(displayio_tilegrid_transpose_xy_obj,
 //|         inside the tilegrid rectangle bounds."""
 //|
 static mp_obj_t displayio_tilegrid_obj_contains(mp_obj_t self_in, mp_obj_t touch_tuple) {
-    displayio_tilegrid_t *self = MP_OBJ_TO_PTR(self_in);
+    displayio_tilegrid_t *self = native_tilegrid(self_in);
 
     mp_obj_t *touch_tuple_items;
     mp_obj_get_array_fixed_n(touch_tuple, 3, &touch_tuple_items);
@@ -453,7 +454,7 @@ static mp_obj_t tilegrid_subscr(mp_obj_t self_in, mp_obj_t index_obj, mp_obj_t v
             return MP_OBJ_NULL; // op not supported
         } else {
             mp_int_t value = mp_obj_get_int(value_obj);
-            mp_arg_validate_int_range(value, 0, 255, MP_QSTR_tile);
+            mp_arg_validate_int_range(value, 0, self->tiles_in_bitmap - 1, MP_QSTR_tile);
 
             common_hal_displayio_tilegrid_set_tile(self, x, y, value);
         }

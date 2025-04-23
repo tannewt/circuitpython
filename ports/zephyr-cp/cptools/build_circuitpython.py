@@ -300,7 +300,6 @@ async def build_circuitpython():
         portdir / "common-hal/microcontroller/Pin.c",
         portdir / "common-hal/microcontroller/Processor.c",
         portdir / "common-hal/os/__init__.c",
-        "supervisor/stub/misc.c",
         "shared/readline/readline.c",
         "shared/runtime/context_manager_helpers.c",
         "shared/runtime/pyexec.c",

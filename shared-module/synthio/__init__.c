@@ -9,7 +9,6 @@
 #include "shared-bindings/audiocore/__init__.h"
 #include "shared-bindings/synthio/__init__.h"
 #include "shared-module/synthio/Biquad.h"
-#include "shared-module/synthio/BlockBiquad.h"
 #include "shared-module/synthio/Note.h"
 #include "py/runtime.h"
 #include <math.h>
@@ -327,10 +326,8 @@ void synthio_synth_synthesize(synthio_synth_t *synth, uint8_t **bufptr, uint32_t
         mp_obj_t filter_obj = synthio_synth_get_note_filter(note_obj);
         if (filter_obj != mp_const_none) {
             synthio_note_obj_t *note = MP_OBJ_TO_PTR(note_obj);
-            if (mp_obj_is_type(filter_obj, &synthio_block_biquad_type_obj)) {
-                common_hal_synthio_block_biquad_tick(filter_obj, &note->filter_state);
-            }
-            synthio_biquad_filter_samples(&note->filter_state, tmp_buffer32, dur);
+            common_hal_synthio_biquad_tick(filter_obj);
+            synthio_biquad_filter_samples(filter_obj, &note->filter_state, tmp_buffer32, dur);
         }
 
         // adjust loudness by envelope

@@ -16,6 +16,10 @@
 #include "py/stream.h"
 #include "shared-bindings/fontio/BuiltinFont.h"
 
+#if CIRCUITPY_LVFONTIO
+#include "shared-bindings/lvfontio/OnDiskFont.h"
+#endif
+
 //| class Terminal:
 //|     """Display a character stream with a TileGrid
 //|
@@ -86,10 +90,28 @@ static mp_obj_t terminalio_terminal_make_new(const mp_obj_type_t *type, size_t n
         status_bar = mp_arg_validate_type(args[ARG_status_bar].u_obj, &displayio_tilegrid_type, MP_QSTR_status_bar);
     }
 
-    fontio_builtinfont_t *font = mp_arg_validate_type(args[ARG_font].u_obj, &fontio_builtinfont_type, MP_QSTR_font);
+    mp_obj_t font = args[ARG_font].u_obj;
 
-    mp_arg_validate_int_min(scroll_area->width_in_tiles, 2, MP_QSTR_scroll_area_width);
-    mp_arg_validate_int_min(scroll_area->height_in_tiles, 2, MP_QSTR_scroll_area_height);
+    // Ensure the font is one of the supported types
+    bool valid_font = false;
+
+    #if CIRCUITPY_FONTIO
+    if (mp_obj_is_type(font, &fontio_builtinfont_type)) {
+        valid_font = true;
+    }
+    #endif
+
+    #if CIRCUITPY_LVFONTIO
+    if (mp_obj_is_type(font, &lvfontio_ondiskfont_type)) {
+        valid_font = true;
+    }
+    #endif
+
+    if (!valid_font) {
+        mp_raise_TypeError_varg(MP_ERROR_TEXT("unsupported %q type"), MP_QSTR_font);
+    }
+
+    mp_arg_validate_int_min(scroll_area->width_in_tiles * scroll_area->height_in_tiles, 2, MP_QSTR_scroll_area_area);
 
     terminalio_terminal_obj_t *self = mp_obj_malloc(terminalio_terminal_obj_t, &terminalio_terminal_type);
 

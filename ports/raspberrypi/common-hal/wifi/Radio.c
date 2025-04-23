@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "supervisor/port.h"
+#include "shared-bindings/wifi/PowerManagement.h"
 #include "shared-bindings/wifi/Radio.h"
 #include "shared-bindings/wifi/Network.h"
 
@@ -105,6 +106,41 @@ void common_hal_wifi_radio_set_tx_power(wifi_radio_obj_t *self, const mp_float_t
     nw_put_le32(buf + 9, dbm_times_four);
     cyw43_ioctl(&cyw43_state, CYW43_IOCTL_SET_VAR, 9 + 4, buf, CYW43_ITF_STA);
     cyw43_ioctl(&cyw43_state, CYW43_IOCTL_SET_VAR, 9 + 4, buf, CYW43_ITF_AP);
+}
+
+wifi_power_management_t common_hal_wifi_radio_get_power_management(wifi_radio_obj_t *self) {
+    uint32_t pm_value = cyw43_get_power_management_value();
+
+    switch (pm_value) {
+        case CONST_CYW43_PERFORMANCE_PM:
+            return POWER_MANAGEMENT_MIN;
+        case CONST_CYW43_AGGRESSIVE_PM:
+            return POWER_MANAGEMENT_MAX;
+        case CONST_CYW43_NONE_PM:
+            return POWER_MANAGEMENT_NONE;
+        default:
+            return POWER_MANAGEMENT_UNKNOWN;
+    }
+}
+
+
+void common_hal_wifi_radio_set_power_management(wifi_radio_obj_t *self, wifi_power_management_t power_management) {
+    uint32_t pm_setting = CONST_CYW43_DEFAULT_PM;
+    switch (power_management) {
+        case POWER_MANAGEMENT_MIN:
+            pm_setting = CONST_CYW43_PERFORMANCE_PM;
+            break;
+        case POWER_MANAGEMENT_MAX:
+            pm_setting = CONST_CYW43_AGGRESSIVE_PM;
+            break;
+        case POWER_MANAGEMENT_NONE:
+            pm_setting = CONST_CYW43_NONE_PM;
+            break;
+        default:
+            // Should not get here.
+            break;
+    }
+    cyw43_set_power_management_value(pm_setting);
 }
 
 mp_obj_t common_hal_wifi_radio_get_mac_address_ap(wifi_radio_obj_t *self) {

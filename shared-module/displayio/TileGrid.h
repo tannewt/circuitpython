@@ -30,7 +30,7 @@ typedef struct {
     uint16_t tile_height;
     uint16_t top_left_x;
     uint16_t top_left_y;
-    uint8_t *tiles;
+    void *tiles;  // Can be either uint8_t* or uint16_t* depending on tiles_in_bitmap
     const displayio_buffer_transform_t *absolute_transform;
     displayio_area_t dirty_area; // Stored as a relative area until the refresh area is fetched.
     displayio_area_t previous_area; // Stored as an absolute area.

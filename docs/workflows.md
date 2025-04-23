@@ -19,10 +19,30 @@ The workflow APIs are documented here.
 These USB interfaces are enabled by default on boards with USB support. They are usable once the
 device has been plugged into a host.
 
-### CIRCUITPY drive
+### Mass Storage
 CircuitPython exposes a standard mass storage (MSC) interface to enable file manipulation over a
-standard interface. This interface works underneath the file system at the block level so using it
-excludes other types of workflows from manipulating the file system at the same time.
+standard interface. (This is how USB drives work.) This interface works underneath the file system at
+the block level so using it excludes other types of workflows from manipulating the file system at
+the same time.
+
+CircuitPython 10.x adds multiple Logical Units (LUNs) to the mass storage interface. This allows for
+multiple drives to be accessed and ejected independently.
+
+#### CIRCUITPY drive
+The CIRCUITPY drive is the main drive that CircuitPython uses. It is writable by the host by default
+and read-only to CircuitPython. `storage.remount()` can be used to remount the drive to
+CircuitPython as read-write.
+
+#### CPSAVES drive
+The board may also expose a CPSAVES drive. (This is based on the ``CIRCUITPY_SAVES_PARTITION_SIZE``
+setting in ``mpconfigboard.h``.) It is a portion of the main flash that is writable by CircuitPython
+by default. It is read-only to the host. `storage.remount()` can be used to remount the drive to the
+host as read-write.
+
+#### SD card drive
+A few boards have SD card automounting. (This is based on the ``DEFAULT_SD`` settings in
+``mpconfigboard.h``.) The card is writable from CircuitPython by default and read-only to the host.
+`storage.remount()` can be used to remount the drive to the host as read-write.
 
 ### CDC serial
 CircuitPython exposes one CDC USB interface for CircuitPython serial. This is a standard serial

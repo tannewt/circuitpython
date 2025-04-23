@@ -47,7 +47,7 @@
 #include "peripherals/touch.h"
 #endif
 
-#if CIRCUITPY_BLEIO
+#if CIRCUITPY_BLEIO_NATIVE
 #include "shared-bindings/_bleio/__init__.h"
 #endif
 
@@ -324,8 +324,12 @@ void port_free(void *ptr) {
     heap_caps_free(ptr);
 }
 
-void *port_realloc(void *ptr, size_t size) {
-    return heap_caps_realloc(ptr, size, MALLOC_CAP_8BIT);
+void *port_realloc(void *ptr, size_t size, bool dma_capable) {
+    size_t caps = MALLOC_CAP_8BIT;
+    if (dma_capable) {
+        caps |= MALLOC_CAP_DMA;
+    }
+    return heap_caps_realloc(ptr, size, caps);
 }
 
 size_t port_heap_get_largest_free_size(void) {
@@ -493,11 +497,17 @@ void port_idle_until_interrupt(void) {
     }
 }
 
-void port_post_boot_py(bool heap_valid) {
-    if (!heap_valid && filesystem_present()) {
+#if CIRCUITPY_WIFI
+void port_boot_info(void) {
+    uint8_t mac[6];
+    esp_wifi_get_mac(ESP_IF_WIFI_STA, mac);
+    mp_printf(&mp_plat_print, "MAC");
+    for (int i = 0; i < 6; i++) {
+        mp_printf(&mp_plat_print, ":%02X", mac[i]);
     }
+    mp_printf(&mp_plat_print, "\n");
 }
-
+#endif
 
 // Wrap main in app_main that the IDF expects.
 extern void main(void);
