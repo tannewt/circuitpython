@@ -8,8 +8,6 @@
 #define MICROPY_HW_LED_STATUS   (&pin_PB23)
 #define MICROPY_HW_NEOPIXEL (&pin_PB22)
 
-#define EXTERNAL_FLASH_QSPI_DUAL
-
 #define BOARD_HAS_CRYSTAL 1
 
 // USB is always used internally so skip the pin objects for it.
