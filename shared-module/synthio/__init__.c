@@ -381,8 +381,8 @@ void synthio_synth_init(synthio_synth_t *synth, uint32_t sample_rate, int channe
     synthio_synth_parse_waveform(&synth->waveform_bufinfo, waveform_obj);
     mp_arg_validate_int_range(channel_count, 1, 2, MP_QSTR_channel_count);
     synth->buffer_length = SYNTHIO_MAX_DUR * SYNTHIO_BYTES_PER_SAMPLE * channel_count;
-    synth->buffers[0] = m_malloc(synth->buffer_length);
-    synth->buffers[1] = m_malloc(synth->buffer_length);
+    synth->buffers[0] = m_malloc_without_collect(synth->buffer_length);
+    synth->buffers[1] = m_malloc_without_collect(synth->buffer_length);
     synth->base.channel_count = channel_count;
     synth->base.single_buffer = false;
     synth->other_channel = -1;

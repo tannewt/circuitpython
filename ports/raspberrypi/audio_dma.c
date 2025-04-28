@@ -256,7 +256,6 @@ audio_dma_result audio_dma_setup_playback(
             #endif
             max_buffer_length);
         #endif
-        dma->buffer[1] = (uint8_t *)port_realloc(dma->buffer[1], max_buffer_length, true);
         dma->buffer_length[1] = max_buffer_length;
 
         if (dma->buffer[1] == NULL) {

@@ -65,7 +65,7 @@ static NORETURN void mbedtls_raise_error(int err) {
     // Try to allocate memory for the message
     #define ERR_STR_MAX 80  // mbedtls_strerror truncates if it doesn't fit
     mp_obj_str_t *o_str = m_new_obj_maybe(mp_obj_str_t);
-    byte *o_str_buf = m_new_maybe(byte, ERR_STR_MAX);
+    byte *o_str_buf = m_malloc_without_collect(ERR_STR_MAX);
     if (o_str == NULL || o_str_buf == NULL) {
         mp_raise_OSError(err);
     }
