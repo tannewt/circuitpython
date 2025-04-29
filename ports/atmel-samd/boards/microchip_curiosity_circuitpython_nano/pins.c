@@ -6,6 +6,12 @@
 
 #include "shared-bindings/board/__init__.h"
 
+// The singleton for board.SPI() is already defined.
+// board.LCD_SPI()
+CIRCUITPY_BOARD_BUS_SINGLETON(lcd_spi, spi, 1)
+// board.SD_SPI()
+CIRCUITPY_BOARD_BUS_SINGLETON(sd_spi, spi, 2)
+
 static const mp_rom_map_elem_t board_module_globals_table[] = {
     CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
 
@@ -19,7 +25,7 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_D7), MP_ROM_PTR(&pin_PB17) },
     { MP_ROM_QSTR(MP_QSTR_D8), MP_ROM_PTR(&pin_PB22) },
     { MP_ROM_QSTR(MP_QSTR_D13), MP_ROM_PTR(&pin_PB23) },
-    
+
     { MP_ROM_QSTR(MP_QSTR_LED), MP_ROM_PTR(&pin_PB23) },
 
     { MP_ROM_QSTR(MP_QSTR_NEOPIX), MP_ROM_PTR(&pin_PB22) },
@@ -41,8 +47,8 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LCD_MOSI), MP_ROM_PTR(&pin_PA04) },
     { MP_ROM_QSTR(MP_QSTR_LCD_SCK), MP_ROM_PTR(&pin_PA05) },
 
-    { MP_ROM_QSTR(MP_QSTR_SDA), MP_ROM_PTR(&pin_PB30) },
-    { MP_ROM_QSTR(MP_QSTR_SCL), MP_ROM_PTR(&pin_PB31) },
+    { MP_ROM_QSTR(MP_QSTR_SCL), MP_ROM_PTR(&pin_PB30) },
+    { MP_ROM_QSTR(MP_QSTR_SDA), MP_ROM_PTR(&pin_PB31) },
 
     { MP_ROM_QSTR(MP_QSTR_BLE_TX), MP_ROM_PTR(&pin_PA12) },
     { MP_ROM_QSTR(MP_QSTR_BLE_RX), MP_ROM_PTR(&pin_PA13) },
@@ -53,9 +59,16 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_SD_SCK), MP_ROM_PTR(&pin_PA17) },
     { MP_ROM_QSTR(MP_QSTR_SD_CS), MP_ROM_PTR(&pin_PA19) },
 
+    { MP_ROM_QSTR(MP_QSTR_MISO), MP_ROM_PTR(&pin_PB00) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_0), MP_ROM_PTR(&pin_PB00) },
+
+    { MP_ROM_QSTR(MP_QSTR_CS), MP_ROM_PTR(&pin_PB01) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_1), MP_ROM_PTR(&pin_PB01) },
+
+    { MP_ROM_QSTR(MP_QSTR_MOSI), MP_ROM_PTR(&pin_PB02) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_2), MP_ROM_PTR(&pin_PB02) },
+
+    { MP_ROM_QSTR(MP_QSTR_SCK ), MP_ROM_PTR(&pin_PB03) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_3), MP_ROM_PTR(&pin_PB03) },
 
     { MP_ROM_QSTR(MP_QSTR_DEBUG_TX), MP_ROM_PTR(&pin_PA22) },
@@ -65,14 +78,11 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_TX),  MP_ROM_PTR(&pin_PB12) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_STANDBY),  MP_ROM_PTR(&pin_PB17) },
 
-    { MP_ROM_QSTR(MP_QSTR_CAN_RX),  MP_ROM_PTR(&pin_PB13) },
-    { MP_ROM_QSTR(MP_QSTR_CAN_TX),  MP_ROM_PTR(&pin_PB12) },
-    { MP_ROM_QSTR(MP_QSTR_CAN_STANDBY),  MP_ROM_PTR(&pin_PB17) },
-
     { MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&board_i2c_obj) },
-    { MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&board_spi_obj) },
     { MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&board_uart_obj) },
-    { MP_ROM_QSTR(MP_QSTR_SDSPI), MP_ROM_PTR(&board_sdspi_obj) },
-    { MP_ROM_QSTR(MP_QSTR_LCDSPI), MP_ROM_PTR(&board_lcdspi_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&board_spi_obj) },
+    { MP_ROM_QSTR(MP_QSTR_LCD_SPI), MP_ROM_PTR(&board_lcd_spi_obj) },
+    { MP_ROM_QSTR(MP_QSTR_SD_SPI), MP_ROM_PTR(&board_sd_spi_obj) },
 };
 MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);

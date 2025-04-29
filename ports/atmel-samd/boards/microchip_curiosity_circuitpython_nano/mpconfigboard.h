@@ -14,18 +14,16 @@
 #define IGNORE_PIN_PA24     1
 #define IGNORE_PIN_PA25     1
 
-#define DEFAULT_I2C_BUS_SCL (&pin_PB31)
-#define DEFAULT_I2C_BUS_SDA (&pin_PB30)
+#define DEFAULT_I2C_BUS_SCL (&pin_PB30)
+#define DEFAULT_I2C_BUS_SDA (&pin_PB31)
 
-#define LCD_SPI_BUS_SCK (&pin_PA05)
-#define LCD_SPI_BUS_MOSI (&pin_PA04)
-#define LCD_SPI_BUS_CS (&pin_PA07)
-#define LCD_BACKLIGHT (&pin_PA06)
-
-#define SDCARD_SPI_BUS_SCK (&pin_PA17)
-#define SDCARD_SPI_BUS_MOSI (&pin_PA16)
-#define SDCARD_SPI_BUS_MISO (&pin_PA18)
-#define SDCARD_SPI_BUS_CS (&pin_PA19)
+#define CIRCUITPY_BOARD_SPI         (3)
+// These correspond to the CIRCUITPY_BOARD_BUS_SINGLETON definitions in pins.c
+#define CIRCUITPY_BOARD_SPI_PIN     { \
+        {.clock = &pin_PB03, .mosi = &pin_PB02, .miso = &pin_PB00}, /*board.SPI()*/ \
+        {.clock = &pin_PA05, .mosi = &pin_PA04, .miso = NULL},      /*board.LCD_SPI()*/ \
+        {.clock = &pin_PA17, .mosi = &pin_PA16, .miso = &pin_PA18}, /*board.SD_SPI()*/ \
+}
 
 #define DEFAULT_CAN_BUS_TX (&pin_PB12)
 #define DEFAULT_CAN_BUS_RX (&pin_PB13)
