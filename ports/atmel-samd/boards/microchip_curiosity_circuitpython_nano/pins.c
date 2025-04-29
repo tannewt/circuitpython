@@ -68,7 +68,7 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MOSI), MP_ROM_PTR(&pin_PB02) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_2), MP_ROM_PTR(&pin_PB02) },
 
-    { MP_ROM_QSTR(MP_QSTR_SCK ), MP_ROM_PTR(&pin_PB03) },
+    { MP_ROM_QSTR(MP_QSTR_SCK), MP_ROM_PTR(&pin_PB03) },
     { MP_ROM_QSTR(MP_QSTR_SPARE_3), MP_ROM_PTR(&pin_PB03) },
 
     { MP_ROM_QSTR(MP_QSTR_DEBUG_TX), MP_ROM_PTR(&pin_PA22) },
