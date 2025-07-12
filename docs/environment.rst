@@ -189,4 +189,18 @@ This feature is not enabled on boards that the CIRCUITPY_OS_GETENV (os CIRCUIPTY
 flag has been set to 0. Currently this is primarily boards with limited flash including some
 of the Atmel_samd boards based on the SAMD21/M0 microprocessor.
 
+CIRCUITPY_TERMINAL_FONT
+~~~~~~~~~~~~~~~~~~~~~~~
+Specifies a custom font file path to use for the terminalio console instead of the default
+``/fonts/terminal.lvfontbin``. This allows users to create and use custom fonts for the
+CircuitPython console.
+
+This feature requires both CIRCUITPY_OS_GETENV and CIRCUITPY_LVFONTIO to be enabled.
+
+Example:
+
+.. code-block::
+
+    CIRCUITPY_TERMINAL_FONT="/fonts/myfont.lvfontbin"
+
 `boards that the terminalio core module is available on <https://docs.circuitpython.org/en/latest/shared-bindings/terminalio/>`_

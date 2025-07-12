@@ -36,7 +36,7 @@ void common_hal_epaperdisplay_epaperdisplay_construct(epaperdisplay_epaperdispla
     uint16_t write_color_ram_command, bool color_bits_inverted, uint32_t highlight_color,
     const uint8_t *refresh_sequence, uint16_t refresh_sequence_len, mp_float_t refresh_time,
     const mcu_pin_obj_t *busy_pin, bool busy_state, mp_float_t seconds_per_frame,
-    bool chip_select, bool grayscale, bool acep, bool two_byte_sequence_length, bool address_little_endian) {
+    bool chip_select, bool grayscale, bool acep, bool spectra6, bool two_byte_sequence_length, bool address_little_endian) {
     uint16_t color_depth = 1;
     bool core_grayscale = true;
     if (highlight_color != 0x000000) {
@@ -46,9 +46,10 @@ void common_hal_epaperdisplay_epaperdisplay_construct(epaperdisplay_epaperdispla
     } else {
         self->core.colorspace.tricolor = false;
     }
-    self->acep = acep;
+    self->acep = acep || spectra6;
+    self->core.colorspace.sixcolor = spectra6;
     self->core.colorspace.sevencolor = acep;
-    if (acep) {
+    if (self->acep) {
         color_depth = 4; // bits. 7 colors + clean
         grayscale = false;
         core_grayscale = false;
@@ -338,7 +339,7 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
                 } else if (self->core.colorspace.tricolor) {
                     self->core.colorspace.grayscale = false;
                     displayio_display_core_fill_area(&self->core, &subrectangle, mask, buffer);
-                } else if (self->core.colorspace.sevencolor) {
+                } else if (self->core.colorspace.sixcolor || self->core.colorspace.sevencolor) {
                     displayio_display_core_fill_area(&self->core, &subrectangle, mask, buffer);
                 }
             } else {
@@ -360,8 +361,11 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
             self->bus.send(self->bus.bus, DISPLAY_DATA, self->chip_select, (uint8_t *)buffer, subrectangle_size_bytes);
             displayio_display_bus_end_transaction(&self->bus);
 
-            // TODO(tannewt): Make refresh displays faster so we don't starve other
-            // background tasks.
+            // Run background tasks so they can run during an explicit refresh.
+            // Auto-refresh won't run background tasks here because it is a background task itself.
+            RUN_BACKGROUND_TASKS;
+
+            // Run USB background tasks so they can run during an implicit refresh.
             #if CIRCUITPY_TINYUSB
             usb_background();
             #endif

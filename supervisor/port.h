@@ -95,12 +95,6 @@ void port_wake_main_task_from_isr(void);
 // CircuitPython task when others are done.
 void port_yield(void);
 
-// Some ports need special handling just after completing boot.py execution.
-// This function is called once while boot.py's VM is still valid, and
-// then a second time after the VM is finalized.
-// A default weak implementation is provided that does nothing.
-void port_post_boot_py(bool heap_valid);
-
 // Some ports want to add information to boot_out.txt.
 // A default weak implementation is provided that does nothing.
 void port_boot_info(void);
@@ -108,3 +102,8 @@ void port_boot_info(void);
 // Some ports want to mark additional pointers as gc roots.
 // A default weak implementation is provided that does nothing.
 void port_gc_collect(void);
+
+// Most ports that implement CIRCUITPY_BOOT_BUTTON use a generic version of
+// this function to sense the button. Ports that need to can override this
+// function to provide their own implementation.
+bool port_boot_button_pressed(void);

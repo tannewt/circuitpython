@@ -1,3 +1,10 @@
+# This file is part of the CircuitPython project: https://circuitpython.org
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025 Adafruit Industries
+#
+# SPDX-License-Identifier: MIT
+
+
 ifeq ($(IDF_TARGET),esp32c2)
 IDF_TARGET_ARCH = riscv
 CROSS_COMPILE = riscv32-esp-elf-
@@ -18,21 +25,23 @@ IDF_TARGET_ARCH = xtensa
 CROSS_COMPILE = xtensa-$(IDF_TARGET)-elf-
 endif
 
-# Use internal flash for CIRCUITPY drive
+# Use "internal flash" for CIRCUITPY drive.
+# Even thought it's an external flash chip, it appears as internal.
 INTERNAL_FLASH_FILESYSTEM = 1
 
 # Internal math library is substantially smaller than toolchain one
 INTERNAL_LIBM = 0
 
-# Longints can be implemented as mpz, as longlong, or not
+# Longints can be implemented as MPZ, as LONGLONG, or NONE
 LONGINT_IMPL = MPZ
 
 # Default to no-psram
 CIRCUITPY_ESP_PSRAM_SIZE ?= 0
 
-# New 4MB boards will not have OTA support but more room for alarm, ble and other
-# newer features.
-CIRCUITPY_LEGACY_4MB_FLASH_LAYOUT ?= 0
+# Some 4MB non-USB boards were initially defined with 2MB firmware, almost 2MB user_fs partitions.
+# Others were defined with 1.4M+1.4M (now a single 2.8MB) firmware partitions / 1.2MB user_fs.
+# Keep the former as is, so that the user filesystem will be unchanged.
+CIRCUITPY_4MB_FLASH_LARGE_USER_FS_LAYOUT ?= 0
 
 # Enable more features
 CIRCUITPY_FULL_BUILD ?= 1
@@ -40,15 +49,13 @@ CIRCUITPY_FULL_BUILD ?= 1
 # If SSL is enabled, it's mbedtls
 CIRCUITPY_SSL_MBEDTLS = 1
 
-# Wifi Power Save
-CIRCUITPY_WIFI_RADIO_SETTABLE_LISTEN_INTERVAL = 1
-
 # Never use our copy of MBEDTLS
 CIRCUITPY_HASHLIB_MBEDTLS_ONLY = 0
 
 CIRCUITPY_PORT_SERIAL = 1
 
 # These modules are implemented in ports/<port>/common-hal:
+CIRCUITPY__EVE ?= 1
 CIRCUITPY_ALARM ?= 1
 CIRCUITPY_ALARM_TOUCH ?= 0
 CIRCUITPY_ANALOGBUFIO ?= 1
@@ -56,6 +63,7 @@ CIRCUITPY_AUDIOBUSIO ?= 1
 CIRCUITPY_AUDIOBUSIO_PDMIN ?= 0
 CIRCUITPY_AUDIOIO ?= 0
 CIRCUITPY_BLEIO_HCI = 0
+CIRCUITPY_BLEIO_NATIVE ?= 1
 CIRCUITPY_CANIO ?= 1
 CIRCUITPY_COUNTIO ?= 1
 CIRCUITPY_ESPCAMERA ?= 1
@@ -67,6 +75,7 @@ CIRCUITPY_HASHLIB ?= 1
 CIRCUITPY_I2CTARGET ?= 0
 CIRCUITPY_MAX3421E ?= 1
 CIRCUITPY_MEMORYMAP ?= 1
+CIRCUITPY_RCLCPY ?= 0
 CIRCUITPY_NVM ?= 1
 CIRCUITPY_PARALLELDISPLAYBUS ?= 1
 CIRCUITPY_PS2IO ?= 1
@@ -79,26 +88,23 @@ CIRCUITPY_WATCHDOG ?= 1
 CIRCUITPY_WIFI ?= 1
 CIRCUITPY_SOCKETPOOL_IPV6 ?= 1
 
-# Enable _eve module
-CIRCUITPY__EVE ?= 1
-
 # Conditionally turn off modules/features
 ifeq ($(IDF_TARGET),esp32)
 # Modules
 CIRCUITPY_ALARM_TOUCH = 1
-CIRCUITPY_AUDIOIO = 1
+CIRCUITPY_AUDIOIO ?= 1
 CIRCUITPY_RGBMATRIX = 0
 
 # SDMMC not supported yet
 CIRCUITPY_SDIOIO = 0
 
-# Features
+# Has no USB
 CIRCUITPY_USB_DEVICE = 0
 
 else ifeq ($(IDF_TARGET),esp32c2)
 
-# C2 ROM spits out the UART at 74880 when connected to a 26mhz crystal! Debug
-# prints will default to that too.
+# C2 ROM spits out the UART at 74880 when connected to a 26mhz crystal!
+# Debug prints will default to that too.
 # Modules
 CIRCUITPY_ESPCAMERA = 0
 CIRCUITPY_ESPULP = 0
@@ -158,9 +164,10 @@ CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 CIRCUITPY_USB_DEVICE = 0
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 1
 
-# No room in flash.
-CIRCUITPY_AESIO = 0
-CIRCUITPY_KEYPAD_DEMUX = 0
+# Some C3 boards have only 2MB flash
+ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),2MB)
+CIRCUITPY_BLEIO_NATIVE = 0
+endif
 
 else ifeq ($(IDF_TARGET),esp32c6)
 # Modules
@@ -211,7 +218,7 @@ else ifeq ($(IDF_TARGET),esp32p4)
 
 # No wifi
 # TODO: Support ESP32-C6 coprocessor on some boards.
-CIRCUITPY_BLEIO = 0
+CIRCUITPY_BLEIO_NATIVE = 0
 CIRCUITPY_WIFI = 0
 CIRCUITPY_SSL = 0
 
@@ -246,68 +253,48 @@ CIRCUITPY_ESPCAMERA = 0
 else ifeq ($(IDF_TARGET),esp32s2)
 # Modules
 CIRCUITPY_ALARM_TOUCH = 1
-CIRCUITPY_AUDIOIO = 1
+CIRCUITPY_AUDIOIO ?= 1
 # No BLE in hw
-CIRCUITPY_BLEIO = 0
+CIRCUITPY_BLEIO_NATIVE = 0
 
 # No SDMMC
 CIRCUITPY_SDIOIO = 0
 
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 0
 
+# TODO: remove this after ESP32-S2 4MB boards get combined OTA partition.
+ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),4MB)
+CIRCUITPY__EVE = 0
+endif
+
 else ifeq ($(IDF_TARGET),esp32s3)
 # Modules
 CIRCUITPY_ALARM_TOUCH = 1
 CIRCUITPY_AUDIOBUSIO_PDMIN = 1
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 0
-
-# No room for _bleio on boards with 4MB flash
-ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),4MB)
-CIRCUITPY_BLEIO ?= 0
 endif
 
-endif
-
-# bitmapfilter does not fit on 4MB boards unless they are set up as camera boards
-ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),4MB)
-CIRCUITPY_BITMAPFILTER ?= 0
-OPTIMIZATION_FLAGS ?= -Os
-CIRCUITPY_DUALBANK ?= 0
-else
-CIRCUITPY_DUALBANK ?= 1
-endif
-
-# We used to default to OTA partition layout but are moving away from it so that
-# BLE and alarm can be included. This setting prevents the partition layout from
-# changing.
-ifeq ($(CIRCUITPY_LEGACY_4MB_FLASH_LAYOUT), 1)
-ifeq ($(IDF_TARGET_ARCH), xtensa)
-	CIRCUITPY_ALARM ?= 1
-else
-CIRCUITPY_ALARM = 0
-endif
-CIRCUITPY_DUALBANK = 1
-CIRCUITPY_BLEIO ?= 0
-CIRCUITPY_SETTABLE_PROCESSOR_FREQUENCY = 0
-else
-CIRCUITPY_SETTABLE_PROCESSOR_FREQUENCY = 1
-endif
-
-# No room for dualbank or mp3 on boards with 2MB flash
+# No room for large modules on 2MB boards
+# 2MB boards have a single firmware partition, and can't do dualbank.
 ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),2MB)
-CIRCUITPY_BITMAPFILTER ?= 0
-CIRCUITPY_DUALBANK = 0
-CIRCUITPY_AUDIOMP3 = 0
-CIRCUITPY_BLEIO ?= 0
-endif
-
-# No room for _eve on boards with 4MB flash
-ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),4MB)
 CIRCUITPY__EVE = 0
+CIRCUITPY_AUDIOMP3 = 0
+CIRCUITPY_BITMAPFILTER ?= 0
+CIRCUITPY_BLEIO_NATIVE ?= 0
+CIRCUITPY_DUALBANK = 0
+OPTIMIZATION_FLAGS ?= -Os
 endif
 
-# default BLEIO after flash-size based defaults
-CIRCUITPY_BLEIO ?= 1
+# 4MB boards have a single firmware partition, and can't do dualbank.
+ifeq ($(CIRCUITPY_ESP_FLASH_SIZE),4MB)
+CIRCUITPY_DUALBANK = 0
+OPTIMIZATION_FLAGS ?= -Os
+endif
+
+# espcamera does not work on boards without SPIRAM
+ifeq ($(CIRCUITPY_ESP_PSRAM_SIZE),0)
+CIRCUITPY_ESPCAMERA = 0
+endif
 
 # Modules dependent on other modules
 CIRCUITPY_ESPNOW ?= $(CIRCUITPY_WIFI)
@@ -315,8 +302,8 @@ CIRCUITPY_GIFIO ?= $(CIRCUITPY_DISPLAYIO)
 CIRCUITPY_JPEGIO ?= $(CIRCUITPY_DISPLAYIO)
 CIRCUITPY_QRIO ?= $(CIRCUITPY_ESPCAMERA)
 
-CIRCUITPY_BLE_FILE_SERVICE ?= $(CIRCUITPY_BLEIO)
-CIRCUITPY_SERIAL_BLE ?= $(CIRCUITPY_BLEIO)
+CIRCUITPY_BLE_FILE_SERVICE ?= $(CIRCUITPY_BLEIO_NATIVE)
+CIRCUITPY_SERIAL_BLE ?= $(CIRCUITPY_BLEIO_NATIVE)
 
 # Features dependent on other features
 ifneq ($(CIRCUITPY_USB_DEVICE),0)

@@ -9,9 +9,10 @@ CIRCUITPY_ESP_FLASH_MODE = qio
 CIRCUITPY_ESP_FLASH_FREQ = 80m
 CIRCUITPY_ESP_FLASH_SIZE = 4MB
 
-CIRCUITPY_AESIO = 0
-CIRCUITPY_CODEOP = 0
 CIRCUITPY_ESPCAMERA = 0
+# TODO: Remove after partition expansion
+CIRCUITPY_AESIO = 0
+CIRCUITPY_KEYPAD_DEMUX = 0
 
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_ConnectionManager
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_Requests
@@ -19,3 +20,4 @@ FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_NeoPixel
 FROZEN_MPY_DIRS += $(TOP)/frozen/mixgo_cp_lib/mixgoce_lib
 
 CIRCUITPY_MESSAGE_COMPRESSION_LEVEL = 9
+OPTIMIZATION_FLAGS = -Os

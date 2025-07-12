@@ -12,6 +12,7 @@
 #define MICROPY_HW_MCU_NAME         "ESP32-C6FH4"
 
 #define MICROPY_HW_NEOPIXEL (&pin_GPIO8)
+#define MICROPY_HW_NEOPIXEL_ORDER_GRB (1)
 
 // I2C
 #define CIRCUITPY_BOARD_I2C         (1)

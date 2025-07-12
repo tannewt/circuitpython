@@ -58,7 +58,8 @@ static mp_obj_t deque_make_new(const mp_obj_type_t *type, size_t n_args, size_t 
     mp_obj_deque_t *o = mp_obj_malloc(mp_obj_deque_t, type);
     o->alloc = maxlen + 1;
     o->i_get = o->i_put = 0;
-    o->items = m_new0(mp_obj_t, o->alloc);
+    // CIRCUITPY-CHANGE
+    o->items = m_malloc_items(o->alloc);
 
     if (n_args > 2) {
         o->flags = mp_obj_get_int(args[2]);
@@ -208,7 +209,7 @@ static mp_obj_t deque_subscr(mp_obj_t self_in, mp_obj_t index, mp_obj_t value) {
 
     size_t offset = mp_get_index(self->base.type, deque_len(self), index, false);
     size_t index_val = self->i_get + offset;
-    if (index_val > self->alloc) {
+    if (index_val >= self->alloc) {
         index_val -= self->alloc;
     }
 
@@ -263,7 +264,7 @@ static MP_DEFINE_CONST_DICT(deque_locals_dict, deque_locals_dict_table);
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_type_deque,
     MP_QSTR_deque,
-    MP_TYPE_FLAG_ITER_IS_GETITER,
+    DEQUE_TYPE_FLAGS,
     make_new, deque_make_new,
     unary_op, deque_unary_op,
     DEQUE_TYPE_SUBSCR

@@ -17,14 +17,12 @@
 #include "shared-bindings/util.h"
 #include "shared-module/synthio/block.h"
 
-#define MIX_DEFAULT 1.0f
-
 //| class Filter:
 //|     """A Filter effect"""
 //|
 //|     def __init__(
 //|         self,
-//|         filter: Optional[synthio.AnyBiquad | Tuple[synthio.AnyBiquad]] = None,
+//|         filter: Optional[synthio.Biquad | Tuple[synthio.Biquad]] = None,
 //|         mix: synthio.BlockInput = 1.0,
 //|         buffer_size: int = 512,
 //|         sample_rate: int = 8000,
@@ -39,7 +37,7 @@
 //|            The mix parameter allows you to change how much of the unchanged sample passes through to
 //|            the output to how much of the effect audio you hear as the output.
 //|
-//|         :param Optional[synthio.AnyBiquad|Tuple[synthio.AnyBiquad]] filter: A normalized biquad filter object or tuple of normalized biquad filter objects. The sample is processed sequentially by each filter to produce the output samples.
+//|         :param Optional[synthio.Biquad|Tuple[synthio.Biquad]] filter: A normalized biquad filter object or tuple of normalized biquad filter objects. The sample is processed sequentially by each filter to produce the output samples.
 //|         :param synthio.BlockInput mix: The mix as a ratio of the sample (0.0) to the effect (1.0).
 //|         :param int buffer_size: The total size in bytes of each of the two playback buffers to use
 //|         :param int sample_rate: The sample rate to be used
@@ -127,7 +125,7 @@ static void check_for_deinit(audiofilters_filter_obj_t *self) {
 //  Provided by context manager helper.
 
 
-//|     filter: synthio.AnyBiquad | Tuple[synthio.AnyBiquad] | None
+//|     filter: synthio.Biquad | Tuple[synthio.Biquad] | None
 //|     """A normalized biquad filter object or tuple of normalized biquad filter objects. The sample is processed sequentially by each filter to produce the output samples."""
 //|
 static mp_obj_t audiofilters_filter_obj_get_filter(mp_obj_t self_in) {

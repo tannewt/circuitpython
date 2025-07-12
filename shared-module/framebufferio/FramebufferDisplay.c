@@ -200,9 +200,11 @@ static bool _refresh_area(framebufferio_framebufferdisplay_obj_t *self, const di
             dest += rowstride;
             src += rowsize;
         }
+        // Run background tasks so they can run during an explicit refresh.
+        // Auto-refresh won't run background tasks here because it is a background task itself.
+        RUN_BACKGROUND_TASKS;
 
-        // TODO(tannewt): Make refresh displays faster so we don't starve other
-        // background tasks.
+        // Run USB background tasks so they can run during an implicit refresh.
         #if CIRCUITPY_TINYUSB
         usb_background();
         #endif

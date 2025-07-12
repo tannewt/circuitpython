@@ -20,7 +20,7 @@ typedef enum {
 
 typedef struct {
     mp_obj_t sample;
-    uint8_t *buffer[2];
+    uint8_t *buffer[2]; // Allocated through port_malloc on RP2350 so they are dma-able
     size_t buffer_length[2];
     uint32_t channels_to_load_mask;
     uint32_t output_register_address;
@@ -38,6 +38,7 @@ typedef struct {
     bool unsigned_to_signed;
     bool output_signed;
     bool playing_in_progress;
+    bool paused;
     bool swap_channel;
 } audio_dma_t;
 

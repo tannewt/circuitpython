@@ -40,7 +40,12 @@
 //|         """Create a `BufferedIn` on the given pin and given sample rate.
 //|
 //|         :param ~microcontroller.Pin pin: the pin to read from
-//|         :param ~int sample_rate: rate: sampling frequency, in samples per second"""
+//|         :param ~int sample_rate: rate: sampling frequency, in samples per second
+//|
+//|         **Limitations**: On many boards with a CYW43 radio module, such as Pico W,
+//|         GPIO29 (often ``board.A3``) is also used to control the CYW43,
+//|         and is therefore not available to use as the `BufferedIn` pin.
+//|         """
 //|         ...
 //|
 static mp_obj_t analogbufio_bufferedin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {

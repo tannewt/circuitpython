@@ -16,7 +16,7 @@
 
 #include "lib/cyw43-driver/src/cyw43.h"
 
-static int power_management_value = PM_DISABLED;
+static uint32_t power_management_value = CONST_CYW43_DEFAULT_PM;
 
 void cyw43_enter_deep_sleep(void) {
 #define WL_REG_ON 23
@@ -43,14 +43,23 @@ MP_DEFINE_CONST_OBJ_TYPE(
     print, shared_bindings_microcontroller_pin_print
     );
 
+uint32_t cyw43_get_power_management_value(void) {
+    return power_management_value;
+}
+
+void cyw43_set_power_management_value(uint32_t value) {
+    power_management_value = value;
+    bindings_cyw43_wifi_enforce_pm();
+}
+
 //| PM_STANDARD: int
-//| """The standard power management mode"""
+//| """The default power management mode; same as PM_PERFORMANCE"""
 //| PM_AGGRESSIVE: int
 //| """Aggressive power management mode for optimal power usage at the cost of performance"""
 //| PM_PERFORMANCE: int
 //| """Performance power management mode where more power is used to increase performance"""
 //| PM_DISABLED: int
-//| """Disable power management and always use highest power mode. CircuitPython sets this value at reset time, because it provides the best connectivity reliability."""
+//| """Disable power management and always use highest power mode."""
 //|
 //|
 //| def set_power_management(value: int) -> None:
@@ -85,8 +94,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 //|
 static mp_obj_t cyw43_set_power_management(const mp_obj_t value_in) {
     mp_int_t value = mp_obj_get_int(value_in);
-    power_management_value = value;
-    bindings_cyw43_wifi_enforce_pm();
+    cyw43_set_power_management_value(value);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(cyw43_set_power_management_obj, cyw43_set_power_management);
@@ -95,7 +103,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(cyw43_set_power_management_obj, cyw43_set_power
 //|     """Retrieve the power management register"""
 //|
 //|
-static mp_obj_t cyw43_get_power_management() {
+static mp_obj_t cyw43_get_power_management(void) {
     return mp_obj_new_int(power_management_value);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(cyw43_get_power_management_obj, cyw43_get_power_management);
@@ -126,10 +134,10 @@ static const mp_rom_map_elem_t cyw43_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_CywPin), MP_ROM_PTR(&cyw43_pin_type) },
     { MP_ROM_QSTR(MP_QSTR_set_power_management), &cyw43_set_power_management_obj },
     { MP_ROM_QSTR(MP_QSTR_get_power_management), &cyw43_get_power_management_obj },
-    { MP_ROM_QSTR(MP_QSTR_PM_STANDARD), MP_ROM_INT(PM_STANDARD) },
-    { MP_ROM_QSTR(MP_QSTR_PM_AGGRESSIVE), MP_ROM_INT(PM_AGGRESSIVE) },
-    { MP_ROM_QSTR(MP_QSTR_PM_PERFORMANCE), MP_ROM_INT(PM_PERFORMANCE) },
-    { MP_ROM_QSTR(MP_QSTR_PM_DISABLED), MP_ROM_INT(PM_DISABLED) },
+    { MP_ROM_QSTR(MP_QSTR_PM_STANDARD), MP_ROM_INT(CONST_CYW43_DEFAULT_PM) },
+    { MP_ROM_QSTR(MP_QSTR_PM_AGGRESSIVE), MP_ROM_INT(CONST_CYW43_AGGRESSIVE_PM) },
+    { MP_ROM_QSTR(MP_QSTR_PM_PERFORMANCE), MP_ROM_INT(CONST_CYW43_PERFORMANCE_PM) },
+    { MP_ROM_QSTR(MP_QSTR_PM_DISABLED), MP_ROM_INT(CONST_CYW43_NONE_PM) },
 };
 
 static MP_DEFINE_CONST_DICT(cyw43_module_globals, cyw43_module_globals_table);

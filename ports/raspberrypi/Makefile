@@ -223,7 +223,7 @@ endif
 
 DISABLE_WARNINGS = -Wno-cast-align
 
-CFLAGS += $(INC) -Wtype-limits -Wall -Werror -std=gnu11 -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT) $(DISABLE_WARNINGS) -Werror=missing-prototypes
+CFLAGS += $(INC) -Wtype-limits -Wall -Werror -std=gnu11 -fshort-enums $(BASE_CFLAGS) $(CFLAGS_MOD) $(COPT) $(DISABLE_WARNINGS) -Werror=missing-prototypes -Wold-style-definition
 
 PICO_LDFLAGS = --specs=nosys.specs --specs=nano.specs
 
@@ -562,11 +562,14 @@ SRC_C += \
 	common-hal/picodvi/Framebuffer_$(CHIP_VARIANT).c \
 
 ifeq ($(CHIP_VARIANT),RP2040)
-SRC_C += \
+SRC_PICODVI := \
 	lib/PicoDVI/software/libdvi/dvi.c \
 	lib/PicoDVI/software/libdvi/dvi_serialiser.c \
 	lib/PicoDVI/software/libdvi/dvi_timing.c \
 	lib/PicoDVI/software/libdvi/tmds_encode.c \
+
+SRC_C += $(SRC_PICODVI)
+$(patsubst %.c,$(BUILD)/%.o,$(SRC_PICODVI))): CFLAGS += -Wno-old-style-definition
 
 endif
 
@@ -660,27 +663,13 @@ else
 OBJ_MBEDTLS :=
 endif
 
-
-SRC_COMMON_HAL_EXPANDED = $(addprefix shared-bindings/, $(SRC_COMMON_HAL)) \
-                          $(addprefix shared-bindings/, $(SRC_BINDINGS_ENUMS)) \
-                          $(addprefix common-hal/, $(SRC_COMMON_HAL))
-
-SRC_SHARED_MODULE_EXPANDED = $(addprefix shared-bindings/, $(SRC_SHARED_MODULE)) \
-                             $(addprefix shared-module/, $(SRC_SHARED_MODULE)) \
-                             $(addprefix shared-module/, $(SRC_SHARED_MODULE_INTERNAL))
-
-# There may be duplicates between SRC_COMMON_HAL_EXPANDED and SRC_SHARED_MODULE_EXPANDED,
-# because a few modules have files both in common-hal/ and shared-module/.
-# Doing a $(sort ...) removes duplicates as part of sorting.
-SRC_COMMON_HAL_SHARED_MODULE_EXPANDED = $(sort $(SRC_COMMON_HAL_EXPANDED) $(SRC_SHARED_MODULE_EXPANDED))
-
-SRC_S = supervisor/$(CHIP_FAMILY)_cpu.s
 BOOT2_S_CFLAGS ?= -DPICO_FLASH_SPI_CLKDIV=4
 SRC_S_UPPER = sdk/src/rp2_common/hardware_irq/irq_handler_chain.S \
               sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S \
               sdk/src/rp2_common/pico_double/double_aeabi_$(DOUBLE_EABI).S \
               sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S \
               sdk/src/rp2_common/pico_crt0/crt0.S \
+              supervisor/shared/cpu_regs.S \
               $(SRC_S_UPPER_CHIP_VARIANT)
 
 ifeq ($(CIRCUITPY_PICODVI),1)
@@ -732,7 +721,7 @@ $(BUILD)/boot2.elf: $(BUILD)/stage2.c
 	$(Q)$(CC) $(CFLAGS) $(BOOT2_S_CFLAGS) -Os -ggdb3 -I. -fPIC --specs=nosys.specs -nostartfiles -Wl,-T,boot_stage2/$(CHIP_VARIANT).ld  -Wl,-Map=$@.map -o $@ $<
 	$(Q)$(SIZE) $@
 
-SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_COMMON_HAL_EXPANDED) $(SRC_SHARED_MODULE_EXPANDED) $(SRC_CIRCUITPY_COMMON)
+SRC_QSTR += $(SRC_C) $(SRC_SUPERVISOR) $(SRC_COMMON_HAL_SHARED_MODULE_EXPANDED) $(SRC_CIRCUITPY_COMMON)
 
 all: $(BUILD)/firmware.uf2
 

@@ -14,6 +14,9 @@
 
 #ifdef PICO_RP2350
 #define MICROPY_PY_SYS_PLATFORM             "RP2350"
+
+// PSRAM can require more stack space for GC.
+#define MICROPY_ALLOC_GC_STACK_SIZE         (128)
 #endif
 
 // Setting a non-default value also requires a non-default link.ld
@@ -32,6 +35,11 @@
 #define MICROPY_USE_INTERNAL_PRINTF         (1)
 
 #define CIRCUITPY_PROCESSOR_COUNT           (2)
+
+// For many RP2 boards BOOTSEL is not connected to a GPIO pin.
+#ifndef CIRCUITPY_BOOT_BUTTON
+#define CIRCUITPY_BOOT_BUTTON_NO_GPIO       (1)
+#endif
 
 #if CIRCUITPY_USB_HOST
 #define CIRCUITPY_USB_HOST_INSTANCE 1

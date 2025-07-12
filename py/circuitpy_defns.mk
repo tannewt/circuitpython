@@ -137,6 +137,9 @@ endif
 ifeq ($(CIRCUITPY_AUDIOFILTERS),1)
 SRC_PATTERNS += audiofilters/%
 endif
+ifeq ($(CIRCUITPY_AUDIOFREEVERB),1)
+SRC_PATTERNS += audiofreeverb/%
+endif
 ifeq ($(CIRCUITPY_AUDIOMIXER),1)
 SRC_PATTERNS += audiomixer/%
 endif
@@ -162,7 +165,7 @@ endif
 ifeq ($(CIRCUITPY_BITOPS),1)
 SRC_PATTERNS += bitops/%
 endif
-ifeq ($(CIRCUITPY_BLEIO),1)
+ifeq ($(CIRCUITPY_BLEIO_NATIVE),1)
 SRC_PATTERNS += _bleio/%
 endif
 ifeq ($(CIRCUITPY_BOARD),1)
@@ -197,6 +200,9 @@ SRC_PATTERNS += digitalio/%
 endif
 ifeq ($(CIRCUITPY_DISPLAYIO),1)
 SRC_PATTERNS += displayio/%
+endif
+ifeq ($(CIRCUITPY_DUALBANK),1)
+SRC_PATTERNS += dualbank/%
 endif
 ifeq ($(CIRCUITPY__EVE),1)
 SRC_PATTERNS += _eve/%
@@ -276,6 +282,9 @@ endif
 ifeq ($(CIRCUITPY_MAX3421E),1)
 SRC_PATTERNS += max3421e/%
 endif
+ifeq ($(CIRCUITPY_MDNS),1)
+SRC_PATTERNS += mdns/%
+endif
 ifeq ($(CIRCUITPY_MEMORYMAP),1)
 SRC_PATTERNS += memorymap/%
 endif
@@ -284,9 +293,6 @@ SRC_PATTERNS += memorymonitor/%
 endif
 ifeq ($(CIRCUITPY_MICROCONTROLLER),1)
 SRC_PATTERNS += microcontroller/%
-endif
-ifeq ($(CIRCUITPY_MDNS),1)
-SRC_PATTERNS += mdns/%
 endif
 ifeq ($(CIRCUITPY_MSGPACK),1)
 SRC_PATTERNS += msgpack/%
@@ -302,9 +308,6 @@ SRC_PATTERNS += onewireio/%
 endif
 ifeq ($(CIRCUITPY_OS),1)
 SRC_PATTERNS += os/%
-endif
-ifeq ($(CIRCUITPY_DUALBANK),1)
-SRC_PATTERNS += dualbank/%
 endif
 ifeq ($(CIRCUITPY_PARALLELDISPLAYBUS),1)
 SRC_PATTERNS += paralleldisplaybus/%
@@ -338,6 +341,9 @@ SRC_PATTERNS += rainbowio/%
 endif
 ifeq ($(CIRCUITPY_RANDOM),1)
 SRC_PATTERNS += random/%
+endif
+ifeq ($(CIRCUITPY_RCLCPY),1)
+SRC_PATTERNS += rclcpy/%
 endif
 ifeq ($(CIRCUITPY_RGBMATRIX),1)
 SRC_PATTERNS += rgbmatrix/%
@@ -395,6 +401,9 @@ SRC_PATTERNS += terminalio/% fontio/%
 endif
 ifeq ($(CIRCUITPY_FONTIO),1)
 SRC_PATTERNS += fontio/%
+endif
+ifeq ($(CIRCUITPY_LVFONTIO),1)
+SRC_PATTERNS += lvfontio/%
 endif
 ifeq ($(CIRCUITPY_TILEPALETTEMAPPER),1)
 SRC_PATTERNS += tilepalettemapper/%
@@ -534,6 +543,9 @@ SRC_COMMON_HAL_ALL = \
 	pulseio/__init__.c \
 	pwmio/PWMOut.c \
 	pwmio/__init__.c \
+	rclcpy/__init__.c \
+	rclcpy/Node.c \
+	rclcpy/Publisher.c \
 	rgbmatrix/RGBMatrix.c \
 	rgbmatrix/__init__.c \
 	rotaryio/IncrementalEncoder.c \
@@ -558,15 +570,27 @@ SRC_COMMON_HAL_ALL = \
 	wifi/ScannedNetworks.c \
 	wifi/__init__.c \
 
-ifeq ($(CIRCUITPY_BLEIO_HCI),1)
-# Helper code for _bleio HCI.
-SRC_C += \
-	common-hal/_bleio/att.c \
-	common-hal/_bleio/hci.c \
-
-endif
-
 SRC_COMMON_HAL = $(filter $(SRC_PATTERNS), $(SRC_COMMON_HAL_ALL))
+
+ifeq ($(CIRCUITPY_BLEIO_HCI),1)
+# HCI device-specific HAL and helper sources.
+SRC_DEVICES_HAL += \
+	_bleio/att.c \
+	_bleio/hci.c \
+    _bleio/Adapter.c \
+	_bleio/Attribute.c \
+	_bleio/Characteristic.c \
+	_bleio/CharacteristicBuffer.c \
+	_bleio/Connection.c \
+	_bleio/Descriptor.c \
+	_bleio/PacketBuffer.c \
+	_bleio/Service.c \
+	_bleio/UUID.c \
+	_bleio/__init__.c
+# HCI device-specific bindings.
+SRC_DEVICES_BINDINGS += \
+	supervisor/bluetooth.c
+endif
 
 # These don't have corresponding files in each port but are still located in
 # shared-bindings to make it clear what the contents of the modules are.
@@ -602,7 +626,25 @@ $(filter $(SRC_PATTERNS), \
 	supervisor/StatusBar.c \
 	wifi/AuthMode.c \
 	wifi/Packet.c \
+	wifi/PowerManagement.c \
 )
+
+ifeq ($(CIRCUITPY_BLEIO_HCI),1)
+# Common _bleio bindings used by HCI.
+SRC_BINDINGS_ENUMS += \
+	_bleio/Address.c \
+	_bleio/Adapter.c \
+	_bleio/Attribute.c \
+	_bleio/Characteristic.c \
+	_bleio/CharacteristicBuffer.c \
+	_bleio/Connection.c \
+	_bleio/Descriptor.c \
+	_bleio/PacketBuffer.c \
+	_bleio/ScanEntry.c \
+	_bleio/Service.c \
+	_bleio/UUID.c \
+	_bleio/__init__.c
+endif
 
 ifeq ($(CIRCUITPY_SAFEMODE_PY),1)
 SRC_BINDINGS_ENUMS += \
@@ -632,11 +674,16 @@ SRC_SHARED_MODULE_ALL = \
 	audiocore/WaveFile.c \
 	audiocore/__init__.c \
 	audiodelays/Echo.c \
+	audiodelays/Chorus.c \
 	audiodelays/PitchShift.c \
+	audiodelays/MultiTapDelay.c \
 	audiodelays/__init__.c \
 	audiofilters/Distortion.c \
 	audiofilters/Filter.c \
+	audiofilters/Phaser.c \
 	audiofilters/__init__.c \
+	audiofreeverb/__init__.c \
+	audiofreeverb/Freeverb.c \
 	audioio/__init__.c \
 	audiomixer/Mixer.c \
 	audiomixer/MixerVoice.c \
@@ -675,6 +722,8 @@ SRC_SHARED_MODULE_ALL = \
 	floppyio/__init__.c \
 	fontio/BuiltinFont.c \
 	fontio/__init__.c \
+	lvfontio/OnDiskFont.c\
+	lvfontio/__init__.c \
 	fourwire/__init__.c \
 	fourwire/FourWire.c \
 	framebufferio/FramebufferDisplay.c \
@@ -727,7 +776,6 @@ SRC_SHARED_MODULE_ALL = \
 	supervisor/__init__.c \
 	supervisor/StatusBar.c \
 	synthio/Biquad.c \
-	synthio/BlockBiquad.c \
 	synthio/LFO.c \
 	synthio/Math.c \
 	synthio/MidiTrack.c \
@@ -757,6 +805,21 @@ SRC_SHARED_MODULE_ALL = \
 
 # All possible sources are listed here, and are filtered by SRC_PATTERNS.
 SRC_SHARED_MODULE = $(filter $(SRC_PATTERNS), $(SRC_SHARED_MODULE_ALL))
+
+SRC_COMMON_HAL_EXPANDED = $(addprefix shared-bindings/, $(SRC_COMMON_HAL)) \
+                          $(addprefix shared-bindings/, $(SRC_BINDINGS_ENUMS)) \
+                          $(addprefix common-hal/, $(SRC_COMMON_HAL)) \
+						  $(addprefix devices/ble_hci/common-hal/, $(SRC_DEVICES_HAL)) \
+						  $(addprefix devices/ble_hci/, $(SRC_DEVICES_BINDINGS))
+
+SRC_SHARED_MODULE_EXPANDED = $(addprefix shared-bindings/, $(SRC_SHARED_MODULE)) \
+                             $(addprefix shared-module/, $(SRC_SHARED_MODULE)) \
+                             $(addprefix shared-module/, $(SRC_SHARED_MODULE_INTERNAL))
+
+# There may be duplicates between SRC_COMMON_HAL_EXPANDED and SRC_SHARED_MODULE_EXPANDED,
+# because a few modules have files both in common-hal/ and shared-module/.
+# Doing a $(sort ...) removes duplicates as part of sorting.
+SRC_COMMON_HAL_SHARED_MODULE_EXPANDED = $(sort $(SRC_COMMON_HAL_EXPANDED) $(SRC_SHARED_MODULE_EXPANDED))
 
 # Use the native touchio if requested. This flag is set conditionally in, say, mpconfigport.h.
 # The presence of common-hal/touchio/* does not imply it's available for all chips in a port,
@@ -789,11 +852,15 @@ SRC_SHARED_MODULE_ALL += \
 	keypad_demux/DemuxKeyMatrix.c
 endif
 
-# If supporting _bleio via HCI, make devices/ble_hci/common-hal/_bleio be includable,
-# and use C source files in devices/ble_hci/common-hal.
 ifeq ($(CIRCUITPY_BLEIO_HCI),1)
+# Add HCI device-specific includes to search path.
 INC += -I$(TOP)/devices/ble_hci
-DEVICES_MODULES += $(TOP)/devices/ble_hci
+# Add HCI shared modules to build.
+SRC_SHARED_MODULE += \
+	_bleio/Address.c \
+	_bleio/Attribute.c \
+	_bleio/ScanEntry.c \
+	_bleio/ScanResults.c
 endif
 
 ifeq ($(CIRCUITPY_AUDIOMP3),1)
@@ -881,11 +948,6 @@ $(filter $(SRC_PATTERNS), \
 	displayio/display_core.c \
 	os/getenv.c \
 	usb/utf16le.c \
-)
-
-SRC_COMMON_HAL_INTERNAL = \
-$(filter $(SRC_PATTERNS), \
-	_bleio/ \
 )
 
 ifeq ($(INTERNAL_LIBM),1)

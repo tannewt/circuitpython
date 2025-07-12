@@ -37,6 +37,7 @@ extern void common_hal_mcu_enable_interrupts(void);
 // MicroPython-only options not used by CircuitPython, but present in various files
 // inherited from MicroPython, especially in extmod/
 #define MICROPY_ENABLE_DYNRUNTIME        (0)
+#define MICROPY_HW_ENABLE_USB            (0)
 #define MICROPY_HW_ENABLE_USB_RUNTIME_DEVICE (0)
 #define MICROPY_PY_BLUETOOTH             (0)
 #define MICROPY_PY_LWIP_SLIP             (0)
@@ -62,6 +63,7 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_EMIT_X64                 (0)
 #define MICROPY_ENABLE_DOC_STRING        (0)
 #define MICROPY_ENABLE_FINALISER         (1)
+#define MICROPY_ENABLE_SELECTIVE_COLLECT (1)
 #define MICROPY_ENABLE_GC                (1)
 #define MICROPY_ENABLE_PYSTACK           (1)
 #define MICROPY_TRACKED_ALLOC            (CIRCUITPY_SSL_MBEDTLS)
@@ -141,7 +143,13 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_PY_UCTYPES               (0)
 #define MICROPY_PY___FILE__              (1)
 
+#if CIRCUITPY_FULL_BUILD
+#ifndef MICROPY_QSTR_BYTES_IN_HASH
 #define MICROPY_QSTR_BYTES_IN_HASH       (1)
+#endif
+#else
+#define MICROPY_QSTR_BYTES_IN_HASH       (0)
+#endif
 #define MICROPY_REPL_AUTO_INDENT         (1)
 #define MICROPY_REPL_EVENT_DRIVEN        (0)
 #define MICROPY_STACK_CHECK              (1)
@@ -257,6 +265,10 @@ typedef long mp_off_t;
 #define MICROPY_PY_COLLECTIONS_DEQUE_SUBSCR   (CIRCUITPY_FULL_BUILD)
 #endif
 
+#ifndef MICROPY_PY_DOUBLE_TYPECODE
+#define MICROPY_PY_DOUBLE_TYPECODE       (CIRCUITPY_FULL_BUILD ? 1 : 0)
+#endif
+
 #ifndef MICROPY_PY_FUNCTION_ATTRS
 #define MICROPY_PY_FUNCTION_ATTRS            (CIRCUITPY_FULL_BUILD)
 #endif
@@ -344,6 +356,7 @@ typedef long mp_off_t;
 #define CIRCUITPY_CONSOLE_UART (1)
 #ifndef CIRCUITPY_CONSOLE_UART_BAUDRATE
 #define CIRCUITPY_CONSOLE_UART_BAUDRATE (115200)
+#endif
 #if !defined(CIRCUITPY_CONSOLE_UART_PRINTF)
 #define CIRCUITPY_CONSOLE_UART_PRINTF(...) mp_printf(&console_uart_print, __VA_ARGS__)
 #endif
@@ -352,7 +365,6 @@ typedef long mp_off_t;
 #endif
 #if !defined(CIRCUITPY_CONSOLE_UART_TIMESTAMP)
 #define CIRCUITPY_CONSOLE_UART_TIMESTAMP (0)
-#endif
 #endif
 #else
 #define CIRCUITPY_CONSOLE_UART (0)
@@ -452,7 +464,7 @@ void background_callback_run_all(void);
 #endif
 
 #ifndef CIRCUITPY_PYSTACK_SIZE
-#define CIRCUITPY_PYSTACK_SIZE 1536
+#define CIRCUITPY_PYSTACK_SIZE 2048
 #endif
 
 // The VM heap starts at this size and doubles in size as needed until it runs
@@ -628,11 +640,20 @@ void background_callback_run_all(void);
 #define MICROPY_PY_BUILTINS_COMPILE (1)
 
 #ifndef CIRCUITPY_MIN_GCC_VERSION
-#define CIRCUITPY_MIN_GCC_VERSION 13
+#define CIRCUITPY_MIN_GCC_VERSION 14
 #endif
 
 #ifndef CIRCUITPY_SAVES_PARTITION_SIZE
 #define CIRCUITPY_SAVES_PARTITION_SIZE 0
+#endif
+
+// Boards that have a boot button connected to a GPIO pin should set
+// CIRCUITPY_BOOT_BUTTON_NO_GPIO to 1.
+#ifndef CIRCUITPY_BOOT_BUTTON_NO_GPIO
+#define CIRCUITPY_BOOT_BUTTON_NO_GPIO (0)
+#endif
+#if defined(CIRCUITPY_BOOT_BUTTON) && CIRCUITPY_BOOT_BUTTON_NO_GPIO
+#error "CIRCUITPY_BOOT_BUTTON and CIRCUITPY_BOOT_BUTTON_NO_GPIO are mutually exclusive"
 #endif
 
 #if defined(__GNUC__) && !defined(__ZEPHYR__)

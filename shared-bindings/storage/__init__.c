@@ -97,6 +97,14 @@ MP_DEFINE_CONST_FUN_OBJ_1(storage_umount_obj, storage_umount);
 //| ) -> None:
 //|     """Remounts the given path with new parameters.
 //|
+//|     This can always be done from boot.py. After boot, it can only be done when the host computer
+//|     doesn't have write access and CircuitPython isn't currently writing to the filesystem. An
+//|     exception will be raised if this is the case. Some host OSes allow you to eject a drive which
+//|     will allow for remounting.
+//|
+//|     Remounting after USB is active may take a little time because it "ejects" the drive for one
+//|     query from the host. These queries happen every second or so.
+//|
 //|     :param str mount_path: The path to remount.
 //|     :param bool readonly: True when the filesystem should be readonly to CircuitPython.
 //|     :param bool disable_concurrent_write_protection: When True, the check that makes sure the
