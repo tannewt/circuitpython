@@ -28,6 +28,8 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_LED), MP_ROM_PTR(&pin_GPIO29) },
 
+    { MP_OBJ_NEW_QSTR(MP_QSTR_IR), MP_ROM_PTR(&pin_GPIO29) },
+
     { MP_OBJ_NEW_QSTR(MP_QSTR_NEOPIXEL), MP_ROM_PTR(&pin_GPIO32) },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_BUTTON1), MP_ROM_PTR(&pin_GPIO0) },

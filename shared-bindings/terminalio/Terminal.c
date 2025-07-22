@@ -24,15 +24,18 @@
 //|     """Display a character stream with a TileGrid
 //|
 //|     ASCII control:
+//|
 //|     * ``\\r`` - Move cursor to column 1
 //|     * ``\\n`` - Move cursor down a row
 //|     * ``\\b`` - Move cursor left one if possible
 //|
 //|     OSC control sequences:
+//|
 //|     * ``ESC ] 0; <s> ESC \\`` - Set title bar to <s>
 //|     * ``ESC ] ####; <s> ESC \\`` - Ignored
 //|
 //|     VT100 control sequences:
+//|
 //|     * ``ESC [ K`` - Clear the remainder of the line
 //|     * ``ESC [ 0 K`` - Clear the remainder of the line
 //|     * ``ESC [ 1 K`` - Clear start of the line to cursor
@@ -50,16 +53,28 @@
 //|     * ``ESC [ ## ; ## ; ## m`` - Set the terminal display attributes.
 //|
 //|     Supported Display attributes:
-//|     0 - Reset all attributes
-//|     Foreground Colors    Background Colors
-//|     30 - Black           40 - Black
-//|     31 - Red             41 - Red
-//|     32 - Green           42 - Green
-//|     33 - Yellow          43 - Yellow
-//|     34 - Blue            44 - Blue
-//|     35 - Magenta         45 - Magenta
-//|     36 - Cyan            46 - Cyan
-//|     37 - White           47 - White
+//|
+//|     +--------+------------+------------+
+//|     | Color  | Foreground | Background |
+//|     +========+============+============+
+//|     | Reset  | 0          | 0          |
+//|     +--------+------------+------------+
+//|     | Black  | 30         | 40         |
+//|     +--------+------------+------------+
+//|     | Red    | 31         | 41         |
+//|     +--------+------------+------------+
+//|     | Green  | 32         | 42         |
+//|     +--------+------------+------------+
+//|     | Yellow | 33         | 43         |
+//|     +--------+------------+------------+
+//|     | Blue   | 34         | 44         |
+//|     +--------+------------+------------+
+//|     | Magenta| 35         | 45         |
+//|     +--------+------------+------------+
+//|     | Cyan   | 36         | 46         |
+//|     +--------+------------+------------+
+//|     | White  | 37         | 47         |
+//|     +--------+------------+------------+
 //|     """
 //|
 //|     def __init__(

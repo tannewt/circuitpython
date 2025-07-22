@@ -6,8 +6,8 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-01-04 12:55-0600\n"
-"PO-Revision-Date: 2025-06-30 16:01+0000\n"
-"Last-Translator: MAE <martin-aehle@hotmail.de>\n"
+"PO-Revision-Date: 2025-07-13 16:01+0000\n"
+"Last-Translator: Mirthe Winter <mirthemwinter@gmail.com>\n"
 "Language-Team: none\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
@@ -49,7 +49,7 @@ msgstr ""
 
 #: py/obj.c
 msgid "  File \"%q\""
-msgstr "  Bestand"
+msgstr "  Bestand \"%q\""
 
 #: py/obj.c
 msgid "  File \"%q\", line %d"
@@ -631,8 +631,8 @@ msgid ""
 "Auto-reload is on. Simply save files over USB to run them or enter REPL to "
 "disable.\n"
 msgstr ""
-"Auto-herlaad staat aan. Sla bestanden simpelweg op over USB om uit te voeren "
-"of start REPL om uit te schakelen.\n"
+"Auto-herlaad staat aan. Sla bestanden simpelweg via USB op om ze uit te "
+"voeren of start REPL om ze uit te schakelen.\n"
 
 #: ports/espressif/common-hal/canio/CAN.c
 msgid "Baudrate not supported by peripheral"
@@ -1845,7 +1845,7 @@ msgstr "Prefix buffer moet op de heap zijn"
 #: main.c
 msgid "Press any key to enter the REPL. Use CTRL-D to reload.\n"
 msgstr ""
-"Druk een willekeurige toets om de REPL te starten. Gebruik CTRL+D om te "
+"Druk op een willekeurige toets om de REPL te starten. Gebruik CTRL+D om te "
 "herstarten.\n"
 
 #: main.c

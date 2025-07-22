@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: circuitpython-cn\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-01-04 12:55-0600\n"
-"PO-Revision-Date: 2025-05-31 20:05+0000\n"
+"PO-Revision-Date: 2025-07-15 00:01+0000\n"
 "Last-Translator: hexthat <hexthat@gmail.com>\n"
 "Language-Team: Chinese Hanyu Pinyin\n"
 "Language: zh_Latn_pinyin\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 5.12-dev\n"
+"X-Generator: Weblate 5.13-dev\n"
 
 #: main.c
 msgid ""
@@ -870,7 +870,7 @@ msgstr "zuòbiāo shùzǔ lèixíng jùyǒu bùtóng de dàxiǎo"
 
 #: ports/espressif/common-hal/rclcpy/Publisher.c
 msgid "Could not publish to ROS topic"
-msgstr ""
+msgstr "wúfǎ fābù dào ROS zhǔtí"
 
 #: shared-bindings/_bleio/Adapter.c
 msgid "Could not set address"
@@ -887,7 +887,7 @@ msgstr "wúfǎ fēnpèi jiěmǎ qì"
 #: ports/espressif/common-hal/rclcpy/__init__.c
 #, c-format
 msgid "Critical ROS failure during soft reboot, reset required: %d"
-msgstr ""
+msgstr "ruǎn chóngqǐ qījiān fāshēng guānjiàn de ROS gùzhàng, xūyàozhòngzhì: %d"
 
 #: ports/stm/common-hal/analogio/AnalogOut.c
 msgid "DAC Channel Init Error"
@@ -1331,7 +1331,7 @@ msgstr "wú xiào de MAC dì zhǐ"
 
 #: ports/espressif/common-hal/rclcpy/__init__.c
 msgid "Invalid ROS domain ID"
-msgstr ""
+msgstr "wúxiàode ROS yù ID"
 
 #: ports/espressif/common-hal/espidf/__init__.c py/moderrno.c
 msgid "Invalid argument"
@@ -1898,7 +1898,7 @@ msgstr "chéng xù tài cháng"
 
 #: shared-bindings/rclcpy/Publisher.c
 msgid "Publishers can only be created from a parent node"
-msgstr ""
+msgstr "chūbǎnshāng zhǐ néngcóng fù jiédiǎn chuàngjiàn"
 
 #: shared-bindings/digitalio/DigitalInOut.c
 msgid "Pull not used when direction is output."
@@ -1922,23 +1922,23 @@ msgstr "RNG chūshǐhuà cuòwù"
 
 #: ports/espressif/common-hal/rclcpy/__init__.c
 msgid "ROS failed to initialize. Is agent connected?"
-msgstr ""
+msgstr "ROS chūshǐhuàshībài. dàilǐ yǐ liánjiē ma?"
 
 #: ports/espressif/common-hal/rclcpy/__init__.c
 msgid "ROS internal setup failure"
-msgstr ""
+msgstr "ROS nèibù shèzhì shībài"
 
 #: ports/espressif/common-hal/rclcpy/__init__.c
 msgid "ROS memory allocator failure"
-msgstr ""
+msgstr "ROS nèicún fēnpèiqì shībài"
 
 #: ports/espressif/common-hal/rclcpy/Node.c
 msgid "ROS node failed to initialize"
-msgstr ""
+msgstr "ROS jiédiǎn chūshǐhuà shībài"
 
 #: ports/espressif/common-hal/rclcpy/Publisher.c
 msgid "ROS topic failed to initialize"
-msgstr ""
+msgstr "ROS zhǔtí chūshǐhuà shībài"
 
 #: ports/atmel-samd/common-hal/busio/UART.c ports/cxd56/common-hal/busio/UART.c
 #: ports/nordic/common-hal/busio/UART.c ports/stm/common-hal/busio/UART.c
