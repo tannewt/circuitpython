@@ -143,9 +143,14 @@ static void wait_for_busy(epaperdisplay_epaperdisplay_obj_t *self) {
     if (self->busy.base.type == &mp_type_NoneType) {
         return;
     }
+    int i = 0;
     while (common_hal_digitalio_digitalinout_get_value(&self->busy) == self->busy_state &&
            !mp_hal_is_interrupted()) {
         RUN_BACKGROUND_TASKS;
+        i++;
+    }
+    if (i > 0) {
+        mp_printf(&mp_plat_print, "Busy wait took %d iterations\n", i);
     }
 }
 
@@ -162,6 +167,11 @@ static void send_command_sequence(epaperdisplay_epaperdisplay_obj_t *self,
             data_size = ((data_size & ~DELAY) << 8) + *(cmd + 2);
             data = cmd + 3;
         }
+        mp_printf(&mp_plat_print, "Sending command sequence: CMD%02X ", cmd[0]);
+        for (uint32_t j = 0; j < data_size; j++) {
+            mp_printf(&mp_plat_print, "%02X ", data[j]);
+        }
+        mp_printf(&mp_plat_print, "\n");
         displayio_display_bus_begin_transaction(&self->bus);
         self->bus.send(self->bus.bus, DISPLAY_COMMAND, self->chip_select, cmd, 1);
         self->bus.send(self->bus.bus, DISPLAY_DATA, self->chip_select, data, data_size);
@@ -317,6 +327,7 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
         if (pass == 1) {
             write_command = self->write_color_ram_command;
         }
+        mp_printf(&mp_plat_print, "write_command: %02x\n", write_command);
         displayio_display_bus_begin_transaction(&self->bus);
         self->bus.send(self->bus.bus, DISPLAY_COMMAND, self->chip_select, &write_command, 1);
         displayio_display_bus_end_transaction(&self->bus);
@@ -369,6 +380,22 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
                 // Can't acquire display bus; skip the rest of the data. Try next display.
                 return false;
             }
+            mp_printf(&mp_plat_print, "Display data:");
+            mp_printf(&mp_plat_print, "Size: %d bytes %d words\n", subrectangle_size_bytes, subrectangle_size_bytes / 4);
+            // const char color[] = "BWRY";
+            // for (uint16_t k = 0; k < subrectangle_size_bytes / 4; k++) {
+            //     uint32_t word = buffer[k];
+            //     for (uint8_t l = 0; l < 4; l++) {
+            //         uint8_t _byte = (word >> (l * 8)) & 0xFF;
+            //         for (uint8_t m = 0; m < 8; m++) {
+            //             uint8_t bits = (_byte >> (m * 2)) & 3;
+            //             mp_printf(&mp_plat_print, "%c", color[bits]);
+            //         }
+            //         mp_printf(&mp_plat_print, " ");
+            //     }
+            //     mp_printf(&mp_plat_print, "\n");
+            // }
+            // mp_printf(&mp_plat_print, "\n");
             self->bus.send(self->bus.bus, DISPLAY_DATA, self->chip_select, (uint8_t *)buffer, subrectangle_size_bytes);
             displayio_display_bus_end_transaction(&self->bus);
 
