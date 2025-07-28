@@ -8,8 +8,8 @@ msgstr ""
 "Project-Id-Version: 0.1\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-01-04 12:55-0600\n"
-"PO-Revision-Date: 2025-06-30 16:01+0000\n"
-"Last-Translator: MAE <martin-aehle@hotmail.de>\n"
+"PO-Revision-Date: 2025-07-29 22:07+0000\n"
+"Last-Translator: Olivier Deveault <olivierdeveault+g@gmail.com>\n"
 "Language-Team: \n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
@@ -49,7 +49,7 @@ msgid ""
 "Press reset to exit safe mode.\n"
 msgstr ""
 "\n"
-"Pour quitter le mode sans échec, appuyez sur reset.\n"
+"Appuyer sur reset pour sortir du mode sans échec.\n"
 
 #: supervisor/shared/safe_mode.c
 msgid ""
@@ -57,7 +57,7 @@ msgid ""
 "You are in safe mode because:\n"
 msgstr ""
 "\n"
-"Le mode sans échec est actif , car:\n"
+"Le mode sans échec est actif pour cette raison:\n"
 
 #: py/obj.c
 msgid "  File \"%q\""
@@ -2024,7 +2024,7 @@ msgstr "Format correct mais non supporté"
 
 #: main.c
 msgid "Running in safe mode! Not running saved code.\n"
-msgstr "Mode sans- échec ! Le code sauvegardé n'est pas éxecuté.\n"
+msgstr "Mode sans échec ! Le code sauvegardé n'est pas éxecuté.\n"
 
 #: shared-module/sdcardio/SDCard.c
 msgid "SD card CSD format not supported"
