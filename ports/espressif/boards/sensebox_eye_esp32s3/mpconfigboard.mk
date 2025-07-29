@@ -16,6 +16,3 @@ CIRCUITPY_ESP_PSRAM_FREQ = 80m
 
 CIRCUITPY_ESPCAMERA = 1
 CIRCUITPY_AUDIOBUSIO = 1
-
-# Include these Python libraries in firmware.
-FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_NeoPixel

@@ -9,7 +9,7 @@
 #define MICROPY_HW_BOARD_NAME       "senseBox-eye ESP32S3"
 #define MICROPY_HW_MCU_NAME         "ESP32S3"
 
-#define MICROPY_HW_NEOPIXEL (&pin_GPIO14)
+#define MICROPY_HW_NEOPIXEL (&pin_GPIO45)
 
 #define DEFAULT_I2C_BUS_SCL (&pin_GPIO1)
 #define DEFAULT_I2C_BUS_SDA (&pin_GPIO2)
