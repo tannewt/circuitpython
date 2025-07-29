@@ -530,7 +530,7 @@ async def build_circuitpython():
 
         if "ssl" in enabled_modules:
             crt_bundle = builddir / "x509_crt_bundle.S"
-            roots_pem = srcdir / "lib/certificates/data/roots.pem"
+            roots_pem = srcdir / "lib/certificates/data/roots-full.pem"
             generator = srcdir / "tools/gen_crt_bundle.py"
             tg.create_task(
                 cpbuild.run_command(
