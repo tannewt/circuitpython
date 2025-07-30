@@ -16,6 +16,7 @@
 void common_hal_audiomixer_mixervoice_construct(audiomixer_mixervoice_obj_t *self) {
     self->sample = NULL;
     common_hal_audiomixer_mixervoice_set_level(self, mp_obj_new_float(1.0));
+    common_hal_audiomixer_mixervoice_set_panning(self, mp_obj_new_float(0.0));
 }
 
 void common_hal_audiomixer_mixervoice_set_parent(audiomixer_mixervoice_obj_t *self, audiomixer_mixer_obj_t *parent) {
@@ -35,6 +36,22 @@ void common_hal_audiomixer_mixervoice_set_level(audiomixer_mixervoice_obj_t *sel
     synthio_block_assign_slot(arg, &self->level, MP_QSTR_level);
     #else
     self->level = (uint16_t)(mp_arg_validate_obj_float_range(arg, 0, 1, MP_QSTR_level) * (1 << 15));
+    #endif
+}
+
+mp_obj_t common_hal_audiomixer_mixervoice_get_panning(audiomixer_mixervoice_obj_t *self) {
+    #if CIRCUITPY_SYNTHIO
+    return self->panning.obj;
+    #else
+    return mp_obj_new_float((mp_float_t)self->panning / ((1 << 15) - 1));
+    #endif
+}
+
+void common_hal_audiomixer_mixervoice_set_panning(audiomixer_mixervoice_obj_t *self, mp_obj_t arg) {
+    #if CIRCUITPY_SYNTHIO
+    synthio_block_assign_slot(arg, &self->panning, MP_QSTR_panning);
+    #else
+    self->panning = (uint16_t)(mp_arg_validate_obj_float_range(arg, -1, 1, MP_QSTR_panning) * ((1 << 15) - 1));
     #endif
 }
 
