@@ -94,7 +94,8 @@ static inline uint32_t add16signed(uint32_t a, uint32_t b) {
 __attribute__((always_inline))
 static inline uint32_t mult16signed(uint32_t val, int32_t mul[2]) {
     #if (defined(__ARM_ARCH_7EM__) && (__ARM_ARCH_7EM__ == 1))
-    mul <<= 16;
+    mul[0] <<= 16;
+    mul[1] <<= 16;
     int32_t hi, lo;
     enum { bits = 16 }; // saturate to 16 bits
     enum { shift = 15 }; // shift is done automatically
