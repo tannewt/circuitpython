@@ -47,7 +47,7 @@ void common_hal_audiomixer_mixervoice_set_loop(audiomixer_mixervoice_obj_t *self
 }
 
 void common_hal_audiomixer_mixervoice_play(audiomixer_mixervoice_obj_t *self, mp_obj_t sample_in, bool loop) {
-    audiosample_must_match(&self->parent->base, sample_in);
+    audiosample_must_match(&self->parent->base, sample_in, true);
     // cast is safe, checked by must_match
     audiosample_base_t *sample = MP_OBJ_TO_PTR(sample_in);
     self->sample = sample;

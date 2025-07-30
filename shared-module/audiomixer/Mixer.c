@@ -154,9 +154,30 @@ static inline uint32_t pack8(uint32_t val) {
     return ((val & 0xff000000) >> 16) | ((val & 0xff00) >> 8);
 }
 
+static inline uint32_t copy16lsb(uint32_t val) {
+    val &= 0x0000ffff;
+    return val | (val << 16);
+}
+
+static inline uint32_t copy16msb(uint32_t val) {
+    val &= 0xffff0000;
+    return val | (val >> 16);
+}
+
+static inline uint32_t copy8lsb(uint32_t val) {
+    val &= 0x00ff;
+    return val | (val << 8);
+}
+
+static inline uint32_t copy8msb(uint32_t val) {
+    val &= 0xff00;
+    return val | (val >> 8);
+}
+
 static void mix_down_one_voice(audiomixer_mixer_obj_t *self,
     audiomixer_mixervoice_obj_t *voice, bool voices_active,
     uint32_t *word_buffer, uint32_t length) {
+    audiosample_base_t *sample = MP_OBJ_TO_PTR(voice->sample);
     while (length != 0) {
         if (voice->buffer_length == 0) {
             if (!voice->more_data) {
@@ -179,13 +200,23 @@ static void mix_down_one_voice(audiomixer_mixer_obj_t *self,
         uint32_t *src = voice->remaining_buffer;
 
         #if CIRCUITPY_SYNTHIO
-        uint32_t n = MIN(MIN(voice->buffer_length, length), SYNTHIO_MAX_DUR * self->base.channel_count);
+        uint32_t n;
+        if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+            n = MIN(MIN(voice->buffer_length, length), SYNTHIO_MAX_DUR * self->base.channel_count);
+        } else {
+            n = MIN(MIN(voice->buffer_length << 1, length), SYNTHIO_MAX_DUR * self->base.channel_count);
+        }
 
         // Get the current level from the BlockInput. These may change at run time so you need to do bounds checking if required.
         shared_bindings_synthio_lfo_tick(self->base.sample_rate, n / self->base.channel_count);
         uint16_t level = (uint16_t)(synthio_block_slot_get_limited(&voice->level, MICROPY_FLOAT_CONST(0.0), MICROPY_FLOAT_CONST(1.0)) * (1 << 15));
         #else
-        uint32_t n = MIN(voice->buffer_length, length);
+        uint32_t n;
+        if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+            n = MIN(voice->buffer_length, length);
+        } else {
+            n = MIN(voice->buffer_length << 1, length);
+        }
         uint16_t level = voice->level;
         #endif
 
@@ -193,61 +224,129 @@ static void mix_down_one_voice(audiomixer_mixer_obj_t *self,
         if (!voices_active) {
             if (MP_LIKELY(self->base.bits_per_sample == 16)) {
                 if (MP_LIKELY(self->base.samples_signed)) {
-                    for (uint32_t i = 0; i < n; i++) {
-                        uint32_t v = src[i];
-                        word_buffer[i] = mult16signed(v, level);
+                    if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                        for (uint32_t i = 0; i < n; i++) {
+                            uint32_t v = src[i];
+                            word_buffer[i] = mult16signed(v, level);
+                        }
+                    } else {
+                        for (uint32_t i = 0; i < n; i += 2) {
+                            uint32_t v = src[i >> 1];
+                            v = mult16signed(v, level);
+                            word_buffer[i] = copy16lsb(v);
+                            word_buffer[i + 1] = copy16msb(v);
+                        }
                     }
                 } else {
-                    for (uint32_t i = 0; i < n; i++) {
-                        uint32_t v = src[i];
-                        v = tosigned16(v);
-                        word_buffer[i] = mult16signed(v, level);
+                    if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                        for (uint32_t i = 0; i < n; i++) {
+                            uint32_t v = src[i];
+                            v = tosigned16(v);
+                            word_buffer[i] = mult16signed(v, level);
+                        }
+                    } else {
+                        for (uint32_t i = 0; i + 1 < n; i += 2) {
+                            uint32_t v = src[i >> 1];
+                            v = tosigned16(v);
+                            v = mult16signed(v, level);
+                            word_buffer[i] = copy16lsb(v);
+                            word_buffer[i + 1] = copy16msb(v);
+                        }
                     }
                 }
             } else {
                 uint16_t *hword_buffer = (uint16_t *)word_buffer;
                 uint16_t *hsrc = (uint16_t *)src;
-                for (uint32_t i = 0; i < n * 2; i++) {
-                    uint32_t word = unpack8(hsrc[i]);
-                    if (MP_LIKELY(!self->base.samples_signed)) {
-                        word = tosigned16(word);
+                if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                    for (uint32_t i = 0; i < n * 2; i++) {
+                        uint32_t word = unpack8(hsrc[i]);
+                        if (MP_LIKELY(!self->base.samples_signed)) {
+                            word = tosigned16(word);
+                        }
+                        word = mult16signed(word, level);
+                        hword_buffer[i] = pack8(word);
                     }
-                    word = mult16signed(word, level);
-                    hword_buffer[i] = pack8(word);
+                } else {
+                    for (uint32_t i = 0; i + 1 < n * 2; i += 2) {
+                        uint32_t word = unpack8(hsrc[i >> 1]);
+                        if (MP_LIKELY(!self->base.samples_signed)) {
+                            word = tosigned16(word);
+                        }
+                        word = mult16signed(word, level);
+                        word = pack8(word);
+                        hword_buffer[i] = copy8lsb(word);
+                        hword_buffer[i + 1] = copy8msb(word);
+                    }
                 }
             }
         } else {
             if (MP_LIKELY(self->base.bits_per_sample == 16)) {
                 if (MP_LIKELY(self->base.samples_signed)) {
-                    for (uint32_t i = 0; i < n; i++) {
-                        uint32_t word = src[i];
-                        word_buffer[i] = add16signed(mult16signed(word, level), word_buffer[i]);
+                    if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                        for (uint32_t i = 0; i < n; i++) {
+                            uint32_t word = src[i];
+                            word_buffer[i] = add16signed(mult16signed(word, level), word_buffer[i]);
+                        }
+                    } else {
+                        for (uint32_t i = 0; i + 1 < n; i += 2) {
+                            uint32_t word = src[i >> 1];
+                            word = mult16signed(word, level);
+                            word_buffer[i] = add16signed(copy16lsb(word), word_buffer[i]);
+                            word_buffer[i + 1] = add16signed(copy16msb(word), word_buffer[i + 1]);
+                        }
                     }
                 } else {
-                    for (uint32_t i = 0; i < n; i++) {
-                        uint32_t word = src[i];
-                        word = tosigned16(word);
-                        word_buffer[i] = add16signed(mult16signed(word, level), word_buffer[i]);
+                    if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                        for (uint32_t i = 0; i < n; i++) {
+                            uint32_t word = src[i];
+                            word = tosigned16(word);
+                            word_buffer[i] = add16signed(mult16signed(word, level), word_buffer[i]);
+                        }
+                    } else {
+                        for (uint32_t i = 0; i + 1 < n; i += 2) {
+                            uint32_t word = src[i >> 1];
+                            word = tosigned16(word);
+                            word = mult16signed(word, level);
+                            word_buffer[i] = add16signed(copy16lsb(word), word_buffer[i]);
+                            word_buffer[i + 1] = add16signed(copy16msb(word), word_buffer[i + 1]);
+                        }
                     }
                 }
             } else {
                 uint16_t *hword_buffer = (uint16_t *)word_buffer;
                 uint16_t *hsrc = (uint16_t *)src;
-                for (uint32_t i = 0; i < n * 2; i++) {
-                    uint32_t word = unpack8(hsrc[i]);
-                    if (MP_LIKELY(!self->base.samples_signed)) {
-                        word = tosigned16(word);
+                if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+                    for (uint32_t i = 0; i < n * 2; i++) {
+                        uint32_t word = unpack8(hsrc[i]);
+                        if (MP_LIKELY(!self->base.samples_signed)) {
+                            word = tosigned16(word);
+                        }
+                        word = mult16signed(word, level);
+                        word = add16signed(word, unpack8(hword_buffer[i]));
+                        hword_buffer[i] = pack8(word);
                     }
-                    word = mult16signed(word, level);
-                    word = add16signed(word, unpack8(hword_buffer[i]));
-                    hword_buffer[i] = pack8(word);
+                } else {
+                    for (uint32_t i = 0; i + 1 < n * 2; i += 2) {
+                        uint32_t word = unpack8(hsrc[i >> 1]);
+                        if (MP_LIKELY(!self->base.samples_signed)) {
+                            word = tosigned16(word);
+                        }
+                        word = mult16signed(word, level);
+                        hword_buffer[i] = pack8(add16signed(copy16lsb(word), unpack8(hword_buffer[i])));
+                        hword_buffer[i + 1] = pack8(add16signed(copy16msb(word), unpack8(hword_buffer[i + 1])));
+                    }
                 }
             }
         }
         length -= n;
         word_buffer += n;
-        voice->remaining_buffer += n;
-        voice->buffer_length -= n;
+        if (MP_LIKELY(self->base.channel_count == sample->channel_count)) {
+            voice->remaining_buffer += n;
+            voice->buffer_length -= n;
+        } else {
+            voice->remaining_buffer += n >> 1;
+            voice->buffer_length -= n >> 1;
+        }
     }
 
     if (length && !voices_active) {
