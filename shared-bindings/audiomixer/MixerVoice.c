@@ -117,7 +117,7 @@ MP_PROPERTY_GETSET(audiomixer_mixervoice_level_obj,
 //|     panning: synthio.BlockInput
 //|     """Defines the channel(s) in which the voice appears, as a floating point number between
 //|     -1 and 1. If your board does not support synthio, this property will only accept a float
-//|     value. This property is ignored if `audiomixer.Mixer.channel_count=1`.
+//|     value. This property is ignored if ``audiomixer.Mixer.channel_count=1``.
 //|
 //|     -1 is left channel only, 0 is both channels, and 1 is right channel. For fractional values,
 //|     the note plays at full amplitude in one channel and partial amplitude in the other channel.
