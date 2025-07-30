@@ -2,7 +2,7 @@ USB_VID = 0x303A
 USB_PID = 0x82D2
 
 USB_PRODUCT = "senseBox-eye ESP32S3"
-USB_MANUFACTURER = "Espressif"
+USB_MANUFACTURER = "senseBox"
 
 IDF_TARGET = esp32s3
 
