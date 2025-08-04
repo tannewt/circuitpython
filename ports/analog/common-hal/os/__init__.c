@@ -15,9 +15,14 @@
 
 // #include "peripherals/periph.h"
 
+// true random number generator, TRNG
+#include "trng.h"
+
 bool common_hal_os_urandom(uint8_t *buffer, uint32_t length) {
     #if (HAS_TRNG)
-    // todo (low prior): implement
+    // get a random number of "length" number of bytes
+    MXC_TRNG_Random(buffer, length);
+    return true;
     #else
     #endif
     return false;

@@ -51,7 +51,7 @@ CIRCUITPY_BITBANGIO ?= 1
 # Requires Microcontroller
 CIRCUITPY_TOUCHIO ?= 1
 # Requires OS
-CIRCUITPY_RANDOM ?= 0
+CIRCUITPY_RANDOM ?= 1
 # Requires busio.UART
 CIRCUITPY_CONSOLE_UART ?= 0
 # Does nothing without I2C
