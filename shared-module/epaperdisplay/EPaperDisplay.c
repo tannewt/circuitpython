@@ -396,6 +396,11 @@ static bool epaperdisplay_epaperdisplay_refresh_area(epaperdisplay_epaperdisplay
             //     mp_printf(&mp_plat_print, "\n");
             // }
             // mp_printf(&mp_plat_print, "\n");
+            // for (uint16_t k = 0; k < subrectangle_size_bytes / 4; k++) {
+            //     uint32_t word = buffer[k];
+            //     mp_printf(&mp_plat_print, " %08x", word);
+            // }
+            // mp_printf(&mp_plat_print, "\n");
             self->bus.send(self->bus.bus, DISPLAY_DATA, self->chip_select, (uint8_t *)buffer, subrectangle_size_bytes);
             displayio_display_bus_end_transaction(&self->bus);
 

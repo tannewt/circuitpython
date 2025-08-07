@@ -129,11 +129,13 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
 
     // Set column.
     displayio_display_bus_begin_transaction(self);
+    mp_printf(&mp_plat_print, "Sending column limits:\n");
     uint8_t data[5];
     data[0] = self->column_command;
     uint8_t data_length = 1;
     display_byte_type_t data_type = DISPLAY_DATA;
     if (!self->data_as_commands) {
+        mp_printf(&mp_plat_print, "Command: %02x\n", self->column_command);
         self->send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data, 1);
         data_length = 0;
     } else {
@@ -162,6 +164,11 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
         data_length = 2;
     }
 
+    for (int i = 0; i < data_length; i++) {
+        mp_printf(&mp_plat_print, " %02x", data[i]);
+    }
+    mp_printf(&mp_plat_print, "\n");
+
     self->send(self->bus, data_type, chip_select, data, data_length);
     displayio_display_bus_end_transaction(self);
 
@@ -172,6 +179,12 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
         // Only send the first half of data because it is the first coordinate.
         self->send(self->bus, DISPLAY_DATA, chip_select, data, data_length / 2);
         displayio_display_bus_end_transaction(self);
+
+        mp_printf(&mp_plat_print, "Sending current column: %02x\n", command);
+        for (int i = 0; i < data_length; i++) {
+            mp_printf(&mp_plat_print, " %02x", data[i]);
+        }
+        mp_printf(&mp_plat_print, "\n");
     }
 
 
@@ -179,7 +192,9 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
     displayio_display_bus_begin_transaction(self);
     data[0] = self->row_command;
     data_length = 1;
+    mp_printf(&mp_plat_print, "Sending row limits:\n");
     if (!self->data_as_commands) {
+        mp_printf(&mp_plat_print, "Command: %02x\n", data[0]);
         self->send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_UNTOUCHED, data, 1);
         data_length = 0;
     }
@@ -206,6 +221,11 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
         data_length = 1;
     }
 
+    for (int i = 0; i < data_length; i++) {
+        mp_printf(&mp_plat_print, " %02x", data[i]);
+    }
+    mp_printf(&mp_plat_print, "\n");
+
     self->send(self->bus, data_type, chip_select, data, data_length);
     displayio_display_bus_end_transaction(self);
 
@@ -216,6 +236,11 @@ void displayio_display_bus_set_region_to_update(displayio_display_bus_t *self, d
         // Only send the first half of data because it is the first coordinate.
         self->send(self->bus, DISPLAY_DATA, chip_select, data, data_length / 2);
         displayio_display_bus_end_transaction(self);
+        mp_printf(&mp_plat_print, "Sending current row: %02x", command);
+        for (int i = 0; i < data_length; i++) {
+            mp_printf(&mp_plat_print, " %02x", data[i]);
+        }
+        mp_printf(&mp_plat_print, "\n");
     }
 }
 
