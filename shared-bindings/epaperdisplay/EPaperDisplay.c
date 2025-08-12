@@ -67,6 +67,10 @@
 //|         two_byte_sequence_length: bool = False,
 //|         start_up_time: float = 0,
 //|         address_little_endian: bool = False,
+//|         save_full_framebuffer: bool = False,
+//|         partial_window_command: Optional[int] = None,
+//|         partial_start_command: Optional[int] = None,
+//|         partial_end_command: Optional[int] = None,
 //|     ) -> None:
 //|         """Create a EPaperDisplay object on the given display bus (`fourwire.FourWire` or `paralleldisplaybus.ParallelBus`).
 //|
@@ -111,7 +115,12 @@
 //|         :param bool two_byte_sequence_length: When true, use two bytes to define sequence length
 //|         :param float start_up_time: Time to wait after reset before sending commands
 //|         :param bool address_little_endian: Send the least significant byte (not bit) of multi-byte addresses first. Ignored when ram is addressed with one byte
-//|         """
+//|         :param bool save_full_framebuffer: When true, the display will save the full framebuffer to enable partial updates
+//|         :param int partial_window_command: Command to set the partial window
+//|         :param int partial_start_command: Command to start partial update
+//|         :param int partial_end_command: Command to end partial update
+//|
+// """
 //|         ...
 //|
 static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
@@ -122,7 +131,8 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
            ARG_write_color_ram_command, ARG_color_bits_inverted, ARG_highlight_color, ARG_highlight_color2,
            ARG_refresh_display_command,  ARG_refresh_time, ARG_busy_pin, ARG_busy_state,
            ARG_seconds_per_frame, ARG_always_toggle_chip_select, ARG_grayscale, ARG_advanced_color_epaper, ARG_spectra6,
-           ARG_two_byte_sequence_length, ARG_start_up_time, ARG_address_little_endian };
+           ARG_two_byte_sequence_length, ARG_start_up_time, ARG_address_little_endian,
+           ARG_save_full_framebuffer, ARG_partial_window_command, ARG_partial_window_start_command, ARG_partial_window_end_command};
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_display_bus, MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_start_sequence, MP_ARG_REQUIRED | MP_ARG_OBJ },
@@ -156,6 +166,10 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
         { MP_QSTR_two_byte_sequence_length, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
         { MP_QSTR_start_up_time, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = MP_OBJ_NEW_SMALL_INT(0)} },
         { MP_QSTR_address_little_endian, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
+        { MP_QSTR_save_full_framebuffer, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
+        { MP_QSTR_partial_window_command, MP_ARG_INT | MP_ARG_KW_ONLY, {.u_int = NO_COMMAND} },
+        { MP_QSTR_partial_start_command, MP_ARG_INT | MP_ARG_KW_ONLY, {.u_int = NO_COMMAND} },
+        { MP_QSTR_partial_end_command, MP_ARG_INT | MP_ARG_KW_ONLY, {.u_int = NO_COMMAND} },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
@@ -247,6 +261,10 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
     construct_args.spectra6 = args[ARG_spectra6].u_bool;
     construct_args.two_byte_sequence_length = two_byte_sequence_length;
     construct_args.address_little_endian = args[ARG_address_little_endian].u_bool;
+    construct_args.save_full_framebuffer = args[ARG_save_full_framebuffer].u_bool;
+    construct_args.partial_window_command = args[ARG_partial_window_command].u_int;
+    construct_args.partial_start_command = args[ARG_partial_window_start_command].u_int;
+    construct_args.partial_end_command = args[ARG_partial_window_end_command].u_int;
     common_hal_epaperdisplay_epaperdisplay_construct(self, &construct_args);
 
     return self;
@@ -293,20 +311,27 @@ static mp_obj_t epaperdisplay_epaperdisplay_update_refresh_mode(size_t n_args, c
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(epaperdisplay_epaperdisplay_update_refresh_mode_obj, 1, epaperdisplay_epaperdisplay_update_refresh_mode);
 
-//|     def refresh(self) -> None:
+//|     def refresh(self, partial: bool = False) -> None:
 //|         """Refreshes the display immediately or raises an exception if too soon. Use
 //|         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur."""
 //|         ...
 //|
-static mp_obj_t epaperdisplay_epaperdisplay_obj_refresh(mp_obj_t self_in) {
-    epaperdisplay_epaperdisplay_obj_t *self = native_display(self_in);
-    bool ok = common_hal_epaperdisplay_epaperdisplay_refresh(self);
+static mp_obj_t epaperdisplay_epaperdisplay_obj_refresh(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_partial };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_partial, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
+    };
+    epaperdisplay_epaperdisplay_obj_t *self = native_display(pos_args[0]);
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    bool ok = common_hal_epaperdisplay_epaperdisplay_refresh(self, args[ARG_partial].u_bool);
     if (!ok) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("Refresh too soon"));
     }
     return mp_const_none;
 }
-MP_DEFINE_CONST_FUN_OBJ_1(epaperdisplay_epaperdisplay_refresh_obj, epaperdisplay_epaperdisplay_obj_refresh);
+MP_DEFINE_CONST_FUN_OBJ_KW(epaperdisplay_epaperdisplay_refresh_obj, 1, epaperdisplay_epaperdisplay_obj_refresh);
 
 //|     time_to_refresh: float
 //|     """Time, in fractional seconds, until the ePaper display can be refreshed."""
