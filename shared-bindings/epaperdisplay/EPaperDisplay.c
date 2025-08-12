@@ -313,7 +313,10 @@ MP_DEFINE_CONST_FUN_OBJ_KW(epaperdisplay_epaperdisplay_update_refresh_mode_obj, 
 
 //|     def refresh(self, partial: bool = False) -> None:
 //|         """Refreshes the display immediately or raises an exception if too soon. Use
-//|         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur."""
+//|         ``time.sleep(display.time_to_refresh)`` to sleep until a refresh can occur.
+//|
+//|           When partial is True, only the changed displayio areas are updated in black and white
+//|           mode."""
 //|         ...
 //|
 static mp_obj_t epaperdisplay_epaperdisplay_obj_refresh(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {

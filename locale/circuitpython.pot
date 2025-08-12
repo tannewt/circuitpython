@@ -1757,6 +1757,10 @@ msgstr ""
 msgid "Parameter error"
 msgstr ""
 
+#: shared-module/epaperdisplay/EPaperDisplay.c
+msgid "Partial display not supported"
+msgstr ""
+
 #: ports/espressif/common-hal/audiobusio/__init__.c
 msgid "Peripheral in use"
 msgstr ""

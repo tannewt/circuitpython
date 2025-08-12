@@ -439,8 +439,18 @@ static bool _clean_area(epaperdisplay_epaperdisplay_obj_t *self) {
     return true;
 }
 
-bool common_hal_epaperdisplay_epaperdisplay_refresh(epaperdisplay_epaperdisplay_obj_t *self) {
-
+bool common_hal_epaperdisplay_epaperdisplay_refresh(epaperdisplay_epaperdisplay_obj_t *self, bool partial) {
+    #if CIRCUITPY_EPAPERDISPLAY_PARTIAL
+    if (partial && (self->partial_window_command == NO_COMMAND ||
+                    self->partial_start_command == NO_COMMAND ||
+                    self->partial_end_command == NO_COMMAND)) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("Partial display not supported"));
+    }
+    #else
+    if (partial) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("Partial display not supported"));
+    }
+    #endif
     if (self->refreshing && self->busy.base.type == &digitalio_digitalinout_type) {
         if (common_hal_digitalio_digitalinout_get_value(&self->busy) != self->busy_state) {
             supervisor_disable_tick();

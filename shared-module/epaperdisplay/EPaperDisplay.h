@@ -37,6 +37,14 @@ typedef struct {
     bool grayscale;
     bool acep;
     bool two_byte_sequence_length;
+    #if CIRCUITPY_EPAPERDISPLAY_PARTIAL
+    bool save_full_framebuffer;
+    uint8_t *full_framebuffer;
+    uint16_t full_framebuffer_size;
+    uint16_t partial_window_command;
+    uint16_t partial_start_command;
+    uint16_t partial_stop_command;
+    #endif
     display_chip_select_behavior_t chip_select;
 } epaperdisplay_epaperdisplay_obj_t;
 
