@@ -521,6 +521,7 @@ void port_boot_info(void) {
 extern void main(void);
 extern void app_main(void);
 void app_main(void) {
+    ESP_LOGI(TAG, "Starting CircuitPython");
     main();
 }
 

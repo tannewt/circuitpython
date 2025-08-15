@@ -11,8 +11,12 @@
 #include "hal/gpio_hal.h"
 
 static bool _pin_is_input(uint8_t pin_number) {
+    #ifdef CONFIG_IDF_TARGET_ESP32C5
+    return IO_MUX.gpio[pin_number].fun_ie;
+    #else
     const uint32_t iomux = READ_PERI_REG(GPIO_PIN_MUX_REG[pin_number]);
     return (iomux & FUN_IE) != 0;
+    #endif
 }
 
 void digitalio_digitalinout_preserve_for_deep_sleep(size_t n_dios, digitalio_digitalinout_obj_t *preserve_dios[]) {
@@ -135,10 +139,18 @@ digitalinout_result_t common_hal_digitalio_digitalinout_set_pull(
 digitalio_pull_t common_hal_digitalio_digitalinout_get_pull(
     digitalio_digitalinout_obj_t *self) {
     gpio_num_t gpio_num = self->pin->number;
+    #ifdef CONFIG_IDF_TARGET_ESP32C5
+    if (IO_MUX.gpio[gpio_num].fun_wpu) {
+        return PULL_UP;
+    } else if (IO_MUX.gpio[gpio_num].fun_wpd) {
+        return PULL_DOWN;
+    }
+    #else
     if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PU)) {
         return PULL_UP;
     } else if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PD)) {
         return PULL_DOWN;
     }
+    #endif
     return PULL_NONE;
 }

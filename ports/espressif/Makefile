@@ -197,7 +197,9 @@ CFLAGS += $(OPTIMIZATION_FLAGS)
 CFLAGS += $(INC) -Werror -Wall -std=gnu11 -Wl,--gc-sections $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes -Werror=old-style-definition
 
 # Most current ESPs have nano versions of newlib in ROM so we use them.
-ifneq ($(IDF_TARGET),esp32c6)
+ifeq ($(IDF_TARGET),esp32c5)
+	LDFLAGS += -T$(IDF_TARGET).rom.newlib.ld
+else ifneq ($(IDF_TARGET),esp32c6)
 	CFLAGS += --specs=nano.specs
 	LDFLAGS += -T$(IDF_TARGET).rom.newlib-nano.ld
 else
@@ -278,6 +280,20 @@ LDFLAGS += \
 CHIP_COMPONENTS = \
 	esp_driver_tsens
 
+else ifeq ($(IDF_TARGET),esp32c5)
+LDFLAGS += \
+	-Tesp32c5.rom.phy.ld \
+	-Tesp32c5.rom.pp.ld \
+	-Tesp32c5.rom.net80211.ld \
+	-Tesp32c5.rom.coexist.ld \
+	-Tesp32c5.rom.heap.ld \
+	-Tesp32c5.rom.systimer.ld \
+	-Tesp32c5.rom.wdt.ld \
+	-Tesp32c5.rom.version.ld
+
+CHIP_COMPONENTS = \
+	esp_driver_tsens
+
 else ifeq ($(IDF_TARGET),esp32c6)
 LDFLAGS += \
 	-Tesp32c6.rom.phy.ld \
@@ -352,6 +368,8 @@ else ifeq ($(IDF_TARGET),esp32c2)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C2
 else ifeq ($(IDF_TARGET),esp32c3)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C3
+else ifeq ($(IDF_TARGET),esp32c5)
+CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C5
 else ifeq ($(IDF_TARGET),esp32c6)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C6
 else ifeq ($(IDF_TARGET),esp32p4)
@@ -685,6 +703,7 @@ ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32s3 := esp32c3
 	BLE_IMPL_esp32c2 := libble
 	BLE_IMPL_esp32c3 := esp32c3
+	BLE_IMPL_esp32c5 := libble
 	BLE_IMPL_esp32c6 := libble
 	BLE_IMPL_esp32h2 := libble
 	BLE_IMPL = $(BLE_IMPL_$(IDF_TARGET))
@@ -767,10 +786,14 @@ ifeq ($(IDF_TARGET),esp32)
 BOOTLOADER_OFFSET = 0x1000
 else ifeq ($(IDF_TARGET),esp32h2)
 BOOTLOADER_OFFSET = 0x0
+else ifeq ($(IDF_TARGET),esp32h4)
+BOOTLOADER_OFFSET = 0x2000
 else ifeq ($(IDF_TARGET),esp32c2)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32c3)
 BOOTLOADER_OFFSET = 0x0
+else ifeq ($(IDF_TARGET),esp32c5)
+BOOTLOADER_OFFSET = 0x2000
 else ifeq ($(IDF_TARGET),esp32c6)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32p4)

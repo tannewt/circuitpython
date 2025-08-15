@@ -384,7 +384,9 @@ void alarm_pin_pinalarm_set_alarms(bool deep_sleep, size_t n_alarms, const mp_ob
             pull_mode = GPIO_PULLUP_ONLY;
         }
         gpio_set_direction(i, GPIO_MODE_DEF_INPUT);
+        #ifdef GPIO_PIN_MUX_REG
         PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[i], PIN_FUNC_GPIO);
+        #endif
         if (pull) {
             gpio_set_pull_mode(i, pull_mode);
         }
