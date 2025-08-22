@@ -122,6 +122,7 @@ mp_int_t common_hal_synthio_miditrack_get_tempo(synthio_miditrack_obj_t *self) {
 
 void common_hal_synthio_miditrack_set_tempo(synthio_miditrack_obj_t *self, mp_int_t value) {
     mp_int_t val = mp_arg_validate_int_min(value, 1, MP_QSTR_tempo);
+    self->synth.span.dur = (uint32_t)self->synth.span.dur * self->tempo / val;
     self->tempo = val;
 }
 
