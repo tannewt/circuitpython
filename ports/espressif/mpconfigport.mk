@@ -61,7 +61,7 @@ CIRCUITPY_ALARM_TOUCH ?= 0
 CIRCUITPY_ANALOGBUFIO ?= 1
 CIRCUITPY_AUDIOBUSIO ?= 1
 CIRCUITPY_AUDIOBUSIO_PDMIN ?= 0
-CIRCUITPY_AUDIOIO ?= 0
+CIRCUITPY_AUDIOIO ?= 1
 CIRCUITPY_BLEIO_HCI = 0
 CIRCUITPY_BLEIO_NATIVE ?= 1
 CIRCUITPY_CANIO ?= 1
@@ -89,11 +89,11 @@ CIRCUITPY_WATCHDOG ?= 1
 CIRCUITPY_WIFI ?= 1
 CIRCUITPY_SOCKETPOOL_IPV6 ?= 1
 
-# Conditionally turn off modules/features
+# Conditionally turn off modules/features per chip type
+#### esp32 ############################################################
 ifeq ($(IDF_TARGET),esp32)
 # Modules
 CIRCUITPY_ALARM_TOUCH = 1
-CIRCUITPY_AUDIOIO ?= 1
 CIRCUITPY_RGBMATRIX = 0
 
 # SDMMC not supported yet
@@ -102,6 +102,7 @@ CIRCUITPY_SDIOIO = 0
 # Has no USB
 CIRCUITPY_USB_DEVICE = 0
 
+#### esp32c2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32c2)
 
 # C2 ROM spits out the UART at 74880 when connected to a 26mhz crystal!
@@ -128,6 +129,9 @@ CIRCUITPY_ANALOGBUFIO = 0
 # No I2S
 CIRCUITPY_AUDIOBUSIO = 0
 
+# No DAC
+CIRCUITPY_AUDIOIO = 0
+
 # No RMT
 CIRCUITPY_NEOPIXEL_WRITE = 0
 CIRCUITPY_PULSEIO = 0
@@ -142,6 +146,7 @@ CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 CIRCUITPY_USB_DEVICE = 0
 CIRCUITPY_ESP_USB_SERIAL_JTAG = 0
 
+#### esp32c3 ##########################################################
 else ifeq ($(IDF_TARGET),esp32c3)
 # Modules
 CIRCUITPY_ESPCAMERA = 0
@@ -150,6 +155,9 @@ CIRCUITPY_MEMORYMAP = 0
 
 # No I80 support from the IDF
 CIRCUITPY_PARALLELDISPLAYBUS = 0
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
 
 # No PCNT peripheral
 CIRCUITPY_FREQUENCYIO = 0
@@ -165,12 +173,16 @@ CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 CIRCUITPY_USB_DEVICE = 0
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 1
 
+#### esp32c6 ##########################################################
 else ifeq ($(IDF_TARGET),esp32c6)
 # Modules
 CIRCUITPY_ESPCAMERA = 0
 CIRCUITPY_ESPULP = 0
 CIRCUITPY_MEMORYMAP = 0
 CIRCUITPY_RGBMATRIX = 0
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
 
 # No space for this
 CIRCUITPY_AUDIOBUSIO = 0
@@ -187,12 +199,16 @@ CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 CIRCUITPY_USB_DEVICE = 0
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 1
 
+#### esp32h2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32h2)
 # Modules
 CIRCUITPY_ESPCAMERA = 0
 CIRCUITPY_ESPULP = 0
 CIRCUITPY_MEMORYMAP = 0
 CIRCUITPY_RGBMATRIX = 0
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
 
 # No I80 support from the IDF
 CIRCUITPY_PARALLELDISPLAYBUS = 0
@@ -210,7 +226,11 @@ CIRCUITPY_WIFI = 0
 
 CIRCUITPY_MAX3421E = 0
 
+#### esp32p4 ##########################################################
 else ifeq ($(IDF_TARGET),esp32p4)
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
 
 # No wifi
 # TODO: Support ESP32-C6 coprocessor on some boards.
@@ -246,10 +266,12 @@ CIRCUITPY_PARALLELDISPLAYBUS = 0
 # Library doesn't support P4 yet it seems
 CIRCUITPY_ESPCAMERA = 0
 
+#### esp32s2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32s2)
 # Modules
-CIRCUITPY_ALARM_TOUCH = 1
+CIRCUITPY_ALARM_TOUCH = $(CIRCUITPY_ALARM)
 CIRCUITPY_AUDIOIO ?= 1
+
 # No BLE in hw
 CIRCUITPY_BLEIO_NATIVE = 0
 
@@ -258,12 +280,19 @@ CIRCUITPY_SDIOIO = 0
 
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 0
 
+#### esp32s3 ##########################################################
 else ifeq ($(IDF_TARGET),esp32s3)
+
 # Modules
-CIRCUITPY_ALARM_TOUCH = 1
+CIRCUITPY_ALARM_TOUCH = $(CIRCUITPY_ALARM)
 CIRCUITPY_AUDIOBUSIO_PDMIN = 1
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 0
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
+
 endif
+#### end chip-specific choices ########################################
 
 # No room for large modules on 2MB boards
 # 2MB boards have a single firmware partition, and can't do dualbank.
