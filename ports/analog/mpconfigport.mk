@@ -24,7 +24,7 @@ INTERNAL_FLASH_FILESYSTEM = 1
 
 # Plan to implement
 CIRCUITPY_BUSIO ?= 0
-CIRCUITPY_RTC ?= 0
+CIRCUITPY_RTC ?= 1
 
 # Other modules (may or may not implement):
 CIRCUITPY_ANALOGIO ?= 0
