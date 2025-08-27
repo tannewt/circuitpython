@@ -25,7 +25,8 @@ INC_CYW43 := \
 CFLAGS_CYW43 := \
 	-DCYW43_LWIP=1 \
 	-DPICO_CYW43_ARCH_THREADSAFE_BACKGROUND=1 \
-	-DCYW43_USE_SPI \
+	-DCYW43_USE_SPI=1 \
+	-DUSE_SDIOIT=0 \
 	-DIGNORE_GPIO25 \
 	-DIGNORE_GPIO23 \
 	-DIGNORE_GPIO24 \
@@ -125,6 +126,7 @@ INC += \
 	-isystem sdk/src/rp2_common/hardware_powman/include/ \
 	-isystem sdk/src/rp2_common/hardware_pwm/include/ \
 	-isystem sdk/src/rp2_common/hardware_resets/include/ \
+	-isystem sdk/src/rp2_common/hardware_rcp/include/ \
 	-isystem sdk/src/rp2_common/hardware_rtc/include/ \
 	-isystem sdk/src/rp2_common/hardware_spi/include/ \
 	-isystem sdk/src/rp2_common/hardware_sync/include/ \
@@ -149,6 +151,7 @@ INC += \
 	-isystem sdk/src/rp2_common/pico_float/include/ \
 	-isystem sdk/src/rp2_common/pico_runtime/include/ \
 	-isystem sdk/src/rp2_common/pico_runtime_init/include/ \
+	-isystem sdk/src/rp2_common/pico_platform_common/include/ \
 	-isystem sdk/src/rp2_common/pico_platform_compiler/include/ \
 	-isystem sdk/src/rp2_common/pico_platform_sections/include/ \
 	-isystem sdk/src/rp2_common/pico_platform_panic/include/ \
