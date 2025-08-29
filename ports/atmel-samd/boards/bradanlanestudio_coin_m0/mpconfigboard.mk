@@ -18,7 +18,7 @@ CHIP_FAMILY = samd21
 
 SPI_FLASH_FILESYSTEM = 1
 EXTERNAL_FLASH_DEVICES = "W25Q32JVxQ"
-LONGINT_IMPL = NONE
+LONGINT_IMPL = MPZ
 
 # the M0 Coin has limited functionality and many modules can be eliminated
 
@@ -26,7 +26,7 @@ LONGINT_IMPL = NONE
 
 # Disable modules that are unusable on this special-purpose board.
 
-CIRCUITPY_FULL_BUILD = 0
+CIRCUITPY_FULL_BUILD = 1
 
 CIRCUITPY_AUDIOIO = 1
 CIRCUITPY_DISPLAYIO = 0
