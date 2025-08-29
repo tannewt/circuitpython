@@ -20,8 +20,8 @@ jobs:
 
   update-learn:
     runs-on: ubuntu-latest
-    # Only run the build if the access token has been configured.  THs will be
-    # the case on Adafruit's repository.  Its necessary to do this here, since
+    # Only run the build if the access token has been configured.  This will be
+    # the case on Adafruit's repository.  It's necessary to do this here, since
     # 'schedule' events cannot (currently) be limited (they run on all forks'
     # default branches).
     if: ${{ (github.repository_owner == 'adafruit') }}
