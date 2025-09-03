@@ -207,9 +207,6 @@ static void start_mp(safe_mode_t safe_mode) {
 
     // Always return to root
     common_hal_os_chdir("/");
-
-    // Initialization for individual boards when a VM starts.
-    mp_board_init();
 }
 
 static void stop_mp(void) {
@@ -1152,7 +1149,6 @@ void gc_collect(void) {
     gc_collect_root((void **)&MP_STATE_VM(vfs_mount_table), sizeof(mp_vfs_mount_t) / sizeof(mp_uint_t));
 
     port_gc_collect();
-    board_gc_collect();
 
     background_callback_gc_collect();
 

@@ -25,10 +25,3 @@ void reset_board(void);
 // state. It should not prevent the user access method from working (such as
 // disabling USB, BLE or flash) because CircuitPython may continue to run.
 void board_deinit(void);
-
-// Initialization for individual boards when a VM starts.
-void mp_board_init(void);
-
-// Some boards may want to mark additional pointers as gc roots.
-// A default weak implementation is provided that does nothing.
-void board_gc_collect(void);

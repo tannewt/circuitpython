@@ -44,11 +44,3 @@ MP_WEAK void board_deinit(void) {
 // Do-nothing so not all boards need to provide this function.
 MP_WEAK void reset_board(void) {
 }
-
-// Do-nothing so not all boards need to provide this function.
-MP_WEAK void mp_board_init(void) {
-}
-
-// Do-nothing so not all boards need to provide this function.
-MP_WEAK void board_gc_collect(void) {
-}
