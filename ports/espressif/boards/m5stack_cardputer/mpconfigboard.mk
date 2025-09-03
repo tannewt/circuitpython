@@ -13,4 +13,4 @@ CIRCUITPY_ESP_FLASH_SIZE = 8MB
 CIRCUITPY_ESPCAMERA = 0
 CIRCUITPY_MAX3421E = 0
 
-SRC_C += boards/$(BOARD)/cardputer_keyboard.c
+SRC_C += module/cardputer_keyboard.c

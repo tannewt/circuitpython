@@ -15,4 +15,4 @@ CIRCUITPY_RCLCPY = 1
 CIRCUITPY_ESPCAMERA = 0
 CIRCUITPY_MAX3421E = 0
 
-SRC_C += boards/$(BOARD)/cardputer_keyboard.c
+SRC_C += module/cardputer_keyboard.c
