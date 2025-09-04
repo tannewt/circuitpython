@@ -16,7 +16,7 @@
 #include "shared-module/keypad_demux/DemuxKeyMatrix.h"
 #include "supervisor/shared/reload.h"
 
-#include "keymap.h"
+#include "cardputer_keymap.h"
 
 //| """M5Stack Cardputer keyboard integration.
 //| """
@@ -31,12 +31,13 @@
 //| """"
 //| KEYBOARD: keypad_demux.DemuxKeymatrix
 //|
-keypad_demux_demuxkeymatrix_obj_t cardputer_keyboard_obj;
-bool cardputer_keyboard_serial_attached = false;
 
-void cardputer_keyboard_init(void);
-void keyboard_seq(const char *seq);
-void update_keyboard(keypad_eventqueue_obj_t *queue);
+keypad_demux_demuxkeymatrix_obj_t cardputer_keyboard;
+static bool cardputer_keyboard_serial_attached = false;
+
+// Forward declarations.
+static void keyboard_seq(const char *seq);
+static void update_keyboard(keypad_eventqueue_obj_t *queue);
 
 //| def detach_serial() -> None:
 //|     """Stops consuming keyboard events and routing them to sys.stdin."""
@@ -44,7 +45,7 @@ void update_keyboard(keypad_eventqueue_obj_t *queue);
 //|
 static mp_obj_t detach_serial(void) {
     cardputer_keyboard_serial_attached = false;
-    common_hal_keypad_eventqueue_set_event_handler(cardputer_keyboard_obj.events, NULL);
+    common_hal_keypad_eventqueue_set_event_handler(cardputer_keyboard.events, NULL);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(detach_serial_obj, detach_serial);
@@ -54,7 +55,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(detach_serial_obj, detach_serial);
 //|     ...
 //|
 static mp_obj_t attach_serial(void) {
-    common_hal_keypad_eventqueue_set_event_handler(cardputer_keyboard_obj.events, update_keyboard);
+    common_hal_keypad_eventqueue_set_event_handler(cardputer_keyboard.events, update_keyboard);
     cardputer_keyboard_serial_attached = true;
     return mp_const_none;
 }
@@ -79,20 +80,20 @@ static mp_obj_t key_to_char(mp_obj_t key_obj, mp_obj_t shifted_obj) {
 static MP_DEFINE_CONST_FUN_OBJ_2(key_to_char_obj, key_to_char);
 
 // Ring buffer of characters consumed from keyboard events (when serial attached)
-ringbuf_t keyqueue;
-char keybuf[32];
+static ringbuf_t keyqueue;
+static char keybuf[32];
 
 keypad_event_obj_t event;
-char keystate[56];
+static char keystate[56] = {0};
 
 // Keyboard pins
-const mcu_pin_obj_t *row_addr_pins[] = {
+static const mcu_pin_obj_t *row_addr_pins[] = {
     &pin_GPIO8,
     &pin_GPIO9,
     &pin_GPIO11,
 };
 
-const mcu_pin_obj_t *column_pins[] = {
+static const mcu_pin_obj_t *column_pins[] = {
     &pin_GPIO13,
     &pin_GPIO15,
     &pin_GPIO3,
@@ -102,22 +103,22 @@ const mcu_pin_obj_t *column_pins[] = {
     &pin_GPIO7
 };
 
-void cardputer_keyboard_init(void) {
-    cardputer_keyboard_obj.base.type = &keypad_demux_demuxkeymatrix_type;
+static void cardputer_keyboard_init(void) {
     common_hal_keypad_demux_demuxkeymatrix_construct(
-        &cardputer_keyboard_obj, // self
-        3,                       // num_row_addr_pins
-        row_addr_pins,           // row_addr_pins
-        7,                       // num_column_pins
-        column_pins,             // column_pins
-        true,                    // columns_to_anodes
-        false,                   // transpose
-        0.01f,                   // interval
-        20,                      // max_events
-        2                        // debounce_threshold
+        &cardputer_keyboard,          // self
+        MP_ARRAY_SIZE(row_addr_pins), // num_row_addr_pins
+        row_addr_pins,                // row_addr_pins
+        MP_ARRAY_SIZE(column_pins),   // num_column_pins
+        column_pins,                  // column_pins
+        true,                         // columns_to_anodes
+        false,                        // transpose
+        0.01f,                        // interval
+        20,                           // max_events
+        2,                            // debounce_threshold
+        false                         // use_gc_allocator
         );
-    demuxkeymatrix_never_reset(&cardputer_keyboard_obj);
 
+    demuxkeymatrix_never_reset(&cardputer_keyboard);
     ringbuf_init(&keyqueue, (uint8_t *)keybuf, sizeof(keybuf));
     attach_serial();
 }
@@ -150,13 +151,13 @@ char board_serial_read(void) {
     }
 }
 
-void keyboard_seq(const char *seq) {
+static void keyboard_seq(const char *seq) {
     while (*seq) {
         ringbuf_put(&keyqueue, *seq++);
     }
 }
 
-void update_keyboard(keypad_eventqueue_obj_t *queue) {
+static void update_keyboard(keypad_eventqueue_obj_t *queue) {
     uint8_t ascii = 0;
 
     if (common_hal_keypad_eventqueue_get_length(queue) == 0) {
@@ -223,7 +224,7 @@ void update_keyboard(keypad_eventqueue_obj_t *queue) {
 
 static const mp_rom_map_elem_t cardputer_keyboard_module_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_cardputer_keyboard)},
-    {MP_ROM_QSTR(MP_QSTR_KEYBOARD), MP_ROM_PTR(&cardputer_keyboard_obj)},
+    {MP_ROM_QSTR(MP_QSTR_KEYBOARD), MP_ROM_PTR(&cardputer_keyboard)},
     {MP_ROM_QSTR(MP_QSTR_attach_serial), MP_ROM_PTR(&attach_serial_obj)},
     {MP_ROM_QSTR(MP_QSTR_detach_serial), MP_ROM_PTR(&detach_serial_obj)},
     {MP_ROM_QSTR(MP_QSTR_key_to_char), MP_ROM_PTR(&key_to_char_obj)},

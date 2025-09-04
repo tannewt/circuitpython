@@ -1179,10 +1179,6 @@ void gc_collect(void) {
     gc_collect_end();
 }
 
-// Ports may provide an implementation of this function if it is needed
-MP_WEAK void port_gc_collect(void) {
-}
-
 size_t gc_get_max_new_split(void) {
     return port_heap_get_largest_free_size();
 }
