@@ -1,6 +1,7 @@
 // This file is part of the CircuitPython project: https://circuitpython.org
 //
 // SPDX-FileCopyrightText: Copyright (c) 2022 Scott Shawcroft for Adafruit Industries
+// SPDX-FileCopyrightText: Copyright (c) 2025 Sam Blenny
 //
 // SPDX-License-Identifier: MIT
 
@@ -70,14 +71,18 @@ void common_hal_usb_core_device_deinit(usb_core_device_obj_t *self) {
 uint16_t common_hal_usb_core_device_get_idVendor(usb_core_device_obj_t *self) {
     uint16_t vid;
     uint16_t pid;
-    tuh_vid_pid_get(self->device_address, &vid, &pid);
+    if (!tuh_vid_pid_get(self->device_address, &vid, &pid)) {
+        mp_raise_usb_core_USBError(NULL);
+    }
     return vid;
 }
 
 uint16_t common_hal_usb_core_device_get_idProduct(usb_core_device_obj_t *self) {
     uint16_t vid;
     uint16_t pid;
-    tuh_vid_pid_get(self->device_address, &vid, &pid);
+    if (!tuh_vid_pid_get(self->device_address, &vid, &pid)) {
+        mp_raise_usb_core_USBError(NULL);
+    }
     return pid;
 }
 
