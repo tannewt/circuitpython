@@ -132,7 +132,7 @@ static size_t _handle_timed_transfer_callback(tuh_xfer_t *xfer, mp_int_t timeout
         tuh_edpt_abort_xfer(xfer->daddr, xfer->ep_addr);
         return 0;
     }
-    // Handle control transfer result code from TinyUSB
+    // Handle transfer result code from TinyUSB
     xfer_result_t result = _xfer_result;
     _xfer_result = XFER_RESULT_INVALID;
     switch (result) {
