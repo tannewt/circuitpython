@@ -101,9 +101,28 @@ static bool _wait_for_callback(void) {
         // we provided above. In other words, the callback isn't in an interrupt.
         RUN_BACKGROUND_TASKS;
     }
+    if (mp_hal_is_interrupted()) {
+        // Handle case of VM being interrupted by Ctrl-C or autoreload
+        return false;
+    }
+    // Handle callback result code from TinyUSB
     xfer_result_t result = _xfer_result;
     _xfer_result = XFER_RESULT_INVALID;
-    return result == XFER_RESULT_SUCCESS;
+    switch (result) {
+        case XFER_RESULT_SUCCESS:
+            return true;
+        case XFER_RESULT_FAILED:
+            mp_raise_usb_core_USBError(NULL);
+            break;
+        case XFER_RESULT_STALLED:
+            mp_raise_usb_core_USBError(MP_ERROR_TEXT("Pipe error"));
+            break;
+        case XFER_RESULT_TIMEOUT:
+        case XFER_RESULT_INVALID:
+            mp_raise_usb_core_USBTimeoutError();
+            break;
+    }
+    return false;
 }
 
 static void _prepare_for_transfer(void) {
@@ -173,41 +192,75 @@ static void _get_langid(usb_core_device_obj_t *self) {
     }
     // Two control bytes and one uint16_t language code.
     uint16_t temp_buf[2];
-    if (!tuh_descriptor_get_string(self->device_address, 0, 0, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
-        return;
+    _prepare_for_transfer();
+    if (!tuh_descriptor_get_string(self->device_address, 0, 0, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
+        mp_raise_usb_core_USBError(NULL);
+    } else if (_wait_for_callback()) {
+        self->first_langid = temp_buf[1];
     }
-    self->first_langid = temp_buf[1];
 }
 
 mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *self) {
     uint16_t temp_buf[127];
-    _get_langid(self);
-    if (!tuh_descriptor_get_serial_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
+    tusb_desc_device_t descriptor;
+    // First, be sure not to ask TinyUSB for a non-existent string (avoid error)
+    if (!tuh_descriptor_get_device_local(self->device_address, &descriptor)) {
         return mp_const_none;
     }
-    return _get_string(temp_buf);
+    if (descriptor.iSerialNumber == 0) {
+        return mp_const_none;
+    }
+    // Device does provide this string, so continue
+    _get_langid(self);
+    _prepare_for_transfer();
+    if (!tuh_descriptor_get_serial_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
+        mp_raise_usb_core_USBError(NULL);
+    } else if (_wait_for_callback()) {
+        return _get_string(temp_buf);
+    }
+    return mp_const_none;
 }
 
 mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
     uint16_t temp_buf[127];
-    _get_langid(self);
-    if (!tuh_descriptor_get_product_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
+    tusb_desc_device_t descriptor;
+    // First, be sure not to ask TinyUSB for a non-existent string (avoid error)
+    if (!tuh_descriptor_get_device_local(self->device_address, &descriptor)) {
         return mp_const_none;
     }
-    return _get_string(temp_buf);
+    if (descriptor.iProduct == 0) {
+        return mp_const_none;
+    }
+    // Device does provide this string, so continue
+    _get_langid(self);
+    _prepare_for_transfer();
+    if (!tuh_descriptor_get_product_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
+        mp_raise_usb_core_USBError(NULL);
+    } else if (_wait_for_callback()) {
+        return _get_string(temp_buf);
+    }
+    return mp_const_none;
 }
 
 mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self) {
     uint16_t temp_buf[127];
-    _get_langid(self);
-    if (!tuh_descriptor_get_manufacturer_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
+    tusb_desc_device_t descriptor;
+    // First, be sure not to ask TinyUSB for a non-existent string (avoid error)
+    if (!tuh_descriptor_get_device_local(self->device_address, &descriptor)) {
         return mp_const_none;
     }
-    return _get_string(temp_buf);
+    if (descriptor.iManufacturer == 0) {
+        return mp_const_none;
+    }
+    // Device does provide this string, so continue
+    _get_langid(self);
+    _prepare_for_transfer();
+    if (!tuh_descriptor_get_manufacturer_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
+        mp_raise_usb_core_USBError(NULL);
+    } else if (_wait_for_callback()) {
+        return _get_string(temp_buf);
+    }
+    return mp_const_none;
 }
 
 
