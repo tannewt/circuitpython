@@ -1396,6 +1396,10 @@ msgstr ""
 msgid "Mapping must be a tuple"
 msgstr ""
 
+#: py/persistentcode.c
+msgid "MicroPython .mpy file; use CircuitPython mpy-cross"
+msgstr ""
+
 #: ports/raspberrypi/bindings/rp2pio/StateMachine.c
 #: ports/raspberrypi/common-hal/rp2pio/StateMachine.c
 msgid "Mismatched data size"
