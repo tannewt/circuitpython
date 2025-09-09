@@ -471,6 +471,9 @@ void mp_raw_code_load(mp_reader_t *reader, mp_compiled_module_t *cm) {
     read_bytes(reader, header, sizeof(header));
     byte arch = MPY_FEATURE_DECODE_ARCH(header[2]);
     // CIRCUITPY-CHANGE: 'C', not 'M'
+    if (header[0] == 'M') {
+        mp_raise_ValueError(MP_ERROR_TEXT("MicroPython .mpy file; use CircuitPython mpy-cross"));
+    }
     if (header[0] != 'C'
         || header[1] != MPY_VERSION
         || (arch != MP_NATIVE_ARCH_NONE && MPY_FEATURE_DECODE_SUB_VERSION(header[2]) != MPY_SUB_VERSION)
