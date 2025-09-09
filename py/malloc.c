@@ -55,18 +55,8 @@
 // example. On the other hand, some (e.g. bare-metal) ports may use GC
 // heap as system heap, so, to avoid warnings, we do undef's first.
 // CIRCUITPY-CHANGE: Add selective collect support to malloc to optimize GC for large buffers
-#undef malloc
 #undef free
 #undef realloc
-#if MICROPY_ENABLE_SELECTIVE_COLLECT
-#define malloc(b) gc_alloc((b), GC_ALLOC_FLAG_DO_NOT_COLLECT)
-#define malloc_with_collect(b) gc_alloc((b), 0)
-#define malloc_without_collect(b) gc_alloc((b), GC_ALLOC_FLAG_DO_NOT_COLLECT)
-#else
-#define malloc(b) gc_alloc((b), 0)
-#define malloc_with_collect(b) gc_alloc((b), 0)
-#endif
-#define malloc_with_finaliser(b) gc_alloc((b), GC_ALLOC_FLAG_HAS_FINALISER)
 #define free gc_free
 #define realloc(ptr, n) gc_realloc(ptr, n, true)
 #define realloc_ext(ptr, n, mv) gc_realloc(ptr, n, mv)
@@ -99,15 +89,18 @@ static void *realloc_ext(void *ptr, size_t n_bytes, bool allow_move) {
 void *m_malloc_helper(size_t num_bytes, uint8_t flags) {
     void *ptr;
     #if MICROPY_ENABLE_GC
+    uint8_t gc_flags = 0;
     #if MICROPY_ENABLE_SELECTIVE_COLLECT
     if ((flags & M_MALLOC_COLLECT) == 0) {
-        ptr = malloc_without_collect(num_bytes);
-    } else {
-        ptr = malloc_with_collect(num_bytes);
+        gc_flags |= GC_ALLOC_FLAG_DO_NOT_COLLECT;
     }
-    #else
-    ptr = malloc_with_collect(num_bytes);
     #endif
+    #if MICROPY_ENABLE_FINALISER
+    if ((flags & M_MALLOC_WITH_FINALISER) != 0) {
+        gc_flags |= GC_ALLOC_FLAG_HAS_FINALISER;
+    }
+    #endif
+    ptr = gc_alloc(num_bytes, gc_flags);
     #else
     ptr = malloc(num_bytes);
     #endif

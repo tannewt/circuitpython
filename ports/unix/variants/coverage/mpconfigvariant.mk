@@ -12,7 +12,8 @@ CFLAGS += \
 LDFLAGS += -fprofile-arcs -ftest-coverage
 
 FROZEN_MANIFEST ?= $(VARIANT_DIR)/manifest.py
-USER_C_MODULES = $(TOP)/examples/usercmodule
+# CIRCUITPY-CHANGE: don't include user C modules
+# USER_C_MODULES = $(TOP)/examples/usercmodule
 
 # CIRCUITPY-CHANGE: use CircuitPython bindings and implementations
 SRC_QRIO := $(patsubst ../../%,%,$(wildcard ../../shared-bindings/qrio/*.c ../../shared-module/qrio/*.c ../../lib/quirc/lib/*.c))
@@ -40,6 +41,7 @@ SRC_BITMAP := \
 	shared-bindings/audiodelays/__init__.c \
 	shared-bindings/audiofilters/Distortion.c \
 	shared-bindings/audiofilters/Filter.c \
+	shared-bindings/audiofilters/Phaser.c \
 	shared-bindings/audiofilters/__init__.c \
 	shared-bindings/audiofreeverb/Freeverb.c \
 	shared-bindings/audiofreeverb/__init__.c \
@@ -87,6 +89,7 @@ SRC_BITMAP := \
 	shared-module/audiodelays/__init__.c \
 	shared-module/audiofilters/Distortion.c \
 	shared-module/audiofilters/Filter.c \
+	shared-module/audiofilters/Phaser.c \
 	shared-module/audiofilters/__init__.c \
 	shared-module/audiofreeverb/Freeverb.c \
 	shared-module/audiofreeverb/__init__.c \

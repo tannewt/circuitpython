@@ -37,7 +37,7 @@
 static void mbedtls_debug(void *ctx, int level, const char *file, int line, const char *str) {
     (void)ctx;
     (void)level;
-    mp_printf(&mp_plat_print, "DBG:%s:%04d: %s\n", file, line, str);
+    mp_printf(&mp_plat_print, "DBG:%s:%04d: %s", file, line, str);
 }
 #define DEBUG_PRINT(fmt, ...) mp_printf(&mp_plat_print, "DBG:%s:%04d: " fmt "\n", __FILE__, __LINE__,##__VA_ARGS__)
 #else
