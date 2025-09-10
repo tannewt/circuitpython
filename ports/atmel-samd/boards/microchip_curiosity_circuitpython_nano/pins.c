@@ -22,13 +22,11 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_D4), MP_ROM_PTR(&pin_PB14) },
     { MP_ROM_QSTR(MP_QSTR_D5), MP_ROM_PTR(&pin_PB15) },
     { MP_ROM_QSTR(MP_QSTR_D6), MP_ROM_PTR(&pin_PB16) },
-    { MP_ROM_QSTR(MP_QSTR_D7), MP_ROM_PTR(&pin_PB17) },
-    { MP_ROM_QSTR(MP_QSTR_D8), MP_ROM_PTR(&pin_PB22) },
-    { MP_ROM_QSTR(MP_QSTR_D13), MP_ROM_PTR(&pin_PB23) },
 
     { MP_ROM_QSTR(MP_QSTR_LED), MP_ROM_PTR(&pin_PB23) },
+    { MP_ROM_QSTR(MP_QSTR_D13), MP_ROM_PTR(&pin_PB23) },
 
-    { MP_ROM_QSTR(MP_QSTR_NEOPIX), MP_ROM_PTR(&pin_PB22) },
+    { MP_ROM_QSTR(MP_QSTR_NEOPIXEL), MP_ROM_PTR(&pin_PB22) },
 
     { MP_ROM_QSTR(MP_QSTR_VREF), MP_ROM_PTR(&pin_PA03) },
 
@@ -60,23 +58,25 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_SD_CS), MP_ROM_PTR(&pin_PA19) },
 
     { MP_ROM_QSTR(MP_QSTR_MISO), MP_ROM_PTR(&pin_PB00) },
-    { MP_ROM_QSTR(MP_QSTR_SPARE_0), MP_ROM_PTR(&pin_PB00) },
+    { MP_ROM_QSTR(MP_QSTR_D8), MP_ROM_PTR(&pin_PB00) },
 
     { MP_ROM_QSTR(MP_QSTR_CS), MP_ROM_PTR(&pin_PB01) },
-    { MP_ROM_QSTR(MP_QSTR_SPARE_1), MP_ROM_PTR(&pin_PB01) },
+    { MP_ROM_QSTR(MP_QSTR_D9), MP_ROM_PTR(&pin_PB01) },
 
     { MP_ROM_QSTR(MP_QSTR_MOSI), MP_ROM_PTR(&pin_PB02) },
-    { MP_ROM_QSTR(MP_QSTR_SPARE_2), MP_ROM_PTR(&pin_PB02) },
+    { MP_ROM_QSTR(MP_QSTR_D10), MP_ROM_PTR(&pin_PB02) },
 
     { MP_ROM_QSTR(MP_QSTR_SCK), MP_ROM_PTR(&pin_PB03) },
-    { MP_ROM_QSTR(MP_QSTR_SPARE_3), MP_ROM_PTR(&pin_PB03) },
+    { MP_ROM_QSTR(MP_QSTR_D11), MP_ROM_PTR(&pin_PB03) },
 
     { MP_ROM_QSTR(MP_QSTR_DEBUG_TX), MP_ROM_PTR(&pin_PA22) },
     { MP_ROM_QSTR(MP_QSTR_DEBUG_RX), MP_ROM_PTR(&pin_PA23) },
 
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_RX),  MP_ROM_PTR(&pin_PB13) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_TX),  MP_ROM_PTR(&pin_PB12) },
+
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_STANDBY),  MP_ROM_PTR(&pin_PB17) },
+    { MP_ROM_QSTR(MP_QSTR_D7), MP_ROM_PTR(&pin_PB17) },
 
     { MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&board_i2c_obj) },
     { MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&board_uart_obj) },
