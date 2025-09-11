@@ -992,7 +992,6 @@ endif
 
 # Sources used in all ports except unix.
 SRC_CIRCUITPY_COMMON = \
-	shared/libc/string0.c \
 	shared/readline/readline.c \
 	lib/oofatfs/ff.c \
 	lib/oofatfs/ffunicode.c \

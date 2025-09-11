@@ -290,7 +290,6 @@ LDFLAGS += \
 	-Tesp32c6.rom.net80211.ld \
 	-Tesp32c6.rom.libc.ld \
 	-Tesp32c6.rom.newlib.ld \
-	-Tesp32c6.rom.spiflash.ld \
 	-Tesp32c6.rom.coexist.ld \
 	-Tesp32c6.rom.heap.ld \
 	-Tesp32c6.rom.systimer.ld \
