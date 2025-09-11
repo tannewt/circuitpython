@@ -523,9 +523,10 @@ static void consider_instruction(introspect_t *state, uint16_t full_instruction,
         }
     }
     if (instruction == pio_instr_bits_wait) {
-        uint16_t wait_source = (full_instruction & 0x0060) >> 5;
-        uint16_t wait_index = (full_instruction & 0x001f) + state->inputs.pio_gpio_offset;
-        if (wait_source == 0 && !PIO_PINMASK_IS_SET(state->inputs.pins_we_use, wait_index)) { // GPIO
+        const uint16_t wait_source = (full_instruction & 0x0060) >> 5;
+        const uint16_t wait_index = full_instruction & 0x001f;
+        const uint16_t wait_pin = wait_index + state->inputs.pio_gpio_offset;
+        if (wait_source == 0 && !PIO_PINMASK_IS_SET(state->inputs.pins_we_use, wait_pin)) { // GPIO
             mp_raise_ValueError_varg(MP_ERROR_TEXT("%q[%u] uses extra pin"), what_program, i);
         } else if (wait_source == 1) { // Input pin
             if (!state->inputs.has_in_pin) {
