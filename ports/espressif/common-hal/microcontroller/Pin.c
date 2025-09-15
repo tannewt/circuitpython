@@ -370,9 +370,8 @@ void reset_all_pins(void) {
     gpio_deep_sleep_hold_dis();
     #endif
 
-    for (uint8_t i = 0; i < GPIO_PIN_COUNT; i++) {
-        uint32_t iomux_address = GPIO_PIN_MUX_REG[i];
-        if (iomux_address == 0 ||
+    for (gpio_num_t i = 0; i < SOC_GPIO_PIN_COUNT; i++) {
+        if (!GPIO_IS_VALID_GPIO(i) ||
             _never_reset(i) ||
             _skip_reset_once(i) ||
             _preserved_pin(i)) {
