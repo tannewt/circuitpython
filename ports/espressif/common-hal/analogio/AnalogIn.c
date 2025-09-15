@@ -32,6 +32,8 @@
 #define DATA_WIDTH          ADC_BITWIDTH_12
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
 #define DATA_WIDTH          ADC_BITWIDTH_12
+#elif defined(CONFIG_IDF_TARGET_ESP32C61)
+#define DATA_WIDTH          ADC_BITWIDTH_12
 #elif defined(CONFIG_IDF_TARGET_ESP32P4)
 #define DATA_WIDTH          ADC_BITWIDTH_12
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)

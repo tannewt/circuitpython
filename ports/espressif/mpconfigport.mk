@@ -17,6 +17,9 @@ CROSS_COMPILE = riscv32-esp-elf-
 else ifeq ($(IDF_TARGET),esp32c6)
 IDF_TARGET_ARCH = riscv
 CROSS_COMPILE = riscv32-esp-elf-
+else ifeq ($(IDF_TARGET),esp32c61)
+IDF_TARGET_ARCH = riscv
+CROSS_COMPILE = riscv32-esp-elf-
 else ifeq ($(IDF_TARGET),esp32h2)
 IDF_TARGET_ARCH = riscv
 CROSS_COMPILE = riscv32-esp-elf-
@@ -200,6 +203,45 @@ CIRCUITPY_TOUCHIO_USE_NATIVE = 0
 # Features
 CIRCUITPY_USB_DEVICE = 0
 CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 1
+
+#### esp32c6 ##########################################################
+else ifeq ($(IDF_TARGET),esp32c61)
+# Modules
+CIRCUITPY_ESPCAMERA = 0
+CIRCUITPY_ESPULP = 0
+CIRCUITPY_MEMORYMAP = 0
+CIRCUITPY_RGBMATRIX = 0
+
+# No DAC
+CIRCUITPY_AUDIOIO = 0
+
+# No space for this
+CIRCUITPY_AUDIOBUSIO = 0
+
+# No I80 support from the IDF
+CIRCUITPY_PARALLELDISPLAYBUS = 0
+
+# No SDMMC
+CIRCUITPY_SDIOIO = 0
+
+CIRCUITPY_TOUCHIO ?= 1
+CIRCUITPY_TOUCHIO_USE_NATIVE = 0
+# Features
+CIRCUITPY_USB_DEVICE = 0
+CIRCUITPY_ESP_USB_SERIAL_JTAG ?= 1
+
+# No TWAI on chip
+CIRCUITPY_CANIO = 0
+
+# No RMT on chip
+CIRCUITPY_NEOPIXEL_WRITE = 0
+CIRCUITPY_PULSEIO = 0
+CIRCUITPY_RGBMATRIX = 0
+
+# No PCNT on chip
+CIRCUITPY_COUNTIO = 0
+CIRCUITPY_ROTARYIO = 0
+CIRCUITPY_FREQUENCYIO = 0
 
 #### esp32h2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32h2)

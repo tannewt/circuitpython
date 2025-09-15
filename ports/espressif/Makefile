@@ -8,6 +8,8 @@ include ../../py/circuitpy_mkenv.mk
 
 ifeq ($(IDF_TARGET),esp32s3)
 BT_IDF_TARGET = esp32c3
+else ifeq ($(IDF_TARGET),esp32c61)
+BT_IDF_TARGET = esp32c6
 else
 BT_IDF_TARGET = $(IDF_TARGET)
 endif
@@ -299,6 +301,23 @@ LDFLAGS += \
 CHIP_COMPONENTS = \
 	esp_driver_tsens
 
+else ifeq ($(IDF_TARGET),esp32c61)
+LDFLAGS += \
+	-Tesp32c61.rom.phy.ld \
+	-Tesp32c61.rom.pp.ld \
+	-Tesp32c61.rom.net80211.ld \
+	-Tesp32c61.rom.libc.ld \
+	-Tesp32c61.rom.newlib.ld \
+	-Tesp32c61.rom.version.ld \
+	-Tesp32c61.rom.coexist.ld \
+	-Tesp32c61.rom.heap.ld \
+	-Tesp32c61.rom.systimer.ld \
+	-Tesp32c61.rom.wdt.ld
+
+
+CHIP_COMPONENTS = \
+	esp_driver_tsens
+
 else ifeq ($(IDF_TARGET),esp32p4)
 LDFLAGS += \
 	-Tesp32p4.rom.newlib.ld \
@@ -360,6 +379,8 @@ else ifeq ($(IDF_TARGET),esp32c3)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C3
 else ifeq ($(IDF_TARGET),esp32c6)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C6
+else ifeq ($(IDF_TARGET),esp32c61)
+CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C61
 else ifeq ($(IDF_TARGET),esp32p4)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32P4
 else ifeq ($(IDF_TARGET),esp32h2)
@@ -698,6 +719,7 @@ ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32c2 := libble
 	BLE_IMPL_esp32c3 := esp32c3
 	BLE_IMPL_esp32c6 := libble
+	BLE_IMPL_esp32c61 := libble
 	BLE_IMPL_esp32h2 := libble
 	BLE_IMPL = $(BLE_IMPL_$(IDF_TARGET))
 
@@ -716,8 +738,8 @@ ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 
 	ifeq ($(BLE_IMPL),libble)
 	BINARY_BLOBS += esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libbtbb.a
-	ifeq ($(IDF_TARGET),esp32c6)
-		BINARY_BLOBS += esp-idf/components/bt/controller/lib_$(IDF_TARGET)/$(IDF_TARGET)-bt-lib/$(IDF_TARGET)/libble_app.a
+	ifeq ($(BT_IDF_TARGET),esp32c6)
+		BINARY_BLOBS += esp-idf/components/bt/controller/lib_$(BT_IDF_TARGET)/$(BT_IDF_TARGET)-bt-lib/$(IDF_TARGET)/libble_app.a
 	else
 		BINARY_BLOBS += esp-idf/components/bt/controller/lib_$(IDF_TARGET)/$(IDF_TARGET)-bt-lib/libble_app.a
 	endif
@@ -784,6 +806,8 @@ BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32c3)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32c6)
+BOOTLOADER_OFFSET = 0x0
+else ifeq ($(IDF_TARGET),esp32c61)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32p4)
 BOOTLOADER_OFFSET = 0x2000
