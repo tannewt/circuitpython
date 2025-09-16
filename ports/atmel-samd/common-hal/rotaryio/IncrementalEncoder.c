@@ -17,6 +17,10 @@
 
 void common_hal_rotaryio_incrementalencoder_construct(rotaryio_incrementalencoder_obj_t *self,
     const mcu_pin_obj_t *pin_a, const mcu_pin_obj_t *pin_b) {
+
+    // Ensure object starts in its deinit state.
+    common_hal_rotaryio_incrementalencoder_mark_deinit(self);
+
     if (!pin_a->has_extint) {
         raise_ValueError_invalid_pin_name(MP_QSTR_pin_a);
     }
@@ -83,10 +87,13 @@ void common_hal_rotaryio_incrementalencoder_deinit(rotaryio_incrementalencoder_o
     turn_off_eic_channel(self->eic_channel_b);
 
     reset_pin_number(self->pin_a);
-    self->pin_a = NO_PIN;
-
     reset_pin_number(self->pin_b);
-    self->pin_b = NO_PIN;
+
+    common_hal_rotaryio_incrementalencoder_mark_deinit(self);
+}
+
+void common_hal_rotaryio_incrementalencoder_mark_deinit(rotaryio_incrementalencoder_obj_t *self) {
+    self->pin_a = NO_PIN;
 }
 
 void incrementalencoder_interrupt_handler(uint8_t channel) {
