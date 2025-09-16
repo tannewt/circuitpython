@@ -183,7 +183,11 @@ MP_PROPERTY_GETTER(audiofilters_filter_playing_obj,
 //|         """Plays the sample once when loop=False and continuously when loop=True.
 //|         Does not block. Use `playing` to block.
 //|
-//|         The sample must match the encoding settings given in the constructor."""
+//|         The sample must match the encoding settings given in the constructor.
+//|
+//|         :return: The effect object itself. Can be used for chaining, ie:
+//|           ``audio.play(effect.play(sample))``.
+//|         :rtype: Filter"""
 //|         ...
 //|
 static mp_obj_t audiofilters_filter_obj_play(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {

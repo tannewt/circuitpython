@@ -166,7 +166,11 @@ MP_PROPERTY_GETTER(audiomixer_mixer_voice_obj,
 //|
 //|         Sample must be an `audiocore.WaveFile`, `audiocore.RawSample`, `audiomixer.Mixer` or `audiomp3.MP3Decoder`.
 //|
-//|         The sample must match the Mixer's encoding settings given in the constructor."""
+//|         The sample must match the Mixer's encoding settings given in the constructor.
+//|
+//|         :return: The mixer object itself. Can be used for chaining, ie:
+//|           ``audio.play(mixer.play(sample))``.
+//|         :rtype: Chorus"""
 //|         ...
 //|
 static mp_obj_t audiomixer_mixer_obj_play(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
