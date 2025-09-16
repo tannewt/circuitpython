@@ -206,7 +206,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(audiodelays_chorus_get_playing_obj, audiodelays_chorus
 MP_PROPERTY_GETTER(audiodelays_chorus_playing_obj,
     (mp_obj_t)&audiodelays_chorus_get_playing_obj);
 
-//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> None:
+//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> Chorus:
 //|         """Plays the sample once when loop=False and continuously when loop=True.
 //|         Does not block. Use `playing` to block.
 //|
@@ -228,7 +228,7 @@ static mp_obj_t audiodelays_chorus_obj_play(size_t n_args, const mp_obj_t *pos_a
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiodelays_chorus_play(self, sample, args[ARG_loop].u_bool);
 
-    return mp_const_none;
+    return pos_args[0];
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiodelays_chorus_play_obj, 1, audiodelays_chorus_obj_play);
 

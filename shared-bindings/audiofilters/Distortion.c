@@ -309,7 +309,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(audiofilters_distortion_get_playing_obj, audiofilters_
 MP_PROPERTY_GETTER(audiofilters_distortion_playing_obj,
     (mp_obj_t)&audiofilters_distortion_get_playing_obj);
 
-//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> None:
+//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> Distortion:
 //|         """Plays the sample once when loop=False and continuously when loop=True.
 //|         Does not block. Use `playing` to block.
 //|
@@ -331,7 +331,7 @@ static mp_obj_t audiofilters_distortion_obj_play(size_t n_args, const mp_obj_t *
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiofilters_distortion_play(self, sample, args[ARG_loop].u_bool);
 
-    return mp_const_none;
+    return pos_args[0];
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiofilters_distortion_play_obj, 1, audiofilters_distortion_obj_play);
 
