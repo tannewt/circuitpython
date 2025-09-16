@@ -255,7 +255,7 @@ static mp_obj_t audiodelays_multi_tap_delay_obj_play(size_t n_args, const mp_obj
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiodelays_multi_tap_delay_play(self, sample, args[ARG_loop].u_bool);
 
-    return pos_args[0];
+    return MP_OBJ_FROM_PTR(self);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiodelays_multi_tap_delay_play_obj, 1, audiodelays_multi_tap_delay_obj_play);
 

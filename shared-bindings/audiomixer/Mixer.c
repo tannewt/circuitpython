@@ -189,7 +189,7 @@ static mp_obj_t audiomixer_mixer_obj_play(size_t n_args, const mp_obj_t *pos_arg
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiomixer_mixervoice_play(voice, sample, args[ARG_loop].u_bool);
 
-    return pos_args[0];
+    return MP_OBJ_FROM_PTR(self);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiomixer_mixer_play_obj, 1, audiomixer_mixer_obj_play);
 
