@@ -59,6 +59,8 @@ CIRCUITPY_PORT_SERIAL = 1
 
 CIRCUITPY_LIB_TLSF = 0
 
+CIRCUITPY_LIBC_STRING0 = 0
+
 # These modules are implemented in ports/<port>/common-hal:
 CIRCUITPY__EVE ?= 1
 CIRCUITPY_ALARM ?= 1

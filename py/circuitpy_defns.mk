@@ -1003,6 +1003,10 @@ SRC_CIRCUITPY_COMMON = \
 	shared/runtime/stdout_helpers.c \
 	shared/runtime/sys_stdio_mphal.c
 
+ifeq ($(CIRCUITPY_LIBC_STRING0),1)
+SRC_CIRCUITPY_COMMON += shared/libc/string0.c
+endif
+
 ifeq ($(CIRCUITPY_QRIO),1)
 SRC_CIRCUITPY_COMMON += lib/quirc/lib/decode.c lib/quirc/lib/identify.c lib/quirc/lib/quirc.c lib/quirc/lib/version_db.c
 $(BUILD)/lib/quirc/lib/%.o: CFLAGS += -Wno-type-limits -Wno-shadow -Wno-sign-compare -include shared-module/qrio/quirc_alloc.h
