@@ -160,13 +160,17 @@ MP_PROPERTY_GETTER(audiomixer_mixer_voice_obj,
 
 //|     def play(
 //|         self, sample: circuitpython_typing.AudioSample, *, voice: int = 0, loop: bool = False
-//|     ) -> None:
+//|     ) -> Mixer:
 //|         """Plays the sample once when loop=False and continuously when loop=True.
 //|         Does not block. Use `playing` to block.
 //|
 //|         Sample must be an `audiocore.WaveFile`, `audiocore.RawSample`, `audiomixer.Mixer` or `audiomp3.MP3Decoder`.
 //|
-//|         The sample must match the Mixer's encoding settings given in the constructor."""
+//|         The sample must match the Mixer's encoding settings given in the constructor.
+//|
+//|         :return: The mixer object itself. Can be used for chaining, ie:
+//|           ``audio.play(mixer.play(sample))``.
+//|         :rtype: Chorus"""
 //|         ...
 //|
 static mp_obj_t audiomixer_mixer_obj_play(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -189,7 +193,7 @@ static mp_obj_t audiomixer_mixer_obj_play(size_t n_args, const mp_obj_t *pos_arg
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiomixer_mixervoice_play(voice, sample, args[ARG_loop].u_bool);
 
-    return mp_const_none;
+    return MP_OBJ_FROM_PTR(self);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiomixer_mixer_play_obj, 1, audiomixer_mixer_obj_play);
 

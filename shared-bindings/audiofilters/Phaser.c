@@ -214,11 +214,15 @@ MP_DEFINE_CONST_FUN_OBJ_1(audiofilters_phaser_get_playing_obj, audiofilters_phas
 MP_PROPERTY_GETTER(audiofilters_phaser_playing_obj,
     (mp_obj_t)&audiofilters_phaser_get_playing_obj);
 
-//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> None:
+//|     def play(self, sample: circuitpython_typing.AudioSample, *, loop: bool = False) -> Phaser:
 //|         """Plays the sample once when loop=False and continuously when loop=True.
 //|         Does not block. Use `playing` to block.
 //|
-//|         The sample must match the encoding settings given in the constructor."""
+//|         The sample must match the encoding settings given in the constructor.
+//|
+//|         :return: The effect object itself. Can be used for chaining, ie:
+//|           ``audio.play(effect.play(sample))``.
+//|         :rtype: Phaser"""
 //|         ...
 //|
 static mp_obj_t audiofilters_phaser_obj_play(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
@@ -236,7 +240,7 @@ static mp_obj_t audiofilters_phaser_obj_play(size_t n_args, const mp_obj_t *pos_
     mp_obj_t sample = args[ARG_sample].u_obj;
     common_hal_audiofilters_phaser_play(self, sample, args[ARG_loop].u_bool);
 
-    return mp_const_none;
+    return MP_OBJ_FROM_PTR(self);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audiofilters_phaser_play_obj, 1, audiofilters_phaser_obj_play);
 
