@@ -628,6 +628,9 @@ void common_hal_rp2pio_statemachine_construct(rp2pio_statemachine_obj_t *self,
     int mov_status_type,
     int mov_status_n) {
 
+    // Ensure object starts in its deinit state.
+    common_hal_rp2pio_statemachine_mark_deinit(self);
+
     // First, check that all pins are free OR already in use by any PIO if exclusive_pin_use is false.
     pio_pinmask_t pins_we_use = wait_gpio_mask;
     PIO_PINMASK_MERGE(pins_we_use, _check_pins_free(first_out_pin, out_pin_count, exclusive_pin_use));
@@ -744,7 +747,7 @@ void common_hal_rp2pio_statemachine_construct(rp2pio_statemachine_obj_t *self,
         mov_status_type, mov_status_n);
     if (!ok) {
         // indicate state machine never inited
-        self->state_machine = NUM_PIO_STATE_MACHINES;
+        common_hal_rp2pio_statemachine_mark_deinit(self);
         mp_raise_RuntimeError(MP_ERROR_TEXT("All state machines in use"));
     }
 }
@@ -825,6 +828,10 @@ void rp2pio_statemachine_deinit(rp2pio_statemachine_obj_t *self, bool leave_pins
 
 void common_hal_rp2pio_statemachine_deinit(rp2pio_statemachine_obj_t *self) {
     rp2pio_statemachine_deinit(self, false);
+}
+
+void common_hal_rp2pio_statemachine_mark_deinit(rp2pio_statemachine_obj_t *self) {
+    self->state_machine = NUM_PIO_STATE_MACHINES;
 }
 
 void common_hal_rp2pio_statemachine_never_reset(rp2pio_statemachine_obj_t *self) {
