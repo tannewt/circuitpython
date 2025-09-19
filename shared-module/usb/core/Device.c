@@ -43,30 +43,19 @@ static uint8_t *_ensure_dma_buffer(usb_core_device_obj_t *self, const uint8_t *b
         return (uint8_t *)buffer;  // Already DMA-capable, use directly
     }
 
-    // Need to allocate/reallocate temporary buffer in DMA-capable memory
-    if (self->temp_buffer_size < len) {
-        self->temp_buffer = port_realloc(self->temp_buffer, len, true);  // true = DMA capable
-        if (self->temp_buffer == NULL) {
-            self->temp_buffer_size = 0;
-            return NULL;  // Allocation failed
-        }
-        self->temp_buffer_size = len;
+    uint8_t *dma_buffer = port_malloc(len, true);  // true = DMA capable
+    if (dma_buffer == NULL) {
+        return NULL;  // Allocation failed
     }
 
     // Copy data to DMA buffer if writing
     if (for_write && buffer != NULL) {
-        memcpy(self->temp_buffer, buffer, len);
+        memcpy(dma_buffer, buffer, len);
     }
 
-    return self->temp_buffer;
+    return dma_buffer;
 }
 
-// Copy data back from DMA buffer to original buffer after read
-static void _copy_from_dma_buffer(usb_core_device_obj_t *self, uint8_t *original_buffer, size_t len) {
-    if (!port_buffer_is_dma_capable(original_buffer) && self->temp_buffer != NULL) {
-        memcpy(original_buffer, self->temp_buffer, len);
-    }
-}
 #endif
 bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t device_address) {
     if (!tuh_inited()) {
@@ -81,10 +70,6 @@ bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t d
     }
     self->device_address = device_address;
     self->first_langid = 0;
-    #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
-    self->temp_buffer = NULL;
-    self->temp_buffer_size = 0;
-    #endif
     _xfer_result = XFER_RESULT_INVALID;
     return true;
 }
@@ -104,14 +89,6 @@ void common_hal_usb_core_device_deinit(usb_core_device_obj_t *self) {
             self->open_endpoints[i] = 0;
         }
     }
-    #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
-    // Clean up temporary buffer
-    if (self->temp_buffer != NULL) {
-        port_free(self->temp_buffer);
-        self->temp_buffer = NULL;
-        self->temp_buffer_size = 0;
-    }
-    #endif
     self->device_address = 0;
 }
 
@@ -180,7 +157,24 @@ static void _prepare_for_transfer(void) {
     _actual_len = 0;
 }
 
-static size_t _handle_timed_transfer_callback(tuh_xfer_t *xfer, mp_int_t timeout) {
+static void _abort_transfer(tuh_xfer_t *xfer) {
+    bool aborted = tuh_edpt_abort_xfer(xfer->daddr, xfer->ep_addr);
+    if (aborted) {
+        // If the transfer was aborted, then we can continue.
+        return;
+    }
+    uint32_t start_time = supervisor_ticks_ms32();
+    // If not, we need to wait for it to finish, otherwise we may free memory out from under it.
+    // Limit the wait time to 10 milliseconds to avoid blocking indefinitely.
+    while (_xfer_result == XFER_RESULT_INVALID && (supervisor_ticks_ms32() - start_time < 10)) {
+        // The background tasks include TinyUSB which will call the function
+        // we provided above. In other words, the callback isn't in an interrupt.
+        RUN_BACKGROUND_TASKS;
+    }
+}
+
+// Only frees the transfer buffer on error.
+static size_t _handle_timed_transfer_callback(tuh_xfer_t *xfer, mp_int_t timeout, bool our_buffer) {
     if (xfer == NULL) {
         mp_raise_usb_core_USBError(NULL);
         return 0;
@@ -195,12 +189,15 @@ static size_t _handle_timed_transfer_callback(tuh_xfer_t *xfer, mp_int_t timeout
     }
     if (mp_hal_is_interrupted()) {
         // Handle case of VM being interrupted by Ctrl-C or autoreload
-        tuh_edpt_abort_xfer(xfer->daddr, xfer->ep_addr);
+        _abort_transfer(xfer);
         return 0;
     }
     // Handle transfer result code from TinyUSB
     xfer_result_t result = _xfer_result;
     _xfer_result = XFER_RESULT_INVALID;
+    if (our_buffer && result != XFER_RESULT_SUCCESS && result != XFER_RESULT_INVALID) {
+        port_free(xfer->buffer);
+    }
     switch (result) {
         case XFER_RESULT_SUCCESS:
             return _actual_len;
@@ -217,8 +214,11 @@ static size_t _handle_timed_transfer_callback(tuh_xfer_t *xfer, mp_int_t timeout
             break;
         case XFER_RESULT_INVALID:
             // This timeout comes from CircuitPython, not TinyUSB, so tell TinyUSB
-            // to stop the transfer
-            tuh_edpt_abort_xfer(xfer->daddr, xfer->ep_addr);
+            // to stop the transfer and then wait to free the buffer.
+            _abort_transfer(xfer);
+            if (our_buffer) {
+                port_free(xfer->buffer);
+            }
             mp_raise_usb_core_USBTimeoutError();
             break;
     }
@@ -382,14 +382,18 @@ void common_hal_usb_core_device_set_configuration(usb_core_device_obj_t *self, m
     _wait_for_callback();
 }
 
-static size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout) {
+// Raises an exception on failure. Returns the number of bytes transferred (maybe zero) on success.
+static size_t _xfer(tuh_xfer_t *xfer, mp_int_t timeout, bool our_buffer) {
     _prepare_for_transfer();
     xfer->complete_cb = _transfer_done_cb;
     if (!tuh_edpt_xfer(xfer)) {
+        if (our_buffer) {
+            port_free(xfer->buffer);
+        }
         mp_raise_usb_core_USBError(NULL);
         return 0;
     }
-    return _handle_timed_transfer_callback(xfer, timeout);
+    return _handle_timed_transfer_callback(xfer, timeout, our_buffer);
 }
 
 static bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
@@ -463,7 +467,13 @@ mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t 
     xfer.ep_addr = endpoint;
     xfer.buffer = dma_buffer;
     xfer.buflen = len;
-    return _xfer(&xfer, timeout);
+    size_t result = _xfer(&xfer, timeout, dma_buffer != buffer);
+    #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
+    if (dma_buffer != buffer) {
+        port_free(dma_buffer);
+    }
+    #endif
+    return result;
 }
 
 mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t endpoint, uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
@@ -488,12 +498,13 @@ mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t e
     xfer.ep_addr = endpoint;
     xfer.buffer = dma_buffer;
     xfer.buflen = len;
-    mp_int_t result = _xfer(&xfer, timeout);
+    mp_int_t result = _xfer(&xfer, timeout, dma_buffer != buffer);
 
     #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
     // Copy data back to original buffer if needed
-    if (result > 0) {
-        _copy_from_dma_buffer(self, buffer, result);
+    if (dma_buffer != buffer) {
+        memcpy(buffer, dma_buffer, result);
+        port_free(dma_buffer);
     }
     #endif
 
@@ -543,12 +554,15 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
         mp_raise_usb_core_USBError(NULL);
         return 0;
     }
-    mp_int_t result = (mp_int_t)_handle_timed_transfer_callback(&xfer, timeout);
+    mp_int_t result = (mp_int_t)_handle_timed_transfer_callback(&xfer, timeout, dma_buffer != buffer);
 
     #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
-    // Copy data back to original buffer if this was a read transfer and we got data
-    if ((bmRequestType & 0x80) != 0 && result > 0 && buffer != NULL) {  // Read transfer (device-to-host)
-        _copy_from_dma_buffer(self, buffer, result);
+    if (dma_buffer != buffer) {
+        // Copy data back to original buffer if this was a read transfer
+        if (buffer != NULL && !is_write) {
+            memcpy(buffer, dma_buffer, result);
+        }
+        port_free(dma_buffer);
     }
     #endif
 
