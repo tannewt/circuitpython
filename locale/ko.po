@@ -890,6 +890,10 @@ msgstr "좌표 배열의 길이가 다릅니다"
 msgid "Coordinate arrays types have different sizes"
 msgstr "좌표 배열 유형은 크기가 다릅니다"
 
+#: shared-module/usb/core/Device.c
+msgid "Could not allocate DMA capable buffer"
+msgstr ""
+
 #: ports/espressif/common-hal/rclcpy/Publisher.c
 msgid "Could not publish to ROS topic"
 msgstr ""
