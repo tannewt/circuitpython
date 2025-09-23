@@ -125,7 +125,7 @@ SRC_MAX32 += \
 	$(PERIPH_SRC)/UART/uart_$(DIE_TYPE).c \
 	$(PERIPH_SRC)/UART/uart_revb.c \
 	$(PERIPH_SRC)/TRNG/trng_revb.c \
-	$(PERIPH_SRC)/TRNG/trng_$(DIE_TYPE).c
+	$(PERIPH_SRC)/TRNG/trng_$(DIE_TYPE).c \
 	$(PERIPH_SRC)/I2C/i2c_$(DIE_TYPE).c \
 	$(PERIPH_SRC)/I2C/i2c_reva.c \
 	$(PERIPH_SRC)/SPI/spi_$(DIE_TYPE).c \

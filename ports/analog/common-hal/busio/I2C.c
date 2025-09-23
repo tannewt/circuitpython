@@ -76,6 +76,16 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
     common_hal_mcu_pin_claim(self->sda);
     common_hal_mcu_pin_claim(self->scl);
 
+    // Clear all flags
+    MXC_I2C_ClearFlags(self->i2c_regs, 0xFFFFFF, 0xFFFFFF);
+
+    // Init as master, no slave address
+    MXC_I2C_Shutdown(self->i2c_regs);
+    MXC_I2C_Init(self->i2c_regs, 1, 0);
+
+    // Set frequency arg (CircuitPython shared-bindings validate)
+    MXC_I2C_SetFrequency(self->i2c_regs, frequency);
+
     // Indicate to this module that the I2C is active
     i2c_active |= (1 << self->i2c_id);
 
@@ -115,6 +125,11 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
 bool common_hal_busio_i2c_probe(busio_i2c_obj_t *self, uint8_t addr) {
     uint32_t int_fl0;
     bool ret = 0;
+
+    // If not in Master mode, error out (can happen in some error conditions)
+    if (!(self->i2c_regs->ctrl & MXC_F_I2C_CTRL_MST_MODE)) {
+        return false;
+    }
 
     // Clear FIFOs & all interrupt flags
     MXC_I2C_ClearRXFIFO(self->i2c_regs);
@@ -175,7 +190,6 @@ void common_hal_busio_i2c_unlock(busio_i2c_obj_t *self) {
 }
 
 // Write data to the device selected by address
-// todo test
 uint8_t common_hal_busio_i2c_write(busio_i2c_obj_t *self, uint16_t addr,
     const uint8_t *data, size_t len) {
 
@@ -221,7 +235,7 @@ uint8_t common_hal_busio_i2c_read(busio_i2c_obj_t *self,
     return 0;
 }
 
-// Write the bytes from out_data to the device selected by address,
+// Write the bytes from out_data to the device selected by address
 uint8_t common_hal_busio_i2c_write_read(busio_i2c_obj_t *self, uint16_t addr,
     uint8_t *out_data, size_t out_len,
     uint8_t *in_data, size_t in_len) {
