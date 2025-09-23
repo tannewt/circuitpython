@@ -25,7 +25,7 @@ intelhex
 # for building & testing natmods
 pyelftools
 
-cryptography
+cryptography<45
 
 # for web workflow minify
 minify_html
