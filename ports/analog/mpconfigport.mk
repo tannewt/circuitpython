@@ -22,8 +22,7 @@ INTERNAL_FLASH_FILESYSTEM = 1
 ####################################################################################
 # These modules are implemented in ports/<port>/common-hal:
 
-# Plan to implement
-CIRCUITPY_BUSIO ?= 0
+CIRCUITPY_BUSIO ?= 1
 CIRCUITPY_RTC ?= 1
 
 # Other modules (may or may not implement):
