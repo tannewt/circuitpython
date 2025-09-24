@@ -143,6 +143,7 @@ msgstr "%q 인덱스 범위를 벗어났습니다"
 msgid "%q indices must be integers, not %s"
 msgstr "%q 인덱스는 %s 가 아닌 정수 여야합니다"
 
+#: ports/analog/common-hal/busio/SPI.c ports/analog/common-hal/busio/UART.c
 #: shared-module/bitbangio/SPI.c
 msgid "%q init failed"
 msgstr "%q 초기화 실패"
@@ -170,6 +171,11 @@ msgstr "%q 길이는 <= %d>여야 합니다"
 #: py/argcheck.c
 msgid "%q length must be >= %d"
 msgstr "%q 길이는 >= %d이어야 합니다"
+
+#: py/runtime.c
+#, fuzzy
+msgid "%q moved from %q to %q"
+msgstr "%q가 %q에서 %q로 이동했습니다"
 
 #: py/argcheck.c
 msgid "%q must be %d"
@@ -256,6 +262,7 @@ msgstr "%q는 2의 거듭제곱이어야 합니다"
 msgid "%q out of bounds"
 msgstr "%q가 경계를 벗어남"
 
+#: ports/analog/common-hal/busio/SPI.c
 #: ports/atmel-samd/common-hal/pulseio/PulseIn.c
 #: ports/cxd56/common-hal/pulseio/PulseIn.c
 #: ports/nordic/common-hal/pulseio/PulseIn.c
@@ -531,7 +538,8 @@ msgstr "모든 RX FIFOs가 사용 중입니다"
 msgid "All SPI peripherals are in use"
 msgstr "사용중인 모든 SPI주변 기기"
 
-#: ports/espressif/common-hal/busio/UART.c ports/nordic/common-hal/busio/UART.c
+#: ports/analog/common-hal/busio/UART.c ports/espressif/common-hal/busio/UART.c
+#: ports/nordic/common-hal/busio/UART.c
 msgid "All UART peripherals are in use"
 msgstr "사용중인 모든 UART주변 기기"
 
@@ -692,6 +700,7 @@ msgstr "비트맵 크기와 값 당 비트가 일치해야 합니다"
 msgid "Boot device must be first (interface #0)."
 msgstr "부팅 장치는 첫 번째(인터페이스 #0)여야 합니다."
 
+#: ports/analog/common-hal/busio/UART.c
 #: ports/mimxrt10xx/common-hal/busio/UART.c
 msgid "Both RX and TX required for flow control"
 msgstr "플로우 제어에 RX와 TX가 모두 필요합니다"
@@ -1041,7 +1050,7 @@ msgstr ""
 "서비스 TXT 레코드를 추가하는 것에 실패했습니다; txt_records에서 비문자열 또"
 "는 바이트가 발견되었습니다"
 
-#: shared-module/rgbmatrix/RGBMatrix.c
+#: ports/analog/common-hal/busio/UART.c shared-module/rgbmatrix/RGBMatrix.c
 msgid "Failed to allocate %q buffer"
 msgstr "%q 버퍼 할당에 실패했습니다"
 
@@ -1098,6 +1107,10 @@ msgstr ""
 #, c-format
 msgid "Failed to release mutex, err 0x%04x"
 msgstr "뮤텍스 해제에 실패했습니다, 오류 0x%04x"
+
+#: ports/analog/common-hal/busio/SPI.c
+msgid "Failed to set SPI Clock Mode"
+msgstr ""
 
 #: ports/zephyr-cp/common-hal/wifi/Radio.c
 msgid "Failed to set hostname"
@@ -1304,6 +1317,10 @@ msgstr "인터럽트 오류."
 msgid "Interrupted by output function"
 msgstr "출력 함수로 인해 종료되었다"
 
+#: ports/analog/common-hal/busio/UART.c
+#: ports/analog/peripherals/max32690/max32_i2c.c
+#: ports/analog/peripherals/max32690/max32_spi.c
+#: ports/analog/peripherals/max32690/max32_uart.c
 #: ports/espressif/common-hal/_bleio/Service.c
 #: ports/espressif/common-hal/espulp/ULP.c
 #: ports/espressif/common-hal/microcontroller/Processor.c
@@ -1396,6 +1413,7 @@ msgstr "잘못된 크기"
 msgid "Invalid socket for TLS"
 msgstr "TLS에 대한 잘못된 소켓"
 
+#: ports/analog/common-hal/busio/SPI.c
 #: ports/espressif/common-hal/espidf/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid state"
@@ -1978,6 +1996,7 @@ msgstr ""
 msgid "ROS topic failed to initialize"
 msgstr ""
 
+#: ports/analog/common-hal/busio/UART.c
 #: ports/atmel-samd/common-hal/busio/UART.c ports/cxd56/common-hal/busio/UART.c
 #: ports/nordic/common-hal/busio/UART.c ports/stm/common-hal/busio/UART.c
 msgid "RS485"
@@ -2068,6 +2087,10 @@ msgstr ""
 
 #: ports/stm/common-hal/busio/SPI.c
 msgid "SPI init error"
+msgstr ""
+
+#: ports/analog/common-hal/busio/SPI.c
+msgid "SPI needs MOSI, MISO, and SCK"
 msgstr ""
 
 #: ports/raspberrypi/common-hal/busio/SPI.c
@@ -2201,6 +2224,10 @@ msgstr ""
 msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
+#: ports/analog/common-hal/busio/UART.c
+msgid "Timeout must be < 100 seconds"
+msgstr ""
+
 #: ports/atmel-samd/common-hal/audiobusio/I2SOut.c
 msgid "Too many channels in sample"
 msgstr ""
@@ -2244,12 +2271,24 @@ msgstr ""
 msgid "UART init"
 msgstr ""
 
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART needs TX & RX"
+msgstr ""
+
 #: ports/raspberrypi/common-hal/busio/UART.c
 msgid "UART peripheral in use"
 msgstr ""
 
 #: ports/stm/common-hal/busio/UART.c
 msgid "UART re-init"
+msgstr ""
+
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART read error"
+msgstr ""
+
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART transaction timeout"
 msgstr ""
 
 #: ports/stm/common-hal/busio/UART.c
@@ -4593,10 +4632,6 @@ msgstr ""
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr ""
-
-#, fuzzy
-#~ msgid "%q moved from %q to %q"
-#~ msgstr "%q가 %q에서 %q로 이동했습니다"
 
 #, c-format
 #~ msgid "%%c requires int or char"

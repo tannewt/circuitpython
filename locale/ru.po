@@ -145,6 +145,7 @@ msgstr "Индекс %q вне диапазона"
 msgid "%q indices must be integers, not %s"
 msgstr "Индексы %q должны быть целыми числами, а не %s"
 
+#: ports/analog/common-hal/busio/SPI.c ports/analog/common-hal/busio/UART.c
 #: shared-module/bitbangio/SPI.c
 msgid "%q init failed"
 msgstr "Инициализация %q не удалась"
@@ -172,6 +173,10 @@ msgstr "Длинна %q должна быть <= %d"
 #: py/argcheck.c
 msgid "%q length must be >= %d"
 msgstr "Длинна %q должна быть >= %d"
+
+#: py/runtime.c
+msgid "%q moved from %q to %q"
+msgstr "%q переместился из %q в %q"
 
 #: py/argcheck.c
 msgid "%q must be %d"
@@ -252,6 +257,7 @@ msgstr "%q должен быть во 2-й степени"
 msgid "%q out of bounds"
 msgstr "%q за пределом"
 
+#: ports/analog/common-hal/busio/SPI.c
 #: ports/atmel-samd/common-hal/pulseio/PulseIn.c
 #: ports/cxd56/common-hal/pulseio/PulseIn.c
 #: ports/nordic/common-hal/pulseio/PulseIn.c
@@ -513,7 +519,8 @@ msgstr "Все RX FIFO уже используются"
 msgid "All SPI peripherals are in use"
 msgstr "Все периферийные устройства SPI уже используются"
 
-#: ports/espressif/common-hal/busio/UART.c ports/nordic/common-hal/busio/UART.c
+#: ports/analog/common-hal/busio/UART.c ports/espressif/common-hal/busio/UART.c
+#: ports/nordic/common-hal/busio/UART.c
 msgid "All UART peripherals are in use"
 msgstr "Все периферийные устройства UART уже используются"
 
@@ -667,6 +674,7 @@ msgstr ""
 msgid "Boot device must be first (interface #0)."
 msgstr "Загрузочное устройство должно быть первым (интерфейс #0)."
 
+#: ports/analog/common-hal/busio/UART.c
 #: ports/mimxrt10xx/common-hal/busio/UART.c
 msgid "Both RX and TX required for flow control"
 msgstr "Для управления потоком требуется как RX так и TX"
@@ -1022,7 +1030,7 @@ msgstr ""
 "Не удалось добавить служебную TXT-запись; в txt_records обнаружена нестрока "
 "или байт"
 
-#: shared-module/rgbmatrix/RGBMatrix.c
+#: ports/analog/common-hal/busio/UART.c shared-module/rgbmatrix/RGBMatrix.c
 msgid "Failed to allocate %q buffer"
 msgstr "Не удалось выделить буфер %q"
 
@@ -1079,6 +1087,10 @@ msgstr ""
 #, c-format
 msgid "Failed to release mutex, err 0x%04x"
 msgstr "Не удалось освободить mutex, ошибка 0x%04x"
+
+#: ports/analog/common-hal/busio/SPI.c
+msgid "Failed to set SPI Clock Mode"
+msgstr ""
 
 #: ports/zephyr-cp/common-hal/wifi/Radio.c
 msgid "Failed to set hostname"
@@ -1292,6 +1304,10 @@ msgstr "Прерванная ошибка."
 msgid "Interrupted by output function"
 msgstr "Прерывается функцией выхода"
 
+#: ports/analog/common-hal/busio/UART.c
+#: ports/analog/peripherals/max32690/max32_i2c.c
+#: ports/analog/peripherals/max32690/max32_spi.c
+#: ports/analog/peripherals/max32690/max32_uart.c
 #: ports/espressif/common-hal/_bleio/Service.c
 #: ports/espressif/common-hal/espulp/ULP.c
 #: ports/espressif/common-hal/microcontroller/Processor.c
@@ -1384,6 +1400,7 @@ msgstr "Неверный размер"
 msgid "Invalid socket for TLS"
 msgstr "Неверный сокет для TLS"
 
+#: ports/analog/common-hal/busio/SPI.c
 #: ports/espressif/common-hal/espidf/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid state"
@@ -1955,6 +1972,7 @@ msgstr ""
 msgid "ROS topic failed to initialize"
 msgstr ""
 
+#: ports/analog/common-hal/busio/UART.c
 #: ports/atmel-samd/common-hal/busio/UART.c ports/cxd56/common-hal/busio/UART.c
 #: ports/nordic/common-hal/busio/UART.c ports/stm/common-hal/busio/UART.c
 msgid "RS485"
@@ -2046,6 +2064,10 @@ msgstr "Сбой конфигурации SPI"
 #: ports/stm/common-hal/busio/SPI.c
 msgid "SPI init error"
 msgstr "Ошибка инициализации SPI"
+
+#: ports/analog/common-hal/busio/SPI.c
+msgid "SPI needs MOSI, MISO, and SCK"
+msgstr ""
 
 #: ports/raspberrypi/common-hal/busio/SPI.c
 msgid "SPI peripheral in use"
@@ -2183,6 +2205,10 @@ msgstr "Время в прошлом."
 msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr "Таймаут слишком длинный: максимальная длина таймаута %d секунд"
 
+#: ports/analog/common-hal/busio/UART.c
+msgid "Timeout must be < 100 seconds"
+msgstr ""
+
 #: ports/atmel-samd/common-hal/audiobusio/I2SOut.c
 msgid "Too many channels in sample"
 msgstr "Слишком много каналов в выборке"
@@ -2226,6 +2252,10 @@ msgstr "Деинициализация UART"
 msgid "UART init"
 msgstr "Инициализация UART"
 
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART needs TX & RX"
+msgstr ""
+
 #: ports/raspberrypi/common-hal/busio/UART.c
 msgid "UART peripheral in use"
 msgstr "Используемое периферийное устройство UART"
@@ -2233,6 +2263,14 @@ msgstr "Используемое периферийное устройство U
 #: ports/stm/common-hal/busio/UART.c
 msgid "UART re-init"
 msgstr "Повторная инициализация UART"
+
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART read error"
+msgstr ""
+
+#: ports/analog/common-hal/busio/UART.c
+msgid "UART transaction timeout"
+msgstr ""
 
 #: ports/stm/common-hal/busio/UART.c
 msgid "UART write"
@@ -4611,9 +4649,6 @@ msgstr "zi должно быть типа float"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "zi должен иметь форму (n_section, 2)"
-
-#~ msgid "%q moved from %q to %q"
-#~ msgstr "%q переместился из %q в %q"
 
 #~ msgid "start/end indices"
 #~ msgstr "Начальные/конечные индексы"
