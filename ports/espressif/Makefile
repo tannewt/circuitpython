@@ -205,7 +205,6 @@ CFLAGS += $(INC) -Werror -Wall -std=gnu11 -Wl,--gc-sections $(BASE_CFLAGS) $(C_D
 # Most current ESPs have nano versions of newlib in ROM so we use them.
 ifneq ($(IDF_TARGET),esp32c6)
 	CFLAGS += --specs=nano.specs
-	LDFLAGS += -T$(IDF_TARGET).rom.newlib-nano.ld
 else
 	LDFLAGS += -T$(IDF_TARGET).rom.newlib-normal.ld
 endif
@@ -264,7 +263,9 @@ else ifeq ($(IDF_TARGET),esp32c2)
 LDFLAGS += \
 	-Tesp32c2.rom.ble.ld \
 	-Tesp32c2.rom.heap.ld \
+	-Tesp32c2.rom.libc.ld \
 	-Tesp32c2.rom.newlib.ld \
+	-Tesp32c2.rom.newlib-nano.ld \
 	-Tesp32c2.rom.version.ld \
 	-Tesp32c2.rom.systimer.ld \
 	-Tesp32c2.rom.wdt.ld
@@ -321,6 +322,7 @@ CHIP_COMPONENTS = \
 
 else ifeq ($(IDF_TARGET),esp32p4)
 LDFLAGS += \
+	-Tesp32p4.rom.libc.ld \
 	-Tesp32p4.rom.newlib.ld \
 	-Tesp32p4.rom.systimer.ld \
 	-Tesp32p4.rom.wdt.ld
@@ -332,6 +334,7 @@ CHIP_COMPONENTS = \
 else ifeq ($(IDF_TARGET),esp32h2)
 LDFLAGS += \
 	-Tesp32h2.rom.heap.ld \
+	-Tesp32h2.rom.libc.ld \
 	-Tesp32h2.rom.newlib.ld \
 	-Tesp32h2.rom.systimer.ld \
 	-Tesp32h2.rom.wdt.ld
@@ -352,6 +355,7 @@ CHIP_COMPONENTS = \
 
 else ifeq ($(IDF_TARGET),esp32s3)
 LDFLAGS += \
+	-Tesp32s3.rom.libc.ld \
 	-Tesp32s3.rom.newlib.ld \
 	-Tesp32s3.rom.version.ld \
 	-Tesp32s3.rom.systimer.ld \
@@ -712,7 +716,7 @@ ifneq ($(NEEDS_COEX),0)
 	ESP_IDF_COMPONENTS_LINK += esp_coex
 endif
 ifneq ($(CIRCUITPY_WIFI),0)
-	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mbedtls mdns wpa_supplicant esp_phy
+	ESP_IDF_COMPONENTS_LINK += esp_netif esp_security esp-tls esp_wifi lwip mbedtls mdns wpa_supplicant esp_phy
 endif
 ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32 := esp32
