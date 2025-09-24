@@ -46,9 +46,6 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
     const mcu_pin_obj_t *scl,
     const mcu_pin_obj_t *sda,
     uint32_t frequency, uint32_t timeout) {
-
-    int temp = 0;
-
     // Check for NULL Pointers && valid I2C settings
     assert(self);
 
@@ -58,12 +55,12 @@ void common_hal_busio_i2c_construct(busio_i2c_obj_t *self,
     */
 
     // Assign I2C ID based on pins
-    temp = pinsToI2c(sda, scl);
-    if (temp == -1) {
+    int i2c_id = pinsToI2c(sda, scl);
+    if (i2c_id == -1) {
         return;
     } else {
-        self->i2c_id = temp;
-        self->i2c_regs = MXC_I2C_GET_I2C(temp);
+        self->i2c_id = i2c_id;
+        self->i2c_regs = MXC_I2C_GET_I2C(i2c_id);
     }
 
     // Check for valid I2C controller

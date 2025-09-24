@@ -56,18 +56,18 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *mosi,
     const mcu_pin_obj_t *miso,
     bool half_duplex) {
-    int temp, err = 0;
+    int err = 0;
 
     // Check for NULL Pointer
     assert(self);
 
     // Assign SPI ID based on pins
-    temp = pinsToSpi(mosi, miso, sck);
-    if (temp == -1) {
+    int spi_id = pinsToSpi(mosi, miso, sck);
+    if (spi_id == -1) {
         return;
     } else {
-        self->spi_id = temp;
-        self->spi_regs = MXC_SPI_GET_SPI(temp);
+        self->spi_id = spi_id;
+        self->spi_regs = MXC_SPI_GET_SPI(spi_id);
     }
 
     // Other pins default to true
