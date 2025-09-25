@@ -513,6 +513,14 @@ void background_callback_run_all(void);
 
 // USB settings
 
+#ifndef CIRCUITPY_SDCARD_USB
+#define CIRCUITPY_SDCARD_USB (1)
+#endif
+
+#if CIRCUITPY_SDCARD_USB && !(CIRCUITPY_SDCARDIO)
+#error CIRCUITPY_SDCARD_USB requires CIRCUITPY_SDCARDIO
+#endif
+
 // Debug level for TinyUSB. Only outputs over debug UART so it doesn't cause
 // additional USB logging.
 #ifndef CIRCUITPY_DEBUG_TINYUSB

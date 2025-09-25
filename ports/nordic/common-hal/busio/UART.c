@@ -122,7 +122,7 @@ void uart_reset(void) {
 
 void common_hal_busio_uart_never_reset(busio_uart_obj_t *self) {
     // Don't never reset objects on the heap.
-    if (gc_alloc_possible() && gc_nbytes(self) > 0) {
+    if (gc_alloc_possible() && gc_ptr_on_heap(self)) {
         return;
     }
     for (size_t i = 0; i < MP_ARRAY_SIZE(nrfx_uartes); i++) {
@@ -346,7 +346,7 @@ size_t common_hal_busio_uart_write(busio_uart_obj_t *self, const uint8_t *data, 
         RUN_BACKGROUND_TASKS;
     }
 
-    if (!nrfx_is_in_ram(data) && gc_alloc_possible() && gc_nbytes(tx_buf) > 0) {
+    if (!nrfx_is_in_ram(data) && gc_alloc_possible() && gc_ptr_on_heap(tx_buf)) {
         gc_free(tx_buf);
     }
 
