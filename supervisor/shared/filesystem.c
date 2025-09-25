@@ -148,8 +148,7 @@ bool filesystem_init(bool create_allowed, bool force_create) {
         res = f_mkdir(&circuitpy->fatfs, "/sd");
         #if CIRCUITPY_FULL_BUILD
         MAKE_FILE_WITH_OPTIONAL_CONTENTS(&circuitpy->fatfs, "/sd/placeholder.txt",
-            "SD cards mounted at /sd will hide this file from Python."
-            " SD cards are not visible via USB CIRCUITPY.\n");
+            "SD cards mounted at /sd will hide this file from Python.\n");
         #endif
         #endif
 

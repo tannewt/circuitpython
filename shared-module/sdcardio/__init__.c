@@ -123,5 +123,5 @@ void automount_sd_card(void) {
     sdcard_vfs->next = MP_STATE_VM(vfs_mount_table);
     MP_STATE_VM(vfs_mount_table) = sdcard_vfs;
     _mounted = true;
-    #endif
+    #endif // DEFAULT_SD_CARD_DETECT
 }
