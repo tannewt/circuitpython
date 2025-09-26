@@ -120,7 +120,7 @@ void common_hal_bleio_characteristic_deinit(bleio_characteristic_obj_t *self) {
         return;
     }
     if (self->current_value != NULL) {
-        if (gc_nbytes(self->current_value) > 0) {
+        if (gc_ptr_on_heap(self->current_value)) {
             m_free(self->current_value);
         } else {
             port_free(self->current_value);

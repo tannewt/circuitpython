@@ -44,6 +44,12 @@ A few boards have SD card automounting. (This is based on the ``DEFAULT_SD`` set
 ``mpconfigboard.h``.) The card is writable from CircuitPython by default and read-only to the host.
 `storage.remount()` can be used to remount the drive to the host as read-write.
 
+On most other boards, except for ``atmel-samd`` boards, an SD card mounted in user code
+at ``/sd`` will become visible after a few seconds on the attached host computer, as an
+additional drive besides CIRCUITPY and (if present) CPSAVES. It will present with the volume
+label on the SD card. Depending on the host operating system settings, the drive may or may not be
+auto-mounted on the host. Host writes to drives mounted by user code will not trigger a reload.
+
 ### CDC serial
 CircuitPython exposes one CDC USB interface for CircuitPython serial. This is a standard serial
 USB interface.

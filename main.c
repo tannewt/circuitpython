@@ -214,7 +214,7 @@ static void stop_mp(void) {
     mp_vfs_mount_t *vfs = MP_STATE_VM(vfs_mount_table);
 
     // Unmount all heap allocated vfs mounts.
-    while (gc_nbytes(vfs) > 0) {
+    while (gc_ptr_on_heap(vfs)) {
         vfs = vfs->next;
     }
     MP_STATE_VM(vfs_mount_table) = vfs;

@@ -87,7 +87,7 @@ void *gc_realloc(void *ptr, size_t n_bytes, bool allow_move);
 // CIRCUITPY-CHANGE
 // True if the pointer is on the MP heap. Doesn't require that it is the start
 // of a block.
-bool gc_ptr_on_heap(void *ptr);
+bool gc_ptr_on_heap(const void *ptr);
 
 typedef struct _gc_info_t {
     size_t total;
