@@ -9,6 +9,11 @@
 #
 # end of LWIP
 
+#
+# Wireless Coexistence
+#
+# CONFIG_ESP_COEX_SW_COEXIST_ENABLE is not set
+# end of Wireless Coexistence
 # end of Component config
 
 # end of Espressif IoT Development Framework Configuration
