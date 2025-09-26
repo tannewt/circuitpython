@@ -514,7 +514,11 @@ void background_callback_run_all(void);
 // USB settings
 
 #ifndef CIRCUITPY_SDCARD_USB
-#define CIRCUITPY_SDCARD_USB (1)
+#if CIRCUITPY_USB_DEVICE
+#define CIRCUITPY_SDCARD_USB (CIRCUITPY_SDCARDIO && CIRCUITPY_USB_MSC)
+#else
+#define CIRCUITPY_SDCARD_USB (0)
+#endif
 #endif
 
 #if CIRCUITPY_SDCARD_USB && !(CIRCUITPY_SDCARDIO)
