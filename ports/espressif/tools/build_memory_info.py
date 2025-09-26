@@ -65,7 +65,7 @@ internal_memory = {
         # Name, Start, Length
         ("LP SRAM", (0x5000_0000,), 16 * 1024),
         ("HP SRAM", (0x4080_0000,), 320 * 1024),
-        ("PSRAM",  (0x4200_0000,), 2 * 1024 * 1024),
+        ("PSRAM", (0x4200_0000,), 2 * 1024 * 1024),
     ],
     "esp32h2": [
         # Name, Start, Length

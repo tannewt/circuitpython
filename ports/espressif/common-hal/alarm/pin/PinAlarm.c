@@ -384,8 +384,12 @@ void alarm_pin_pinalarm_set_alarms(bool deep_sleep, size_t n_alarms, const mp_ob
             ESP_ERROR_CHECK(gpio_set_pull_mode(pin, GPIO_FLOATING));
         }
         gpio_int_type_t intr = GPIO_INTR_DISABLE;
-        if (high) intr = GPIO_INTR_HIGH_LEVEL;
-        if (low) intr = GPIO_INTR_LOW_LEVEL;
+        if (high) {
+            intr = GPIO_INTR_HIGH_LEVEL;
+        }
+        if (low) {
+            intr = GPIO_INTR_LOW_LEVEL;
+        }
         never_reset_pin_number(pin);
         gpio_wakeup_enable(pin, intr);
         gpio_set_intr_type(pin, intr);
