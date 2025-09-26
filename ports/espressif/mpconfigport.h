@@ -17,11 +17,6 @@
 
 #define CIRCUITPY_DIGITALIO_HAVE_INPUT_ONLY (1)
 
-// // Present SD card as USB MSC device by default
-// #ifndef CIRCUITPY_SDCARD_USB
-// #define CIRCUITPY_SDCARD_USB (1)
-// #endif
-
 #include "py/circuitpy_mpconfig.h"
 
 #define MICROPY_NLR_SETJMP                  (1)
