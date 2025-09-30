@@ -211,14 +211,22 @@ static void start_mp(safe_mode_t safe_mode) {
 
 static void stop_mp(void) {
     #if MICROPY_VFS
-    mp_vfs_mount_t *vfs = MP_STATE_VM(vfs_mount_table);
 
     // Unmount all heap allocated vfs mounts.
-    while (gc_ptr_on_heap(vfs)) {
+    mp_vfs_mount_t *vfs = MP_STATE_VM(vfs_mount_table);
+    do {
+        if (gc_ptr_on_heap(vfs)) {
+            // mp_vfs_umount will splice out an unmounted vfs from the vfs_mount_table linked list.
+            mp_vfs_umount(vfs->obj);
+            // Start over at the beginning of the list since the first entry may have been removed.
+            vfs = MP_STATE_VM(vfs_mount_table);
+            continue;
+        }
         vfs = vfs->next;
-    }
-    MP_STATE_VM(vfs_mount_table) = vfs;
+    } while (vfs != NULL);
+
     // The last vfs is CIRCUITPY and the root directory.
+    vfs = MP_STATE_VM(vfs_mount_table);
     while (vfs->next != NULL) {
         vfs = vfs->next;
     }

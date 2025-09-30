@@ -247,13 +247,13 @@ void filesystem_set_writable_by_usb(fs_user_mount_t *vfs, bool usb_writable) {
 }
 
 bool filesystem_is_writable_by_python(fs_user_mount_t *vfs) {
-    return (vfs->blockdev.flags & MP_BLOCKDEV_FLAG_CONCURRENT_WRITE_PROTECTED) == 0 ||
-           (vfs->blockdev.flags & MP_BLOCKDEV_FLAG_USB_WRITABLE) == 0;
+    return ((vfs->blockdev.flags & MP_BLOCKDEV_FLAG_CONCURRENT_WRITE_PROTECTED) == 0) ||
+           ((vfs->blockdev.flags & MP_BLOCKDEV_FLAG_USB_WRITABLE) == 0);
 }
 
 bool filesystem_is_writable_by_usb(fs_user_mount_t *vfs) {
-    return (vfs->blockdev.flags & MP_BLOCKDEV_FLAG_CONCURRENT_WRITE_PROTECTED) == 0 ||
-           (vfs->blockdev.flags & MP_BLOCKDEV_FLAG_USB_WRITABLE) != 0;
+    return ((vfs->blockdev.flags & MP_BLOCKDEV_FLAG_CONCURRENT_WRITE_PROTECTED) == 0) ||
+           ((vfs->blockdev.flags & MP_BLOCKDEV_FLAG_USB_WRITABLE) != 0);
 }
 
 void filesystem_set_internal_concurrent_write_protection(bool concurrent_write_protection) {
