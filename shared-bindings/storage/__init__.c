@@ -60,18 +60,6 @@ static mp_obj_t storage_mount(size_t n_args, const mp_obj_t *pos_args, mp_map_t 
     // Currently, the only supported filesystem is VfsFat.
     mp_arg_validate_type(vfs_obj, &mp_fat_vfs_type, MP_QSTR_filesystem);
 
-    // Add this back if/when we start supporting other filesystems.
-    #if 0
-    // Make sure we're given an object we can mount.
-    // TODO(tannewt): Make sure we have all the methods we need to operating it
-    // as a file system.
-    mp_obj_t dest[2];
-    mp_load_method_maybe(vfs_obj, MP_QSTR_mount, dest);
-    if (dest[0] == MP_OBJ_NULL) {
-        mp_raise_ValueError(MP_ERROR_TEXT("filesystem must provide mount method"));
-    }
-    #endif
-
     common_hal_storage_mount(vfs_obj, mnt_str, args[ARG_readonly].u_bool);
 
     return mp_const_none;
