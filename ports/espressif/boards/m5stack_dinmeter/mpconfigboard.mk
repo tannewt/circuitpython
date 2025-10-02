@@ -1,7 +1,7 @@
 USB_VID = 0x303A
 USB_PID = 0x81DD
 
-USB_PRODUCT = "M5stack - DinMeter"
+USB_PRODUCT = "DinMeter"
 USB_MANUFACTURER = "M5Stack"
 
 IDF_TARGET = esp32s3
