@@ -1,6 +1,6 @@
 USB_VID = 0x04D8
 USB_PID = 0xE52B
-USB_PRODUCT = "Microchip Curiosity CircuitPython Nano"
+USB_PRODUCT = "Microchip Curiosity CircuitPython"
 USB_MANUFACTURER = "Microchip Technology Inc"
 
 CHIP_VARIANT = SAME51J20A

@@ -1,7 +1,7 @@
 
 #pragma once
 
-#define MICROPY_HW_BOARD_NAME "Microchip Curiosity CircuitPython Nano"
+#define MICROPY_HW_BOARD_NAME "Microchip Curiosity CircuitPython"
 #define MICROPY_HW_MCU_NAME "same51j20"
 #define CIRCUITPY_MCU_FAMILY samd51
 
