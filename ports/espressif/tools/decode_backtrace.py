@@ -24,7 +24,7 @@ while True:
         addresses = addresses[len("Backtrace:") :]
         addresses = addresses.strip().split()
         addresses = [address.split(":")[0] for address in addresses]
-    if addresses.startswith("Stack memory:"):
+    elif addresses.startswith("Stack memory:"):
         addresses = []
         extra_lines = sys.stdin.readlines()
         for line in extra_lines:
