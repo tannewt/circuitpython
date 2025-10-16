@@ -14,7 +14,9 @@ print(board)
 
 elfs = [
     f"build-{board}/firmware.elf",
-    "/home/tannewt/Downloads/esp-rom-elfs-20241011/esp32c6_rev0_rom.elf",
+    # Add additional ELF files here such as the ROM ELF files from:
+    # https://github.com/espressif/esp-rom-elfs/releases
+    # "/home/tannewt/Downloads/esp-rom-elfs-20241011/esp32c6_rev0_rom.elf",
 ]
 
 while True:
