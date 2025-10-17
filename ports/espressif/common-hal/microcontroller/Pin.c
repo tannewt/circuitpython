@@ -77,6 +77,15 @@ static uint64_t _in_use_pin_mask;
 #define GPIO_SEL_47             ((uint64_t)PIN_BIT(47))     /*!< Pin 47 selected */
 #define GPIO_SEL_48             ((uint64_t)PIN_BIT(48))     /*!< Pin 48 selected */
 #endif
+#if SOC_GPIO_PIN_COUNT > 49
+#define GPIO_SEL_49             ((uint64_t)PIN_BIT(49))     /*!< Pin 49 selected */
+#define GPIO_SEL_50             ((uint64_t)PIN_BIT(50))     /*!< Pin 50 selected */
+#define GPIO_SEL_51             ((uint64_t)PIN_BIT(51))     /*!< Pin 51 selected */
+#define GPIO_SEL_52             ((uint64_t)PIN_BIT(52))     /*!< Pin 52 selected */
+#define GPIO_SEL_53             ((uint64_t)PIN_BIT(53))     /*!< Pin 53 selected */
+#define GPIO_SEL_54             ((uint64_t)PIN_BIT(54))     /*!< Pin 54 selected */
+#define GPIO_SEL_55             ((uint64_t)PIN_BIT(55))     /*!< Pin 55 selected */
+#endif
 
 // Bit mask of all pins that should never EVER be reset.
 // Typically these are SPI flash and PSRAM control pins, and communication pins.
@@ -202,10 +211,10 @@ static const uint64_t pin_mask_reset_forbidden =
     GPIO_SEL_32 |
     GPIO_SEL_33 |
     GPIO_SEL_34 |
-    #if CIRCUITPY_ESP_USB_SERIAL_JTAG
+    #if CIRCUITPY_ESP_USB_SERIAL_JTAG || (defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG) && CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
     // Never ever reset serial/JTAG communication pins.
-    GPIO_SEL_50 |         // USB D-
-    GPIO_SEL_51 |         // USB D+
+    GPIO_SEL_24 |         // USB D-
+    GPIO_SEL_25 |         // USB D+
     #endif
     #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) && CONFIG_ESP_CONSOLE_UART_DEFAULT && CONFIG_ESP_CONSOLE_UART_NUM == 0
     // Never reset debug UART/console pins.

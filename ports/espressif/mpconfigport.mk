@@ -312,6 +312,9 @@ CIRCUITPY_PARALLELDISPLAYBUS = 0
 # Library doesn't support P4 yet it seems
 CIRCUITPY_ESPCAMERA = 0
 
+# P4 has MIPI-DSI
+CIRCUITPY_MIPIDSI = 1
+
 #### esp32s2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32s2)
 # Modules

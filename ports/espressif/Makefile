@@ -76,6 +76,7 @@ INC += \
 	-isystem esp-idf/components/esp_driver_uart/include \
 	-isystem esp-idf/components/esp_event/include \
 	-isystem esp-idf/components/esp_hw_support/dma/include \
+	-isystem esp-idf/components/esp_hw_support/ldo/include \
 	-isystem esp-idf/components/esp_hw_support/include \
 	-isystem esp-idf/components/esp_hw_support/include/soc \
 	-isystem esp-idf/components/esp_hw_support/port/$(IDF_TARGET)/private_include \
@@ -171,7 +172,8 @@ REGISTRATION_FUNCTIONS = \
 	-u esp_libc_init_funcs \
 	-u include_esp_phy_override \
 	-u vfs_include_syscalls_impl \
-	-u esp_vfs_include_nullfs_register
+	-u esp_vfs_include_nullfs_register \
+	-u usb_serial_jtag_vfs_include_dev_init
 
 
 #Debugging/Optimization
@@ -329,7 +331,8 @@ LDFLAGS += \
 
 
 CHIP_COMPONENTS = \
-	esp_driver_tsens
+	esp_driver_tsens \
+	esp_driver_usb_serial_jtag
 
 else ifeq ($(IDF_TARGET),esp32h2)
 LDFLAGS += \
@@ -465,6 +468,13 @@ CFLAGS += \
 	-isystem esp-idf/components/esp_lcd/include \
 	-isystem esp-idf/components/esp_lcd/interface \
 	-isystem esp-idf/components/esp_lcd/rgb/include
+endif
+
+ifneq ($(CIRCUITPY_MIPIDSI),0)
+CFLAGS += \
+	-isystem esp-idf/components/esp_lcd/include \
+	-isystem esp-idf/components/esp_lcd/interface \
+	-isystem esp-idf/components/esp_lcd/dsi/include
 endif
 
 ifneq ($(CIRCUITPY_ESPCAMERA),0)
@@ -755,6 +765,9 @@ ifneq ($(CIRCUITPY_ESP_PSRAM_SIZE),0)
 	ESP_IDF_COMPONENTS_LINK += esp_psram
 endif
 ifneq ($(CIRCUITPY_DOTCLOCKFRAMEBUFFER),0)
+	ESP_IDF_COMPONENTS_LINK += esp_lcd
+endif
+ifneq ($(CIRCUITPY_MIPIDSI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_lcd
 endif
 ifneq ($(CIRCUITPY_PARALLELDISPLAYBUS),0)
