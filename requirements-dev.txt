@@ -25,6 +25,7 @@ intelhex
 # for building & testing natmods
 pyelftools
 
+# newer versions break ESP-IDF now
 cryptography<45
 
 # for web workflow minify
