@@ -44,7 +44,7 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LCD_CS), MP_ROM_PTR(&pin_PA07) },
     { MP_ROM_QSTR(MP_QSTR_LCD_MOSI), MP_ROM_PTR(&pin_PA04) },
     { MP_ROM_QSTR(MP_QSTR_LCD_SCK), MP_ROM_PTR(&pin_PA05) },
-    { MP_ROM_QSTR(MP_QSTR_LCD_LEDA), MP_ROM_PTR(&pin_PA06) },
+    { MP_ROM_QSTR(MP_QSTR_LCD_BL), MP_ROM_PTR(&pin_PA06) },
 
     { MP_ROM_QSTR(MP_QSTR_SCL), MP_ROM_PTR(&pin_PB30) },
     { MP_ROM_QSTR(MP_QSTR_SDA), MP_ROM_PTR(&pin_PB31) },
@@ -78,7 +78,7 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_RX),  MP_ROM_PTR(&pin_PB13) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_TX),  MP_ROM_PTR(&pin_PB12) },
 
-    { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_STANDBY),  MP_ROM_PTR(&pin_PB17) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_CAN_STDBY),  MP_ROM_PTR(&pin_PB17) },
     { MP_ROM_QSTR(MP_QSTR_D7), MP_ROM_PTR(&pin_PB17) },
 
     { MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&board_i2c_obj) },
