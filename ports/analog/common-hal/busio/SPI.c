@@ -61,6 +61,9 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     // Check for NULL Pointer
     assert(self);
 
+    // Ensure the object starts in its deinit state.
+    common_hal_busio_spi_mark_deinit(self);
+
     // Assign SPI ID based on pins
     int spi_id = pinsToSpi(mosi, miso, sck);
     if (spi_id == -1) {
@@ -127,6 +130,10 @@ bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
     return self->sck == NULL;
 }
 
+void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
+    self->sck = NULL;
+}
+
 // Deinit SPI obj
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
 
@@ -138,8 +145,9 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
 
     self->mosi = NULL;
     self->miso = NULL;
-    self->sck = NULL;
     self->nss = NULL;
+
+    common_hal_busio_spi_mark_deinit(self);
 }
 
 // Configures the SPI bus. The SPI object must be locked.

@@ -39,15 +39,6 @@ static SPIDRV_Init_t spidrv_eusart_init = SPIDRV_MASTER_EUSART1;
 static bool in_used = false;
 static bool never_reset = false;
 
-// Reset SPI when reload
-void spi_reset(void) {
-    if (!never_reset && in_used) {
-        SPIDRV_DeInit(&spidrv_eusart_handle);
-        in_used = false;
-    }
-    return;
-}
-
 // Construct SPI protocol, this function init SPI peripheral
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *sck,
@@ -60,6 +51,9 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
         mp_raise_NotImplementedError(
             MP_ERROR_TEXT("Half duplex SPI is not implemented"));
     }
+
+    // Ensure the object starts in its deinit state.
+    common_hal_busio_spi_mark_deinit(self);
 
     if ((sck != NULL) && (mosi != NULL) && (miso != NULL)) {
         if (sck->function_list[FN_EUSART1_SCLK] == 1
@@ -119,6 +113,10 @@ bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
     return self->sck == NULL;
 }
 
+void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
+    self->sck = NULL;
+}
+
 // Deinit SPI obj
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
 
@@ -132,13 +130,14 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     }
 
     in_used = false;
-    self->sck = NULL;
     self->mosi = NULL;
     self->miso = NULL;
     self->handle = NULL;
     common_hal_reset_pin(self->mosi);
     common_hal_reset_pin(self->miso);
     common_hal_reset_pin(self->sck);
+
+    common_hal_busio_spi_mark_deinit(self);
 }
 
 // Configures the SPI bus. The SPI object must be locked.

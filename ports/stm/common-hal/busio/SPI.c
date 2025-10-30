@@ -76,18 +76,6 @@ static uint32_t stm32_baud_to_spi_div(uint32_t baudrate, uint16_t *prescaler, ui
     return SPI_BAUDRATEPRESCALER_256;
 }
 
-void spi_reset(void) {
-    uint16_t never_reset_mask = 0x00;
-    for (int i = 0; i < MAX_SPI; i++) {
-        if (!never_reset_spi[i]) {
-            reserved_spi[i] = false;
-        } else {
-            never_reset_mask |= 1 << i;
-        }
-    }
-    spi_clock_disable(ALL_CLOCKS & ~(never_reset_mask));
-}
-
 static const mcu_periph_obj_t *find_pin_function(const mcu_periph_obj_t *table, size_t sz, const mcu_pin_obj_t *pin, int periph_index) {
     for (size_t i = 0; i < sz; i++, table++) {
         if (periph_index == table->periph_index && pin == table->pin) {
@@ -151,6 +139,9 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 
     int periph_index = check_pins(self, sck, mosi, miso);
     SPI_TypeDef *SPIx = mcu_spi_banks[periph_index - 1];
+
+    // Ensure the object starts in its deinit state.
+    common_hal_busio_spi_mark_deinit(self);
 
     // Start GPIO for each pin
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -236,6 +227,10 @@ void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
 
 bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
     return self->sck == NULL;
+}
+
+void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
+    self->sck = NULL;
 }
 
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {

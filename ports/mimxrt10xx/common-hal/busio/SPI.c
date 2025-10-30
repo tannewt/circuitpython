@@ -53,22 +53,6 @@ static void config_periph_pin(const mcu_periph_obj_t *periph) {
         | IOMUXC_SW_PAD_CTL_PAD_SRE(0));
 }
 
-void spi_reset(void) {
-    for (uint i = 0; i < MP_ARRAY_SIZE(mcu_spi_banks); i++) {
-        if (!never_reset_spi[i]) {
-            reserved_spi[i] = false;
-            #if IMXRT11XX
-            // Skip resetting SPIs that aren't clocked. Doing so generates a bus fault.
-            if ((CCM->LPCG[s_lpspiClocks[i + 1]].STATUS0 & CCM_LPCG_STATUS0_ON_MASK) == ((uint32_t)kCLOCK_Off & CCM_LPCG_STATUS0_ON_MASK)) {
-                continue;
-            }
-            #endif
-
-            LPSPI_Deinit(mcu_spi_banks[i]);
-        }
-    }
-}
-
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *clock, const mcu_pin_obj_t *mosi,
     const mcu_pin_obj_t *miso, bool half_duplex) {
@@ -81,6 +65,9 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     if (half_duplex) {
         mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("%q"), MP_QSTR_half_duplex);
     }
+
+    // Ensure the object starts in its deinit state.
+    common_hal_busio_spi_mark_deinit(self);
 
     for (uint i = 0; i < sck_count; i++) {
         if (mcu_spi_sck_list[i].pin != clock) {
@@ -214,6 +201,10 @@ bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
     return self->clock == NULL;
 }
 
+void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
+    self->clock = NULL;
+}
+
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
@@ -226,9 +217,10 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     common_hal_reset_pin(self->mosi->pin);
     common_hal_reset_pin(self->miso->pin);
 
-    self->clock = NULL;
     self->mosi = NULL;
     self->miso = NULL;
+
+    common_hal_busio_spi_mark_deinit(self);
 }
 
 bool common_hal_busio_spi_configure(busio_spi_obj_t *self,

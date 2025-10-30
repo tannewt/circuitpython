@@ -13,6 +13,7 @@
 #include "py/runtime.h"
 #include "shared-bindings/board/__init__.h"
 #include "shared-bindings/busio/I2C.h"
+#include "shared-bindings/busio/SPI.h"
 #include "shared-bindings/displayio/Bitmap.h"
 #include "shared-bindings/displayio/Group.h"
 #include "shared-bindings/displayio/Palette.h"
@@ -221,6 +222,7 @@ void reset_displays(void) {
                 #endif
                 memcpy(&fourwire->inline_bus, original_spi, sizeof(busio_spi_obj_t));
                 fourwire->bus = &fourwire->inline_bus;
+
                 // Check for other display buses that use the same spi bus and swap them too.
                 for (uint8_t j = i + 1; j < CIRCUITPY_DISPLAY_LIMIT; j++) {
                     if (display_buses[j].fourwire_bus.base.type == &fourwire_fourwire_type &&
@@ -228,6 +230,8 @@ void reset_displays(void) {
                         display_buses[j].fourwire_bus.bus = &fourwire->inline_bus;
                     }
                 }
+                // Mark the old SPI object so it is considered deinit.
+                common_hal_busio_spi_mark_deinit(original_spi);
             }
         #endif
         #if CIRCUITPY_I2CDISPLAYBUS
