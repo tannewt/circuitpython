@@ -19,8 +19,6 @@
 
 #define NO_INSTANCE 0xff
 
-static bool never_reset_spi[2];
-
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *clock, const mcu_pin_obj_t *mosi,
     const mcu_pin_obj_t *miso, bool half_duplex) {
@@ -88,8 +86,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 }
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    never_reset_spi[spi_get_index(self->peripheral)] = true;
-
     common_hal_never_reset_pin(self->clock);
     common_hal_never_reset_pin(self->MOSI);
     common_hal_never_reset_pin(self->MISO);
@@ -107,7 +103,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
     }
-    never_reset_spi[spi_get_index(self->peripheral)] = false;
     spi_deinit(self->peripheral);
 
     common_hal_reset_pin(self->clock);

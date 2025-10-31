@@ -42,7 +42,6 @@
 typedef enum {
     SPI_FREE = 0,
     SPI_BUSY,
-    SPI_NEVER_RESET,
 } spi_status_t;
 
 // Set each bit to indicate an active SPI
@@ -121,8 +120,6 @@ void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
     common_hal_never_reset_pin(self->miso);
     common_hal_never_reset_pin(self->sck);
     common_hal_never_reset_pin(self->nss);
-
-    spi_status[self->spi_id] = SPI_NEVER_RESET;
 }
 
 // Check SPI status, deinited or not

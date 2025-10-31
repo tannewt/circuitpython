@@ -19,7 +19,6 @@
 #define MAX_SPI 6
 
 static bool reserved_spi[MAX_SPI];
-static bool never_reset_spi[MAX_SPI];
 
 #define ALL_CLOCKS 0xFF
 static void spi_clock_enable(uint8_t mask);
@@ -215,7 +214,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
 
-    never_reset_spi[self->sck->periph_index - 1] = true;
     never_reset_pin_number(self->sck->pin->port, self->sck->pin->number);
     if (self->mosi != NULL) {
         never_reset_pin_number(self->mosi->pin->port, self->mosi->pin->number);
@@ -239,7 +237,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     }
     spi_clock_disable(1 << (self->sck->periph_index - 1));
     reserved_spi[self->sck->periph_index - 1] = false;
-    never_reset_spi[self->sck->periph_index - 1] = false;
 
     reset_pin_number(self->sck->pin->port, self->sck->pin->number);
     if (self->mosi != NULL) {

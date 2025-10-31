@@ -414,7 +414,7 @@ void reset_to_bootloader(void) {
 }
 
 void reset_cpu(void) {
-    #if CIRCUITPY_DEBUG || 1
+    #if CIRCUITPY_DEBUG
     esp_backtrace_print(100);
     #endif
     esp_restart();

@@ -30,7 +30,6 @@ static SPI0_Type *spi[NUM_SPI] = {SPI0, NULL, NULL};
 static SPI1_Type *aux_spi[NUM_SPI] = {NULL, SPI1, SPI2};
 #endif
 
-static bool never_reset_spi[NUM_SPI];
 static bool spi_in_use[NUM_SPI];
 
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
@@ -99,8 +98,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 }
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    never_reset_spi[self->index] = true;
-
     common_hal_never_reset_pin(self->clock);
     common_hal_never_reset_pin(self->MOSI);
     common_hal_never_reset_pin(self->MISO);
@@ -118,7 +115,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
     }
-    never_reset_spi[self->index] = false;
 
     common_hal_reset_pin(self->clock);
     common_hal_reset_pin(self->MOSI);

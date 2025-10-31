@@ -26,7 +26,6 @@
 
 // arrays use 0 based numbering: SPI1 is stored at index 0
 static bool reserved_spi[MP_ARRAY_SIZE(mcu_spi_banks)];
-static bool never_reset_spi[MP_ARRAY_SIZE(mcu_spi_banks)];
 
 #if IMXRT11XX
 static const clock_ip_name_t s_lpspiClocks[] = LPSPI_CLOCKS;
@@ -187,7 +186,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 }
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    never_reset_spi[self->clock->bank_idx - 1] = true;
     common_hal_never_reset_pin(self->clock->pin);
     if (self->mosi != NULL) {
         common_hal_never_reset_pin(self->mosi->pin);
@@ -211,7 +209,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     }
     LPSPI_Deinit(self->spi);
     reserved_spi[self->clock->bank_idx - 1] = false;
-    never_reset_spi[self->clock->bank_idx - 1] = false;
 
     common_hal_reset_pin(self->clock->pin);
     common_hal_reset_pin(self->mosi->pin);

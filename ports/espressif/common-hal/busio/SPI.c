@@ -16,7 +16,6 @@
 #define SPI_MAX_DMA_BITS (SPI_MAX_DMA_LEN * 8)
 #define MAX_SPI_TRANSACTIONS 10
 
-static bool spi_never_reset[SOC_SPI_PERIPH_NUM];
 static spi_device_handle_t spi_handle[SOC_SPI_PERIPH_NUM];
 
 static bool spi_bus_is_free(spi_host_device_t host_id) {
@@ -107,7 +106,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 }
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    spi_never_reset[self->host_id] = true;
     common_hal_never_reset_pin(self->clock);
     if (self->MOSI != NULL) {
         common_hal_never_reset_pin(self->MOSI);
@@ -139,7 +137,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     common_hal_reset_pin(self->clock);
     common_hal_busio_spi_mark_deinit(self);
 
-    spi_never_reset[self->host_id] = false;
     spi_bus_remove_device(spi_handle[self->host_id]);
     spi_bus_free(self->host_id);
 

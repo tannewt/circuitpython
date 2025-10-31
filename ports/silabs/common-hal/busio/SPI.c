@@ -37,7 +37,6 @@
 static SPIDRV_HandleData_t spidrv_eusart_handle;
 static SPIDRV_Init_t spidrv_eusart_init = SPIDRV_MASTER_EUSART1;
 static bool in_used = false;
-static bool never_reset = false;
 
 // Construct SPI protocol, this function init SPI peripheral
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
@@ -102,7 +101,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 
 // Never reset SPI when reload
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    never_reset = true;
     common_hal_never_reset_pin(self->mosi);
     common_hal_never_reset_pin(self->miso);
     common_hal_never_reset_pin(self->sck);
