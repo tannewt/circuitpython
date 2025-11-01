@@ -356,14 +356,11 @@ void reset_port(void) {
     ssl_reset();
     #endif
 
-    reset_all_pins();
-
     #if CIRCUITPY_ANALOGIO
     analogout_reset();
     #endif
 
     #if CIRCUITPY_BUSIO
-    spi_reset();
     uart_reset();
     #endif
 
