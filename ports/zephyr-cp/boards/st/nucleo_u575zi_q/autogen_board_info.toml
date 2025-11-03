@@ -66,6 +66,7 @@ mdns = false
 memorymap = false
 memorymonitor = false
 microcontroller = true
+mipidsi = false
 msgpack = false
 neopixel_write = false
 nvm = false
