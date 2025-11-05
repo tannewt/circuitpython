@@ -41,6 +41,10 @@
 #include "shared-module/aurora_epaper/aurora_framebuffer.h"
 #endif
 
+#if CIRCUITPY_MIPIDSI
+#include "shared-bindings/mipidsi/Display.h"
+#endif
+
 #ifdef BOARD_USE_INTERNAL_SPI
 #include "supervisor/spi_flash_api.h"
 #endif
@@ -64,7 +68,7 @@ displayio_buffer_transform_t null_transform = {
     .transpose_xy = false
 };
 
-#if CIRCUITPY_RGBMATRIX || CIRCUITPY_IS31FL3741 || CIRCUITPY_VIDEOCORE || CIRCUITPY_PICODVI
+#if CIRCUITPY_RGBMATRIX || CIRCUITPY_IS31FL3741 || CIRCUITPY_VIDEOCORE || CIRCUITPY_PICODVI || CIRCUITPY_MIPIDSI
 static bool any_display_uses_this_framebuffer(mp_obj_base_t *obj) {
     for (uint8_t i = 0; i < CIRCUITPY_DISPLAY_LIMIT; i++) {
         if (displays[i].display_base.type == &framebufferio_framebufferdisplay_type) {
@@ -179,6 +183,10 @@ static void common_hal_displayio_release_displays_impl(bool keep_primary) {
         #if CIRCUITPY_PICODVI
         } else if (bus_type == &picodvi_framebuffer_type) {
             common_hal_picodvi_framebuffer_deinit(&display_buses[i].picodvi);
+        #endif
+        #if CIRCUITPY_MIPIDSI
+        } else if (bus_type == &mipidsi_display_type) {
+            common_hal_mipidsi_display_deinit(&display_buses[i].mipidsi);
         #endif
         }
         display_buses[i].bus_base.type = &mp_type_NoneType;
@@ -332,6 +340,13 @@ void reset_displays(void) {
             #endif
             // Set to None, gets deinit'd up by display_base
             display_buses[i].bus_base.type = &mp_type_NoneType;
+        #endif
+        #if CIRCUITPY_MIPIDSI
+        } else if (display_bus_type == &mipidsi_display_type) {
+            mipidsi_display_obj_t *display = &display_buses[i].mipidsi;
+            if (!any_display_uses_this_framebuffer(&display->base)) {
+                common_hal_mipidsi_display_deinit(display);
+            }
         #endif
         } else {
             // Not an active display bus.
