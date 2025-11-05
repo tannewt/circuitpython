@@ -170,10 +170,6 @@ msgstr "Délka %q musí být <= %d"
 msgid "%q length must be >= %d"
 msgstr "Délka %q musí být >= %d"
 
-#: py/runtime.c
-msgid "%q moved from %q to %q"
-msgstr ""
-
 #: py/argcheck.c
 msgid "%q must be %d"
 msgstr "%q musí být %d"
@@ -854,6 +850,10 @@ msgstr "Jádro kódu CircuitPython tvrdě havarovalo. Jejda!\n"
 msgid "Clock unit in use"
 msgstr "Jednotka hodin je používána"
 
+#: ports/espressif/common-hal/mipidsi/Display.c
+msgid "Color depth must be 16 or 24"
+msgstr ""
+
 #: shared-bindings/_bleio/Connection.c
 msgid ""
 "Connection has been disconnected and can no longer be used. Create a new "
@@ -950,6 +950,7 @@ msgstr "Displej musí mít 16bitový barevný prostor."
 #: shared-bindings/busdisplay/BusDisplay.c
 #: shared-bindings/epaperdisplay/EPaperDisplay.c
 #: shared-bindings/framebufferio/FramebufferDisplay.c
+#: shared-bindings/mipidsi/Display.c
 msgid "Display rotation must be in 90 degree increments"
 msgstr "Otočení displeje musí být po 90 stupních"
 
@@ -1296,7 +1297,8 @@ msgstr ""
 #: ports/raspberrypi/bindings/rp2pio/StateMachine.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c py/argcheck.c
 #: shared-bindings/digitalio/DigitalInOut.c
-#: shared-bindings/epaperdisplay/EPaperDisplay.c shared-bindings/pwmio/PWMOut.c
+#: shared-bindings/epaperdisplay/EPaperDisplay.c
+#: shared-bindings/mipidsi/Display.c shared-bindings/pwmio/PWMOut.c
 #: shared-bindings/supervisor/__init__.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
 #: shared-module/lvfontio/OnDiskFont.c
@@ -2290,6 +2292,7 @@ msgid "Unable to allocate to the heap."
 msgstr ""
 
 #: ports/espressif/common-hal/busio/I2C.c
+#: ports/espressif/common-hal/busio/SPI.c
 msgid "Unable to create lock"
 msgstr "Není možné vytvořit zámek"
 
@@ -3202,10 +3205,6 @@ msgstr ""
 #: shared-bindings/traceback/__init__.c
 msgid "file write is not available"
 msgstr "zápis do souboru není dostupný"
-
-#: shared-bindings/storage/__init__.c
-msgid "filesystem must provide mount method"
-msgstr ""
 
 #: extmod/ulab/code/numpy/vector.c
 msgid "first argument must be a callable"
