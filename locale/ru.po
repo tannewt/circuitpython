@@ -174,10 +174,6 @@ msgstr "Длинна %q должна быть <= %d"
 msgid "%q length must be >= %d"
 msgstr "Длинна %q должна быть >= %d"
 
-#: py/runtime.c
-msgid "%q moved from %q to %q"
-msgstr "%q переместился из %q в %q"
-
 #: py/argcheck.c
 msgid "%q must be %d"
 msgstr "%q должно быть %d"
@@ -862,6 +858,10 @@ msgstr "Основной код CircuitPython сильно разбился. У�
 msgid "Clock unit in use"
 msgstr "Источник тактирования уже используется"
 
+#: ports/espressif/common-hal/mipidsi/Display.c
+msgid "Color depth must be 16 or 24"
+msgstr ""
+
 #: shared-bindings/_bleio/Connection.c
 msgid ""
 "Connection has been disconnected and can no longer be used. Create a new "
@@ -960,6 +960,7 @@ msgstr "Дисплей должен иметь 16 битное цветовое 
 #: shared-bindings/busdisplay/BusDisplay.c
 #: shared-bindings/epaperdisplay/EPaperDisplay.c
 #: shared-bindings/framebufferio/FramebufferDisplay.c
+#: shared-bindings/mipidsi/Display.c
 msgid "Display rotation must be in 90 degree increments"
 msgstr "Поворот дисплея должен осуществляться с шагом 90 градусов"
 
@@ -1317,7 +1318,8 @@ msgstr "Прерывается функцией выхода"
 #: ports/raspberrypi/bindings/rp2pio/StateMachine.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c py/argcheck.c
 #: shared-bindings/digitalio/DigitalInOut.c
-#: shared-bindings/epaperdisplay/EPaperDisplay.c shared-bindings/pwmio/PWMOut.c
+#: shared-bindings/epaperdisplay/EPaperDisplay.c
+#: shared-bindings/mipidsi/Display.c shared-bindings/pwmio/PWMOut.c
 #: shared-bindings/supervisor/__init__.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
 #: shared-module/lvfontio/OnDiskFont.c
@@ -2324,6 +2326,7 @@ msgid "Unable to allocate to the heap."
 msgstr "Невозможно выделить место в куче."
 
 #: ports/espressif/common-hal/busio/I2C.c
+#: ports/espressif/common-hal/busio/SPI.c
 msgid "Unable to create lock"
 msgstr "Не удается создать блокировку"
 
@@ -3256,10 +3259,6 @@ msgstr "Файл должен быть файлом, открытым в бай�
 #: shared-bindings/traceback/__init__.c
 msgid "file write is not available"
 msgstr "Запись файлов недоступна"
-
-#: shared-bindings/storage/__init__.c
-msgid "filesystem must provide mount method"
-msgstr "Файловая система должна предусматривать метод монтирования"
 
 #: extmod/ulab/code/numpy/vector.c
 msgid "first argument must be a callable"
@@ -4649,6 +4648,12 @@ msgstr "zi должно быть типа float"
 #: extmod/ulab/code/scipy/signal/signal.c
 msgid "zi must be of shape (n_section, 2)"
 msgstr "zi должен иметь форму (n_section, 2)"
+
+#~ msgid "%q moved from %q to %q"
+#~ msgstr "%q переместился из %q в %q"
+
+#~ msgid "filesystem must provide mount method"
+#~ msgstr "Файловая система должна предусматривать метод монтирования"
 
 #~ msgid "start/end indices"
 #~ msgstr "Начальные/конечные индексы"
