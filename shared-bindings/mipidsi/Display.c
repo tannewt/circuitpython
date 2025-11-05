@@ -124,7 +124,7 @@ static mp_obj_t mipidsi_display_make_new(const mp_obj_type_t *type, size_t n_arg
     mp_uint_t height = (mp_uint_t)mp_arg_validate_int_min(args[ARG_height].u_int, 0, MP_QSTR_height);
     mp_uint_t color_depth = args[ARG_color_depth].u_int;
 
-    if (color_depth != 8 && color_depth != 16 && color_depth != 24) {
+    if (color_depth != 16 && color_depth != 24) {
         mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_color_depth);
     }
 

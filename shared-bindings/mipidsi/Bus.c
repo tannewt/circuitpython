@@ -28,6 +28,13 @@
 //|         :param int num_lanes: the number of data lanes to use (default 2, range 1-4)
 //|         """
 //|
+//
+//
+// All MCUs we support only have one DSI bus but it can be shared between multiple displays. One
+// display may live longer than the VM, so we need to allocate the bus outside the VM. To simplify
+// memory tracking, we use a global object for the bus.
+//
+static mipidsi_bus_obj_t _mipidsi_bus_obj;
 
 static mp_obj_t mipidsi_bus_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
     enum { ARG_frequency, ARG_num_lanes };
@@ -38,7 +45,8 @@ static mp_obj_t mipidsi_bus_make_new(const mp_obj_type_t *type, size_t n_args, s
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    mipidsi_bus_obj_t *self = mp_obj_malloc(mipidsi_bus_obj_t, &mipidsi_bus_type);
+    _mipidsi_bus_obj.base.type = &mipidsi_bus_type;
+    mipidsi_bus_obj_t *self = &_mipidsi_bus_obj;
 
     mp_uint_t frequency = (mp_uint_t)mp_arg_validate_int_min(args[ARG_frequency].u_int, 1, MP_QSTR_frequency);
     uint8_t num_lanes = (uint8_t)mp_arg_validate_int_range(args[ARG_num_lanes].u_int, 1, 4, MP_QSTR_num_lanes);
@@ -62,28 +70,8 @@ static mp_obj_t mipidsi_bus_deinit(mp_obj_t self_in) {
 
 static MP_DEFINE_CONST_FUN_OBJ_1(mipidsi_bus_deinit_obj, mipidsi_bus_deinit);
 
-//|     def __enter__(self) -> Bus:
-//|         """No-op used by Context Managers."""
-//|         ...
-//|
-//  Provided by context manager helper.
-
-//|     def __exit__(self) -> None:
-//|         """Automatically deinitializes the hardware when exiting a context. See
-//|         :ref:`lifetime-and-contextmanagers` for more info."""
-//|         ...
-//|
-static mp_obj_t mipidsi_bus_obj___exit__(size_t n_args, const mp_obj_t *args) {
-    (void)n_args;
-    common_hal_mipidsi_bus_deinit(args[0]);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mipidsi_bus___exit___obj, 4, 4, mipidsi_bus_obj___exit__);
-
 static const mp_rom_map_elem_t mipidsi_bus_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&mipidsi_bus_deinit_obj) },
-    { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
-    { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&mipidsi_bus___exit___obj) },
 };
 static MP_DEFINE_CONST_DICT(mipidsi_bus_locals_dict, mipidsi_bus_locals_dict_table);
 

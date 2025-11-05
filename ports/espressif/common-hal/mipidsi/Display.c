@@ -67,7 +67,7 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         color_format = LCD_COLOR_FMT_RGB888;
     } else {
         common_hal_mipidsi_display_deinit(self);
-        mp_raise_ValueError(MP_ERROR_TEXT("Color depth must be 16 or 24"));
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_color_depth);
     }
 
     // Create the DPI panel for sending pixel data
@@ -173,6 +173,7 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
             common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, on);
         }
     }
+    mipidsi_bus_increment_use_count(self->bus);
 }
 
 void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
@@ -202,6 +203,7 @@ void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
         self->dbi_io_handle = NULL;
     }
 
+    mipidsi_bus_decrement_use_count(self->bus);
     self->bus = NULL;
     self->framebuffer = NULL;
 }

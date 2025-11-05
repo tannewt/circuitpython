@@ -14,6 +14,10 @@ void common_hal_mipidsi_bus_construct(mipidsi_bus_obj_t *self, mp_uint_t frequen
     self->num_data_lanes = num_lanes;
     self->bus_handle = NULL;
 
+    if (self->use_count > 0) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q in use"), MP_QSTR_mipidsi);
+    }
+
     esp_ldo_channel_handle_t ldo_mipi_phy = NULL;
     esp_ldo_channel_config_t ldo_mipi_phy_config = {
         .chan_id = 3,
@@ -33,6 +37,9 @@ void common_hal_mipidsi_bus_construct(mipidsi_bus_obj_t *self, mp_uint_t frequen
 }
 
 void common_hal_mipidsi_bus_deinit(mipidsi_bus_obj_t *self) {
+    if (self->use_count > 0) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q in use"), MP_QSTR_Bus);
+    }
     if (common_hal_mipidsi_bus_deinited(self)) {
         return;
     }
@@ -49,4 +56,14 @@ void common_hal_mipidsi_bus_deinit(mipidsi_bus_obj_t *self) {
 
 bool common_hal_mipidsi_bus_deinited(mipidsi_bus_obj_t *self) {
     return self->bus_handle == NULL;
+}
+
+void mipidsi_bus_increment_use_count(mipidsi_bus_obj_t *self) {
+    self->use_count++;
+}
+void mipidsi_bus_decrement_use_count(mipidsi_bus_obj_t *self) {
+    self->use_count--;
+    if (self->use_count == 0) {
+        common_hal_mipidsi_bus_deinit(self);
+    }
 }
