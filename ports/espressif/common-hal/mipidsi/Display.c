@@ -213,8 +213,9 @@ bool common_hal_mipidsi_display_deinited(mipidsi_display_obj_t *self) {
 }
 
 void common_hal_mipidsi_display_refresh(mipidsi_display_obj_t *self) {
-    // Write back the cache to ensure framebuffer changes are visible
-    Cache_WriteBack_Addr((uint32_t)(self->framebuffer), self->framebuffer_size);
+    // Drawing the framebuffer we got from the IDF will flush the cache(s) so
+    // DMA can see our changes. It won't cause an extra copy.
+    esp_lcd_panel_draw_bitmap(self->dpi_panel_handle, 0, 0, self->width, self->height, self->framebuffer);
 
     // The DPI panel will automatically refresh from the framebuffer
     // No explicit refresh call is needed as the DSI hardware continuously
