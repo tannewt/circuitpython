@@ -1,13 +1,15 @@
 import logging
 import pathlib
+
 import cpbuild
-
-from devicetree import dtlib
 import yaml
-
 from compat2driver import COMPAT_TO_DRIVER
+from devicetree import dtlib
 
 logger = logging.getLogger(__name__)
+
+# GPIO flags defined here: include/zephyr/dt-bindings/gpio/gpio.h
+GPIO_ACTIVE_LOW = 1 << 0
 
 MANUAL_COMPAT_TO_DRIVER = {
     "renesas_ra_nv_flash": "flash",
@@ -82,12 +84,86 @@ CONNECTORS = {
         "D12",
         "D13",
     ],
+    "arducam,dvp-20pin-connector": [
+        "SCL",
+        "SDA",
+        "VS",
+        "HS",
+        "PCLK",
+        "XCLK",
+        "D7",
+        "D6",
+        "D5",
+        "D4",
+        "D3",
+        "D2",
+        "D1",
+        "D0",
+        "PEN",
+        "PDN",
+        "GPIO0",
+        "GPIO1",
+    ],
     "renesas,ra-gpio-mipi-header": [
         "IIC_SDA",
         "DISP_BLEN",
         "IIC_SCL",
         "DISP_INT",
         "DISP_RST",
+    ],
+    "renesas,ra-parallel-graphics-header": [
+        "DISP_BLEN",
+        "IIC_SDA",
+        "DISP_INT",
+        "IIC_SCL",
+        "DISP_RST",
+        "LCDC_TCON0",
+        "LCDC_CLK",
+        "LCDC_TCON2",
+        "LCDC_TCON1",
+        "LCDC_EXTCLK",
+        "LCDC_TCON3",
+        "LCDC_DATA01",
+        "LCDC_DATA00",
+        "LCDC_DATA03",
+        "LCDC_DATA02",
+        "LCDC_DATA05",
+        "LCDC_DATA04",
+        "LCDC_DATA07",
+        "LCDC_DATA16",
+        "LCDC_DATA09",
+        "LCDC_DATA08",
+        "LCDC_DATA11",
+        "LCDC_DATA10",
+        "LCDC_DATA13",
+        "LCDC_DATA12",
+        "LCDC_DATA15",
+        "LCDC_DATA14",
+        "LCDC_DATA17",
+        "LCDC_DATA16",
+        "LCDC_DATA19",
+        "LCDC_DATA18",
+        "LCDC_DATA21",
+        "LCDC_DATA20",
+        "LCDC_DATA23",
+        "LCDC_DATA22",
+    ],
+    "st,stm32-dcmi-camera-fpu-330zh": [
+        "SCL",
+        "SDA",
+        "RESET",
+        "PEN",
+        "VS",
+        "HS",
+        "PCLK",
+        "D7",
+        "D6",
+        "D5",
+        "D4",
+        "D3",
+        "D2",
+        "D1",
+        "D0",
     ],
 }
 
@@ -139,6 +215,7 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):  # noqa: C901
     flashes = []
     rams = []
     status_led = None
+    status_led_inverted = False
     path2chosen = {}
     chosen2path = {}
     usb_num_endpoint_pairs = 0
@@ -247,6 +324,7 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):  # noqa: C901
                 props = led.props
                 ioport = props["gpios"]._markers[1][2]
                 num = int.from_bytes(props["gpios"].value[4:8], "big")
+                flags = int.from_bytes(props["gpios"].value[8:12], "big")
                 if "label" in props:
                     if (ioport, num) not in board_names:
                         board_names[(ioport, num)] = []
@@ -257,6 +335,7 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):  # noqa: C901
                     if "led0" in node2alias[led]:
                         board_names[(ioport, num)].append("LED")
                         status_led = (ioport, num)
+                        status_led_inverted = flags & GPIO_ACTIVE_LOW
                     board_names[(ioport, num)].extend(node2alias[led])
 
         if "gpio-keys" in compatible:
@@ -316,8 +395,12 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):  # noqa: C901
     header = board_dir / "mpconfigboard.h"
     if status_led:
         status_led = f"#define MICROPY_HW_LED_STATUS (&pin_{status_led})\n"
+        status_led_inverted = (
+            f"#define MICROPY_HW_LED_STATUS_INVERTED ({'1' if status_led_inverted else '0'})\n"
+        )
     else:
         status_led = ""
+        status_led_inverted = ""
     ram_list = []
     ram_externs = []
     max_size = 0
@@ -339,6 +422,7 @@ def zephyr_dts_to_cp_board(builddir, zephyrbuilddir):  # noqa: C901
 #define MICROPY_HW_MCU_NAME         "{soc_name}"
 #define CIRCUITPY_RAM_DEVICE_COUNT  {len(rams)}
 {status_led}
+{status_led_inverted}
         """
     if not header.exists() or header.read_text() != new_header_content:
         header.write_text(new_header_content)
@@ -384,8 +468,7 @@ CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
 
 MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 """
-    if not board_c.exists() or new_board_c_content != board_c.read_text():
-        board_c.write_text(new_board_c_content)
+    board_c.write_text(new_board_c_content)
     board_info["source_files"] = [board_c]
     board_info["cflags"] = ("-I", board_dir)
     board_info["flash_count"] = len(flashes)
