@@ -1,16 +1,16 @@
 import asyncio
-import colorlog
-import sys
 import logging
 import os
 import pathlib
-import tomllib
-import tomlkit
-import yaml
 import pickle
+import sys
 
-import cpbuild
 import board_tools
+import colorlog
+import cpbuild
+import tomlkit
+import tomllib
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -219,13 +219,13 @@ async def build_circuitpython():
     circuitpython_flags.append(f"-DCIRCUITPY_ENABLE_MPY_NATIVE={1 if enable_mpy_native else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_FULL_BUILD={1 if full_build else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_USB_HOST={1 if usb_host else 0}")
-    circuitpython_flags.append(f'-DCIRCUITPY_BOARD_ID=\\"{board}\\"')
+    circuitpython_flags.append(f"-DCIRCUITPY_BOARD_ID='\"{board}\"'")
     circuitpython_flags.append(f"-DCIRCUITPY_TUSB_MEM_ALIGN={tusb_mem_align}")
     circuitpython_flags.append(f"-DCIRCUITPY_TRANSLATE_OBJECT={1 if lto else 0}")
     circuitpython_flags.append("-DINTERNAL_FLASH_FILESYSTEM")
     circuitpython_flags.append("-DLONGINT_IMPL_MPZ")
     circuitpython_flags.append("-DCIRCUITPY_SSL_MBEDTLS")
-    circuitpython_flags.append('-DFFCONF_H=\\"lib/oofatfs/ffconf.h\\"')
+    circuitpython_flags.append("-DFFCONF_H='\"lib/oofatfs/ffconf.h\"'")
     circuitpython_flags.extend(("-I", srcdir))
     circuitpython_flags.extend(("-I", srcdir / "lib/tinyusb/src"))
     circuitpython_flags.extend(("-I", srcdir / "supervisor/shared/usb"))
@@ -448,10 +448,7 @@ async def build_circuitpython():
 
     if "ssl" in enabled_modules:
         # TODO: Figure out how to get these paths from zephyr
-        circuitpython_flags.append('-DMBEDTLS_CONFIG_FILE=\\"config-tls-generic.h\\"')
-        circuitpython_flags.extend(
-            ("-isystem", portdir / "modules" / "crypto" / "tinycrypt" / "lib" / "include")
-        )
+        circuitpython_flags.append("-DMBEDTLS_CONFIG_FILE='\"config-mbedtls.h\"'")
         circuitpython_flags.extend(
             ("-isystem", portdir / "modules" / "crypto" / "mbedtls" / "include")
         )
