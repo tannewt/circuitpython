@@ -185,8 +185,8 @@ static mp_obj_t bitmaptools_obj_rotozoom(size_t n_args, const mp_obj_t *pos_args
           ARG_angle, ARG_scale, ARG_skip_index};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
 
         {MP_QSTR_ox, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} }, // None convert to destination->width  / 2
         {MP_QSTR_oy, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} }, // None convert to destination->height / 2
@@ -421,26 +421,26 @@ MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_alphablend_obj, 0, bitmaptools_alphablend
 //| def replace_color(
 //|     dest_bitmap: displayio.Bitmap, old_color: int, new_color: int
 //| ) -> None:
-//|     """Replace any pixels of old_color with new_color in the dest_bitmap
+//|     """Replace any pixels of ``old_color`` with ``new_color`` in the ``bitmap``
 //|
-//|     :param bitmap dest_bitmap: Destination bitmap that will be written into
+//|     :param displayio.Bitmap bitmap: Bitmap that will be changed
 //|     :param int old_color: Bitmap palette index that will overwritten
 //|     :param int new_color: Bitmap palette index that will get put in the bitmap"""
 //|     ...
 //|
 //|
 static mp_obj_t bitmaptools_obj_replace_color(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum {ARG_dest_bitmap, ARG_old_color, ARG_new_color};
+    enum {ARG_bitmap, ARG_old_color, ARG_new_color};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_old_color, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_new_color, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_old_color, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_new_color, MP_ARG_REQUIRED | MP_ARG_INT},
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    displayio_bitmap_t *destination = MP_OBJ_TO_PTR(args[ARG_dest_bitmap].u_obj);     // the destination bitmap
+    displayio_bitmap_t *destination = MP_OBJ_TO_PTR(mp_arg_validate_type(args[ARG_bitmap].u_obj, &displayio_bitmap_type, MP_QSTR_bitmap));
 
     uint32_t old_color, new_color, color_depth;
     old_color = args[ARG_old_color].u_int;
@@ -448,7 +448,7 @@ static mp_obj_t bitmaptools_obj_replace_color(size_t n_args, const mp_obj_t *pos
 
     color_depth = (1 << destination->bits_per_value);
     if (color_depth <= old_color || color_depth <= new_color) {
-        mp_raise_ValueError(MP_ERROR_TEXT("out of range of target"));
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q out of range"), MP_QSTR_color);
     }
 
     common_hal_bitmaptools_replace_color(destination, old_color, new_color);
@@ -478,9 +478,9 @@ static mp_obj_t bitmaptools_obj_fill_region(size_t n_args, const mp_obj_t *pos_a
     enum {ARG_dest_bitmap, ARGS_X1_Y1_X2_Y2, ARG_value};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
         ALLOWED_ARGS_X1_Y1_X2_Y2(MP_ARG_REQUIRED, MP_ARG_REQUIRED),
-        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT},
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
@@ -527,10 +527,10 @@ static mp_obj_t bitmaptools_obj_boundary_fill(size_t n_args, const mp_obj_t *pos
     enum {ARG_dest_bitmap, ARG_x, ARG_y, ARG_fill_color_value, ARG_replaced_color_value};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_fill_color_value, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_fill_color_value, MP_ARG_REQUIRED | MP_ARG_INT},
         {MP_QSTR_replaced_color_value, MP_ARG_INT, {.u_int = INT_MAX} },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
@@ -588,12 +588,12 @@ static mp_obj_t bitmaptools_obj_draw_line(size_t n_args, const mp_obj_t *pos_arg
     enum {ARG_dest_bitmap, ARG_x1, ARG_y1, ARG_x2, ARG_y2, ARG_value};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_x1, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_y1, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_x2, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_y2, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_x1, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_y1, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_x2, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_y2, MP_ARG_REQUIRED | MP_ARG_INT},
+        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT},
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
@@ -675,10 +675,10 @@ static mp_obj_t bitmaptools_obj_draw_polygon(size_t n_args, const mp_obj_t *pos_
     enum {ARG_dest_bitmap, ARG_xs, ARG_ys, ARG_value, ARG_close};
 
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_xs, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_ys, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
-        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_xs, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_ys, MP_ARG_REQUIRED | MP_ARG_OBJ},
+        {MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT},
         {MP_QSTR_close, MP_ARG_BOOL, {.u_bool = true}},
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
@@ -757,8 +757,8 @@ MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_draw_polygon_obj, 0, bitmaptools_obj_draw
 static mp_obj_t bitmaptools_arrayblit(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_bitmap, ARG_data, ARGS_X1_Y1_X2_Y2, ARG_skip_index };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_data, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_data, MP_ARG_REQUIRED | MP_ARG_OBJ },
         ALLOWED_ARGS_X1_Y1_X2_Y2(0, 0),
         { MP_QSTR_skip_index, MP_ARG_OBJ, {.u_obj = mp_const_none } },
     };
@@ -822,9 +822,9 @@ MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_arrayblit_obj, 0, bitmaptools_arrayblit);
 static mp_obj_t bitmaptools_readinto(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_bitmap, ARG_file, ARG_bits_per_pixel, ARG_element_size, ARG_reverse_pixels_in_element, ARG_swap_bytes_in_element, ARG_reverse_rows };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_file, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_bits_per_pixel, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_file, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_bits_per_pixel, MP_ARG_REQUIRED | MP_ARG_INT },
         { MP_QSTR_element_size, MP_ARG_INT, { .u_int = 1 } },
         { MP_QSTR_reverse_pixels_in_element, MP_ARG_BOOL, { .u_bool = false } },
         { MP_QSTR_swap_bytes_in_element,  MP_ARG_BOOL, { .u_bool = false } },
@@ -913,9 +913,9 @@ MAKE_ENUM_TYPE(bitmaptools, DitherAlgorithm, bitmaptools_dither_algorithm);
 static mp_obj_t bitmaptools_dither(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_dest_bitmap, ARG_source_bitmap, ARG_source_colorspace, ARG_algorithm };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        { MP_QSTR_source_colorspace, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_source_colorspace, MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_algorithm, MP_ARG_OBJ, { .u_obj = MP_ROM_PTR((void *)&dither_algorithm_Atkinson_obj) } },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
@@ -1078,10 +1078,10 @@ MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_draw_circle_obj, 0, bitmaptools_obj_draw_
 static mp_obj_t bitmaptools_obj_blit(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum {ARG_destination, ARG_source, ARG_x, ARG_y, ARG_x1, ARG_y1, ARG_x2, ARG_y2, ARG_skip_source_index, ARG_skip_dest_index};
     static const mp_arg_t allowed_args[] = {
-        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        {MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
-        {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL} },
-        {MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL} },
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        {MP_QSTR_source_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        {MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT },
+        {MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT },
         ALLOWED_ARGS_X1_Y1_X2_Y2(0, 0),
         {MP_QSTR_skip_source_index, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} },
         {MP_QSTR_skip_dest_index, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} },
