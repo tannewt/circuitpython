@@ -418,6 +418,46 @@ static mp_obj_t bitmaptools_alphablend(size_t n_args, const mp_obj_t *pos_args, 
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_alphablend_obj, 0, bitmaptools_alphablend);
 
+//| def replace_color(
+//|     dest_bitmap: displayio.Bitmap, old_color: int, new_color: int
+//| ) -> None:
+//|     """Replace any pixels of old_color with new_color in the dest_bitmap
+//|
+//|     :param bitmap dest_bitmap: Destination bitmap that will be written into
+//|     :param int old_color: Bitmap palette index that will overwritten
+//|     :param int new_color: Bitmap palette index that will get put in the bitmap"""
+//|     ...
+//|
+//|
+static mp_obj_t bitmaptools_obj_replace_color(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum {ARG_dest_bitmap, ARG_old_color, ARG_new_color};
+
+    static const mp_arg_t allowed_args[] = {
+        {MP_QSTR_dest_bitmap, MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_old_color, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+        {MP_QSTR_new_color, MP_ARG_REQUIRED | MP_ARG_INT, {.u_obj = MP_OBJ_NULL}},
+    };
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    displayio_bitmap_t *destination = MP_OBJ_TO_PTR(args[ARG_dest_bitmap].u_obj);     // the destination bitmap
+
+    uint32_t old_color, new_color, color_depth;
+    old_color = args[ARG_old_color].u_int;
+    new_color = args[ARG_new_color].u_int;
+
+    color_depth = (1 << destination->bits_per_value);
+    if (color_depth <= old_color || color_depth <= new_color) {
+        mp_raise_ValueError(MP_ERROR_TEXT("out of range of target"));
+    }
+
+    common_hal_bitmaptools_replace_color(destination, old_color, new_color);
+
+    return mp_const_none;
+}
+
+MP_DEFINE_CONST_FUN_OBJ_KW(bitmaptools_replace_color_obj, 0, bitmaptools_obj_replace_color);
+
 //| def fill_region(
 //|     dest_bitmap: displayio.Bitmap, x1: int, y1: int, x2: int, y2: int, value: int
 //| ) -> None:
@@ -1103,6 +1143,7 @@ static const mp_rom_map_elem_t bitmaptools_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_rotozoom), MP_ROM_PTR(&bitmaptools_rotozoom_obj) },
     { MP_ROM_QSTR(MP_QSTR_arrayblit), MP_ROM_PTR(&bitmaptools_arrayblit_obj) },
     { MP_ROM_QSTR(MP_QSTR_alphablend), MP_ROM_PTR(&bitmaptools_alphablend_obj) },
+    { MP_ROM_QSTR(MP_QSTR_replace_color), MP_ROM_PTR(&bitmaptools_replace_color_obj) },
     { MP_ROM_QSTR(MP_QSTR_fill_region), MP_ROM_PTR(&bitmaptools_fill_region_obj) },
     { MP_ROM_QSTR(MP_QSTR_boundary_fill), MP_ROM_PTR(&bitmaptools_boundary_fill_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw_line), MP_ROM_PTR(&bitmaptools_draw_line_obj) },
