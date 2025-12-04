@@ -25,8 +25,8 @@
 //|     .. class:: I2C()
 //|
 //|       Cannot be instantiated directly. Instead singletons are created using the
-//|       `board` aliases that match the device tree labels. `board` may list multiple
-//|       aliases for a single device. For example, `board.I2C1` and `board.ARDUINO_I2C`
+//|       ``board`` aliases that match the device tree labels. ``board`` may list multiple
+//|       aliases for a single device. For example, ``board.I2C1`` and ``board.ARDUINO_I2C``
 //|       may both refer to the same device.
 //|     """
 //|
