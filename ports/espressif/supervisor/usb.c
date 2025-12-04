@@ -13,7 +13,6 @@
 #include "shared/readline/readline.h"
 
 #include "hal/gpio_ll.h"
-#include "hal/usb_serial_jtag_ll.h"
 
 #include "esp_err.h"
 #include "esp_private/usb_phy.h"
@@ -28,6 +27,10 @@
 #include "freertos/task.h"
 
 #include "tusb.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+#include "hal/usb_serial_jtag_ll.h"
+#endif
 
 #if CIRCUITPY_USB_DEVICE
 #ifdef CFG_TUSB_DEBUG
@@ -66,11 +69,11 @@ void init_usb_hardware(void) {
         .target = USB_PHY_TARGET_INT,
         .otg_mode = USB_OTG_MODE_DEVICE,
         #if defined(CONFIG_IDF_TARGET_ESP32P4) && CIRCUITPY_USB_DEVICE_INSTANCE == 0
-            .otg_speed = USB_PHY_SPEED_FULL,
+        .otg_speed = USB_PHY_SPEED_FULL,
         #else
         // https://github.com/hathach/tinyusb/issues/2943#issuecomment-2601888322
         // Set speed to undefined (auto-detect) to avoid timing/race issue with S3 with host such as macOS
-            .otg_speed = USB_PHY_SPEED_UNDEFINED,
+        .otg_speed = USB_PHY_SPEED_UNDEFINED,
         #endif
     };
     usb_new_phy(&phy_conf, &device_phy_hdl);
@@ -81,9 +84,11 @@ void init_usb_hardware(void) {
     #endif
     // Switch the USB PHY
     const usb_serial_jtag_pull_override_vals_t override_disable_usb = {
-        .dm_pd = true, .dm_pu = false, .dp_pd = true, .dp_pu = false};
+        .dm_pd = true, .dm_pu = false, .dp_pd = true, .dp_pu = false
+    };
     const usb_serial_jtag_pull_override_vals_t override_enable_usb = {
-        .dm_pd = false, .dm_pu = false, .dp_pd = false, .dp_pu = true};
+        .dm_pd = false, .dm_pu = false, .dp_pd = false, .dp_pu = true
+    };
 
     // Drop off the bus by removing the pull-up on USB DP
     usb_serial_jtag_ll_phy_enable_pull_override(&override_disable_usb);
@@ -96,32 +101,6 @@ void init_usb_hardware(void) {
     usb_serial_jtag_ll_phy_enable_pull_override(&override_enable_usb);
     usb_serial_jtag_ll_phy_disable_pull_override();
     #endif
-
-    // Pin the USB task to the same core as CircuitPython. This way we leave
-    // the other core for networking.
-    (void)xTaskCreateStaticPinnedToCore(usb_device_task,
-        "usbd",
-        USBD_STACK_SIZE,
-        NULL,
-        5,
-        usb_device_stack,
-        &usb_device_taskdef,
-        xPortGetCoreID());
-    #endif
-    // Configure USB PHY
-    usb_phy_config_t phy_conf = {
-        .controller = USB_PHY_CTRL_OTG,
-        .target = USB_PHY_TARGET_INT,
-        .otg_mode = USB_OTG_MODE_DEVICE,
-        #if defined(CONFIG_IDF_TARGET_ESP32P4) && CIRCUITPY_USB_DEVICE_INSTANCE == 0
-            .otg_speed = USB_PHY_SPEED_FULL,
-        #else
-        // https://github.com/hathach/tinyusb/issues/2943#issuecomment-2601888322
-        // Set speed to undefined (auto-detect) to avoid timing/race issue with S3 with host such as macOS
-            .otg_speed = USB_PHY_SPEED_UNDEFINED,
-        #endif
-    };
-    usb_new_phy(&phy_conf, &device_phy_hdl);
 
     // Pin the USB task to the same core as CircuitPython. This way we leave
     // the other core for networking.
