@@ -204,13 +204,8 @@ static const uint64_t pin_mask_reset_forbidden =
     #endif // ESP32H2
 
     #if defined(CONFIG_IDF_TARGET_ESP32P4)
-    // Never ever reset pins used to communicate with the SPI flash.
-    GPIO_SEL_28 |
-    GPIO_SEL_29 |
-    GPIO_SEL_30 |
-    GPIO_SEL_32 |
-    GPIO_SEL_33 |
-    GPIO_SEL_34 |
+    // SPI flash is on dedicated pins.
+
     // USB is on the FS OTG
     #if CIRCUITPY_USB_DEVICE_INSTANCE == 0
     #if CIRCUITPY_ESP32P4_SWAP_LSFS == 1
