@@ -124,6 +124,7 @@ msgid "%q in %q must be of type %q, not %q"
 msgstr "%q의 %q는 %q가 아니라 %q 유형이어야 합니다"
 
 #: ports/espressif/common-hal/espulp/ULP.c
+#: ports/espressif/common-hal/mipidsi/Bus.c
 #: ports/mimxrt10xx/common-hal/audiobusio/__init__.c
 #: ports/mimxrt10xx/common-hal/usb_host/Port.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
@@ -263,7 +264,8 @@ msgstr "%q가 경계를 벗어남"
 #: ports/nordic/common-hal/pulseio/PulseIn.c
 #: ports/raspberrypi/common-hal/rp2pio/StateMachine.c
 #: ports/stm/common-hal/pulseio/PulseIn.c py/argcheck.c
-#: shared-bindings/canio/Match.c shared-bindings/time/__init__.c
+#: shared-bindings/bitmaptools/__init__.c shared-bindings/canio/Match.c
+#: shared-bindings/time/__init__.c
 #, fuzzy
 msgid "%q out of range"
 msgstr "%q가 범위를 벗어남"
@@ -880,10 +882,6 @@ msgstr "CircuitPython 핵심 코드가 심하게 충돌했습니다. 앗!\n"
 msgid "Clock unit in use"
 msgstr "시계 장치가 사용 중입니다"
 
-#: ports/espressif/common-hal/mipidsi/Display.c
-msgid "Color depth must be 16 or 24"
-msgstr ""
-
 #: shared-bindings/_bleio/Connection.c
 msgid ""
 "Connection has been disconnected and can no longer be used. Create a new "
@@ -1172,8 +1170,9 @@ msgstr ""
 "주파수는 24, 150, 396, 450, 528, 600, 720, 816, 912, 960 또는 1008 Mhz 여야 "
 "합니다"
 
-#: shared-bindings/bitbangio/I2C.c shared-bindings/bitbangio/SPI.c
-#: shared-bindings/busio/I2C.c shared-bindings/busio/SPI.c
+#: ports/zephyr-cp/bindings/zephyr_i2c/I2C.c shared-bindings/bitbangio/I2C.c
+#: shared-bindings/bitbangio/SPI.c shared-bindings/busio/I2C.c
+#: shared-bindings/busio/SPI.c
 msgid "Function requires lock"
 msgstr "이 함수에는 잠금이 필요합니다"
 
@@ -1324,6 +1323,7 @@ msgstr "출력 함수로 인해 종료되었다"
 #: ports/espressif/common-hal/_bleio/Service.c
 #: ports/espressif/common-hal/espulp/ULP.c
 #: ports/espressif/common-hal/microcontroller/Processor.c
+#: ports/espressif/common-hal/mipidsi/Display.c
 #: ports/mimxrt10xx/common-hal/audiobusio/__init__.c
 #: ports/mimxrt10xx/common-hal/pwmio/PWMOut.c
 #: ports/raspberrypi/bindings/picodvi/Framebuffer.c
