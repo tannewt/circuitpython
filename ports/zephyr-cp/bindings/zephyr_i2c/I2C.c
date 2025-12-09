@@ -275,9 +275,9 @@ MP_DEFINE_CONST_FUN_OBJ_KW(zephyr_i2c_i2c_writeto_obj, 3, zephyr_i2c_i2c_writeto
 //|         in_buffer: WriteableBuffer,
 //|         *,
 //|         out_start: int = 0,
-//|         out_end: int = None,
+//|         out_end: int = sys.maxsize,
 //|         in_start: int = 0,
-//|         in_end: int = None
+//|         in_end: int = sys.maxsize
 //|     ) -> None:
 //|         """Write the bytes from ``out_buffer`` to the device selected by ``address``, generate
 //|         no stop bit, generate a repeated start and read into ``in_buffer``. ``out_buffer`` and
