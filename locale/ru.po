@@ -126,6 +126,7 @@ msgid "%q in %q must be of type %q, not %q"
 msgstr "%q в %q должно быть типа %q, а не %q"
 
 #: ports/espressif/common-hal/espulp/ULP.c
+#: ports/espressif/common-hal/mipidsi/Bus.c
 #: ports/mimxrt10xx/common-hal/audiobusio/__init__.c
 #: ports/mimxrt10xx/common-hal/usb_host/Port.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
@@ -259,7 +260,8 @@ msgstr "%q за пределом"
 #: ports/nordic/common-hal/pulseio/PulseIn.c
 #: ports/raspberrypi/common-hal/rp2pio/StateMachine.c
 #: ports/stm/common-hal/pulseio/PulseIn.c py/argcheck.c
-#: shared-bindings/canio/Match.c shared-bindings/time/__init__.c
+#: shared-bindings/bitmaptools/__init__.c shared-bindings/canio/Match.c
+#: shared-bindings/time/__init__.c
 msgid "%q out of range"
 msgstr "%q вне диапазона"
 
@@ -858,10 +860,6 @@ msgstr "Основной код CircuitPython сильно разбился. У�
 msgid "Clock unit in use"
 msgstr "Источник тактирования уже используется"
 
-#: ports/espressif/common-hal/mipidsi/Display.c
-msgid "Color depth must be 16 or 24"
-msgstr ""
-
 #: shared-bindings/_bleio/Connection.c
 msgid ""
 "Connection has been disconnected and can no longer be used. Create a new "
@@ -1156,8 +1154,9 @@ msgstr ""
 "Частота должна быть 24, 150, 396, 450, 528, 600, 720, 816, 912, 960 или 1008 "
 "МГц"
 
-#: shared-bindings/bitbangio/I2C.c shared-bindings/bitbangio/SPI.c
-#: shared-bindings/busio/I2C.c shared-bindings/busio/SPI.c
+#: ports/zephyr-cp/bindings/zephyr_i2c/I2C.c shared-bindings/bitbangio/I2C.c
+#: shared-bindings/bitbangio/SPI.c shared-bindings/busio/I2C.c
+#: shared-bindings/busio/SPI.c
 msgid "Function requires lock"
 msgstr "Функция требует блокировки"
 
@@ -1312,6 +1311,7 @@ msgstr "Прерывается функцией выхода"
 #: ports/espressif/common-hal/_bleio/Service.c
 #: ports/espressif/common-hal/espulp/ULP.c
 #: ports/espressif/common-hal/microcontroller/Processor.c
+#: ports/espressif/common-hal/mipidsi/Display.c
 #: ports/mimxrt10xx/common-hal/audiobusio/__init__.c
 #: ports/mimxrt10xx/common-hal/pwmio/PWMOut.c
 #: ports/raspberrypi/bindings/picodvi/Framebuffer.c
