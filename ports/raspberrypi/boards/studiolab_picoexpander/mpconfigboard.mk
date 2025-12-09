@@ -1,6 +1,6 @@
 USB_VID = 0x1209
 USB_PID = 0xC1C1
-USB_PRODUCT = "Pico 2 W"
+USB_PRODUCT = "StudioLab Pico Expander"
 USB_MANUFACTURER = "Raspberry Pi"
 
 CHIP_VARIANT = RP2350
