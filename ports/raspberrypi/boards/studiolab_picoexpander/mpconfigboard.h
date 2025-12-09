@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-#define MICROPY_HW_BOARD_NAME "StudioLabPico Expander"
+#define MICROPY_HW_BOARD_NAME "Studiolab Pico Expander"
 #define MICROPY_HW_MCU_NAME "rp2350a"
 
 #define CIRCUITPY_DIGITALIO_HAVE_INVALID_PULL (1)
