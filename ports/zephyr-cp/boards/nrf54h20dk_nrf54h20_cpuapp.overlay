@@ -43,3 +43,5 @@
 	memory-regions = <&cpuapp_dma_region>;
 	status = "okay";
 };
+
+#include "../app.overlay"

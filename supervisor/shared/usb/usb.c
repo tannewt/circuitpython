@@ -87,6 +87,10 @@ bool usb_enabled(void) {
     return tusb_inited();
 }
 
+bool usb_connected(void) {
+    return tud_ready();
+}
+
 MP_WEAK void post_usb_init(void) {
 }
 
@@ -141,40 +145,6 @@ void usb_init(void) {
         NULL, NULL, NULL,
         CONFIG_MAIN_THREAD_PRIORITY - 1, 0, K_NO_WAIT);
     k_thread_name_set(_tinyusb_tid, "tinyusb");
-    #endif
-}
-
-// Set up USB defaults before any USB changes are made in boot.py
-void usb_set_defaults(void) {
-    #if CIRCUITPY_USB_DEVICE
-    #if CIRCUITPY_STORAGE && CIRCUITPY_USB_MSC
-    storage_usb_set_defaults();
-    #endif
-
-    #if CIRCUITPY_USB_CDC
-    usb_cdc_set_defaults();
-    #endif
-
-    #if CIRCUITPY_USB_HID
-    usb_hid_set_defaults();
-    #endif
-
-    #if CIRCUITPY_USB_MIDI
-    usb_midi_set_defaults();
-    #endif
-    #endif
-};
-
-// Call this when ready to run code.py or a REPL, and a VM has been started.
-void usb_setup_with_vm(void) {
-    #if CIRCUITPY_USB_DEVICE
-    #if CIRCUITPY_USB_HID
-    usb_hid_setup_devices();
-    #endif
-
-    #if CIRCUITPY_USB_MIDI
-    usb_midi_setup_ports();
-    #endif
     #endif
 }
 
