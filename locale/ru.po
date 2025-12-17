@@ -1154,9 +1154,8 @@ msgstr ""
 "Частота должна быть 24, 150, 396, 450, 528, 600, 720, 816, 912, 960 или 1008 "
 "МГц"
 
-#: ports/zephyr-cp/bindings/zephyr_i2c/I2C.c shared-bindings/bitbangio/I2C.c
-#: shared-bindings/bitbangio/SPI.c shared-bindings/busio/I2C.c
-#: shared-bindings/busio/SPI.c
+#: shared-bindings/bitbangio/I2C.c shared-bindings/bitbangio/SPI.c
+#: shared-bindings/busio/I2C.c shared-bindings/busio/SPI.c
 msgid "Function requires lock"
 msgstr "Функция требует блокировки"
 
@@ -1503,8 +1502,7 @@ msgstr "Не хватает jmp_pin.%q [%u] прыгает на пин"
 msgid "Mount point directory missing"
 msgstr "Отсутствует каталог точки монтирования"
 
-#: ports/zephyr-cp/bindings/zephyr_serial/UART.c shared-bindings/busio/UART.c
-#: shared-bindings/displayio/Group.c
+#: shared-bindings/busio/UART.c shared-bindings/displayio/Group.c
 msgid "Must be a %q subclass."
 msgstr "Должен быть субклассом %q."
 
@@ -2456,6 +2454,12 @@ msgstr "Неподдерживаемый тип сокета"
 #: ports/espressif/common-hal/dualbank/__init__.c
 msgid "Update failed"
 msgstr "Обновление не удалось"
+
+#: ports/zephyr-cp/common-hal/busio/I2C.c
+#: ports/zephyr-cp/common-hal/busio/SPI.c
+#: ports/zephyr-cp/common-hal/busio/UART.c
+msgid "Use device tree to define %q devices"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
