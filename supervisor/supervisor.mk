@@ -116,6 +116,7 @@ ifeq ($(CIRCUITPY_TINYUSB),1)
     lib/tinyusb/src/common/tusb_fifo.c \
     lib/tinyusb/src/tusb.c \
     supervisor/usb.c \
+    supervisor/shared/usb.c \
     supervisor/shared/usb/usb.c \
 
   ifeq ($(CIRCUITPY_USB_DEVICE),1)
