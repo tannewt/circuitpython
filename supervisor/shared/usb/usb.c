@@ -88,7 +88,11 @@ bool usb_enabled(void) {
 }
 
 bool usb_connected(void) {
+    #if CIRCUITPY_TINYUSB && CIRCUITPY_USB_DEVICE
     return tud_ready();
+    #else
+    return false;
+    #endif
 }
 
 MP_WEAK void post_usb_init(void) {
