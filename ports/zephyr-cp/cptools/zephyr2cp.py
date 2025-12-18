@@ -31,6 +31,8 @@ BLOCKED_FLASH_COMPAT = (
 
 BUSIO_CLASSES = {"serial": "UART", "i2c": "I2C", "spi": "SPI"}
 
+AUDIOBUSIO_CLASSES = {"i2s": "I2SOut", "audio/dmic": "PDMIn"}
+
 CONNECTORS = {
     "mikro-bus": [
         "AN",
@@ -377,6 +379,7 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
     board_info = {
         "wifi": False,
         "usb_device": False,
+        "audiobusio": False,
     }
 
     runners = zephyrbuilddir / "runners.yaml"
@@ -476,6 +479,13 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
                 usb_num_endpoint_pairs += min(single_direction_endpoints)
             elif driver.startswith("wifi"):
                 board_info["wifi"] = True
+            elif driver in AUDIOBUSIO_CLASSES:
+                # audiobusio driver (i2s, audio/dmic)
+                board_info["audiobusio"] = True
+                logger.info(f"Supported audiobusio driver: {driver}")
+                if driver not in active_zephyr_devices:
+                    active_zephyr_devices[driver] = []
+                active_zephyr_devices[driver].append(node.labels)
             elif driver in EXCEPTIONAL_DRIVERS:
                 pass
             elif driver in BUSIO_CLASSES:
@@ -583,14 +593,23 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
     zephyr_binding_objects = []
     zephyr_binding_labels = []
     for driver, instances in active_zephyr_devices.items():
-        driverclass = BUSIO_CLASSES[driver]
-        zephyr_binding_headers.append(f'#include "shared-bindings/busio/{driverclass}.h"')
+        # Determine if this is busio or audiobusio
+        if driver in BUSIO_CLASSES:
+            module = "busio"
+            driverclass = BUSIO_CLASSES[driver]
+        elif driver in AUDIOBUSIO_CLASSES:
+            module = "audiobusio"
+            driverclass = AUDIOBUSIO_CLASSES[driver]
+        else:
+            continue
 
-        # Designate a main bus such as board.I2C.
+        zephyr_binding_headers.append(f'#include "shared-bindings/{module}/{driverclass}.h"')
+
+        # Designate a main device such as board.I2C or board.I2S.
         if len(instances) == 1:
             instances[0].append(driverclass)
         else:
-            # Check to see if a main bus has already been designated
+            # Check to see if a main device has already been designated
             found_main = False
             for labels in instances:
                 for label in labels:
@@ -606,23 +625,29 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
                     if found_main:
                         break
         for labels in instances:
-            instance_name = f"{driver}_{labels[0]}"
+            instance_name = f"{driver.replace('/', '_')}_{labels[0]}"
             c_function_name = f"_{instance_name}"
             singleton_ptr = f"{c_function_name}_singleton"
             function_object = f"{c_function_name}_obj"
-            busio_type = f"busio_{driverclass.lower()}"
+            obj_type = f"{module}_{driverclass.lower()}"
 
-            # UART needs a receiver buffer
+            # Handle special cases for different drivers
             if driver == "serial":
+                # UART needs a receiver buffer
                 buffer_decl = f"static byte {instance_name}_buffer[128];"
                 construct_call = f"common_hal_busio_uart_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})), 128, {instance_name}_buffer)"
-            else:
+            elif driver == "audio/dmic":
+                # PDMIn needs default audio parameters
                 buffer_decl = ""
-                construct_call = f"common_hal_busio_{driverclass.lower()}_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})))"
+                construct_call = f"common_hal_audiobusio_pdmin_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})), 16000, 16, true, 64)"
+            else:
+                # Default case (I2C, SPI, I2S)
+                buffer_decl = ""
+                construct_call = f"common_hal_{module}_{driverclass.lower()}_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})))"
 
             zephyr_binding_objects.append(
                 f"""{buffer_decl}
-static {busio_type}_obj_t {instance_name}_obj;
+static {obj_type}_obj_t {instance_name}_obj;
 static mp_obj_t {singleton_ptr} = mp_const_none;
 static mp_obj_t {c_function_name}(void) {{
     if ({singleton_ptr} != mp_const_none) {{

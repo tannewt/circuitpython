@@ -57,12 +57,15 @@ DEFAULT_MODULES = [
     "supervisor",
     "errno",
     "io",
+    "math",
 ]
 # Flags that don't match with with a *bindings module. Some used by adafruit_requests
-MPCONFIG_FLAGS = ["array", "errno", "io", "json"]
+MPCONFIG_FLAGS = ["array", "errno", "io", "json", "math"]
 
 # List of other modules (the value) that can be enabled when another one (the key) is.
 REVERSE_DEPENDENCIES = {
+    "audiobusio": ["audiocore"],
+    "audiocore": ["audiomp3"],
     "busio": ["fourwire", "i2cdisplaybus", "sdcardio", "sharpdisplay"],
     "fourwire": ["displayio", "busdisplay", "epaperdisplay"],
     "i2cdisplaybus": ["displayio", "busdisplay", "epaperdisplay"],
@@ -80,7 +83,16 @@ REVERSE_DEPENDENCIES = {
 }
 
 # Other flags to set when a module is enabled
-EXTRA_FLAGS = {"busio": ["BUSIO_SPI", "BUSIO_I2C"]}
+EXTRA_FLAGS = {
+    "busio": {"BUSIO_SPI": 1, "BUSIO_I2C": 1},
+    "audiobusio": {"AUDIOBUSIO_I2SOUT": 1, "AUDIOBUSIO_PDMIN": 0},
+}
+
+# Library sources. Will be globbed from the top level directory
+# No QSTR processing or CIRCUITPY specific flags
+LIBRARY_SOURCE = {
+    "audiomp3": ["lib/mp3/src/*.c"],
+}
 
 SHARED_MODULE_AND_COMMON_HAL = ["os"]
 
@@ -420,6 +432,7 @@ async def build_circuitpython():
 
     # Make sure all modules have a setting by filling in defaults.
     hal_source = []
+    library_sources = []
     autogen_board_info = tomlkit.document()
     autogen_board_info.add(
         tomlkit.comment(
@@ -446,8 +459,8 @@ async def build_circuitpython():
 
         if enabled:
             if module.name in EXTRA_FLAGS:
-                for flag in EXTRA_FLAGS[module.name]:
-                    circuitpython_flags.append(f"-DCIRCUITPY_{flag}=1")
+                for flag, value in EXTRA_FLAGS[module.name].items():
+                    circuitpython_flags.append(f"-DCIRCUITPY_{flag}={value}")
 
         if enabled:
             hal_source.extend(portdir.glob(f"bindings/{module.name}/*.c"))
@@ -457,6 +470,9 @@ async def build_circuitpython():
             if len(hal_source) == len_before or module.name in SHARED_MODULE_AND_COMMON_HAL:
                 hal_source.extend(top.glob(f"shared-module/{module.name}/*.c"))
             hal_source.extend(top.glob(f"shared-bindings/{module.name}/*.c"))
+            if module.name in LIBRARY_SOURCE:
+                for library_source in LIBRARY_SOURCE[module.name]:
+                    library_sources.extend(top.glob(library_source))
 
     if os.environ.get("CI", "false") == "true":
         # Fail the build if it isn't up to date.
@@ -555,6 +571,12 @@ async def build_circuitpython():
 
     objects = []
     async with asyncio.TaskGroup() as tg:
+        for source_file in library_sources:
+            source_file = top / source_file
+            build_file = source_file.with_suffix(".o")
+            object_file = builddir / (build_file.relative_to(top))
+            objects.append(object_file)
+            tg.create_task(compiler.compile(source_file, object_file))
         for source_file in source_files:
             source_file = top / source_file
             build_file = source_file.with_suffix(".o")
