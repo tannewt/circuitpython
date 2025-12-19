@@ -178,3 +178,11 @@ size_t port_heap_get_largest_free_size(void) {
     // IDF does this. Not sure why.
     return tlsf_fit_size(heap, max_size);
 }
+
+void assert_post_action(const char *file, unsigned int line) {
+    printk("Assertion failed at %s:%u\n", file, line);
+    __asm__ ("bkpt");
+    while (1) {
+        ;
+    }
+}

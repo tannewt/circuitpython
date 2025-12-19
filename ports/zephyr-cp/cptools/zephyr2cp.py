@@ -113,6 +113,35 @@ CONNECTORS = {
         "GPIO0",
         "GPIO1",
     ],
+    "nxp,cam-44pins-connector": ["CAM_RESETB", "CAM_PWDN"],
+    "nxp,lcd-8080": [
+        "TOUCH_SCL",
+        "TOUCH_SDA",
+        "TOUCH_INT",
+        "BACKLIGHT",
+        "RESET",
+        "LCD_DC",
+        "LCD_CS",
+        "LCD_WR",
+        "LCD_RD",
+        "LCD_TE",
+        "LCD_D0",
+        "LCD_D1",
+        "LCD_D2",
+        "LCD_D3",
+        "LCD_D4",
+        "LCD_D5",
+        "LCD_D6",
+        "LCD_D7",
+        "LCD_D8",
+        "LCD_D9",
+        "LCD_D10",
+        "LCD_D11",
+        "LCD_D12",
+        "LCD_D13",
+        "LCD_D14",
+        "LCD_D15",
+    ],
     "raspberrypi,csi-connector": [
         "CSI_D0_N",
         "CSI_D0_P",
@@ -431,7 +460,7 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
                 continue
             if driver == "flash":
                 pass  # Handled by find_flash_devices()
-            elif driver == "usb/udc":
+            elif driver == "usb/udc" or "zephyr_udc0" in node.labels:
                 board_info["usb_device"] = True
                 props = node.props
                 if "num-bidir-endpoints" not in props:
@@ -467,7 +496,7 @@ def zephyr_dts_to_cp_board(portdir, builddir, zephyrbuilddir):  # noqa: C901
             all_ioports.append(node.labels[0])
             if status == "okay":
                 ioports[node.labels[0]] = set(range(0, ngpios))
-        if gpio_map:
+        if gpio_map and compatible[0] != "gpio-nexus":
             i = 0
             for offset, t, label in gpio_map._markers:
                 if not label:

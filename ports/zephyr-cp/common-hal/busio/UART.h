@@ -17,6 +17,7 @@ typedef struct {
     struct k_msgq msgq;
 
     k_timeout_t timeout;
+    k_timeout_t write_timeout;
 
     bool rx_paused;     // set by irq if no space in rbuf
 } busio_uart_obj_t;
