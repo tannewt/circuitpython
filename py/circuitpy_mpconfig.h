@@ -650,7 +650,7 @@ void background_callback_run_all(void);
 // Align the internal sector buffer. Useful when it is passed into TinyUSB for
 // loads.
 #ifndef MICROPY_FATFS_WINDOW_ALIGNMENT
-#define MICROPY_FATFS_WINDOW_ALIGNMENT CIRCUITPY_TUSB_MEM_ALIGN
+#define MICROPY_FATFS_WINDOW_ALIGNMENT 64 // Espressif is strictest
 #endif
 
 #define FF_FS_CASE_INSENSITIVE_COMPARISON_ASCII_ONLY (1)
