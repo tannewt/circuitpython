@@ -1,4 +1,5 @@
 set(pca10056_BOARD_ALIAS nrf52840dk/nrf52840)
+set(renesas_da14695_dk_usb_BOARD_ALIAS da14695_dk_usb)
 set(renesas_ek_ra6m5_BOARD_ALIAS ek_ra6m5)
 set(renesas_ek_ra8d1_BOARD_ALIAS ek_ra8d1)
 set(nordic_nrf54l15dk_BOARD_ALIAS nrf54l15dk/nrf54l15/cpuapp)

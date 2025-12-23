@@ -12,6 +12,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 
+#include "bindings/zephyr_kernel/__init__.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-module/audiocore/__init__.h"
 #include "py/runtime.h"
@@ -104,7 +105,6 @@ static void fill_buffer(audiobusio_i2sout_obj_t *self, uint8_t *buffer, size_t b
             if (self->loop) {
                 // Reset to beginning
                 audiosample_reset_buffer(self->sample, false, 0);
-                continue;
             } else {
                 // Done playing, fill rest with silence
                 self->stopping = true;
@@ -159,7 +159,6 @@ static void audio_thread_func(void *self_in, void *unused1, void *unused2) {
 void common_hal_audiobusio_i2sout_play(audiobusio_i2sout_obj_t *self,
     mp_obj_t sample, bool loop) {
     printk("common_hal_audiobusio_i2sout_play\n");
-    return;
 
     // Stop any existing playback
     if (self->playing) {
@@ -211,8 +210,9 @@ void common_hal_audiobusio_i2sout_play(audiobusio_i2sout_obj_t *self,
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate I2S buffer"));
     }
 
+    printk("Allocating next buffer from slab\n");
     if (k_mem_slab_alloc(&self->mem_slab, (void **)&self->next_buffer, K_NO_WAIT) != 0) {
-        k_mem_slab_free(&self->mem_slab, (void *)&self->current_buffer);
+        k_mem_slab_free(&self->mem_slab, (void *)self->current_buffer);
         m_free(self->slab_buffer);
         self->slab_buffer = NULL;
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate I2S buffer"));
@@ -229,34 +229,43 @@ void common_hal_audiobusio_i2sout_play(audiobusio_i2sout_obj_t *self,
     config.block_size = block_size;
     config.timeout = 1000; // Not a k_timeout_t. In milliseconds.
 
+    printk("Configuring I2S\n");
     int ret = i2s_configure(self->i2s_dev, I2S_DIR_TX, &config);
     if (ret < 0) {
-        k_mem_slab_free(&self->mem_slab, (void *)&self->current_buffer);
-        k_mem_slab_free(&self->mem_slab, (void *)&self->next_buffer);
+        printk("Failed to configure I2S\n");
+        k_mem_slab_free(&self->mem_slab, (void *)self->current_buffer);
+        k_mem_slab_free(&self->mem_slab, (void *)self->next_buffer);
         m_free(self->slab_buffer);
         self->slab_buffer = NULL;
         mp_raise_RuntimeError(MP_ERROR_TEXT("Failed to configure I2S"));
     }
 
     // Fill initial buffer
+    printk("Filling initial buffer\n");
     fill_buffer(self, self->current_buffer, block_size);
 
     // Start I2S
+    printk("Starting I2S\n");
     ret = i2s_trigger(self->i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
     if (ret < 0) {
-        k_mem_slab_free(&self->mem_slab, (void *)&self->current_buffer);
-        k_mem_slab_free(&self->mem_slab, (void *)&self->next_buffer);
+        printk("Failed to start I2S %d\n", ret);
+        k_mem_slab_free(&self->mem_slab, (void *)self->current_buffer);
+        k_mem_slab_free(&self->mem_slab, (void *)self->next_buffer);
         m_free(self->slab_buffer);
         self->slab_buffer = NULL;
-        mp_raise_RuntimeError(MP_ERROR_TEXT("Failed to start I2S"));
+        raise_zephyr_error(ret);
+        return;
     }
 
     // Write first buffer
+    printk("Writing first buffer\n");
     ret = i2s_buf_write(self->i2s_dev, self->current_buffer, block_size);
     if (ret < 0) {
+        printk("Failed to write to I2S %d\n", ret);
+        printk("Stopping I2S\n");
         i2s_trigger(self->i2s_dev, I2S_DIR_TX, I2S_TRIGGER_STOP);
-        k_mem_slab_free(&self->mem_slab, (void *)&self->current_buffer);
-        k_mem_slab_free(&self->mem_slab, (void *)&self->next_buffer);
+        k_mem_slab_free(&self->mem_slab, (void *)self->current_buffer);
+        k_mem_slab_free(&self->mem_slab, (void *)self->next_buffer);
         m_free(self->slab_buffer);
         self->slab_buffer = NULL;
         mp_raise_RuntimeError(MP_ERROR_TEXT("Failed to write to I2S"));
@@ -265,6 +274,7 @@ void common_hal_audiobusio_i2sout_play(audiobusio_i2sout_obj_t *self,
     self->playing = true;
 
     // Allocate thread stack
+    printk("Allocating thread stack\n");
     self->thread_stack = m_malloc(AUDIO_THREAD_STACK_SIZE);
     if (self->thread_stack == NULL) {
         i2s_trigger(self->i2s_dev, I2S_DIR_TX, I2S_TRIGGER_STOP);
@@ -277,6 +287,7 @@ void common_hal_audiobusio_i2sout_play(audiobusio_i2sout_obj_t *self,
     }
 
     // Create and start audio processing thread
+    printk("Creating and starting audio processing thread\n");
     self->thread_id = k_thread_create(&self->thread, self->thread_stack,
         AUDIO_THREAD_STACK_SIZE,
         audio_thread_func,
