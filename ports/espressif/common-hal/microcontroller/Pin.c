@@ -13,7 +13,6 @@
 #include "driver/gpio.h"
 #include "soc/gpio_periph.h"
 
-static uint64_t _never_reset_pin_mask;
 static uint64_t _skip_reset_once_pin_mask;
 static uint64_t _preserved_pin_mask;
 static uint64_t _in_use_pin_mask;
@@ -270,14 +269,6 @@ static const uint64_t pin_mask_reset_forbidden =
 
 
 
-void never_reset_pin_number(gpio_num_t pin_number) {
-    // Some CircuitPython APIs deal in uint8_t pin numbers, but NO_PIN is -1.
-    // Also allow pin 255 to be treated as NO_PIN to avoid crashes
-    if (pin_number == NO_PIN || pin_number == (uint8_t)NO_PIN) {
-        return;
-    }
-    _never_reset_pin_mask |= PIN_BIT(pin_number);
-}
 
 void skip_reset_once_pin_number(gpio_num_t pin_number) {
     // Some CircuitPython APIs deal in uint8_t pin numbers, but NO_PIN is -1.
@@ -288,12 +279,6 @@ void skip_reset_once_pin_number(gpio_num_t pin_number) {
     _skip_reset_once_pin_mask |= PIN_BIT(pin_number);
 }
 
-void common_hal_never_reset_pin(const mcu_pin_obj_t *pin) {
-    if (pin == NULL) {
-        return;
-    }
-    never_reset_pin_number(pin->number);
-}
 
 MP_WEAK bool espressif_board_reset_pin_number(gpio_num_t pin_number) {
     return false;
@@ -303,9 +288,6 @@ static bool _reset_forbidden(gpio_num_t pin_number) {
     return pin_mask_reset_forbidden & PIN_BIT(pin_number);
 }
 
-static bool _never_reset(gpio_num_t pin_number) {
-    return _never_reset_pin_mask & PIN_BIT(pin_number);
-}
 
 static bool _skip_reset_once(gpio_num_t pin_number) {
     return _skip_reset_once_pin_mask & PIN_BIT(pin_number);
@@ -380,7 +362,6 @@ void reset_pin_number(gpio_num_t pin_number) {
     if (pin_number == NO_PIN || pin_number == (uint8_t)NO_PIN) {
         return;
     }
-    _never_reset_pin_mask &= ~PIN_BIT(pin_number);
     _in_use_pin_mask &= ~PIN_BIT(pin_number);
 
     _reset_pin(pin_number);
@@ -414,14 +395,13 @@ void reset_all_pins(void) {
 
     for (gpio_num_t i = 0; i < SOC_GPIO_PIN_COUNT; i++) {
         if (!GPIO_IS_VALID_GPIO(i) ||
-            _never_reset(i) ||
             _skip_reset_once(i) ||
             _preserved_pin(i)) {
             continue;
         }
         _reset_pin(i);
     }
-    _in_use_pin_mask = _never_reset_pin_mask | pin_mask_reset_forbidden;
+    _in_use_pin_mask = pin_mask_reset_forbidden;
     // Don't continue to skip resetting these pins.
     _skip_reset_once_pin_mask = 0;
 }

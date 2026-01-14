@@ -97,7 +97,6 @@ void alarm_touch_touchalarm_set_alarm(const bool deep_sleep, const size_t n_alar
 
     // reset touch peripheral
     peripherals_touch_reset();
-    peripherals_touch_never_reset(true);
 
     for (uint8_t i = 1; i <= 14; i++) {
         if ((touch_channel_mask & 1 << i) != 0) {
@@ -149,7 +148,6 @@ void alarm_touch_touchalarm_prepare_for_deep_sleep(void) {
     }
 
     // reset touch peripheral
-    peripherals_touch_never_reset(false);
     peripherals_touch_reset();
 
     // initialize touchpad
@@ -190,5 +188,4 @@ bool alarm_touch_touchalarm_woke_this_cycle(void) {
 void alarm_touch_touchalarm_reset(void) {
     woke_up = false;
     touch_channel_mask = 0;
-    peripherals_touch_never_reset(false);
 }

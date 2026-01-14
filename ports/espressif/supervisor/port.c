@@ -360,13 +360,7 @@ void reset_port(void) {
     analogout_reset();
     #endif
 
-    #if CIRCUITPY_BUSIO
-    uart_reset();
-    #endif
 
-    #if CIRCUITPY_SDIOIO
-    sdioio_reset();
-    #endif
 
     #if CIRCUITPY_DUALBANK
     dualbank_reset();

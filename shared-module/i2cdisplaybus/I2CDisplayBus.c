@@ -47,8 +47,6 @@ void common_hal_i2cdisplaybus_i2cdisplaybus_deinit(i2cdisplaybus_i2cdisplaybus_o
     if (self->bus == &self->inline_bus) {
         common_hal_busio_i2c_deinit(self->bus);
     }
-    // TODO figure out how to undo never_reset. maybe only mark never_reset when
-    // we subsume objects off the mp heap.
 
     self->bus = NULL;
 
