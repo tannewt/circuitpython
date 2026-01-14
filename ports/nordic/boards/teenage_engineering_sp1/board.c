@@ -195,11 +195,11 @@ void board_early_init(void) {
     nrfx_rtc_enable(&wake_rtc);
 }
 
-// Pins that must not float. reset_all_pins() and reset_pin_number() ask the
-// board for each pin, so this configuration is re-applied after every reset
+// Pins that must not float. reset_pin_number() asks the board for each pin,
+// so this configuration is re-applied after every reset rather than the pin
 // rather than the pin being left in its default (disconnected) state.
 //
-// None of these are marked never-reset, so Python can still claim them. This
+// None of these are claimed, so Python can still claim them. This
 // only makes the resting state between runs a defined, safe one.
 static const uint8_t default_low_pins[] = {
     // 3.072 MHz oscillator enable. Held low: it draws current straight through
@@ -281,9 +281,8 @@ static void apply_all_pin_defaults(void) {
 }
 
 bool board_reset_pin_number(uint8_t pin_number) {
-    // main() calls reset_all_pins() immediately after port_init(), so without
-    // this the boot up heartbeat blink would last microseconds and show
-    // nothing. board_init() hands the pin back.
+    // A reset of this pin while the heartbeat is lit must not disturb it;
+    // board_init() hands the pin back.
     if (heartbeat_lit && pin_number == PIN_LED_HEARTBEAT) {
         return true;
     }
