@@ -49,4 +49,3 @@ uint8_t common_hal_busio_i2c_write_read(busio_i2c_obj_t *self, uint16_t address,
     uint8_t *out_data, size_t out_len, uint8_t *in_data, size_t in_len);
 
 // This is used by the supervisor to claim I2C devices indefinitely.
-extern void common_hal_busio_i2c_never_reset(busio_i2c_obj_t *self);

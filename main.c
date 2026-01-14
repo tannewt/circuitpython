@@ -406,21 +406,22 @@ static void cleanup_after_vm(mp_obj_t exception) {
     wifi_user_reset();
     #endif
 
-    // reset_board_buses() first because it may release pins from the never_reset state, so that
-    // reset_port() can reset them.
+    // reset_board_buses() first to preserve display buses and deinit others.
     #if CIRCUITPY_BOARD
     reset_board_buses();
     #endif
+
+    // Flush before GC might free file objects.
+    filesystem_flush();
+
+    // Runs finalisers while shutting down the heap. Finalizers call deinit on all user objects.
+    stop_mp();
+
+    // Port-wide cleanup after finalizers have run.
     reset_port();
     reset_board();
 
-    // Free the heap last because other modules may reference heap memory and need to shut down.
-    filesystem_flush();
-
-    // Runs finalisers while shutting down the heap.
-    stop_mp();
-
-    // Don't reset pins until finalisers have run.
+    // Reset all pins unconditionally after finalizers have cleaned up objects.
     reset_all_pins();
 
     // Let the workflows know we've reset in case they want to restart.

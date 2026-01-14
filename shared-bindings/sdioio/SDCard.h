@@ -40,4 +40,3 @@ int common_hal_sdioio_sdcard_readblocks(sdioio_sdcard_obj_t *self, uint32_t star
 int common_hal_sdioio_sdcard_writeblocks(sdioio_sdcard_obj_t *self, uint32_t start_block, mp_buffer_info_t *bufinfo);
 
 // This is used by the supervisor to claim SDIO devices indefinitely.
-extern void common_hal_sdioio_sdcard_never_reset(sdioio_sdcard_obj_t *self);

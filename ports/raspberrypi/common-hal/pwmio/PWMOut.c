@@ -63,9 +63,6 @@ void pwmio_release_slice_ab_channels(uint8_t slice) {
     channel_use &= ~channel_mask;
 }
 
-void common_hal_pwmio_pwmout_never_reset(pwmio_pwmout_obj_t *self) {
-    never_reset_pin_number(self->pin->number);
-}
 
 pwmout_result_t pwmout_allocate(uint8_t slice, uint8_t ab_channel, bool variable_frequency, uint32_t frequency) {
     uint32_t channel_use_mask = _mask(slice, ab_channel);

@@ -421,16 +421,8 @@ safe_mode_t port_init(void) {
 }
 
 void reset_port(void) {
-    #if CIRCUITPY_BUSIO
-    reset_uart();
-    #endif
-
     #if CIRCUITPY_COUNTIO
     reset_countio();
-    #endif
-
-    #if CIRCUITPY_RP2PIO
-    reset_rp2pio_statemachine();
     #endif
 
     #if CIRCUITPY_RTC

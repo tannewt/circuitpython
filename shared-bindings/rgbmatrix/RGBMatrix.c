@@ -31,7 +31,6 @@ static uint8_t validate_pin(mp_obj_t obj, qstr arg_name) {
 
 static void claim_and_never_reset_pin(mp_obj_t pin) {
     common_hal_mcu_pin_claim(pin);
-    common_hal_never_reset_pin(pin);
 }
 
 static void claim_and_never_reset_pins(mp_obj_t seq) {
