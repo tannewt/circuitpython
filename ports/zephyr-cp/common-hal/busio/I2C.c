@@ -146,7 +146,3 @@ uint8_t common_hal_busio_i2c_write_read(busio_i2c_obj_t *self, uint16_t addr,
 
     return 0;
 }
-
-void common_hal_busio_i2c_never_reset(busio_i2c_obj_t *self) {
-    // Not needed for Zephyr port (devices are managed by Zephyr)
-}
