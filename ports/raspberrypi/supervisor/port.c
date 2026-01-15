@@ -161,7 +161,6 @@ static void __no_inline_not_in_flash_func(setup_psram)(void) {
         reset_pin_number(CIRCUITPY_PSRAM_CHIP_SELECT->number);
         return;
     }
-    never_reset_pin_number(CIRCUITPY_PSRAM_CHIP_SELECT->number);
 
     // Enable quad mode.
     qmi_hw->direct_csr = 30 << QMI_DIRECT_CSR_CLKDIV_LSB |
@@ -364,13 +363,6 @@ safe_mode_t port_init(void) {
 
     // Set up the critical section to protect the background task queue.
     critical_section_init(&background_queue_lock);
-
-    #if CIRCUITPY_CYW43
-    never_reset_pin_number(CYW43_DEFAULT_PIN_WL_REG_ON);
-    never_reset_pin_number(CYW43_DEFAULT_PIN_WL_DATA_IN);
-    never_reset_pin_number(CYW43_DEFAULT_PIN_WL_CS);
-    never_reset_pin_number(CYW43_DEFAULT_PIN_WL_CLOCK);
-    #endif
 
     // Reset everything into a known state before board_init.
     reset_port();
