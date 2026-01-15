@@ -360,9 +360,6 @@ safe_mode_t port_init(void) {
 }
 
 void reset_port(void) {
-    #if CIRCUITPY_BUSIO
-    reset_sercoms();
-    #endif
 
     #if CIRCUITPY_AUDIOIO
     audio_dma_reset();

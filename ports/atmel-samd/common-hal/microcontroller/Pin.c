@@ -26,7 +26,6 @@ bool speaker_enable_in_use;
 #define SWD_MUX GPIO_PIN_FUNCTION_G
 #endif
 
-static uint32_t never_reset_pins[PORT_COUNT];
 
 void reset_all_pins(void) {
     uint32_t pin_mask[PORT_COUNT] = PORT_OUT_IMPLEMENTED;
@@ -39,10 +38,6 @@ void reset_all_pins(void) {
     // Do not reset SWD when a debugger is present.
     if (DSU->STATUSB.bit.DBGPRES == 1) {
         pin_mask[0] &= ~(PORT_PA30 | PORT_PA31);
-    }
-
-    for (uint32_t i = 0; i < PORT_COUNT; i++) {
-        pin_mask[i] &= ~never_reset_pins[i];
     }
 
     gpio_set_port_direction(GPIO_PORTA, pin_mask[0], GPIO_DIRECTION_OFF);
@@ -73,20 +68,11 @@ void reset_all_pins(void) {
     #endif
 }
 
-void never_reset_pin_number(uint8_t pin_number) {
-    if (pin_number >= PORT_BITS) {
-        return;
-    }
-
-    never_reset_pins[GPIO_PORT(pin_number)] |= 1 << GPIO_PIN(pin_number);
-}
 
 void reset_pin_number(uint8_t pin_number) {
     if (pin_number >= PORT_BITS) {
         return;
     }
-
-    never_reset_pins[GPIO_PORT(pin_number)] &= ~(1 << GPIO_PIN(pin_number));
 
     if (pin_number == PIN_PA30
         #ifdef SAM_D5X_E5X
@@ -111,9 +97,6 @@ void reset_pin_number(uint8_t pin_number) {
     #endif
 }
 
-void common_hal_never_reset_pin(const mcu_pin_obj_t* pin) {
-    never_reset_pin_number(pin->number);
-}
 
 void common_hal_reset_pin(const mcu_pin_obj_t* pin) {
     if (pin == NULL) {

@@ -172,13 +172,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     spi_m_sync_enable(&self->spi_desc);
 }
 
-void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    never_reset_sercom(self->spi_desc.dev.prvt);
-
-    never_reset_pin_number(self->clock_pin);
-    never_reset_pin_number(self->MOSI_pin);
-    never_reset_pin_number(self->MISO_pin);
-}
 
 bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
     return self->clock_pin == NO_PIN;
