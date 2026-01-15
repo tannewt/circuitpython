@@ -22,7 +22,6 @@ uint32_t slice_variable_frequency;
 
 #define AB_CHANNELS_PER_SLICE 2
 static uint32_t channel_use;
-static uint32_t never_reset_channel;
 
 // Per the RP2040 datasheet:
 //
@@ -144,7 +143,6 @@ bool common_hal_pwmio_pwmout_deinited(pwmio_pwmout_obj_t *self) {
 void pwmout_free(uint8_t slice, uint8_t ab_channel) {
     uint32_t channel_mask = _mask(slice, ab_channel);
     channel_use &= ~channel_mask;
-    never_reset_channel &= ~channel_mask;
     uint32_t slice_mask = ((1 << AB_CHANNELS_PER_SLICE) - 1) << (slice * AB_CHANNELS_PER_SLICE);
     if ((channel_use & slice_mask) == 0) {
         target_slice_frequencies[slice] = 0;

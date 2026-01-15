@@ -175,7 +175,6 @@ void rp2pio_statemachine_dma_complete_write(rp2pio_statemachine_obj_t *self, int
 void rp2pio_statemachine_dma_complete_read(rp2pio_statemachine_obj_t *self, int channel);
 
 void rp2pio_statemachine_reset_ok(PIO pio, int sm);
-void rp2pio_statemachine_never_reset(PIO pio, int sm);
 
 uint8_t rp2pio_statemachine_find_pio(int program_size, int sm_count);
 
