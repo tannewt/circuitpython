@@ -18,7 +18,6 @@ bool speaker_enable_in_use;
 
 // Bit mask of claimed pins on each of up to two ports. nrf52832 has one port; nrf52840 has two.
 static uint32_t claimed_pins[GPIO_COUNT];
-static uint32_t never_reset_pins[GPIO_COUNT];
 
 static void reset_speaker_enable_pin(void) {
     #ifdef SPEAKER_ENABLE_PIN
@@ -35,13 +34,10 @@ static void reset_speaker_enable_pin(void) {
 
 void reset_all_pins(void) {
     for (size_t i = 0; i < GPIO_COUNT; i++) {
-        claimed_pins[i] = never_reset_pins[i];
+        claimed_pins[i] = 0;
     }
 
     for (uint32_t pin = 0; pin < NUMBER_OF_PINS; ++pin) {
-        if ((never_reset_pins[nrf_pin_port(pin)] & (1 << nrf_relative_pin_number(pin))) != 0) {
-            continue;
-        }
         nrf_gpio_cfg_default(pin);
     }
 
@@ -57,7 +53,6 @@ void reset_pin_number(uint8_t pin_number) {
 
     // Clear claimed bit.
     claimed_pins[nrf_pin_port(pin_number)] &= ~(1 << nrf_relative_pin_number(pin_number));
-    never_reset_pins[nrf_pin_port(pin_number)] &= ~(1 << nrf_relative_pin_number(pin_number));
 
     #ifdef SPEAKER_ENABLE_PIN
     if (pin_number == SPEAKER_ENABLE_PIN->number) {
@@ -66,17 +61,6 @@ void reset_pin_number(uint8_t pin_number) {
     #endif
 }
 
-
-void never_reset_pin_number(uint8_t pin_number) {
-    if (pin_number == NO_PIN) {
-        return;
-    }
-    never_reset_pins[nrf_pin_port(pin_number)] |= 1 << nrf_relative_pin_number(pin_number);
-}
-
-void common_hal_never_reset_pin(const mcu_pin_obj_t *pin) {
-    never_reset_pin_number(pin->number);
-}
 
 void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
     if (pin == NULL) {
