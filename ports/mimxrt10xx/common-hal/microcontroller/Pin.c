@@ -14,7 +14,6 @@
 #include "py/gc.h"
 
 static bool claimed_pins[PAD_COUNT];
-static bool never_reset_pins[PAD_COUNT];
 
 // Default is that no pins are forbidden to reset.
 MP_WEAK const mcu_pin_obj_t *mimxrt10xx_reset_forbidden_pins[] = {
@@ -38,13 +37,10 @@ static bool _reset_forbidden(const mcu_pin_obj_t *pin) {
 // systems are not related and one cannot determine the other without a pin object
 void reset_all_pins(void) {
     for (uint8_t i = 0; i < PAD_COUNT; i++) {
-        claimed_pins[i] = never_reset_pins[i];
+        claimed_pins[i] = 0;
     }
     for (uint8_t i = 0; i < PAD_COUNT; i++) {
         mcu_pin_obj_t *pin = mcu_pin_globals.map.table[i].value;
-        if (never_reset_pins[pin->mux_idx]) {
-            continue;
-        }
         common_hal_reset_pin(pin);
     }
 }
@@ -70,7 +66,6 @@ void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
     }
 
     disable_pin_change_interrupt(pin);
-    never_reset_pins[pin->mux_idx] = false;
     claimed_pins[pin->mux_idx] = false;
 
     // Make sure this pin's GPIO is set to input. Otherwise, output values could interfere
@@ -84,13 +79,6 @@ void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
     }
     *(uint32_t *)pin->mux_reg = pin->mux_reset;
     *(uint32_t *)pin->cfg_reg = pin->pad_reset;
-}
-
-void common_hal_never_reset_pin(const mcu_pin_obj_t *pin) {
-    if (pin == NULL) {
-        return;
-    }
-    never_reset_pins[pin->mux_idx] = true;
 }
 
 bool common_hal_mcu_pin_is_free(const mcu_pin_obj_t *pin) {
