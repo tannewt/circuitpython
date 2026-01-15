@@ -112,11 +112,3 @@ int common_hal_sdioio_sdcard_writeblocks(sdioio_sdcard_obj_t *self, uint32_t sta
 
     return self->inode->u.i_bops->write(self->inode, bufinfo->buf, start_block, bufinfo->len / 512);
 }
-
-void common_hal_sdioio_sdcard_never_reset(sdioio_sdcard_obj_t *self) {
-    never_reset_pin_number(self->clock_pin->number);
-    never_reset_pin_number(self->command_pin->number);
-    for (uint8_t i = 0; i < DATA_PINS_NUM; i++) {
-        never_reset_pin_number(self->data_pins[i]->number);
-    }
-}
