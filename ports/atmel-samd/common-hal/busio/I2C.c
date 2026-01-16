@@ -132,7 +132,6 @@ void common_hal_busio_i2c_deinit(busio_i2c_obj_t *self) {
     if (common_hal_busio_i2c_deinited(self)) {
         return;
     }
-    allow_reset_sercom(self->i2c_desc.device.hw);
 
     i2c_m_sync_disable(&self->i2c_desc);
     i2c_m_sync_deinit(&self->i2c_desc);
@@ -239,4 +238,3 @@ uint8_t common_hal_busio_i2c_write_read(busio_i2c_obj_t *self, uint16_t addr,
 
     return common_hal_busio_i2c_read(self, addr, in_data, in_len);
 }
-

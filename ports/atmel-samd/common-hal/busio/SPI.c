@@ -185,7 +185,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
     }
-    allow_reset_sercom(self->spi_desc.dev.prvt);
 
     // Mark as deinit early in case we are used in an interrupt.
     common_hal_busio_spi_mark_deinit(self);
