@@ -12,7 +12,6 @@
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/disk.h>
-#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/kernel.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/usb/class/usbd_msc.h>

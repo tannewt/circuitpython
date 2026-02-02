@@ -23,8 +23,11 @@
 #endif
 #endif
 
-#if CIRCUITPY_TINYUSB || CIRCUITPY_USB_KEYBOARD_WORKFLOW
+#if CIRCUITPY_USB_DEVICE || CIRCUITPY_USB_KEYBOARD_WORKFLOW
 #include "supervisor/usb.h"
+#endif
+
+#if CIRCUITPY_TINYUSB
 #include "tusb.h"
 #endif
 
@@ -68,8 +71,7 @@ void supervisor_workflow_request_background(void) {
 bool supervisor_workflow_active(void) {
     #if CIRCUITPY_USB_DEVICE
     // Eventually there might be other non-USB workflows, such as BLE.
-    // tud_ready() checks for usb mounted and not suspended.
-    if (tud_ready()) {
+    if (usb_connected()) {
         return true;
     }
     #endif

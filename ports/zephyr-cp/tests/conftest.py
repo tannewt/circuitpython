@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 ZEPHYR_CP = Path(__file__).parent.parent
 BUILD_DIR = ZEPHYR_CP / "build-native_native_sim"
 BINARY = BUILD_DIR / "zephyr-cp/zephyr/zephyr.exe"
+UART_PTY_RE = re.compile(r"uart connected to pseudotty: (?P<path>/dev/pts/\d+)", re.IGNORECASE)
+USB_PTY_RE = re.compile(
+    r"(?P<label>.*(?:usb|cdc|acm).*)connected to pseudotty: (?P<path>/dev/pts/\d+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -176,6 +181,7 @@ def run_circuitpython(native_sim_binary, create_flash_image, tmp_path):
         input_sequence: List of InputTrigger objects. When trigger text is seen
             in output, the corresponding data is written to the PTY. If trigger
             is None, the data is sent immediately when PTY is opened.
+        console: Which console PTY to use ("usb" or "uart").
     """
 
     def _run(
@@ -184,7 +190,11 @@ def run_circuitpython(native_sim_binary, create_flash_image, tmp_path):
         erase_flash: bool = False,
         input_sequence: list[InputTrigger] | None = None,
         disabled_i2c_devices: list[str] | None = None,
+        console: str = "uart",
     ) -> SimulatorResult:
+        console = console.lower()
+        if console not in ("usb", "uart"):
+            raise ValueError(f"Unknown console {console!r}; expected 'usb' or 'uart'")
         files = {"code.py": code} if code is not None else {}
         flash = create_flash_image(files)
         triggers = list(input_sequence) if input_sequence else []
@@ -236,10 +246,13 @@ def run_circuitpython(native_sim_binary, create_flash_image, tmp_path):
 
                     stdout_lines.append(line.rstrip())
 
-                    # Look for PTY path
-                    match = re.search(r"uart connected to pseudotty: (/dev/pts/\d+)", line)
-                    if match:
-                        pty_path = match.group(1)
+                    usb_match = USB_PTY_RE.search(line)
+                    if usb_match and console == "usb":
+                        pty_path = usb_match.group("path")
+                    uart_match = UART_PTY_RE.search(line)
+                    if uart_match and console == "uart":
+                        pty_path = uart_match.group("path")
+                    if pty_path:
                         # Open the PTY for reading and writing
                         pty_fd = os.open(pty_path, os.O_RDWR | os.O_NONBLOCK)
 
@@ -252,7 +265,7 @@ def run_circuitpython(native_sim_binary, create_flash_image, tmp_path):
                         break
 
             if pty_fd is None:
-                raise RuntimeError("Failed to find PTY path in output")
+                raise RuntimeError(f"Failed to find {console} PTY path in output")
 
             def check_triggers(accumulated_output: str) -> None:
                 """Check accumulated output against triggers and send input."""
