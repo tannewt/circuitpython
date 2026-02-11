@@ -353,6 +353,19 @@ static
 os_getenv_err_t common_hal_os_getenv_str_inner(const char *key, char *value, size_t value_len) {
     bool quoted;
     os_getenv_err_t result = os_getenv_buf_terminated(key, value, value_len, &quoted);
+    #if defined(__ZEPHYR__)
+    if (result == GETENV_ERR_OPEN || result == GETENV_ERR_NOT_FOUND) {
+        const char *env_value = getenv(key);
+        if (env_value != NULL) {
+            size_t len = strlen(env_value);
+            if (len + 1 > value_len) {
+                return GETENV_ERR_LENGTH;
+            }
+            memcpy(value, env_value, len + 1);
+            return GETENV_OK;
+        }
+    }
+    #endif
     if (result == GETENV_OK && !quoted) {
         result = GETENV_ERR_UNEXPECTED | value[0];
     }
@@ -391,9 +404,28 @@ static os_getenv_err_t common_hal_os_getenv_int_inner(const char *key, mp_int_t 
     char buf[16];
     bool quoted;
     os_getenv_err_t result = os_getenv_buf_terminated(key, buf, sizeof(buf), &quoted);
+    #if defined(__ZEPHYR__)
+    if (result != GETENV_OK) {
+        const char *env_value = getenv(key);
+        if (env_value != NULL) {
+            char *end;
+            long num = strtol(env_value, &end, 0);
+            while (unichar_isspace(*end)) {
+                end++;
+            }
+            if (end == env_value || *end) {
+                return GETENV_ERR_UNEXPECTED | *end;
+            }
+            *value = (mp_int_t)num;
+            return GETENV_OK;
+        }
+        return result;
+    }
+    #else
     if (result != GETENV_OK) {
         return result;
     }
+    #endif
     if (quoted) {
         return GETENV_ERR_UNEXPECTED | '"';
     }

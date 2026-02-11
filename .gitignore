@@ -107,3 +107,7 @@ TAGS
 
 # windsurf rules
 .windsurfrules
+
+# Zephyr trace files
+**/channel0_0
+**/*.perfetto-trace

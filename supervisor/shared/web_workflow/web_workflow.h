@@ -8,7 +8,12 @@
 
 #include <stdbool.h>
 
+#if CIRCUITPY_MDNS
 #include "shared-bindings/mdns/Server.h"
+#else
+typedef struct mdns_server_obj mdns_server_obj_t;
+#endif
+
 #include "shared-bindings/socketpool/Socket.h"
 
 // This background function should be called repeatedly. It cannot be done based

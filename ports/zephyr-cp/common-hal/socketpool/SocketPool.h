@@ -6,8 +6,13 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "py/obj.h"
 
 typedef struct {
     mp_obj_base_t base;
+    bool is_hostnetwork;
+    uint16_t port_offset;
 } socketpool_socketpool_obj_t;

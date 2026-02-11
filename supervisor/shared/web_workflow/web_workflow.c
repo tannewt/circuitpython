@@ -8,6 +8,8 @@
 #define _GNU_SOURCE
 
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "extmod/vfs.h"
@@ -41,6 +43,10 @@
 #include "shared-bindings/microcontroller/Processor.h"
 #include "shared-bindings/socketpool/Socket.h"
 #include "shared-bindings/socketpool/SocketPool.h"
+
+#if CIRCUITPY_HOSTNETWORK
+#include "bindings/hostnetwork/__init__.h"
+#endif
 
 #if CIRCUITPY_WIFI
 #include "shared-bindings/wifi/__init__.h"
@@ -84,9 +90,11 @@ typedef struct {
     char websocket_key[24 + 1];
 } _request;
 
+#if CIRCUITPY_WIFI
 static wifi_radio_error_t _wifi_status = WIFI_RADIO_ERROR_NONE;
+#endif
 
-#if CIRCUITPY_STATUS_BAR
+#if CIRCUITPY_STATUS_BAR && CIRCUITPY_WIFI
 // Store various last states to compute if status bar needs an update.
 static bool _last_enabled = false;
 static uint32_t _last_ip = 0;
@@ -173,9 +181,11 @@ static bool _base64_in_place(char *buf, size_t in_len, size_t out_len) {
 
 static void _update_encoded_ip(void) {
     uint32_t ipv4_address = 0;
+    #if CIRCUITPY_WIFI
     if (common_hal_wifi_radio_get_enabled(&common_hal_wifi_radio_obj)) {
         ipv4_address = wifi_radio_get_ipv4_address(&common_hal_wifi_radio_obj);
     }
+    #endif
     if (_encoded_ip != ipv4_address) {
         uint8_t *octets = (uint8_t *)&ipv4_address;
         snprintf(_our_ip_encoded, sizeof(_our_ip_encoded), "%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
@@ -184,25 +194,33 @@ static void _update_encoded_ip(void) {
 }
 
 mdns_server_obj_t *supervisor_web_workflow_mdns(mp_obj_t network_interface) {
-    #if CIRCUITPY_MDNS
+    #if CIRCUITPY_MDNS && CIRCUITPY_WIFI
     if (network_interface == &common_hal_wifi_radio_obj &&
         mdns.base.type == &mdns_server_type) {
         return &mdns;
     }
     #endif
+    (void)network_interface;
     return NULL;
 }
 
 #if CIRCUITPY_STATUS_BAR
 bool supervisor_web_workflow_status_dirty(void) {
+    #if CIRCUITPY_WIFI
     return common_hal_wifi_radio_get_enabled(&common_hal_wifi_radio_obj) != _last_enabled ||
            _encoded_ip != _last_ip ||
            _last_wifi_status != _wifi_status;
+    #else
+    return false;
+    #endif
 }
 #endif
 
 #if CIRCUITPY_STATUS_BAR
 void supervisor_web_workflow_status(void) {
+    #if !CIRCUITPY_WIFI
+    return;
+    #else
     _last_enabled = common_hal_wifi_radio_get_enabled(&common_hal_wifi_radio_obj);
     if (_last_enabled) {
         uint32_t ipv4_address = wifi_radio_get_ipv4_address(&common_hal_wifi_radio_obj);
@@ -233,12 +251,20 @@ void supervisor_web_workflow_status(void) {
         serial_write_compressed(MP_ERROR_TEXT("Wi-Fi: "));
         serial_write_compressed(MP_ERROR_TEXT("off"));
     }
+    #endif
 }
 #endif
 
 bool supervisor_start_web_workflow(void) {
-    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_WIFI && CIRCUITPY_OS_GETENV
+    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_OS_GETENV && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK)
 
+    #if CIRCUITPY_WIFI
+    mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj);
+    #else
+    mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_hostnetwork_obj);
+    #endif
+
+    #if CIRCUITPY_WIFI
     char ssid[33];
     char password[64];
 
@@ -275,6 +301,7 @@ bool supervisor_start_web_workflow(void) {
         common_hal_wifi_radio_set_enabled(&common_hal_wifi_radio_obj, false);
         return false;
     }
+    #endif
 
     // Skip starting the workflow if we're not starting from power on or reset.
     const mcu_reset_reason_t reset_reason = common_hal_mcu_processor_get_reset_reason();
@@ -289,7 +316,7 @@ bool supervisor_start_web_workflow(void) {
     bool initialized = pool.base.type == &socketpool_socketpool_type;
 
     if (!initialized) {
-        result = common_hal_os_getenv_str("CIRCUITPY_WEB_INSTANCE_NAME", web_instance_name, sizeof(web_instance_name));
+        os_getenv_err_t result = common_hal_os_getenv_str("CIRCUITPY_WEB_INSTANCE_NAME", web_instance_name, sizeof(web_instance_name));
         if (result != GETENV_OK || web_instance_name[0] == '\0') {
             strcpy(web_instance_name, MICROPY_HW_BOARD_NAME);
         }
@@ -307,7 +334,7 @@ bool supervisor_start_web_workflow(void) {
         }
 
         pool.base.type = &socketpool_socketpool_type;
-        common_hal_socketpool_socketpool_construct(&pool, &common_hal_wifi_radio_obj);
+        common_hal_socketpool_socketpool_construct(&pool, socketpool_radio);
 
         socketpool_socket_reset(&listening);
         socketpool_socket_reset(&active);

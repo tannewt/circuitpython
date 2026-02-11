@@ -1858,6 +1858,10 @@ msgstr ""
 msgid "Polygon needs at least 3 points"
 msgstr ""
 
+#: ports/zephyr-cp/common-hal/socketpool/Socket.c
+msgid "Port out of range"
+msgstr ""
+
 #: supervisor/shared/safe_mode.c
 msgid "Power dipped. Make sure you are providing enough power."
 msgstr ""
@@ -2077,8 +2081,11 @@ msgstr ""
 
 #: ports/espressif/common-hal/socketpool/SocketPool.c
 #: ports/raspberrypi/common-hal/socketpool/SocketPool.c
-#: ports/zephyr-cp/common-hal/socketpool/SocketPool.c
 msgid "SocketPool can only be used with wifi.radio"
+msgstr ""
+
+#: ports/zephyr-cp/common-hal/socketpool/SocketPool.c
+msgid "SocketPool can only be used with wifi.radio or hostnetwork.HostNetwork"
 msgstr ""
 
 #: shared-bindings/aesio/aes.c

@@ -24,12 +24,11 @@
 //|     a pool of sockets provided by the underlying OS.
 //|     """
 //|
-//|     def __init__(self, radio: wifi.Radio) -> None:
+//|     def __init__(self, radio: Union[wifi.Radio, hostnetwork.HostNetwork]) -> None:
 //|         """Create a new SocketPool object for the provided radio
 //|
-//|         :param wifi.Radio radio: The (connected) network hardware to associate
-//|             with this SocketPool; currently, this will always be the object
-//|             returned by :py:attr:`wifi.radio`
+//|         :param radio: The (connected) network interface to associate with this
+//|             SocketPool, such as :py:attr:`wifi.radio` or :py:attr:`board.NETWORK`.
 //|         """
 //|         ...
 //|
