@@ -37,6 +37,17 @@
 #define IOBROKER_ROUTING 0
 #endif
 
+// Analog pad allocation is available when a supported analog device is
+// built: the nRF SAADC driver (src/nordic/nrf/) or the emulated ADC/DAC
+// devices (src/emul/, native_sim). Without it the allocate function reports
+// -ENOSYS.
+#if defined(CONFIG_ADC_NRFX_SAADC) || defined(CONFIG_ADC_EMUL) || \
+    defined(CONFIG_DAC_TEST)
+#define IOBROKER_ANALOG 1
+#else
+#define IOBROKER_ANALOG 0
+#endif
+
 // Signals needed by the widest bus (UART with tx/rx/rts/cts).
 #define IOBROKER_MAX_PINS 4
 
@@ -165,6 +176,37 @@ int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     package_pin_t miso, const struct device **dev_out);
 int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     package_pin_t rts, package_pin_t cts, const struct device **dev_out);
+
+// Analog peripheral kinds, for iobroker_analog_allocate().
+#define IOBROKER_ANALOG_ADC 0
+#define IOBROKER_ANALOG_DAC 1
+
+// Allocate a package pin for an analog peripheral function (ADC input or DAC
+// output). Analog functions have no runtime routing: the pad's analog input
+// is fixed by the SoC, so the call resolves and returns it in *input_out (the
+// input selector the device's channel configuration takes, such as a SAADC
+// AIN number; undefined when the device has no selectable inputs, as on the
+// emulated ADC). The call also assigns a free channel slot on the analog
+// device, returned in *channel_out; the caller configures the channel itself
+// (adc_channel_setup()/dac_channel_setup()) with channel_id = *channel_out
+// and input_positive = *input_out where the device takes an input selector.
+// The pad stays claimed while the allocation is held, so bus allocate() calls
+// and GPIO allocations refuse it with -EBUSY.
+//
+// Returns 0, or a negative errno:
+//   -ENOSYS: no analog support for this kind on this SoC
+//   -EINVAL: the pin is disconnected, unknown, or has no analog function
+//   -EBUSY:  the pad is already claimed
+//   -ENOMEM: the analog claim registry is full
+int iobroker_analog_allocate(package_pin_t pin, uint16_t kind,
+    const struct device **dev_out, uint8_t *channel_out, uint8_t *input_out);
+
+// Release an analog pad allocated with iobroker_analog_allocate(), unconfigure
+// its channel if the analog device needs that (Zephyr's ADC API has no
+// channel release, so implementations handle it per SoC) and return the pad
+// to a quiescent state. Pass the device and channel the allocate call
+// returned. Returns true when an allocation was held.
+bool iobroker_analog_release(const struct device *dev, uint8_t channel);
 
 // Returns true when the package pin is currently claimed by an allocated bus
 // instance, a GPIO allocation, or a fixed peripheral (console UART, flash

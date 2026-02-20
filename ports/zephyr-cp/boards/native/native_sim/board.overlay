@@ -60,4 +60,20 @@
 	};
 };
 
+/* Expand ADC channels for analogio tests. */
+&adc0 {
+	nchannels = <4>;
+	ref-internal-mv = <3300>;
+};
+
+/ {
+	dac0: dac {
+		compatible = "vnd,dac";
+		status = "okay";
+		#io-channel-cells = <1>;
+		vref-mv = <3300>;
+	};
+};
+
+
 #include "../../../app.overlay"

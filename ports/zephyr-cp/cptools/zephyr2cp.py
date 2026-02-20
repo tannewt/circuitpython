@@ -44,6 +44,14 @@ BLOCKED_FLASH_COMPAT = (
 
 BUSIO_CLASSES = {"serial": "UART", "i2c": "I2C", "spi": "SPI"}
 
+# Compatibles analogio is implemented against: the SoC ADC (whose pads
+# iobroker resolves to their fixed analog input) and the emulated devices.
+ANALOG_COMPAT = {
+    "nordic_nrf_saadc": "adc",
+    "zephyr_adc_emul": "adc",
+    "vnd_dac": "dac",
+}
+
 AUDIOBUSIO_CLASSES = {"i2s": "I2SOut"}
 
 CONNECTORS = {
@@ -659,6 +667,8 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
 
     config_bt_enabled = False
     config_bt_found = False
+    config_adc_enabled = False
+    config_dac_enabled = False
     config_present = True
     config = zephyrbuilddir / ".config"
     if not config.exists():
@@ -668,11 +678,13 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             if line.startswith("CONFIG_BT="):
                 config_bt_enabled = line.strip().endswith("=y")
                 config_bt_found = True
-                break
-            if line.startswith("# CONFIG_BT is not set"):
+            elif line.startswith("# CONFIG_BT is not set"):
                 config_bt_enabled = False
                 config_bt_found = True
-                break
+            elif line.startswith("CONFIG_ADC="):
+                config_adc_enabled = line.strip().endswith("=y")
+            elif line.startswith("CONFIG_DAC="):
+                config_dac_enabled = line.strip().endswith("=y")
 
     runners = zephyrbuilddir / "runners.yaml"
     runners = yaml.safe_load(runners.read_text())
@@ -739,6 +751,8 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
     active_zephyr_devices = {}
     usb_num_endpoint_pairs = 0
     ble_hardware_present = False
+    adc_present = False
+    dac_present = False
     for k in device_tree.root.nodes["chosen"].props:
         value = device_tree.root.nodes["chosen"].props[k]
         path2chosen[value.to_path()] = k
@@ -817,6 +831,19 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                 if driver not in active_zephyr_devices:
                     active_zephyr_devices[driver] = []
                 active_zephyr_devices[driver].append(node.labels)
+            elif driver in ("adc", "dac"):
+                # Analog peripherals: analogio is only enabled for the
+                # compatibles it implements (the SoC ADCs iobroker can resolve
+                # to their fixed analog inputs, and the emulated devices);
+                # external sensor ADC chips are not pad-addressable.
+                if underscored in ANALOG_COMPAT:
+                    if driver == "adc":
+                        adc_present = True
+                    else:
+                        dac_present = True
+                    logger.info(f"Supported analog driver: {underscored}")
+                else:
+                    logger.debug(f"Analog driver without analogio support: {underscored}")
             else:
                 logger.warning(f"Unsupported driver: {driver}")
 
@@ -1464,6 +1491,12 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     board_info["cflags"] = ("-I", board_dir)
     board_info["flash_count"] = len(flashes)
     board_info["rotaryio"] = bool(ioports)
+    # analogio requires both the devicetree device and the Zephyr driver:
+    # the ADC path resolves pads to their analog inputs through iobroker and
+    # the DAC path needs the emulated DAC for its counter tracks.
+    board_info["analogio"] = (adc_present and config_adc_enabled) or (
+        dac_present and config_dac_enabled
+    )
     board_info["usb_num_endpoint_pairs"] = usb_num_endpoint_pairs
 
     # Detect NVM partition from the device tree.

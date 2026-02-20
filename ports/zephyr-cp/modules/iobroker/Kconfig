@@ -13,6 +13,13 @@ config IOBROKER_GPIO_MAX_PINS
 	  Size of the registry of pins claimed for plain GPIO use via
 	  iobroker_gpio_allocate().
 
+config IOBROKER_ANALOG_MAX_PINS
+	int "Maximum number of pins allocatable for analog use"
+	default 16
+	help
+	  Size of the registry of pads claimed for analog use (ADC inputs, DAC
+	  outputs) via iobroker_analog_allocate().
+
 choice IOBROKER_PACKAGE
 	prompt "SoC package pin map"
 	help

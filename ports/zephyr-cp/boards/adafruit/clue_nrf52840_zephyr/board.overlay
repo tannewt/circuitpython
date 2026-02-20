@@ -135,3 +135,8 @@
 };
 
 #include "../../../app.overlay"
+
+/* Enable the SAADC for analogio (AIN0..AIN7 are on P0.02..P0.05 and P0.28..P0.31). */
+&adc {
+	status = "okay";
+};

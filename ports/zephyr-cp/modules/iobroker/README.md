@@ -28,6 +28,14 @@ encoding can be computed at runtime and whose peripherals can be routed to
 (almost) any pin via PSEL. On other SoCs the module compiles but the allocate
 functions always return `-ENOSYS`.
 
+Analog pads (ADC inputs, DAC outputs) are allocated through
+`iobroker_analog_allocate()`, which has no routing: the pad's analog input is
+fixed by the SoC, so the call resolves it (for example a SAADC AIN number)
+from a per-SoC table, claims the pad and hands out a free channel slot on the
+analog device. Zephyr's ADC API has no channel release, so the release
+implementation unconfigures the slot per SoC (through `nrfx` for the SAADC).
+See `src/nordic/nrf/iobroker_analog.c` and `src/emul/iobroker_analog.c`.
+
 ## Source layout
 
 The source is organized by vendor and SoC family under `src/`:

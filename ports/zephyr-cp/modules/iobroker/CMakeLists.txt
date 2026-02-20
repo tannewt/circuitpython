@@ -16,6 +16,16 @@ zephyr_library_sources(src/iobroker.c)
 zephyr_library_sources_ifdef(CONFIG_PINCTRL_NRF
   src/nordic/nrf/iobroker_route.c
 )
+
+# Analog pad allocation: the nRF SAADC and the emulated ADC/DAC devices used
+# on native_sim. Other SoCs' implementations go into src/<vendor>/<soc>/ and
+# get a corresponding line here.
+zephyr_library_sources_ifdef(CONFIG_ADC_NRFX_SAADC
+  src/nordic/nrf/iobroker_analog.c
+)
+if(CONFIG_ADC_EMUL OR CONFIG_DAC_TEST)
+  zephyr_library_sources(src/emul/iobroker_analog.c)
+endif()
 # Private headers shared by the core and the vendor implementations.
 zephyr_library_include_directories(src)
 
