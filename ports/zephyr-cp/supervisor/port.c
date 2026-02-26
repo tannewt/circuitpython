@@ -52,6 +52,7 @@ static struct k_timer tick_timer;
 // INT32_MAX means option was not provided.
 static int32_t native_sim_vm_runs = INT32_MAX;
 static uint32_t native_sim_reset_port_count = 0;
+static bool native_sim_enable_usb = false;
 
 static struct args_struct_t native_sim_reset_port_args[] = {
     {
@@ -62,6 +63,13 @@ static struct args_struct_t native_sim_reset_port_args[] = {
         .descript = "Exit native_sim after this many VM runs. "
             "Example: --vm-runs=2"
     },
+    {
+        .option = "enable-usb",
+        .is_switch = true,
+        .type = 'b',
+        .dest = &native_sim_enable_usb,
+        .descript = "Enable USB stack (USB/IP) in native_sim."
+    },
     ARG_TABLE_ENDMARKER
 };
 
@@ -71,6 +79,14 @@ static void native_sim_register_cmdline_opts(void) {
 
 NATIVE_TASK(native_sim_register_cmdline_opts, PRE_BOOT_1, 0);
 #endif
+
+bool native_sim_usb_enabled(void) {
+    #if defined(CONFIG_ARCH_POSIX)
+    return native_sim_enable_usb;
+    #else
+    return true;
+    #endif
+}
 
 static void _tick_function(struct k_timer *timer_id) {
     supervisor_tick();

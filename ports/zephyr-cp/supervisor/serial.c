@@ -8,78 +8,104 @@
 
 #include "supervisor/zephyr-cp.h"
 
-#if CIRCUITPY_USB_DEVICE == 1
-#include "shared-bindings/usb_cdc/Serial.h"
-usb_cdc_serial_obj_t *usb_console;
-#else
 #include "shared-bindings/busio/UART.h"
 static busio_uart_obj_t uart_console;
-static uint8_t buffer[64];
+static uint8_t uart_buffer[64];
+
+#if CIRCUITPY_USB_DEVICE == 1
+#include "shared-bindings/usb_cdc/Serial.h"
+static usb_cdc_serial_obj_t *usb_console;
+static bool use_usb_console;
 #endif
 
-void port_serial_early_init(void) {
-    #if CIRCUITPY_USB_DEVICE == 0
+static void uart_console_init(void) {
     uart_console.base.type = &busio_uart_type;
-    common_hal_busio_uart_construct_from_device(&uart_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(buffer), buffer);
+    common_hal_busio_uart_construct_from_device(&uart_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(uart_buffer), uart_buffer);
+}
+
+void port_serial_early_init(void) {
+    #if CIRCUITPY_USB_DEVICE == 1
+    use_usb_console = native_sim_usb_enabled();
+    if (!use_usb_console) {
+        uart_console_init();
+    }
+    #else
+    uart_console_init();
     #endif
 }
 
 void port_serial_init(void) {
     #if CIRCUITPY_USB_DEVICE == 1
-    usb_console = usb_cdc_serial_get_console();
+    if (use_usb_console) {
+        usb_console = usb_cdc_serial_get_console();
+        #if defined(CONFIG_ARCH_POSIX)
+        if (usb_console == NULL) {
+            use_usb_console = false;
+            uart_console_init();
+        }
+        #endif
+    }
     #endif
 }
 
 bool port_serial_connected(void) {
     #if CIRCUITPY_USB_DEVICE == 1
-    if (usb_console == NULL) {
-        return false;
+    if (use_usb_console) {
+        if (usb_console == NULL) {
+            return false;
+        }
+        return common_hal_usb_cdc_serial_get_connected(usb_console);
     }
-    return common_hal_usb_cdc_serial_get_connected(usb_console);
-    #else
-    return true;
     #endif
+    return true;
 }
 
 char port_serial_read(void) {
+    char buf[1];
+    size_t count;
+
     #if CIRCUITPY_USB_DEVICE == 1
-    if (usb_console == NULL) {
-        return -1;
+    if (use_usb_console) {
+        if (usb_console == NULL) {
+            return -1;
+        }
+        count = common_hal_usb_cdc_serial_read(usb_console, buf, 1, NULL);
+        if (count == 0) {
+            return -1;
+        }
+        return buf[0];
     }
-    char buf[1];
-    size_t count = common_hal_usb_cdc_serial_read(usb_console, buf, 1, NULL);
-    if (count == 0) {
-        return -1;
-    }
-    return buf[0];
-    #else
-    char buf[1];
-    size_t count = common_hal_busio_uart_read(&uart_console, buf, 1, NULL);
-    if (count == 0) {
-        return -1;
-    }
-    return buf[0];
     #endif
+
+    count = common_hal_busio_uart_read(&uart_console, buf, 1, NULL);
+    if (count == 0) {
+        return -1;
+    }
+    return buf[0];
 }
 
 uint32_t port_serial_bytes_available(void) {
     #if CIRCUITPY_USB_DEVICE == 1
-    if (usb_console == NULL) {
-        return 0;
+    if (use_usb_console) {
+        if (usb_console == NULL) {
+            return 0;
+        }
+        return common_hal_usb_cdc_serial_get_in_waiting(usb_console);
     }
-    return common_hal_usb_cdc_serial_get_in_waiting(usb_console);
-    #else
-    return common_hal_busio_uart_rx_characters_available(&uart_console);
     #endif
+
+    return common_hal_busio_uart_rx_characters_available(&uart_console);
 }
 
 void port_serial_write_substring(const char *text, uint32_t length) {
     #if CIRCUITPY_USB_DEVICE == 1
-    if (usb_console == NULL) {
+    if (use_usb_console) {
+        if (usb_console != NULL) {
+            common_hal_usb_cdc_serial_write(usb_console, text, length, NULL);
+        }
         return;
     }
-    common_hal_usb_cdc_serial_write(usb_console, text, length, NULL);
-    #else
-    common_hal_busio_uart_write(&uart_console, text, length, NULL);
     #endif
+
+    common_hal_busio_uart_write(&uart_console, text, length, NULL);
 }

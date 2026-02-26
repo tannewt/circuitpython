@@ -46,6 +46,10 @@ def pytest_configure(config):
         "markers",
         "native_sim_rt: run native_sim in realtime mode (-rt instead of -no-rt)",
     )
+    config.addinivalue_line(
+        "markers",
+        "native_sim_usb: run native_sim with USB enabled (--enable-usb)",
+    )
 
 
 ZEPHYR_CP = Path(__file__).parent.parent
@@ -216,13 +220,18 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
             realtime_flag = "-rt" if use_realtime else "-no-rt"
             cmd.extend((realtime_flag, "-wait_uart", f"--vm-runs={code_py_runs + 1}"))
 
+        if request.node.get_closest_marker("native_sim_usb") is not None and "bsim" not in board:
+            cmd.append("--enable-usb")
+
         marker = request.node.get_closest_marker("disable_i2c_devices")
         if marker and len(marker.args) > 0:
             for device in marker.args:
                 cmd.append(f"--disable-i2c={device}")
         logger.info("Running: %s", " ".join(cmd))
 
-        procs.append(NativeSimProcess(cmd, timeout, trace_file, native_sim_env))
+        proc = NativeSimProcess(cmd, timeout, trace_file, native_sim_env)
+        proc.flash_path = flash
+        procs.append(proc)
     if instance_count == 1:
         yield procs[0]
     else:

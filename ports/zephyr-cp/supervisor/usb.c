@@ -12,7 +12,6 @@
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/disk.h>
-#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/kernel.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/usb/class/usbd_msc.h>
@@ -210,6 +209,15 @@ static void _msg_cb(struct usbd_context *const ctx, const struct usbd_msg *msg) 
 void usb_init(void) {
     printk("Initializing USB\n");
     int err;
+
+    #if defined(CONFIG_ARCH_POSIX)
+    if (!native_sim_usb_enabled()) {
+        usb_cdc_set_console(mp_const_none);
+        usb_cdc_set_data(mp_const_none);
+        printk("USB disabled (pass --enable-usb to enable)\n");
+        return;
+    }
+    #endif
 
     printk("Adding language descriptor\n");
     err = usbd_add_descriptor(&main_usbd, &main_lang);

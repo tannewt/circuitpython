@@ -4,6 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include <stdbool.h>
+
 #include "shared-bindings/usb_cdc/Serial.h"
 
 usb_cdc_serial_obj_t *usb_cdc_serial_get_console(void);
+bool native_sim_usb_enabled(void);

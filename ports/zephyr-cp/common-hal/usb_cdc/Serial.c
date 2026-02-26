@@ -60,9 +60,9 @@ void common_hal_usb_cdc_serial_set_timeout(usb_cdc_serial_obj_t *self, mp_float_
 }
 
 mp_float_t common_hal_usb_cdc_serial_get_write_timeout(usb_cdc_serial_obj_t *self) {
-    return common_hal_busio_uart_get_write_timeout(self);
+    return common_hal_busio_uart_get_timeout(self);
 }
 
 void common_hal_usb_cdc_serial_set_write_timeout(usb_cdc_serial_obj_t *self, mp_float_t write_timeout) {
-    common_hal_busio_uart_set_write_timeout(self, write_timeout);
+    common_hal_busio_uart_set_timeout(self, write_timeout);
 }

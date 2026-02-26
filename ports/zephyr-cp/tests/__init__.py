@@ -139,7 +139,11 @@ class NativeSimProcess:
     def shutdown(self):
         if self._proc.poll() is None:
             self._proc.terminate()
-            self._proc.wait(timeout=self._timeout)
+            try:
+                self._proc.wait(timeout=self._timeout)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+                self._proc.wait(timeout=5)
 
         self.serial.close()
         self.debug_serial.close()
