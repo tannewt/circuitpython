@@ -1,31 +1,9 @@
-&flash0 {
-    /delete-node/ partitions;
+#include "partitions/stm32wba65i_dk1.dtsi"
 
-    partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		boot_partition: partition@0 {
-			label = "mcuboot";
-			reg = <0x00000000 DT_SIZE_K(64)>;
-		};
-
-		slot0_partition: partition@10000 {
-			label = "image-0";
-			reg = <0x00010000 DT_SIZE_K(928)>;
-		};
-
-		storage_partition: partition@f80000 {
-			label = "storage";
-			reg = <0x001e0000 DT_SIZE_K(64)>;
-		};
-
-        circuitpy_partition: partition@108000 {
-            label = "circuitpy";
-            reg = <0x00108000 DT_SIZE_K(992)>;
-        };
-    };
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
 };
 
 &rng {

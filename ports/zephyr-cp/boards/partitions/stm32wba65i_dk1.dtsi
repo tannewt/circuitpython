@@ -1,0 +1,4 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash0 { /delete-node/ partitions; };
+
+#include "generated/stm32wba65i_dk1.dtsi"

@@ -10,6 +10,11 @@ if(CONFIG_BOARD_NATIVE_SIM)
     target_sources(app PRIVATE native_sim_i2c_emul_control.c)
 endif()
 
+# External nRF70 firmware loader (reads FW from flash partition)
+if(CONFIG_NRF_WIFI_PATCHES_EXTERNAL)
+    target_sources(app PRIVATE nrf70_fw_load_external.c)
+endif()
+
 if(CONFIG_TRACING_PERFETTO)
   zephyr_include_directories(${ZEPHYR_BINARY_DIR}/subsys/tracing/perfetto/proto)
 endif()

@@ -1,0 +1,14 @@
+&w25q512jvfiq {
+	partitions {
+
+		nvm_partition: partition@620000 {
+			label = "nvm";
+			reg = <0x620000 DT_SIZE_K(4)>;
+		};
+
+		circuitpy_partition: partition@621000 {
+			label = "circuitpy";
+			reg = <0x621000 DT_SIZE_K(59260)>;
+		};
+	};
+};

@@ -1,5 +1,9 @@
-&mx25lm51245 {
-    /delete-node/ partitions;
+#include "partitions/stm32h7b3i_dk.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
 };
 
 &sram5 {

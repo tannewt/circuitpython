@@ -1,10 +1,9 @@
-&flash0 {
-    partitions{
-        circuitpy_partition: partition@118000 {
-			label = "circuitpy";
-			reg = <0x118000 (DT_SIZE_M(4) - DT_SIZE_K(1120))>;
-		};
-    };
+#include "partitions/da14695_dk_usb.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
 };
 
 #include "../app.overlay"

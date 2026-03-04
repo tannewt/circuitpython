@@ -21,7 +21,7 @@ ifeq ($(DEBUG),1)
 WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(DEBUG_CONF_FILE)
 endif
 
-.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all test fetch-port-submodules
+.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules mcuboot
 
 $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
 	python cptools/pre_zephyr_build_prep.py $(BOARD)
@@ -37,7 +37,7 @@ $(BUILD)/firmware.exe: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $(BUILD)/zephyr-cp/zephyr/zephyr.exe $@
 
 $(BUILD)/firmware.uf2: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
-	cp $(BUILD)/zephyr-cp/zephyr/zephyr.uf2 $@
+	python zephyr/scripts/build/uf2conv.py -c -b $(shell grep CONFIG_FLASH_LOAD_OFFSET $(BUILD)/zephyr-cp/zephyr/.config | cut -d= -f2) -o $@ $(BUILD)/zephyr-cp/zephyr/zephyr.signed.bin
 
 flash: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	west flash -d $(BUILD)
@@ -73,6 +73,9 @@ run-sim:
 menuconfig:
 	west build $(WEST_SHIELD_ARGS) --sysbuild -d $(BUILD) -t menuconfig -- $(WEST_CMAKE_ARGS)
 
+mcuboot:
+	west build -d $(BUILD) --domain mcuboot
+
 clean:
 	rm -rf $(BUILD)
 
@@ -86,6 +89,13 @@ all:
 
 clean-all:
 	rm -rf build build-*
+
+# Build all sim boards concurrently using the same jobserver as `make all`.
+sim:
+	+python cptools/build_all_boards.py --vendor native --continue-on-error
+
+clean-sim:
+	rm -rf $(wildcard build-native_*)
 
 test: build-native_native_sim/zephyr-cp/zephyr/zephyr.exe
 	pytest cptools/tests

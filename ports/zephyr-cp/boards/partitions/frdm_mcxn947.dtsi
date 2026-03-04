@@ -1,0 +1,5 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash { /delete-node/ partitions; };
+&w25q64jvssiq { /delete-node/ partitions; };
+
+#include "generated/frdm_mcxn947.dtsi"

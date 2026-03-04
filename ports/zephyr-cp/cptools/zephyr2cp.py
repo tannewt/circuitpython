@@ -893,4 +893,12 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     board_info["flash_count"] = len(flashes)
     board_info["rotaryio"] = bool(ioports)
     board_info["usb_num_endpoint_pairs"] = usb_num_endpoint_pairs
+
+    # Detect NVM partition size from the device tree.
+    nvm_size = 0
+    nvm_node = device_tree.label2node.get("nvm_partition")
+    if nvm_node and "reg" in nvm_node.props:
+        nvm_size = nvm_node.props["reg"].to_nums()[1]
+    board_info["nvm_size"] = nvm_size
+
     return board_info

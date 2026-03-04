@@ -1,0 +1,4 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&mx25um51245g { /delete-node/ partitions; };
+
+#include "generated/nucleo_n657x0_q.dtsi"

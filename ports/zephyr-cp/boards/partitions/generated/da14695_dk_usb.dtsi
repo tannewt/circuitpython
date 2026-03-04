@@ -1,0 +1,34 @@
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* 0x0-0x2400 reserved for product header.
+		 * MCUboot limited to 64 KB cacheable area. */
+		boot_partition: partition@2400 {
+			label = "mcuboot";
+			reg = <0x2400 0xdc00>;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x10000 DT_SIZE_K(1024)>;
+		};
+
+		storage_partition: partition@110000 {
+			label = "storage";
+			reg = <0x110000 DT_SIZE_K(4)>;
+		};
+
+		nvm_partition: partition@111000 {
+			label = "nvm";
+			reg = <0x111000 DT_SIZE_K(4)>;
+		};
+
+		circuitpy_partition: partition@112000 {
+			label = "circuitpy";
+			reg = <0x112000 DT_SIZE_K(3000)>;
+		};
+	};
+};

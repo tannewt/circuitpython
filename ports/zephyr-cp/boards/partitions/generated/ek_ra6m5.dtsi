@@ -1,0 +1,53 @@
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(64)>;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x10000 DT_SIZE_K(1984)>;
+		};
+	};
+};
+
+&mx25l25645g {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		storage_partition: partition@0 {
+			label = "storage";
+			reg = <0x0 DT_SIZE_K(4)>;
+		};
+
+		slot1_partition: partition@1000 {
+			label = "image-1";
+			reg = <0x1000 DT_SIZE_K(2016)>;
+		};
+
+		circuitpy_partition: partition@1f9000 {
+			label = "circuitpy";
+			reg = <0x1f9000 DT_SIZE_K(30748)>;
+		};
+	};
+};
+
+&flash1 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		nvm_partition: partition@0 {
+			label = "nvm";
+			reg = <0x0 DT_SIZE_K(8)>;
+		};
+	};
+};

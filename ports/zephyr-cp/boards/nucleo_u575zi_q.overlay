@@ -1,0 +1,9 @@
+#include "partitions/nucleo_u575zi_q.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+#include "../app.overlay"

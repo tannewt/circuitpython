@@ -1,0 +1,11 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash0 { /delete-node/ partitions; };
+&flash1 { /delete-node/ partitions; };
+
+/ {
+	aliases {
+		mcuboot-button0 = &button0;
+	};
+};
+
+#include "generated/ek_ra6m5.dtsi"

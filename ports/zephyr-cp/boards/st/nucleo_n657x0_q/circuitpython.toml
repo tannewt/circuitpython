@@ -1,1 +1,6 @@
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["hex"]
+
+[external_flash]
+label = "mx25um51245g"
+erase_block_size = 4096

@@ -1,3 +1,4 @@
 # TX is on pin P411. RX is on pin P410.
 
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["elf"]

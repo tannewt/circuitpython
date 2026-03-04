@@ -1,0 +1,61 @@
+&mram1x {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* 0x0-0x30000 reserved for IronSide SE */
+
+		boot_partition: partition@30000 {
+			label = "mcuboot";
+			reg = <0x30000 DT_SIZE_K(128)>;
+		};
+
+		slot0_partition: partition@50000 {
+			label = "image-0";
+			reg = <0x50000 DT_SIZE_K(1344)>;
+		};
+
+		/* VPR code partitions — labels must exist for SoC DTS references. */
+		cpuppr_code_partition: partition@e4000 {
+			reg = <0xe4000 DT_SIZE_K(64)>;
+		};
+
+		cpuflpr_code_partition: partition@f4000 {
+			reg = <0xf4000 DT_SIZE_K(48)>;
+		};
+
+		netcore_partition: partition@1a0000 {
+			label = "image-2";
+			reg = <0x1a0000 DT_SIZE_K(352)>;
+		};
+
+		nvm_partition: partition@1f8000 {
+			label = "nvm";
+			reg = <0x1f8000 DT_SIZE_K(16)>;
+		};
+
+		storage_partition: partition@1fc000 {
+			label = "storage";
+			reg = <0x1fc000 DT_SIZE_K(16)>;
+		};
+	};
+};
+
+&mx25uw63 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot1_partition: partition@0 {
+			label = "image-1";
+			reg = <0x0 DT_SIZE_K(1348)>;
+		};
+
+		circuitpy_partition: partition@151000 {
+			label = "circuitpy";
+			reg = <0x151000 DT_SIZE_K(6844)>;
+		};
+	};
+};

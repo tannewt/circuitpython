@@ -1,5 +1,9 @@
-&w25q64jvssiq {
-    /delete-node/ partitions;
+#include "partitions/frdm_mcxn947.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
 };
 
 #include "../app.overlay"

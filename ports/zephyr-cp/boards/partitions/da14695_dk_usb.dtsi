@@ -1,0 +1,10 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash0 { /delete-node/ partitions; };
+
+/ {
+	aliases {
+		mcuboot-button0 = &user_button;
+	};
+};
+
+#include "generated/da14695_dk_usb.dtsi"

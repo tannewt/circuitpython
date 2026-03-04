@@ -1,0 +1,24 @@
+/* Delete Zephyr-default partitions before redefining them.
+ * IronSide SE occupies 0x0-0x30000 and is not touched.
+ */
+&mram1x { /delete-node/ partitions; };
+
+&gpio6 {
+	status = "okay";
+};
+
+&exmif {
+	status = "okay";
+};
+
+&mx25uw63 {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		mcuboot-button0 = &button0;
+	};
+};
+
+#include "generated/nrf54h20dk.dtsi"

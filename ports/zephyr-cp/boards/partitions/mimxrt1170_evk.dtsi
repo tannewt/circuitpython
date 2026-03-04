@@ -1,0 +1,8 @@
+/* Delete the storage partition so we can replace it with nvm + circuitpy. */
+&is25wp128 {
+	partitions {
+		/delete-node/ partition@e20000;
+	};
+};
+
+#include "generated/mimxrt1170_evk.dtsi"

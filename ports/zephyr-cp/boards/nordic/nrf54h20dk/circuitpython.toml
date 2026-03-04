@@ -1,1 +1,6 @@
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["elf"]
+
+[external_flash]
+label = "mx25uw63"
+erase_block_size = 4096

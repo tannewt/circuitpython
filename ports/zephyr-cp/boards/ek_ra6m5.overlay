@@ -1,0 +1,23 @@
+#include "partitions/ek_ra6m5.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+/* Disable OFS (Option Function Select) nodes so their high-address
+ * sections don't end up in the app HEX.  MCUboot's own build still
+ * has them, so the merged HEX programs OFS correctly.
+ */
+&option_setting_ofs0        { status = "disabled"; };
+&option_setting_dualsel     { status = "disabled"; };
+&option_setting_ofs1_sec    { status = "disabled"; };
+&option_setting_banksel_sec { status = "disabled"; };
+&option_setting_bps_sec     { status = "disabled"; };
+&option_setting_pbps_sec    { status = "disabled"; };
+&option_setting_ofs1_sel    { status = "disabled"; };
+&option_setting_banksel_sel { status = "disabled"; };
+&option_setting_bps_sel     { status = "disabled"; };
+
+#include "../app.overlay"

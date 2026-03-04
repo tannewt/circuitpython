@@ -1,0 +1,32 @@
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(128)>;
+		};
+
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x20000 DT_SIZE_K(952)>;
+		};
+
+		storage_partition: partition@10e000 {
+			label = "storage";
+			reg = <0x10e000 DT_SIZE_K(8)>;
+		};
+
+		nvm_partition: partition@110000 {
+			label = "nvm";
+			reg = <0x110000 DT_SIZE_K(8)>;
+		};
+
+		circuitpy_partition: partition@112000 {
+			label = "circuitpy";
+			reg = <0x112000 DT_SIZE_K(952)>;
+		};
+	};
+};

@@ -1,0 +1,45 @@
+&flash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(128)>;
+		};
+
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x20000 DT_SIZE_K(1912)>;
+		};
+
+		storage_partition: partition@1fe000 {
+			label = "storage";
+			reg = <0x1fe000 DT_SIZE_K(8)>;
+		};
+	};
+};
+
+&w25q64jvssiq {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		nvm_partition: partition@0 {
+			label = "nvm";
+			reg = <0x0 DT_SIZE_K(4)>;
+		};
+
+		slot1_partition: partition@1000 {
+			label = "image-1";
+			reg = <0x1000 DT_SIZE_K(1920)>;
+		};
+
+		circuitpy_partition: partition@1e1000 {
+			label = "circuitpy";
+			reg = <0x1e1000 DT_SIZE_K(6268)>;
+		};
+	};
+};

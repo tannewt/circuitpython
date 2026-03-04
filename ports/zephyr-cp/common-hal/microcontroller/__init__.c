@@ -11,7 +11,7 @@
 #include "common-hal/microcontroller/Pin.h"
 #include "common-hal/microcontroller/Processor.h"
 
-// #include "shared-bindings/nvm/ByteArray.h"
+#include "shared-bindings/nvm/ByteArray.h"
 #include "shared-bindings/microcontroller/__init__.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/microcontroller/Processor.h"

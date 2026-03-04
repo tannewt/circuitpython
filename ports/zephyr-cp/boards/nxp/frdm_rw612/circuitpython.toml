@@ -1,3 +1,4 @@
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["elf"]
 BLOBS=["hal_nxp"]
 

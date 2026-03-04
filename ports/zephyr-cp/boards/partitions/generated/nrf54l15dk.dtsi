@@ -1,0 +1,45 @@
+&cpuapp_rram {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(128)>;
+		};
+
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x20000 DT_SIZE_K(1356)>;
+		};
+
+		nvm_partition: partition@173000 {
+			label = "nvm";
+			reg = <0x173000 DT_SIZE_K(4)>;
+		};
+
+		storage_partition: partition@174000 {
+			label = "storage";
+			reg = <0x174000 DT_SIZE_K(36)>;
+		};
+	};
+};
+
+&mx25r64 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot1_partition: partition@0 {
+			label = "image-1";
+			reg = <0x0 DT_SIZE_K(1360)>;
+		};
+
+		circuitpy_partition: partition@154000 {
+			label = "circuitpy";
+			reg = <0x154000 DT_SIZE_K(6832)>;
+		};
+	};
+};

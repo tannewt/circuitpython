@@ -1,1 +1,2 @@
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["elf"]

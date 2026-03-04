@@ -1,0 +1,10 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash0 { /delete-node/ partitions; };
+
+/ {
+	aliases {
+		mcuboot-button0 = &user_button;
+	};
+};
+
+#include "generated/nucleo_u575zi_q.dtsi"

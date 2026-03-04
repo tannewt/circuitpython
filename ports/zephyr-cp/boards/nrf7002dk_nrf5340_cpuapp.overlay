@@ -1,0 +1,9 @@
+#include "partitions/nrf7002dk.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+#include "../app.overlay"

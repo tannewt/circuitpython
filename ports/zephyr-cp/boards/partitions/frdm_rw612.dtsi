@@ -1,0 +1,14 @@
+/* Delete the storage partition so we can replace it with nvm + circuitpy. */
+&w25q512jvfiq {
+	partitions {
+		/delete-node/ partition@620000;
+	};
+};
+
+/ {
+	aliases {
+		mcuboot-button0 = &user_button_0;
+	};
+};
+
+#include "generated/frdm_rw612.dtsi"

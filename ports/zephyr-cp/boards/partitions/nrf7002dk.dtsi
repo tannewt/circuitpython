@@ -1,0 +1,24 @@
+/* Delete Zephyr-default partitions before redefining them. */
+&flash0 { /delete-node/ partitions; };
+
+&gpregret1 {
+	status = "okay";
+
+	boot_mode0: boot_mode@0 {
+		compatible = "zephyr,retention";
+		status = "okay";
+		reg = <0x0 0x1>;
+	};
+};
+
+/ {
+	chosen {
+		zephyr,boot-mode = &boot_mode0;
+	};
+
+	aliases {
+		mcuboot-button0 = &button0;
+	};
+};
+
+#include "generated/nrf7002dk.dtsi"

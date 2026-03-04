@@ -1,1 +1,2 @@
+adaboot = false
 CIRCUITPY_BUILD_EXTENSIONS = ["elf", "exe"]

@@ -1,1 +1,9 @@
+#include "partitions/nrf54l15dk.dtsi"
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
 // No app.overlay because it doesn't have USB.

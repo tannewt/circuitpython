@@ -1,0 +1,53 @@
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x0 DT_SIZE_K(128)>;
+		};
+
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x20000 DT_SIZE_K(1728)>;
+		};
+
+		storage_partition: partition@1d0000 {
+			label = "storage";
+			reg = <0x1d0000 DT_SIZE_K(160)>;
+		};
+	};
+};
+
+&s28hl512t {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot1_partition: partition@0 {
+			label = "image-1";
+			reg = <0x0 DT_SIZE_M(2)>;
+		};
+
+		circuitpy_partition: partition@200000 {
+			label = "circuitpy";
+			reg = <0x200000 DT_SIZE_M(62)>;
+		};
+	};
+};
+
+&flash1 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		nvm_partition: partition@0 {
+			label = "nvm";
+			reg = <0x0 DT_SIZE_K(12)>;
+		};
+	};
+};
