@@ -178,6 +178,8 @@ def zephyr_sample(request, bsim_phy, native_sim_env, sim_id):
     sample_rel = str(sample).removeprefix("zephyr/samples/")
     source_dir = ZEPHYR_CP / "zephyr/samples" / sample_rel
     if not source_dir.exists():
+        source_dir = ZEPHYR_CP / sample  # port-local sample
+    if not source_dir.exists():
         pytest.skip(f"Zephyr sample not found: {source_dir}")
 
     build_name = f"build-bsim-sample-{sample_rel.replace('/', '_')}-{board}"

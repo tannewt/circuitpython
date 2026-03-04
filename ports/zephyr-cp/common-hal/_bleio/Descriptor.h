@@ -7,9 +7,14 @@
 
 #pragma once
 
+#include <zephyr/bluetooth/uuid.h>
+
 #include "py/obj.h"
 #include "shared-bindings/_bleio/Attribute.h"
 #include "common-hal/_bleio/UUID.h"
+
+// Forward declaration to break circular dependency
+struct _bleio_characteristic_obj;
 
 typedef struct _bleio_descriptor_obj {
     mp_obj_base_t base;
@@ -21,4 +26,6 @@ typedef struct _bleio_descriptor_obj {
     bool fixed_length;
     uint8_t *value;
     uint16_t value_length;
+    struct _bleio_characteristic_obj *characteristic;
+    struct bt_uuid_128 zephyr_uuid;
 } bleio_descriptor_obj_t;

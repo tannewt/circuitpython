@@ -159,7 +159,6 @@ static void bleio_connected_cb(struct bt_conn *conn, uint8_t err) {
 }
 
 static void bleio_disconnected_cb(struct bt_conn *conn, uint8_t reason) {
-    printk("disconnected %p\n", conn);
     bleio_connection_release(bleio_connection_find_by_conn(conn), reason);
 }
 

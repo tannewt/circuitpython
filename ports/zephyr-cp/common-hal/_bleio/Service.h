@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <zephyr/bluetooth/gatt.h>
+
 #include "py/obj.h"
 #include "py/objlist.h"
 #include "common-hal/_bleio/UUID.h"
@@ -20,4 +22,11 @@ typedef struct bleio_service_obj {
     uint16_t end_handle;
     bool is_remote;
     bool is_secondary;
+    // Zephyr GATT server fields:
+    struct bt_gatt_service zephyr_service;
+    struct bt_gatt_attr *attrs;
+    size_t attr_count;
+    size_t attr_capacity;
+    struct bt_uuid_128 zephyr_uuid;
+    bool registered;
 } bleio_service_obj_t;
