@@ -86,6 +86,8 @@ jobs:
           submodules: false
           show-progress: false
           fetch-depth: 1
+      - name: Mark repo as safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Set up submodules
         id: set-up-submodules
         uses: ./.github/actions/deps/submodules
