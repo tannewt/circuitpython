@@ -2,7 +2,12 @@ name: Build Container Images
 
 on:
   push:
-    branches: [main]
+    branches: [main, containerize]
+    paths:
+      - containers/**
+      - requirements-dev.txt
+      - .github/workflows/build-containers.yml
+  pull_request:
     paths:
       - containers/**
       - requirements-dev.txt
@@ -51,6 +56,7 @@ jobs:
             zephyr:
               - containers/base/**
               - containers/zephyr/**
+              - ports/zephyr-cp/zephyr-config/**
               - requirements-dev.txt
             dev:
               - containers/**

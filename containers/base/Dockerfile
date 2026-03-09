@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake mtools uncrustify \
     gettext wget curl ca-certificates \
     pkg-config autoconf automake libtool \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
 # dosfstools 4.2 (newer than apt's 4.1)
 RUN wget -q https://github.com/dosfstools/dosfstools/releases/download/v4.2/dosfstools-4.2.tar.gz \
