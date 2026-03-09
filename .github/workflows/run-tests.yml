@@ -6,6 +6,10 @@ on:
       cp-version:
         required: true
         type: string
+      zephyr-image:
+        required: false
+        type: string
+        default: 'ghcr.io/adafruit/circuitpython-zephyr:latest'
 
 jobs:
   run:
@@ -69,6 +73,8 @@ jobs:
 
   zephyr:
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ inputs.zephyr-image }}
     strategy:
       fail-fast: false
     env:
@@ -80,12 +86,6 @@ jobs:
           submodules: false
           show-progress: false
           fetch-depth: 1
-      - name: Set up python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.13
-      - name: Set up Zephyr
-        uses: ./.github/actions/deps/ports/zephyr-cp
       - name: Set up submodules
         id: set-up-submodules
         uses: ./.github/actions/deps/submodules

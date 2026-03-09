@@ -12,6 +12,10 @@ on:
       port:
         required: true
         type: string
+      container:
+        required: false
+        type: string
+        default: ''
     secrets:
       AWS_ACCESS_KEY_ID:
         required: false
@@ -21,6 +25,7 @@ on:
 jobs:
   board:
     runs-on: ubuntu-24.04
+    container: ${{ inputs.container || '' }}
     env:
       CP_VERSION: ${{ inputs.cp-version }}
     strategy:
@@ -37,11 +42,13 @@ jobs:
         persist-credentials: false
 
     - name: Set up python
+      if: ${{ !inputs.container }}
       uses: actions/setup-python@v5
       with:
         python-version: 3.x
 
     - name: Set up port
+      if: ${{ !inputs.container }}
       id: set-up-port
       uses: ./.github/actions/deps/ports
       with:

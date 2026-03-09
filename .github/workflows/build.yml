@@ -92,11 +92,18 @@ jobs:
       env:
         LAST_FAILED_JOBS: ${{ steps.get-last-commit-with-checks.outputs.check_runs }}
 
+  zephyr-container:
+    uses: ./.github/workflows/build-zephyr-container.yml
+    permissions:
+      contents: read
+      packages: write
+
   tests:
-    needs: scheduler
+    needs: [scheduler, zephyr-container]
     uses: ./.github/workflows/run-tests.yml
     with:
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
+      zephyr-image: ${{ needs.zephyr-container.outputs.image }}
 
   mpy-cross:
     needs: scheduler
@@ -314,7 +321,7 @@ jobs:
       run: make -j4 -C ports/zephyr-cp BOARD=renesas_ek_ra8d1
 
   ports:
-    needs: [scheduler, mpy-cross, tests]
+    needs: [scheduler, mpy-cross, tests, zephyr-container]
     if: needs.scheduler.outputs.ports != '{}'
     uses: ./.github/workflows/build-boards.yml
     secrets: inherit
@@ -326,3 +333,4 @@ jobs:
       boards: ${{ toJSON(fromJSON(needs.scheduler.outputs.ports)[matrix.port]) }}
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
       port: ${{ matrix.port }}
+      container: ${{ matrix.port == 'zephyr-cp' && needs.zephyr-container.outputs.image || '' }}

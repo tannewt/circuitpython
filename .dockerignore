@@ -1,0 +1,5 @@
+# Only send files needed by the Zephyr Dockerfile to the build context.
+*
+!ports/zephyr-cp/zephyr-config/
+!ports/zephyr-cp/entrypoint.sh
+!requirements-dev.txt

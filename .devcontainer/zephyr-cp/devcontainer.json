@@ -1,0 +1,17 @@
+{
+	"name": "zephyr-cp",
+	"image": "ghcr.io/adafruit/circuitpython-zephyr:latest",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/circuitpython,type=bind,consistency=cached",
+	"workspaceFolder": "/circuitpython/ports/zephyr-cp",
+	"mounts": [
+		// Uncomment to bind-mount a local Zephyr checkout for development.
+		// This overrides the container's baked-in Zephyr and also update
+		// ZEPHYR_BASE below to match.
+		// "source=/path/to/your/zephyr,target=/opt/zephyr-workspace/zephyr,type=bind,consistency=cached"
+	],
+	"remoteEnv": {
+		"VIRTUAL_ENV": "/opt/zephyr-venv",
+		"PATH": "/opt/zephyr-venv/bin:${containerEnv:PATH}",
+		"ZEPHYR_BASE": "/opt/zephyr-workspace/zephyr"
+	}
+}
