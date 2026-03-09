@@ -1,0 +1,191 @@
+name: Build Container Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - containers/**
+      - requirements-dev.txt
+      - .github/workflows/build-containers.yml
+  workflow_dispatch:
+    inputs:
+      force-all:
+        description: Rebuild all images even if unchanged
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/circuitpython-ci
+
+concurrency:
+  group: build-containers
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      base: ${{ steps.filter.outputs.base || inputs.force-all }}
+      cortex-m: ${{ steps.filter.outputs.cortex-m || inputs.force-all }}
+      espressif: ${{ steps.filter.outputs.espressif || inputs.force-all }}
+      zephyr: ${{ steps.filter.outputs.zephyr || inputs.force-all }}
+      dev: ${{ steps.filter.outputs.dev || inputs.force-all }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            base:
+              - containers/base/**
+              - requirements-dev.txt
+            cortex-m:
+              - containers/base/**
+              - containers/cortex-m/**
+              - requirements-dev.txt
+            espressif:
+              - containers/base/**
+              - containers/espressif/**
+              - requirements-dev.txt
+            zephyr:
+              - containers/base/**
+              - containers/zephyr/**
+              - requirements-dev.txt
+            dev:
+              - containers/**
+              - requirements-dev.txt
+
+  base:
+    needs: changes
+    if: needs.changes.outputs.base == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/base/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:base
+
+  cortex-m:
+    needs: [changes, base]
+    if: "!failure() && !cancelled() && needs.changes.outputs.cortex-m == 'true'"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/cortex-m/Dockerfile
+          build-args: BASE_IMAGE=${{ env.IMAGE_PREFIX }}:base
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:cortex-m
+
+  espressif:
+    needs: [changes, base]
+    if: "!failure() && !cancelled() && needs.changes.outputs.espressif == 'true'"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Initialize ESP-IDF submodule
+        run: git submodule update --init --depth=1 --recursive ports/espressif/esp-idf
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/espressif/Dockerfile
+          build-args: BASE_IMAGE=${{ env.IMAGE_PREFIX }}:base
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:espressif
+
+  zephyr:
+    needs: [changes, base]
+    if: "!failure() && !cancelled() && needs.changes.outputs.zephyr == 'true'"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/zephyr/Dockerfile
+          build-args: BASE_IMAGE=${{ env.IMAGE_PREFIX }}:base
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:zephyr
+
+  dev:
+    needs: [changes, base]
+    if: "!failure() && !cancelled() && needs.changes.outputs.dev == 'true'"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Initialize ESP-IDF submodule
+        run: git submodule update --init --depth=1 --recursive ports/espressif/esp-idf
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/dev/Dockerfile
+          build-args: BASE_IMAGE=${{ env.IMAGE_PREFIX }}:base
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:dev

@@ -326,3 +326,10 @@ jobs:
       boards: ${{ toJSON(fromJSON(needs.scheduler.outputs.ports)[matrix.port]) }}
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
       port: ${{ matrix.port }}
+      container-image: >-
+        ${{
+          matrix.port == 'espressif' && format('ghcr.io/{0}/circuitpython-ci:espressif', github.repository_owner) ||
+          matrix.port == 'zephyr-cp' && '' ||
+          matrix.port == 'unix' && format('ghcr.io/{0}/circuitpython-ci:base', github.repository_owner) ||
+          format('ghcr.io/{0}/circuitpython-ci:cortex-m', github.repository_owner)
+        }}

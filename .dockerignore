@@ -1,0 +1,3 @@
+# For source overlay builds
+.git
+build-*

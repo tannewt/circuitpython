@@ -1,0 +1,3 @@
+# Only need requirements-dev.txt for base image
+*
+!requirements-dev.txt
