@@ -19,7 +19,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: adafruit/circuitpython-zephyr
+  IMAGE_NAME: ${{ github.repository_owner }}/circuitpython-zephyr
 
 jobs:
   build-and-push:

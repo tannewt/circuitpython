@@ -9,7 +9,7 @@ on:
       zephyr-image:
         required: false
         type: string
-        default: 'ghcr.io/adafruit/circuitpython-zephyr:latest'
+        default: ''
 
 jobs:
   run:
