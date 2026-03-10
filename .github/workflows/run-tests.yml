@@ -95,6 +95,14 @@ jobs:
           target: zephyr-cp
       - name: Set up external
         uses: ./.github/actions/deps/external
+      - name: Link Zephyr workspace into port tree
+        run: |
+          cd ports/zephyr-cp
+          for dir in zephyr modules tools bootloader; do
+            [ ! -e "$dir" ] && ln -s "/opt/zephyr-workspace/$dir" "$dir"
+          done
+          mkdir -p .west
+          printf '[manifest]\npath = zephyr-config\n\n[zephyr]\nbase = zephyr\n' > .west/config
       - name: Build native sim target
         run: make -C ports/zephyr-cp -j2 BOARD=native_native_sim
       - name: Build bsim
