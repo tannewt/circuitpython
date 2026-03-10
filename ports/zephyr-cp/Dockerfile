@@ -65,9 +65,9 @@ COPY requirements-dev.txt /tmp/requirements-dev.txt
 RUN pip install -r /tmp/requirements-dev.txt && rm /tmp/requirements-dev.txt
 
 # Install the Zephyr SDK and move it to a well-known path.
-# west sdk install puts it under ~/.local/opt/zephyr-sdk-<version>.
+# west sdk install puts it under ~/zephyr-sdk-<version>.
 RUN west sdk install \
-    && mv /root/.local/opt/zephyr-sdk-* /opt/zephyr-sdk
+    && mv /root/zephyr-sdk-* /opt/zephyr-sdk
 
 # Point CMake and west at the pre-built Zephyr workspace.
 # ZEPHYR_BASE is used by west and many Zephyr scripts.
