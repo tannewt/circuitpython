@@ -68,7 +68,12 @@ RUN pip install -r /tmp/requirements-dev.txt && rm /tmp/requirements-dev.txt
 RUN west sdk install
 
 # Point CMake and west at the pre-built Zephyr workspace.
+# ZEPHYR_BASE is used by west and many Zephyr scripts.
+# CMAKE_PREFIX_PATH lets find_package(Zephyr) work without relying on the
+# per-user CMake package registry (~/.cmake/packages), which won't exist
+# when CI runs the container as a different UID than the build-time user.
 ENV ZEPHYR_BASE=/opt/zephyr-workspace/zephyr
+ENV CMAKE_PREFIX_PATH=/opt/zephyr-workspace/zephyr/share/zephyr-package:/opt/zephyr-workspace/zephyr/share/sysbuild-package
 
 # Entrypoint ensures west can find its workspace from the bind-mounted
 # CircuitPython tree by symlinking .west if it doesn't already exist.
