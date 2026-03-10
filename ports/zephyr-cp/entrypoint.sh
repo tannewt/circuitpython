@@ -34,4 +34,10 @@ path = zephyr-config
 base = zephyr
 EOF
 
+# Register Zephyr CMake packages for the current user.  The Dockerfile ran
+# west zephyr-export during build (as root), but CI may run the container as
+# a different UID whose ~/.cmake/packages won't have those entries.
+cd "${ZEPHYR_WS}" && west zephyr-export 2>/dev/null || true
+cd "${PORT_DIR}"
+
 exec "$@"
