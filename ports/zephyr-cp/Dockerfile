@@ -64,15 +64,19 @@ RUN pip install -r zephyr/scripts/requirements.txt protobuf grpcio-tools
 COPY requirements-dev.txt /tmp/requirements-dev.txt
 RUN pip install -r /tmp/requirements-dev.txt && rm /tmp/requirements-dev.txt
 
-# Install the Zephyr SDK via west (version determined by the Zephyr tree)
-RUN west sdk install
+# Install the Zephyr SDK and move it to a well-known path.
+# west sdk install puts it under ~/.local/opt/zephyr-sdk-<version>.
+RUN west sdk install \
+    && mv /root/.local/opt/zephyr-sdk-* /opt/zephyr-sdk
 
 # Point CMake and west at the pre-built Zephyr workspace.
 # ZEPHYR_BASE is used by west and many Zephyr scripts.
+# ZEPHYR_SDK_INSTALL_DIR tells FindZephyr-sdk.cmake where the SDK lives.
 # CMAKE_PREFIX_PATH lets find_package(Zephyr) work without relying on the
 # per-user CMake package registry (~/.cmake/packages), which won't exist
 # when CI runs the container as a different UID than the build-time user.
 ENV ZEPHYR_BASE=/opt/zephyr-workspace/zephyr
+ENV ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk
 ENV CMAKE_PREFIX_PATH=/opt/zephyr-workspace/zephyr/share/zephyr-package:/opt/zephyr-workspace/zephyr/share/sysbuild-package
 
 # Entrypoint ensures west can find its workspace from the bind-mounted
