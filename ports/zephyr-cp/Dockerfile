@@ -64,10 +64,15 @@ RUN pip install -r zephyr/scripts/requirements.txt protobuf grpcio-tools
 COPY requirements-dev.txt /tmp/requirements-dev.txt
 RUN pip install -r /tmp/requirements-dev.txt && rm /tmp/requirements-dev.txt
 
-# Install the Zephyr SDK and move it to a well-known path.
-# west sdk install puts it under ~/zephyr-sdk-<version>.
+# Install the Zephyr SDK to a well-known path.
+# We set HOME=/opt so west sdk install places it at /opt/zephyr-sdk-<version>,
+# then symlink to /opt/zephyr-sdk.  setup.sh records its install path
+# internally, so we must not move the directory after installation.
+ENV HOME=/opt
 RUN west sdk install \
-    && mv /root/zephyr-sdk-* /opt/zephyr-sdk
+    && ln -s /opt/zephyr-sdk-* /opt/zephyr-sdk \
+    && /opt/zephyr-sdk/setup.sh -c
+ENV HOME=/root
 
 # Point CMake and west at the pre-built Zephyr workspace.
 # ZEPHYR_BASE is used by west and many Zephyr scripts.
