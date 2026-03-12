@@ -10,7 +10,7 @@ runs:
         sudo apt-get install -y libusb-1.0-0-dev libudev-dev mtools
       shell: bash
     - name: Setup Zephyr project
-      uses: zephyrproject-rtos/action-zephyr-setup@v1
+      uses: ./.github/actions/deps/ports/zephyr-cp/zephyr-setup
       with:
         app-path: zephyr-config
         base-path: ports/zephyr-cp
