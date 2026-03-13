@@ -447,5 +447,6 @@ class Compiler:
             )
             if result.returncode == 0 and result.stdout.strip():
                 logger.info(f"ccache stats:\n{result.stdout}")
+            self.ccache_statslog.unlink(missing_ok=True)
         except FileNotFoundError:
             pass
