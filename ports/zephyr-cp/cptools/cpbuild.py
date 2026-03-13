@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import re
+import subprocess
 import tempfile
 import time
 from typing import Optional
@@ -345,7 +346,14 @@ def parse_depfile(f):
 
 class Compiler:
     def __init__(self, srcdir: pathlib.Path, builddir: pathlib.Path, cmake_args):
+        compiler_launcher = cmake_args.get("COMPILER_LAUNCHER", "")
         self.c_compiler = cmake_args["CC"]
+        if compiler_launcher:
+            self.c_compiler = f"{compiler_launcher} {self.c_compiler}"
+            self.ccache_statslog = builddir / "ccache_statslog.txt"
+            os.environ["CCACHE_STATSLOG"] = str(self.ccache_statslog)
+        else:
+            self.ccache_statslog = None
         self.ar = cmake_args["AR"]
         self.cflags = cmake_args.get("CFLAGS", "")
 
@@ -426,3 +434,18 @@ class Compiler:
             working_directory=self.srcdir,
             responsefile=responsefile,
         )
+
+    def print_ccache_stats(self):
+        if not self.ccache_statslog:
+            logger.info("ccache disabled")
+            return
+        try:
+            result = subprocess.run(
+                ["ccache", "--show-log-stats", "-v", str(self.ccache_statslog)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                logger.info(f"ccache stats:\n{result.stdout}")
+        except FileNotFoundError:
+            pass

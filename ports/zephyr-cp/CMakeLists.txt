@@ -39,11 +39,14 @@ set(external_project_cflags
 zephyr_get(CONFIG_LTO SYSBUILD GLOBAL)
 zephyr_get(BOARD_ALIAS SYSBUILD GLOBAL)
 
+get_property(RULE_LAUNCH_COMPILE GLOBAL PROPERTY RULE_LAUNCH_COMPILE)
+
 ExternalProject_Add(circuitpython
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
     BUILD_COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/cptools/build_circuitpython.py
     CC=${CMAKE_C_COMPILER}
+    COMPILER_LAUNCHER=${RULE_LAUNCH_COMPILE}
     AR=${CMAKE_AR}
     CFLAGS=${external_project_cflags}
     BOARD=${BOARD}

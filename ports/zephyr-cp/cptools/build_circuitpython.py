@@ -627,6 +627,7 @@ async def build_circuitpython():
             )
 
     await compiler.archive(objects, pathlib.Path(cmake_args["OUTPUT_FILE"]))
+    compiler.print_ccache_stats()
 
 
 async def main():
