@@ -14,6 +14,7 @@ aesio = false
 alarm = false
 analogbufio = false
 analogio = false
+asyncexample = true
 atexit = false
 audiobusio = false
 audiocore = false

@@ -148,4 +148,19 @@ class NativeSimProcess:
         start_time = time.monotonic()
         while self._proc.poll() is None and time.monotonic() - start_time < self._timeout:
             time.sleep(0.01)
+
+        returncode = self._proc.poll()
         self.shutdown()
+
+        if returncode is None:
+            raise TimeoutError(f"native_sim process did not exit within {self._timeout}s")
+        if returncode < 0:
+            import signal
+
+            try:
+                sig_name = signal.Signals(-returncode).name
+            except (ValueError, AttributeError):
+                sig_name = str(-returncode)
+            raise RuntimeError(f"native_sim process killed by signal {sig_name}")
+        if returncode != 0:
+            raise RuntimeError(f"native_sim process exited with code {returncode}")

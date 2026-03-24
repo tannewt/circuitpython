@@ -116,6 +116,9 @@ endif
 ifeq ($(CIRCUITPY_ANALOGIO),1)
 SRC_PATTERNS += analogio/%
 endif
+ifeq ($(CIRCUITPY_ASYNCEXAMPLE),1)
+SRC_PATTERNS += asyncexample/%
+endif
 ifeq ($(CIRCUITPY_ATEXIT),1)
 SRC_PATTERNS += atexit/%
 endif

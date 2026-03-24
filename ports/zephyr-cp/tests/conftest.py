@@ -187,10 +187,25 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
             tmp_drive = tmp_path / f"drive{i}"
             tmp_drive.mkdir(exist_ok=True)
 
+            fat_dirs_created = set()
             for name, content in files.items():
                 src = tmp_drive / name
+                src.parent.mkdir(parents=True, exist_ok=True)
                 src.write_text(content)
-                subprocess.run(["mcopy", "-i", str(flash), str(src), f"::{name}"], check=True)
+                # Create intermediate directories on the FAT image.
+                parts = Path(name).parent.parts
+                for depth in range(1, len(parts) + 1):
+                    fat_dir = "/".join(parts[:depth])
+                    if fat_dir and fat_dir not in fat_dirs_created:
+                        subprocess.run(
+                            ["mmd", "-i", str(flash), f"::{fat_dir}"],
+                            check=False,  # ignore if already exists
+                        )
+                        fat_dirs_created.add(fat_dir)
+                subprocess.run(
+                    ["mcopy", "-i", str(flash), str(src), f"::{name}"],
+                    check=True,
+                )
 
         trace_file = tmp_path / f"trace-{i}.perfetto"
 

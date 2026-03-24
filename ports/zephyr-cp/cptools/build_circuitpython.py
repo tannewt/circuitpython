@@ -51,6 +51,7 @@ DEFAULT_MODULES = [
     "array",
     "json",
     "random",
+    "asyncexample",
     "digitalio",
     "rotaryio",
     "rainbowio",
@@ -326,6 +327,8 @@ async def build_circuitpython():
     circuitpython_flags.append(f"-DCIRCUITPY_BOARD_ID='\"{board}\"'")
     circuitpython_flags.append(f"-DCIRCUITPY_TRANSLATE_OBJECT={1 if lto else 0}")
     circuitpython_flags.append("-DINTERNAL_FLASH_FILESYSTEM")
+    circuitpython_flags.append("-DMICROPY_PY_ASYNCIO=1")
+    circuitpython_flags.append("-DMICROPY_PY_SELECT=1")
     circuitpython_flags.append("-DLONGINT_IMPL_MPZ")
     circuitpython_flags.append("-DCIRCUITPY_SSL_MBEDTLS")
     circuitpython_flags.append("-DFFCONF_H='\"lib/oofatfs/ffconf.h\"'")
@@ -384,6 +387,8 @@ async def build_circuitpython():
     circuitpython_flags.append(f"-DCIRCUITPY_WEB_WORKFLOW={1 if web_workflow_enabled else 0}")
     supervisor_source = [
         "main.c",
+        "extmod/modasyncio.c",
+        "extmod/modselect.c",
         "extmod/modjson.c",
         "extmod/vfs_fat.c",
         "lib/tlsf/tlsf.c",
