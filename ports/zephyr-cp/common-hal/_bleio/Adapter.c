@@ -455,6 +455,8 @@ bool common_hal_bleio_adapter_get_advertising(bleio_adapter_obj_t *self) {
 mp_obj_t common_hal_bleio_adapter_start_scan(bleio_adapter_obj_t *self, uint8_t *prefixes, size_t prefix_length, bool extended, mp_int_t buffer_size, mp_float_t timeout, mp_float_t interval, mp_float_t window, mp_int_t minimum_rssi, bool active) {
     (void)extended;
 
+    printk("starting scan\n");
+
     if (self->scan_results != NULL) {
         if (!shared_module_bleio_scanresults_get_done(self->scan_results)) {
             common_hal_bleio_adapter_stop_scan(self);

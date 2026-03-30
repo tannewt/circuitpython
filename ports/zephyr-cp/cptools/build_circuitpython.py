@@ -59,6 +59,7 @@ DEFAULT_MODULES = [
     "supervisor",
     "errno",
     "io",
+    "storage",
 ]
 # Flags that don't match with with a *bindings module. Some used by adafruit_requests
 MPCONFIG_FLAGS = ["array", "errno", "io", "json"]
@@ -262,10 +263,6 @@ def determine_enabled_modules(board_info, portdir, srcdir):
     if board_info["wifi"]:
         enabled_modules.add("wifi")
         module_reasons["wifi"] = "Zephyr board has wifi"
-
-    if board_info["flash_count"] > 0:
-        enabled_modules.add("storage")
-        module_reasons["storage"] = "Zephyr board has flash"
 
     network_enabled = board_info.get("wifi", False) or board_info.get("hostnetwork", False)
 
