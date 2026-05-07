@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2025 Scott Shawcroft for Adafruit Industries
 # SPDX-License-Identifier: MIT
 
-"""Pytest fixtures for CircuitPython native_sim testing."""
+"""Pytest fixtures for CircuitPython native_sim and hardware-in-the-loop testing."""
 
 import logging
 import os
@@ -16,6 +16,7 @@ from .perfetto_input_trace import write_input_trace
 from perfetto.trace_processor import TraceProcessor
 
 from . import NativeSimProcess
+from .esp import EspProcess, SumpLogicAnalyzer, find_user_fs_partition
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,38 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="Overwrite golden images with captured output instead of comparing.",
+    )
+    parser.addoption(
+        "--esp-port",
+        default=None,
+        help="Serial port for ESP32 hardware-in-the-loop testing (e.g. /dev/ttyACM0).",
+    )
+    parser.addoption(
+        "--esp-chip",
+        default="auto",
+        help="ESP chip type for esptool (default: auto).",
+    )
+    parser.addoption(
+        "--esp-flash-size",
+        default="4MB",
+        help="ESP flash size (2MB, 4MB, 8MB, 16MB, 32MB). Default: 4MB.",
+    )
+    parser.addoption(
+        "--esp-uf2",
+        action="store_true",
+        default=False,
+        help="Board uses UF2 bootloader partition layout.",
+    )
+    parser.addoption(
+        "--logic-port",
+        default=None,
+        help="Serial port for esp-perfetto-logic analyzer (e.g. /dev/ttyACM1).",
+    )
+    parser.addoption(
+        "--logic-baud",
+        type=int,
+        default=115200,
+        help="Baud rate for logic analyzer (default: 115200).",
     )
 
 
@@ -200,9 +233,44 @@ def sim_id(request) -> str:
     return request.node.nodeid.replace("/", "_")
 
 
+def _create_flash_image(tmp_path, drive_marker, flash_total_size, index=0):
+    """Create a FAT flash image and populate it with files from the marker.
+
+    Returns (flash_path, files_dict_or_None).
+    """
+    flash = tmp_path / f"flash-{index}.bin"
+    flash.write_bytes(b"\xff" * flash_total_size)
+    files = None
+    if len(drive_marker.args) == 1:
+        files = drive_marker.args[0]
+    if files is not None:
+        subprocess.run(["mformat", "-i", str(flash), "::"], check=True)
+        tmp_drive = tmp_path / f"drive{index}"
+        tmp_drive.mkdir(exist_ok=True)
+
+        for name, content in files.items():
+            src = tmp_drive / name
+            if isinstance(content, bytes):
+                src.write_bytes(content)
+            else:
+                src.write_text(content)
+            subprocess.run(["mcopy", "-i", str(flash), str(src), f"::{name}"], check=True)
+    return flash
+
+
 @pytest.fixture
-def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp_path):
-    """Run CircuitPython with given code string and return PTY output."""
+def circuitpython(request, board, sim_id, tmp_path):
+    """Run CircuitPython and return a process with serial access.
+
+    Targets native_sim by default, or ESP32 hardware when --esp-port is given.
+    """
+    esp_port = request.config.getoption("--esp-port")
+    if esp_port is not None:
+        yield from _circuitpython_esp(request, tmp_path, esp_port)
+        return
+
+    native_sim_binary = request.getfixturevalue("native_sim_binary")
+    native_sim_env = request.getfixturevalue("native_sim_env")
 
     instance_count = 1
     if "circuitpython1" in request.fixturenames and "circuitpython2" in request.fixturenames:
@@ -279,23 +347,8 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
 
     procs = []
     for i in range(instance_count):
-        flash = tmp_path / f"flash-{i}.bin"
-        flash.write_bytes(b"\xff" * flash_total_size)
-        files = None
-        if len(drives[i][1].args) == 1:
-            files = drives[i][1].args[0]
-        if files is not None:
-            subprocess.run(["mformat", "-i", str(flash), "::"], check=True)
-            tmp_drive = tmp_path / f"drive{i}"
-            tmp_drive.mkdir(exist_ok=True)
-
-            for name, content in files.items():
-                src = tmp_drive / name
-                if isinstance(content, bytes):
-                    src.write_bytes(content)
-                else:
-                    src.write_text(content)
-                subprocess.run(["mcopy", "-i", str(flash), str(src), f"::{name}"], check=True)
+        drives_entry = drives[i][1]
+        flash = _create_flash_image(tmp_path, drives_entry, flash_total_size, index=i)
 
         trace_file = tmp_path / f"trace-{i}.perfetto"
 
@@ -379,3 +432,64 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
         print()
         print("All debug serial output:")
         print(proc.debug_serial.all_output)
+
+
+def _circuitpython_esp(request, tmp_path, esp_port):
+    """ESP32 hardware-in-the-loop variant of the circuitpython fixture."""
+
+    drives = list(request.node.iter_markers_with_node("circuitpy_drive"))
+    if len(drives) != 1:
+        pytest.skip("ESP hardware backend only supports single-instance tests")
+
+    # Skip tests that require native_sim-only features.
+    if request.node.get_closest_marker("input_trace") is not None:
+        pytest.skip("input_trace not supported on ESP hardware")
+    if request.node.get_closest_marker("display") is not None:
+        pytest.skip("display capture not supported on ESP hardware")
+    if request.node.get_closest_marker("disable_i2c_devices") is not None:
+        pytest.skip("disable_i2c_devices not supported on ESP hardware")
+    if request.node.get_closest_marker("flash_config") is not None:
+        pytest.skip("flash_config not supported on ESP hardware")
+
+    flash_size = request.config.getoption("--esp-flash-size")
+    uf2 = request.config.getoption("--esp-uf2")
+    chip = request.config.getoption("--esp-chip")
+
+    user_fs_offset, user_fs_size = find_user_fs_partition(flash_size, uf2)
+
+    marker = request.node.get_closest_marker("duration")
+    timeout = marker.args[0] if marker is not None else 30
+
+    runs_marker = request.node.get_closest_marker("code_py_runs")
+    code_py_runs = int(runs_marker.args[0]) if runs_marker is not None else 1
+
+    flash = _create_flash_image(tmp_path, drives[0][1], user_fs_size, index=0)
+
+    # Set up logic analyzer if configured.
+    logic_port = request.config.getoption("--logic-port")
+    logic_analyzer = None
+    trace_file = None
+    if logic_port is not None:
+        logic_baud = request.config.getoption("--logic-baud")
+        logic_analyzer = SumpLogicAnalyzer(logic_port, baud=logic_baud)
+        trace_file = tmp_path / "trace-0.perfetto"
+
+    proc = EspProcess(
+        port=esp_port,
+        flash_file=flash,
+        user_fs_offset=user_fs_offset,
+        user_fs_size=user_fs_size,
+        chip=chip,
+        timeout=timeout,
+        logic_analyzer=logic_analyzer,
+        trace_file=trace_file,
+    )
+    proc._expected_runs = code_py_runs
+
+    yield proc
+
+    print("All serial output:")
+    print(proc.serial.all_output if proc.serial else "(closed)")
+    proc.shutdown()
+    if logic_analyzer is not None:
+        logic_analyzer.close()
