@@ -14,6 +14,12 @@ struct sockaddr_storage;
 
 void wifi_reset(void);
 
+// Raw hostname of the network interface as configured via net_hostname_set
+// (DHCP option 12). Never allocates. The returned pointer points into
+// storage owned by the port and stays valid until set_hostname() replaces it,
+// so use it promptly rather than holding onto it. Used by supervisor/shared/web_workflow.
+const char *wifi_get_hostname_raw(void);
+
 // void ipaddress_ipaddress_to_esp_idf(mp_obj_t ip_address, ip_addr_t *esp_ip_address);
 // void ipaddress_ipaddress_to_esp_idf_ip4(mp_obj_t ip_address, esp_ip4_addr_t *esp_ip_address);
 

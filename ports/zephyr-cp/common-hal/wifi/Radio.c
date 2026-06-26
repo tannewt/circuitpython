@@ -128,6 +128,10 @@ void common_hal_wifi_radio_set_hostname(wifi_radio_obj_t *self, const char *host
     }
 }
 
+const char *wifi_get_hostname_raw(void) {
+    return net_hostname_get();
+}
+
 mp_obj_t common_hal_wifi_radio_get_mac_address(wifi_radio_obj_t *self) {
     uint8_t mac[MAC_ADDRESS_LENGTH] = { 0 };
     if (self->sta_netif != NULL) {

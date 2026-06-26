@@ -11,6 +11,12 @@
 #include "lwip/ip_addr.h"
 
 void wifi_reset(void);
+
+// Raw hostname of the network interface as set via netif_set_hostname (DHCP
+// option 12). Never allocates. The returned pointer points into the radio
+// obj's storage and stays valid until set_hostname() replaces it, so use it
+// promptly rather than holding onto it. Used by supervisor/shared/web_workflow.
+const char *wifi_get_hostname_raw(void);
 MP_NORETURN void raise_cyw_error(int err);
 #define CHECK_CYW_RESULT(x) do { int res = (x); if (res != 0) raise_cyw_error(res); } while (0)
 

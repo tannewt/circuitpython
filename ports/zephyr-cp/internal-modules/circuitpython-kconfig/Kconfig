@@ -125,6 +125,106 @@ config BT_SETTINGS
 config BT_KEYS_OVERWRITE_OLDEST
 	default y
 
+# ===== Networking =====
+
+# getaddrinfo() resolves hostnames through Zephyr's DNS resolver. Without it,
+# the resolver symbols stay invisible and only literal IP addresses resolve;
+# every hostname lookup returns DNS_EAI_NONAME ("Name or service not known").
+# DHCP feeds the resolver the DNS server from its lease via
+# NET_DHCPV4_OPTION_DNS_ADDRESS (default y once DNS_RESOLVER is on). Boards
+# can turn it off with CONFIG_DNS_RESOLVER=n in board.conf.
+config DNS_RESOLVER
+	default y if NETWORKING
+
+# Every SOCK_STREAM socket, from the connection manager to the web workflow
+# listener, needs the TCP stack. NETWORKING + NET_SOCKETS only give UDP until
+# this is set: socketpool raises "Out of sockets" (because zsock_socket()
+# fails with -EPFNOSUPPORT) for every TCP attempt. Silabs documented the same
+# gap for its native-stack board, so default it on for every networked board.
+config NET_TCP
+	default y if NETWORKING
+
+# Zephyr's 2 s DNS window gives exactly one query: the first lookup right
+# after a boot (when the resolver just learned its server and the APR entry
+# may not exist yet) gets cancelled outright, reported as DNS_EAI_CANCELED
+# (-101). 10 s with 5 s backoff gives every lookup one retry.
+config NET_SOCKETS_DNS_TIMEOUT
+	default 10000 if DNS_RESOLVER
+
+# The ENET-QoS RX thread's Zephyr default stack of 1024 bytes barely fits the
+# driver, and overflows once the network stack logs (the packet-trace DBG
+# lines in net_pkt land on this thread too), faulting with "Stack overflow"
+# on ENETQOS_RX. 2048 covers normal operations; debug builds take more in
+# debug.conf.
+config ETH_NXP_ENET_QOS_RX_THREAD_STACK_SIZE
+	default 2048
+
+# ZVFS_POLL_MAX must be strictly greater than the number of services
+# registered on the socket-service thread: DNS_RESOLVER registers one and
+# MDNS_RESPONDER two. Zephyr's default of 3 has no headroom for them, so the
+# service thread fails at boot and every socket it owns is unread.
+config ZVFS_POLL_MAX
+	default 6 if DNS_RESOLVER || MDNS_RESPONDER
+
+# Budgets for the network stack's tables. Zephyr's small defaults (6 network
+# contexts, 8 connections, and a zero-based fd table that rounds up only to
+# the subsystem adders) are exhausted by the DNS resolver's sockets, the
+# web-workflow listener and the connection manager's socket pool together:
+# socket creation then fails ("Out of sockets"), getaddrinfo() cannot hand its
+# query to the resolver (reported as DNS_EAI_SYSTEM, "getaddrinfo failure:
+# -11"), and Zephyr's socket service can walk freed table entries and fault.
+# Each closed TCP connection holds a slot for TIME_WAIT, so the headroom also
+# keeps web workflow bursts from being refused. 12, as on the boards that
+# documented this before the default existed.
+config NET_MAX_CONTEXTS
+	default 12 if NETWORKING
+
+config NET_MAX_CONN
+	default 12 if NETWORKING
+
+config ZVFS_OPEN_MAX
+	default 12 if NETWORKING
+
+# The per-interface TX/RX queue threads run the full network stack plus its
+# logs; Zephyr's 1200/1500-1792 baselines overflow when the debug packet
+# tracing lands on those threads, faulting rx_q[...] with "Stack overflow".
+config NET_TX_STACK_SIZE
+	default 3072 if NETWORKING
+
+config NET_RX_STACK_SIZE
+	default 3072 if NETWORKING
+
+# The net_mgmt event thread runs interface/wifi/ethernet management callbacks
+# (carrier, address add, DHCP bind...) — including their logging. Zephyr's 800
+# byte default overflows on those events.
+config NET_MGMT_EVENT_STACK_SIZE
+	default 2048 if NETWORKING
+
+# ... and the socket-service thread, whose poll() set includes the DNS
+# resolver's UDP sockets; its 1200 byte default overflows under DBG logs.
+config NET_SOCKETS_SERVICE_STACK_SIZE
+	default 2400 if NETWORKING
+
+# ... and the TCP workqueue, which runs the whole TCP input path (segment
+# processing, retransmit timers and the net_tcp DBG logs) on its own thread;
+# Zephyr's 1024 default overflows under TCP DBG logging.
+config NET_TCP_WORKQ_STACK_SIZE
+	default 2400 if NETWORKING
+
+# The mbedtls TLS configuration needed by shared-module/ssl (protocol, key
+# exchange, RNG and PEM parsing). It applies to every board with a network
+# interface (wifi, ethernet or offloaded sockets) because Zephyr's mbedtls
+# build is fully Kconfig-driven: without PEM parsing, for example,
+# shared-bindings/ssl cannot load PEM CAs. Boards can disable it with
+# CONFIG_ZCP_MBEDTLS_TLS=n in their board.conf.
+config ZCP_MBEDTLS_TLS
+	bool "mbedtls TLS support for the ssl module"
+	default y if WIFI || NET_L2_ETHERNET || NET_NATIVE_OFFLOADED_SOCKETS
+	select MBEDTLS_CIPHERSUITE_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+	select MBEDTLS_ENTROPY_C
+	select MBEDTLS_CTR_DRBG_C
+	select MBEDTLS_PEM_PARSE_C
+
 # ===== OTA firmware updates over BLE (SMP/MCUmgr) =====
 #
 # Boards that boot under MCUboot opt in via boards/<vendor>/<board>/sysbuild.conf

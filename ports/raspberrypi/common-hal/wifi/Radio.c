@@ -80,6 +80,10 @@ void common_hal_wifi_radio_set_hostname(wifi_radio_obj_t *self, const char *host
     netif_set_hostname(NETIF_AP, self->hostname);
 }
 
+const char *wifi_get_hostname_raw(void) {
+    return NETIF_STA->hostname == NULL ? "" : NETIF_STA->hostname;
+}
+
 void wifi_radio_get_mac_address(wifi_radio_obj_t *self, uint8_t *mac) {
     memcpy(mac, cyw43_state.mac, MAC_ADDRESS_LENGTH);
 }

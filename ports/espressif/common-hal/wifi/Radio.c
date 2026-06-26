@@ -120,6 +120,12 @@ void common_hal_wifi_radio_set_hostname(wifi_radio_obj_t *self, const char *host
     esp_netif_set_hostname(self->ap_netif, hostname);
 }
 
+const char *wifi_get_hostname_raw(void) {
+    const char *hostname = NULL;
+    esp_netif_get_hostname(common_hal_wifi_radio_obj.netif, &hostname);
+    return hostname == NULL ? "" : hostname;
+}
+
 mp_obj_t common_hal_wifi_radio_get_mac_address(wifi_radio_obj_t *self) {
     uint8_t mac[MAC_ADDRESS_LENGTH];
     esp_wifi_get_mac(WIFI_IF_STA, mac);

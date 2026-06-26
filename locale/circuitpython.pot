@@ -1777,13 +1777,11 @@ msgstr ""
 
 #: ports/espressif/common-hal/socketpool/Socket.c
 #: ports/raspberrypi/common-hal/socketpool/Socket.c
-#: ports/zephyr-cp/common-hal/socketpool/Socket.c
 msgid "Out of sockets"
 msgstr ""
 
 #: ports/espressif/common-hal/socketpool/SocketPool.c
-#: ports/raspberrypi/common-hal/socketpool/SocketPool.c
-msgid "SocketPool can only be used with wifi.radio"
+msgid "SocketPool can only be used with wifi.radio or board.ETHERNET"
 msgstr ""
 
 #: ports/espressif/common-hal/watchdog/WatchDogTimer.c
@@ -2222,6 +2220,10 @@ msgstr ""
 msgid "Only IPv4 sockets supported"
 msgstr ""
 
+#: ports/raspberrypi/common-hal/socketpool/SocketPool.c
+msgid "SocketPool can only be used with wifi.radio"
+msgstr ""
+
 #: ports/raspberrypi/common-hal/usb_host/Port.c
 msgid "All dma channels in use"
 msgstr ""
@@ -2403,8 +2405,14 @@ msgstr ""
 msgid "Use device tree to define %q devices"
 msgstr ""
 
+#: ports/zephyr-cp/common-hal/ethernet/Ethernet.c
+msgid "Failed to set IP address"
+msgstr ""
+
 #: ports/zephyr-cp/common-hal/socketpool/SocketPool.c
-msgid "SocketPool can only be used with wifi.radio or hostnetwork.HostNetwork"
+msgid ""
+"SocketPool can only be used with wifi.radio, board.ETHERNET, or "
+"hostnetwork.HostNetwork"
 msgstr ""
 
 #: ports/zephyr-cp/common-hal/usb_hid/Device.c shared-module/usb_hid/Device.c
@@ -4197,6 +4205,10 @@ msgstr ""
 msgid "Refresh too soon"
 msgstr ""
 
+#: shared-bindings/ethernet/Ethernet.c shared-bindings/wifi/Radio.c
+msgid "invalid hostname"
+msgstr ""
+
 #: shared-bindings/framebufferio/FramebufferDisplay.c
 msgid "Buffer is not a bytearray."
 msgstr ""
@@ -4404,10 +4416,6 @@ msgstr ""
 
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
-msgstr ""
-
-#: shared-bindings/wifi/Radio.c
-msgid "invalid hostname"
 msgstr ""
 
 #: shared-bindings/wifi/Radio.c
