@@ -354,7 +354,6 @@ CIRCUITPY_AUDIOIO = 0
 # TODO: Support ESP32-C6 coprocessor on some boards.
 CIRCUITPY_BLEIO_NATIVE = 0
 CIRCUITPY_WIFI = 0
-CIRCUITPY_SSL = 0
 
 # Second stage bootloader doesn't work when the factory partition is empty due to
 # UF2 missing.

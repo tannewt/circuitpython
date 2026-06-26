@@ -82,6 +82,7 @@ INC += \
 	-isystem esp-idf/components/esp_hw_support/port/$(IDF_TARGET)/private_include \
 	-isystem esp-idf/components/esp_hw_support/etm/include \
 	-isystem esp-idf/components/esp_mm/include \
+	-isystem esp-idf/components/esp_eth/include \
 	-isystem esp-idf/components/esp_netif/include \
 	-isystem esp-idf/components/esp_blockdev/include \
 	-isystem esp-idf/components/esp_partition/include \
@@ -953,6 +954,16 @@ ESP_IDF_COMPONENTS_LINK += esp_hal_regi2c
 endif
 ifneq ($(CIRCUITPY_WIFI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
+endif
+# mdns registers handlers on ETH_EVENT, which is defined by esp_eth.
+ifneq ($(CIRCUITPY_MDNS),0)
+	ESP_IDF_COMPONENTS_LINK += esp_eth
+endif
+ifneq ($(CIRCUITPY_MII),0)
+	ESP_IDF_COMPONENTS_LINK += esp_eth
+  ifeq ($(CIRCUITPY_WIFI),0)
+	ESP_IDF_COMPONENTS_LINK += esp_netif lwip mbedtls mdns
+  endif
 endif
 ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32 := esp32
