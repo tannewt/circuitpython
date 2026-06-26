@@ -228,6 +228,9 @@ endif
 ifeq ($(CIRCUITPY_ESPULP),1)
 SRC_PATTERNS += espulp/%
 endif
+ifeq ($(CIRCUITPY_ETHERNET),1)
+SRC_PATTERNS += ethernet/%
+endif
 ifeq ($(CIRCUITPY_FLOPPYIO),1)
 SRC_PATTERNS += floppyio/%
 endif
@@ -526,6 +529,8 @@ SRC_COMMON_HAL_ALL = \
 	dotclockframebuffer/DotClockFramebuffer.c \
 	dotclockframebuffer/__init__.c \
 	dualbank/__init__.c \
+	ethernet/Ethernet.c \
+	ethernet/__init__.c \
 	floppyio/__init__.c \
 	frequencyio/FrequencyIn.c \
 	frequencyio/__init__.c \

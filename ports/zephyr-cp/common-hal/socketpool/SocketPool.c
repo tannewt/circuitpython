@@ -14,6 +14,9 @@
 #if CIRCUITPY_WIFI
 #include "shared-bindings/wifi/__init__.h"
 #endif
+#if CIRCUITPY_ETHERNET
+#include "common-hal/ethernet/__init__.h"
+#endif
 #include "common-hal/socketpool/__init__.h"
 
 #include <stdio.h>
@@ -26,12 +29,16 @@ void common_hal_socketpool_socketpool_construct(socketpool_socketpool_obj_t *sel
     #if CIRCUITPY_WIFI
     is_wifi = radio == MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj);
     #endif
+    bool is_ethernet = false;
+    #if CIRCUITPY_ETHERNET
+    is_ethernet = radio == MP_OBJ_FROM_PTR(&common_hal_ethernet_ethernet_obj);
+    #endif
     bool is_hostnetwork = false;
     #if CIRCUITPY_HOSTNETWORK
     is_hostnetwork = mp_obj_is_type(radio, &hostnetwork_hostnetwork_type);
     #endif
-    if (!(is_wifi || is_hostnetwork)) {
-        mp_raise_ValueError(MP_ERROR_TEXT("SocketPool can only be used with wifi.radio or hostnetwork.HostNetwork"));
+    if (!(is_wifi || is_ethernet || is_hostnetwork)) {
+        mp_raise_ValueError(MP_ERROR_TEXT("SocketPool can only be used with wifi.radio, board.ETHERNET, or hostnetwork.HostNetwork"));
     }
 }
 

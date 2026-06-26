@@ -1072,6 +1072,10 @@ msgstr ""
 msgid "Failed to release mutex, err 0x%04x"
 msgstr ""
 
+#: ports/zephyr-cp/common-hal/ethernet/Ethernet.c
+msgid "Failed to set IP address"
+msgstr ""
+
 #: ports/analog/common-hal/busio/SPI.c
 msgid "Failed to set SPI Clock Mode"
 msgstr ""
@@ -2071,13 +2075,18 @@ msgstr ""
 msgid "Slices not supported"
 msgstr ""
 
-#: ports/espressif/common-hal/socketpool/SocketPool.c
 #: ports/raspberrypi/common-hal/socketpool/SocketPool.c
 msgid "SocketPool can only be used with wifi.radio"
 msgstr ""
 
+#: ports/espressif/common-hal/socketpool/SocketPool.c
+msgid "SocketPool can only be used with wifi.radio or board.ETHERNET"
+msgstr ""
+
 #: ports/zephyr-cp/common-hal/socketpool/SocketPool.c
-msgid "SocketPool can only be used with wifi.radio or hostnetwork.HostNetwork"
+msgid ""
+"SocketPool can only be used with wifi.radio, board.ETHERNET, or "
+"hostnetwork.HostNetwork"
 msgstr ""
 
 #: shared-bindings/aesio/aes.c
@@ -3511,7 +3520,7 @@ msgstr ""
 msgid "invalid format specifier"
 msgstr ""
 
-#: shared-bindings/wifi/Radio.c
+#: shared-bindings/ethernet/Ethernet.c shared-bindings/wifi/Radio.c
 msgid "invalid hostname"
 msgstr ""
 

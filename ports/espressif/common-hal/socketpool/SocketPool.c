@@ -8,7 +8,12 @@
 #include "common-hal/socketpool/Socket.h"
 
 #include "py/runtime.h"
+#if CIRCUITPY_WIFI
 #include "shared-bindings/wifi/__init__.h"
+#endif
+#if CIRCUITPY_ETHERNET
+#include "common-hal/ethernet/__init__.h"
+#endif
 #include "common-hal/socketpool/__init__.h"
 
 #include "components/lwip/lwip/src/include/lwip/netdb.h"
@@ -16,8 +21,15 @@
 #include "bindings/espidf/__init__.h"
 
 void common_hal_socketpool_socketpool_construct(socketpool_socketpool_obj_t *self, mp_obj_t radio) {
-    if (radio != MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj)) {
-        mp_raise_ValueError(MP_ERROR_TEXT("SocketPool can only be used with wifi.radio"));
+    bool valid = false;
+    #if CIRCUITPY_WIFI
+    valid = valid || radio == MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj);
+    #endif
+    #if CIRCUITPY_ETHERNET
+    valid = valid || radio == MP_OBJ_FROM_PTR(&common_hal_ethernet_ethernet_obj);
+    #endif
+    if (!valid) {
+        mp_raise_ValueError(MP_ERROR_TEXT("SocketPool can only be used with wifi.radio or board.ETHERNET"));
     }
 }
 

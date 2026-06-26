@@ -281,21 +281,31 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("wifi")
         module_reasons["wifi"] = "Zephyr board has wifi"
 
+    if board_info.get("ethernet", False):
+        enabled_modules.add("ethernet")
+        module_reasons["ethernet"] = "Zephyr board has ethernet"
+
     if board_info["flash_count"] > 0:
         enabled_modules.add("storage")
         module_reasons["storage"] = "Zephyr board has flash"
 
-    network_enabled = board_info.get("wifi", False) or board_info.get("hostnetwork", False)
+    network_enabled = (
+        board_info.get("wifi", False)
+        or board_info.get("ethernet", False)
+        or board_info.get("hostnetwork", False)
+    )
 
     if network_enabled:
+        enabled_modules.add("ipaddress")
+        module_reasons["ipaddress"] = "Zephyr networking enabled"
         enabled_modules.add("socketpool")
         module_reasons["socketpool"] = "Zephyr networking enabled"
         enabled_modules.add("hashlib")
         module_reasons["hashlib"] = "Zephyr networking enabled"
 
-    if board_info.get("wifi", False) or board_info.get("ethernet", False):
+    if board_info.get("wifi", False):
         enabled_modules.add("ssl")
-        module_reasons["ssl"] = "Zephyr networking enabled"
+        module_reasons["ssl"] = "Zephyr wifi enabled"
 
     for port_module in (portdir / "bindings").iterdir():
         if not board_info.get(port_module.name, False):
