@@ -15,7 +15,8 @@
 //   GB_RESET = GPIO37 (drives /GB_RESET via Q1 BSS138, active high to assert)
 //   AUDIO  = GPIO38 (PWM audio out to cartridge AUDIO pin)
 // MIDI:    GPIO0 = OUT (TX), GPIO1 = IN (RX, via H11L1 optocoupler)
-// I2C STEMMA QT (J14): SDA=GPIO46, SCL=GPIO47
+// J14 STEMMA QT connector, used as a UART serial console (NOT I2C):
+//   SDA (GPIO46) = console TX, SCL (GPIO47) = console RX
 // LED (D3): GPIO45 (active low)
 
 #include "shared-bindings/board/__init__.h"
@@ -149,10 +150,13 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_GP45), MP_ROM_PTR(&pin_GPIO45) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_LED), MP_ROM_PTR(&pin_GPIO45) },
 
+    // J14 STEMMA QT pins; also exposed as the UART serial console (TX on SDA, RX on SCL).
     { MP_ROM_QSTR(MP_QSTR_GP46), MP_ROM_PTR(&pin_GPIO46) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_SDA), MP_ROM_PTR(&pin_GPIO46) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_CONSOLE_TX), MP_ROM_PTR(&pin_GPIO46) },
 
     { MP_ROM_QSTR(MP_QSTR_GP47), MP_ROM_PTR(&pin_GPIO47) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_SCL), MP_ROM_PTR(&pin_GPIO47) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_CONSOLE_RX), MP_ROM_PTR(&pin_GPIO47) },
 };
 MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);

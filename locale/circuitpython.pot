@@ -2222,6 +2222,7 @@ msgid "Too many channels in sample."
 msgstr ""
 
 #: ports/atmel-samd/common-hal/_gbio/__init__.c
+#: ports/raspberrypi/common-hal/_gbio/__init__.c
 msgid "Too many commands"
 msgstr ""
 
@@ -3364,6 +3365,10 @@ msgstr ""
 #: shared-bindings/time/__init__.c
 #, c-format
 msgid "function takes %d positional arguments but %d were given"
+msgstr ""
+
+#: ports/raspberrypi/common-hal/_gbio/__init__.c
+msgid "game boy not running"
 msgstr ""
 
 #: py/objgenerator.c

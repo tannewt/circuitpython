@@ -31,6 +31,10 @@
 #include "common-hal/wifi/__init__.h"
 #endif
 
+#if CIRCUITPY_GBIO
+#include "common-hal/_gbio/__init__.h"
+#endif
+
 #include "common-hal/rtc/RTC.h"
 #include "common-hal/busio/UART.h"
 
@@ -374,6 +378,10 @@ safe_mode_t port_init(void) {
 
     // Reset everything into a known state before board_init.
     reset_port();
+
+    #if CIRCUITPY_GBIO
+    gbio_init();
+    #endif
 
     // Initialize RTC
     #if CIRCUITPY_RTC

@@ -14,9 +14,13 @@
 #define MICROPY_HW_LED_STATUS (&pin_GPIO45)
 #define MICROPY_HW_LED_STATUS_INVERTED (1)
 
-// J14 STEMMA QT (I2C) connector: SDA=GPIO46, SCL=GPIO47.
-#define DEFAULT_I2C_BUS_SDA (&pin_GPIO46)
-#define DEFAULT_I2C_BUS_SCL (&pin_GPIO47)
+// J14 STEMMA QT connector, repurposed as a UART serial console (output + input):
+//   SDA (GPIO46) = console TX, SCL (GPIO47) = console RX.
+// This routes the CircuitPython REPL / print() output to the STEMMA QT pins over UART
+// (115200-8-N-1) instead of I2C. The pins are claimed at boot and never reset, so
+// board.I2C() on these pins is no longer available.
+#define CIRCUITPY_CONSOLE_UART_TX (&pin_GPIO46)
+#define CIRCUITPY_CONSOLE_UART_RX (&pin_GPIO47)
 
 // MIDI UART: GPIO0 = MIDI OUT (TX), GPIO1 = MIDI IN (RX, via H11L1 optocoupler).
 #define DEFAULT_UART_BUS_TX (&pin_GPIO0)
