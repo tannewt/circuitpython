@@ -57,6 +57,9 @@
 #include "common-hal/frequencyio/FrequencyIn.h"
 #endif
 
+#if CIRCUITPY_GBIO
+#include "common-hal/_gbio/__init__.h"
+#endif
 #include "common-hal/microcontroller/Pin.h"
 
 #if CIRCUITPY_PS2IO
@@ -128,6 +131,14 @@ static void reset_ticks(void) {
 }
 
 extern volatile bool mp_msc_enabled;
+
+#if SAMD51
+extern char _start_backupram_bss;
+extern char _end_backupram_bss;
+extern char _start_backupram_data;
+extern char _end_backupram_data;
+extern char _backupram_data_destination;
+#endif
 
 #if defined(SAMD21) && defined(ENABLE_MICRO_TRACE_BUFFER)
 // Stores 2 ^ TRACE_BUFFER_MAGNITUDE_PACKETS packets.
@@ -336,11 +347,21 @@ safe_mode_t port_init(void) {
 
     rtc_init();
 
+    // Init backup ram.
+    #if SAMD51
+    memset(&_start_backupram_bss, 0, &_end_backupram_bss - &_start_backupram_bss);
+    memcpy(&_backupram_data_destination, &_start_backupram_data, &_end_backupram_data - &_start_backupram_data);
+    #endif
+
     init_shared_dma();
 
     // Reset everything into a known state before board_init.
     // Pins are reset in main() after this routine returns.
     reset_port();
+
+    #if CIRCUITPY_GBIO
+    gbio_init();
+    #endif
 
     #ifdef SAMD21
     if (PM->RCAUSE.bit.BOD33 == 1 || PM->RCAUSE.bit.BOD12 == 1) {
@@ -402,6 +423,10 @@ void reset_port(void) {
     pew_reset();
     #endif
 
+    #if CIRCUITPY_GBIO
+    // gbio keeps the event system configured across VM resets; only reset tick state.
+    reset_ticks();
+    #else
     #ifdef SAMD21
     if (!tick_enabled())
     // SAMD21 ticks depend on the event system, so don't disturb the event system if we need ticks,
@@ -411,6 +436,7 @@ void reset_port(void) {
         reset_event_system();
         reset_ticks();
     }
+    #endif
 
     // Output clocks for debugging.
     // not supported by SAMD51G; uncomment for SAMD51J or update for 51G
@@ -558,9 +584,11 @@ static void evsyshandler_common(void) {
 }
 
 #ifdef SAM_D5X_E5X
+#if !CIRCUITPY_GBIO
 void EVSYS_0_Handler(void) {
     evsyshandler_common();
 }
+#endif
 void EVSYS_1_Handler(void) {
     evsyshandler_common();
 }

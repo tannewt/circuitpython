@@ -1172,6 +1172,10 @@ msgstr ""
 msgid "GNSS init"
 msgstr ""
 
+#: ports/atmel-samd/common-hal/_gbio/__init__.c
+msgid "GameBoy not running"
+msgstr ""
+
 #: ports/espressif/common-hal/espidf/__init__.c
 msgid "Generic Failure"
 msgstr ""
@@ -2217,6 +2221,10 @@ msgstr ""
 msgid "Too many channels in sample."
 msgstr ""
 
+#: ports/atmel-samd/common-hal/_gbio/__init__.c
+msgid "Too many commands"
+msgstr ""
+
 #: ports/espressif/common-hal/_bleio/Characteristic.c
 msgid "Too many descriptors"
 msgstr ""
@@ -2756,6 +2764,10 @@ msgstr ""
 
 #: extmod/ulab/code/numpy/create.c extmod/ulab/code/utils/utils.c
 msgid "buffer is smaller than requested size"
+msgstr ""
+
+#: shared-bindings/_gbio/__init__.c
+msgid "buffer must be a bytes-like object"
 msgstr ""
 
 #: extmod/ulab/code/numpy/create.c extmod/ulab/code/utils/utils.c
@@ -3511,6 +3523,10 @@ msgstr ""
 
 #: extmod/ulab/code/numpy/poly.c
 msgid "input vectors must be of equal length"
+msgstr ""
+
+#: shared-bindings/_gbio/__init__.c
+msgid "instruction buffer must be a bytearray or array of type 'B'"
 msgstr ""
 
 #: extmod/ulab/code/numpy/approx.c

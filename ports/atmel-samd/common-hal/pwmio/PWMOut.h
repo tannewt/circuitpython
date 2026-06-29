@@ -10,6 +10,9 @@
 
 #include "py/obj.h"
 
+// Mark a TCC as never-to-be-reset so it survives VM restarts (used by gbio).
+void never_reset_tcc(uint8_t index);
+
 typedef struct {
     mp_obj_base_t base;
     const mcu_pin_obj_t *pin;

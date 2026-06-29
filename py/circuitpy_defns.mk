@@ -249,6 +249,9 @@ endif
 ifeq ($(CIRCUITPY_GETPASS),1)
 SRC_PATTERNS += getpass/%
 endif
+ifeq ($(CIRCUITPY_GBIO),1)
+SRC_PATTERNS += _gbio/%
+endif
 ifeq ($(CIRCUITPY_GIFIO),1)
 SRC_PATTERNS += gifio/%
 endif
@@ -537,6 +540,7 @@ SRC_COMMON_HAL_ALL = \
 	floppyio/__init__.c \
 	frequencyio/FrequencyIn.c \
 	frequencyio/__init__.c \
+	_gbio/__init__.c \
 	imagecapture/ParallelImageCapture.c \
 	imagecapture/__init__.c \
 	gnss/__init__.c \

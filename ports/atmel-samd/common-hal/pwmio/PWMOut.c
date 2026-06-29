@@ -38,6 +38,11 @@ uint8_t tcc_channels[3];   // Set by pwmout_reset() to {0xf0, 0xfc, 0xfc} initia
 uint8_t tcc_channels[5];   // Set by pwmout_reset() to {0xc0, 0xf0, 0xf8, 0xfc, 0xfc} initially.
 #endif
 
+static uint8_t never_reset_tc_or_tcc[TC_INST_NUM + TCC_INST_NUM];
+
+void never_reset_tcc(uint8_t index) {
+    never_reset_tc_or_tcc[TC_INST_NUM + index] += 1;
+}
 
 void common_hal_pwmio_pwmout_never_reset(pwmio_pwmout_obj_t *self) {
     never_reset_pin_number(self->pin->number);

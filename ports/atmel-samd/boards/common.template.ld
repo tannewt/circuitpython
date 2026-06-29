@@ -11,6 +11,7 @@ MEMORY
     FLASH_NVM (r) : ORIGIN = ${CIRCUITPY_INTERNAL_NVM_START_ADDR}, LENGTH = ${CIRCUITPY_INTERNAL_NVM_SIZE}
 
     RAM (xrw)  : ORIGIN = 0x20000000, LENGTH = ${RAM_SIZE}
+    BACKUPRAM (xrw)  : ORIGIN = 0x47000000, LENGTH = 8K
 }
 
 /* top end of the stack */
@@ -80,6 +81,19 @@ SECTIONS
         _erelocate = .;        /* define a global symbol at data end; used by startup code in order to initialize the .data section in RAM */
     } >RAM AT> FLASH_FIRMWARE
 
+    /* Data that lives in backup RAM (SAMD51). Initial values are stored in
+       flash and copied to backup RAM by port_init(). */
+    .backupram_data :
+    {
+        . = ALIGN(4);
+        *(.backupram_data)
+        *(.backupram_data*)
+        . = ALIGN(4);
+    } >BACKUPRAM AT>FLASH_FIRMWARE
+    _start_backupram_data = LOADADDR(.backupram_data);
+    _backupram_data_destination = ADDR(.backupram_data);
+    _end_backupram_data = _start_backupram_data + SIZEOF(.backupram_data);
+
     /* Uninitialized data section */
     .bss (NOLOAD) :
     {
@@ -94,6 +108,17 @@ SECTIONS
         _ezero = .;         /* define a global symbol at bss end; used by startup code */
         _ebss = .;
     } >RAM
+
+    /* Zero-initialized data in backup RAM (SAMD51). Cleared by port_init(). */
+    .backupram_bss (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.backupram)
+        *(.backupram_bss)
+        . = ALIGN(4);
+    } >BACKUPRAM
+    _start_backupram_bss = ADDR(.backupram_bss);
+    _end_backupram_bss = _start_backupram_bss + SIZEOF(.backupram_bss);
 
     .ARM.attributes 0 : { *(.ARM.attributes) }
 }

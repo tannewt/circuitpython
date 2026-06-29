@@ -353,7 +353,7 @@ endif
 
 $(BUILD)/firmware.bin: $(BUILD)/firmware.elf
 	$(STEPECHO) "Create $@"
-	$(Q)$(OBJCOPY) -O binary -j .vectors -j .text -j .data $^ $@
+	$(Q)$(OBJCOPY) -O binary -j .vectors -j .text -j .data -j .backupram_data $^ $@
 
 $(BUILD)/firmware.uf2: $(BUILD)/firmware.bin
 	$(STEPECHO) "Create $@"
