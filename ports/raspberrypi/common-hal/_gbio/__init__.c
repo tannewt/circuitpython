@@ -14,12 +14,13 @@
 //   * gbio_ctrl  (GPIO base 0)  watches /RD and A15 and, on every cartridge ROM
 //     read (A15 low, /RD low), pulses an internal handshake pin (GPIO22).
 //   * gbio_data  (GPIO base 16) drives D0..D7 from its TX FIFO.  A DMA channel
-//     keeps the TX FIFO full from a command buffer in RAM.  Crucially the data
-//     SM drives each byte onto D0..D7 BEFORE the matching /RD strobe (mirroring
-//     the SAMD port, whose port-DMA latches the output register at the END of
-//     the previous read so it is stable throughout the next).  When the FIFO
-//     runs dry the state machine stalls on `pull` and the pins hold the last
-//     byte -- this is the "idle" state in which the game boy spins on JP (HL).
+//     keeps the TX FIFO full from a command buffer in RAM.  Each byte is driven
+//     onto D0..D7 BEFORE its matching /RD strobe (mirroring the SAMD port,
+//     whose port-DMA latches the output register at the END of the previous
+//     read so the byte is stable throughout the next), so the GameBoy's
+//     sample point always catches the right byte.  When the FIFO runs dry the
+//     state machine stalls on `pull` and the pins hold the last byte -- this is
+//     the "idle" state in which the game boy spins on a JP (HL) self loop.
 //
 // Two PIO instances are required because the PyGameBoy routes D7 to GPIO36
 // (only reachable with GPIO base 16) and /RD to GPIO4 (only reachable with
@@ -328,7 +329,7 @@ static volatile uint16_t boot_address_i;
 // memory slot.
 
 #define CTRL_PROG_LEN 6
-#define DATA_PROG_LEN 5
+#define DATA_PROG_LEN 4
 static uint16_t ctrl_program[CTRL_PROG_LEN];
 static uint16_t data_program[DATA_PROG_LEN];
 
@@ -355,36 +356,45 @@ static void build_pio_programs(void) {
     // (see the GB_HANDSHAKE_PIN note above) reorganises the encoded index to
     // match whatever PIO base this SM ends up on.
     //
-    //   pull block              ; (entry) prefetch byte[0] into OSR
+    //   pull block              ; (entry) prefetch stream byte[0] into OSR
     // loop:
-    //     out pins, 8           ; drive the current byte onto D0..D7 now, so it
-    //                           ;  is stable on the bus BEFORE the read strobe
-    //     wait 1 gpio 22        ; read in progress (handshake high); byte held
+    //     out pins, 8           ; drive the current byte onto D0..D7 NOW, so it
+    //                           ;  is stable on the bus BEFORE the /RD strobe
+    //     wait 1 gpio 22        ; the matching read is in progress (handshake
+    //                           ;  high); the byte was already driven above
     //     wait 0 gpio 22        ; read finished (handshake low)
-    //     jmp pull               ; prefetch the next byte; pins still hold the
-    //                           ;  current one until the next `out`
+    //   (wrap -> pull)          ; prefetch the next byte; pins keep holding the
+    //                           ;  current byte until the next `out` reloads it
     //
-    // Driving the byte BEFORE the /RD strobe (instead of reacting to it) is what
-    // makes the data valid for the GameBoy's sampling edge regardless of where
-    // in the read cycle that edge falls -- the previous `wait 0 -> jmp -> pull
-    // -> out` reload happens in the dead time between reads, so by the time the
-    // next /RD falls the new byte has already been on the bus for a while.  This
-    // mirrors the SAMD gb_m4 port, whose port-DMA latches the output register
-    // on the RISING edge of the read-valid LUT (end of the previous read), so it
-    // is stable throughout the next.  Without this the byte arrived a few PIO
-    // cycles after /RD fell, racing the GameBoy's data-sample point and
-    // corrupting the boot logo.
+    // WHY drive-before-read (this is the crux of matching the SAMD port):
     //
-    // NOTE: because this drives the byte BEFORE its read (no delivery latency),
-    // but the SM83 boot stream is authored for SAMD's one-read pipeline delay
-    // (read#1 receives the output register's initial value, stream byte[0]
-    // lands on read#2), callers prepend a single 0x00 byte to the DMG boot feed
-    // to reproduce that delay exactly -- see common_hal_gbio_reset_gameboy().
+    // The SAMD gb_m4 port-DMA writes one stream byte into the port output
+    // register on the RISING edge of the read-valid LUT -- i.e. at the END of
+    // the *previous* read -- "so we have almost a full cycle to move the new
+    // data".  So the byte the game boy samples during read N was loaded right
+    // after read N-1 ended and is then stable on D0..D7 for the *entire* read N
+    // window.  read#1 gets stream byte[0] (loaded at reset release); there is
+    // NO extra one-read pipeline delay -- see the alignment note in
+    // common_hal_gbio_reset_gameboy().
+    //
+    // The naive RP2350 program `pull; wait handshake-high; out; wait low`
+    // instead drives the byte only AFTER /RD has already fallen (the ctrl SM
+    // raises the handshake reactively, a few PIO cycles into the read), so the
+    // byte lands late in the read window and races the GameBoy's data-sample
+    // point -- which garbles the boot logo even when the alignment is correct.
+    //
+    // Reordering to `pull; out; wait handshake-high; wait handshake-low`
+    // (wrap->pull) drives each byte during the dead time between reads (the
+    // `wrap->pull` that follows the previous `wait 0`), so by the time the next
+    // /RD falls the byte has already been on the bus -- exactly mirroring the
+    // SAMD port's stable-before-read behaviour.  read#1's byte is driven at SM
+    // entry (well before reset release), and idle behaviour is preserved: when
+    // the FIFO drains the SM stalls on `pull` with the pins holding the last
+    // byte (0xE9 = JP (HL)).
     data_program[0] = pio_encode_pull(false, true);
     data_program[1] = pio_encode_out(pio_pins, 8);
     data_program[2] = pio_encode_wait_gpio(true, GB_HANDSHAKE_PIN);
     data_program[3] = pio_encode_wait_gpio(false, GB_HANDSHAKE_PIN);
-    data_program[4] = pio_encode_jmp(0);
 }
 
 // ===== DMA / FEEDER HELPERS =====
@@ -701,32 +711,29 @@ void common_hal_gbio_reset_gameboy(void) {
 
     // Feed the DMG boot stream first.  If we detect a GBC we re-boot below.
     //
-    // Pipeline-delay alignment with the SAMD gb_m4 port: on SAMD the data DMA
-    // is triggered on the RISING edge of the read-valid LUT (i.e. at the END of
-    // each cart read), so the byte loaded at the end of read N-1 is what the
-    // game boy samples during read N.  That means the very first cart read after
-    // /GB_RESET release samples the output register's initial value (0), and
-    // gameboy_boot[0] (a deliberately-early 0x00) lands on read #2.  The entire
-    // stream is authored for that one-read pipeline delay.
+    // Alignment with the SAMD gb_m4 port (the boot streams are byte-identical,
+    // so the served-byte-per-cart-address mapping must match SAMD exactly):
     //
-    // The RP2350 PIO has no such delay: its program is `pull; wait handshake;
-    // out; wait`, so gameboy_boot[0] would be served on read #1 -- one read
-    // earlier than the stream expects -- which misaligns the Nintendo logo /
-    // header checksum and the DMG boot ROM halts partway through reading it.
+    //   * There is NO one-read pipeline delay.  The very first response byte
+    //     is gameboy_boot[0] (read#1), and read#N serves gameboy_boot[N-1].
+    //   * Proof from the SAMD GBC-detection check `address_i == 50 && address
+    //     == 0x0104`: on a DMG the 50th read must NOT be at 0x0104 (else the
+    //     DMG would be falsely detected as a GBC and re-armed with the wrong
+    //     stream).  The DMG reads the logo at 0x0104 at read#K != 50, and 0x0104
+    //     must receive gameboy_boot[48] = 0xCE (start of the "Nintendo logo 48
+    //     bytes" chunk, which the DMG boot ROM compares against its internal
+    //     Nintendo logo).  read#N -> gameboy_boot[N-1] gives K = 49 (and GBC,
+    //     which reads 0x0104 one read later, lands on read#50 -> detected).
+    //     read#N -> gameboy_boot[N-2] (a one-read delay) would force K = 50 --
+    //     a false-positive GBC detection AND a corrupt logo -- so we must NOT
+    //     prepend a placeholder byte here.
     //
-    // Mirror SAMD's read #1 by prepending a single 0x00 byte to the fed buffer,
-    // so the RP2350 serves: read#1 = 0x00 (the prepended byte), read#2 =
-    // gameboy_boot[0], ... exactly reproducing the SAMD byte/address sequence.
-    // (The GBC re-arm path below needs NO such prepend: SAMD software-triggers
-    // the DMA there, which already has no delay, and gameboy_color_boot[0] is
-    // the first logo byte 0xCE -- so the RP2350, also delay-free, matches.)
-    //
-    // command_cache is free here: nothing_going (everything_going is false)
-    // so no vblank / queue_commands path can touch it concurrently.
+    // The data SM (build_pio_programs) drives each byte onto D0..D7 BEFORE
+    // its /RD strobe, so it serves gameboy_boot[0] stably on read#1 -- which
+    // is exactly how the SAMD port sets its first response byte (loaded at
+    // reset release / the previous read's rising edge, stable for the read).
     mp_printf(&mp_plat_print, "  [gbio] stage 3: starting DMG feeder (gameboy_boot)\n");
-    command_cache[0] = 0x00;     // SAMD-equivalent initial-output read
-    memcpy(command_cache + 1, gameboy_boot, sizeof(gameboy_boot));
-    feeder_start(command_cache, sizeof(gameboy_boot) + 1);
+    feeder_start(gameboy_boot, sizeof(gameboy_boot));
 
     // Release reset: the game boy boot ROM starts reading the cartridge header.
     mp_printf(&mp_plat_print, "  [gbio] stage 4: releasing /GB_RESET\n");
