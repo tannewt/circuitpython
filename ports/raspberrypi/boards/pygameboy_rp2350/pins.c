@@ -5,16 +5,18 @@
 // SPDX-License-Identifier: MIT
 
 // Pin mapping for the PyGameBoy RP2350 cartridge (RP2350B, QFN-80).
-// Derived from ~/repos/pcbs/pygb/pygameboy.kicad_pcb (rp2350 branch).
+// Derived from ~/repos/pcbs/pygb/pygameboy.kicad_pcb (v8).
 //
-// Game Boy cartridge bus (U1):
-//   CLK=GPIO2  WR=GPIO3  RD=GPIO4  CS=GPIO5
-//   A0..A15 = GPIO6..GPIO21
-//   D0..D7  = GPIO29..GPIO36 (3V side of 74LVC4245 level shifter U5)
-//   DATA_OE = GPIO28 (level shifter output enable)
-//   GB_RESET = GPIO37 (drives /GB_RESET via Q1 BSS138, active high to assert)
+// Game Boy cartridge bus (U1), all signals on the first 32 GPIO:
+//   A0..A15 = GPIO2..GPIO17
+//   CLK=GPIO18  WR=GPIO19  RD=GPIO20  CS=GPIO21
+//   DATA_OE = GPIO22 (level shifter U5 output enable)
+//   D0..D7  = GPIO23..GPIO30 (3V side of 74LVC4245 level shifter U5)
+//   GB_RESET = GPIO31 (drives /GB_RESET via Q1 BSS138, active high to assert)
 //   AUDIO  = GPIO38 (PWM audio out to cartridge AUDIO pin)
 // MIDI:    GPIO0 = OUT (TX), GPIO1 = IN (RX, via H11L1 optocoupler)
+// J101 debug UART header (3-pin: RX, GND, TX):
+//   DEBUG_TX = GPIO42, DEBUG_RX = GPIO43
 // J14 STEMMA QT connector, used as a UART serial console (NOT I2C):
 //   SDA (GPIO46) = console TX, SCL (GPIO47) = console RX
 // LED (D3): GPIO45 (active low)
@@ -31,101 +33,101 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_MIDI_IN), MP_ROM_PTR(&pin_GPIO1) },
 
     { MP_ROM_QSTR(MP_QSTR_GP2), MP_ROM_PTR(&pin_GPIO2) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_CLK), MP_ROM_PTR(&pin_GPIO2) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A0), MP_ROM_PTR(&pin_GPIO2) },
 
     { MP_ROM_QSTR(MP_QSTR_GP3), MP_ROM_PTR(&pin_GPIO3) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_WR), MP_ROM_PTR(&pin_GPIO3) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A1), MP_ROM_PTR(&pin_GPIO3) },
 
     { MP_ROM_QSTR(MP_QSTR_GP4), MP_ROM_PTR(&pin_GPIO4) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_RD), MP_ROM_PTR(&pin_GPIO4) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A2), MP_ROM_PTR(&pin_GPIO4) },
 
     { MP_ROM_QSTR(MP_QSTR_GP5), MP_ROM_PTR(&pin_GPIO5) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_CS), MP_ROM_PTR(&pin_GPIO5) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A3), MP_ROM_PTR(&pin_GPIO5) },
 
     { MP_ROM_QSTR(MP_QSTR_GP6), MP_ROM_PTR(&pin_GPIO6) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A0), MP_ROM_PTR(&pin_GPIO6) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A4), MP_ROM_PTR(&pin_GPIO6) },
 
     { MP_ROM_QSTR(MP_QSTR_GP7), MP_ROM_PTR(&pin_GPIO7) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A1), MP_ROM_PTR(&pin_GPIO7) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A5), MP_ROM_PTR(&pin_GPIO7) },
 
     { MP_ROM_QSTR(MP_QSTR_GP8), MP_ROM_PTR(&pin_GPIO8) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A2), MP_ROM_PTR(&pin_GPIO8) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A6), MP_ROM_PTR(&pin_GPIO8) },
 
     { MP_ROM_QSTR(MP_QSTR_GP9), MP_ROM_PTR(&pin_GPIO9) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A3), MP_ROM_PTR(&pin_GPIO9) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A7), MP_ROM_PTR(&pin_GPIO9) },
 
     { MP_ROM_QSTR(MP_QSTR_GP10), MP_ROM_PTR(&pin_GPIO10) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A4), MP_ROM_PTR(&pin_GPIO10) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A8), MP_ROM_PTR(&pin_GPIO10) },
 
     { MP_ROM_QSTR(MP_QSTR_GP11), MP_ROM_PTR(&pin_GPIO11) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A5), MP_ROM_PTR(&pin_GPIO11) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A9), MP_ROM_PTR(&pin_GPIO11) },
 
     { MP_ROM_QSTR(MP_QSTR_GP12), MP_ROM_PTR(&pin_GPIO12) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A6), MP_ROM_PTR(&pin_GPIO12) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A10), MP_ROM_PTR(&pin_GPIO12) },
 
     { MP_ROM_QSTR(MP_QSTR_GP13), MP_ROM_PTR(&pin_GPIO13) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A7), MP_ROM_PTR(&pin_GPIO13) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A11), MP_ROM_PTR(&pin_GPIO13) },
 
     { MP_ROM_QSTR(MP_QSTR_GP14), MP_ROM_PTR(&pin_GPIO14) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A8), MP_ROM_PTR(&pin_GPIO14) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A12), MP_ROM_PTR(&pin_GPIO14) },
 
     { MP_ROM_QSTR(MP_QSTR_GP15), MP_ROM_PTR(&pin_GPIO15) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A9), MP_ROM_PTR(&pin_GPIO15) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A13), MP_ROM_PTR(&pin_GPIO15) },
 
     { MP_ROM_QSTR(MP_QSTR_GP16), MP_ROM_PTR(&pin_GPIO16) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A10), MP_ROM_PTR(&pin_GPIO16) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A14), MP_ROM_PTR(&pin_GPIO16) },
 
     { MP_ROM_QSTR(MP_QSTR_GP17), MP_ROM_PTR(&pin_GPIO17) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A11), MP_ROM_PTR(&pin_GPIO17) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A15), MP_ROM_PTR(&pin_GPIO17) },
 
     { MP_ROM_QSTR(MP_QSTR_GP18), MP_ROM_PTR(&pin_GPIO18) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A12), MP_ROM_PTR(&pin_GPIO18) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_CLK), MP_ROM_PTR(&pin_GPIO18) },
 
     { MP_ROM_QSTR(MP_QSTR_GP19), MP_ROM_PTR(&pin_GPIO19) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A13), MP_ROM_PTR(&pin_GPIO19) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_WR), MP_ROM_PTR(&pin_GPIO19) },
 
     { MP_ROM_QSTR(MP_QSTR_GP20), MP_ROM_PTR(&pin_GPIO20) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A14), MP_ROM_PTR(&pin_GPIO20) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_RD), MP_ROM_PTR(&pin_GPIO20) },
 
     { MP_ROM_QSTR(MP_QSTR_GP21), MP_ROM_PTR(&pin_GPIO21) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_A15), MP_ROM_PTR(&pin_GPIO21) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_CS), MP_ROM_PTR(&pin_GPIO21) },
 
     { MP_ROM_QSTR(MP_QSTR_GP22), MP_ROM_PTR(&pin_GPIO22) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_DATA_OE), MP_ROM_PTR(&pin_GPIO22) },
+
     { MP_ROM_QSTR(MP_QSTR_GP23), MP_ROM_PTR(&pin_GPIO23) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D0), MP_ROM_PTR(&pin_GPIO23) },
+
     { MP_ROM_QSTR(MP_QSTR_GP24), MP_ROM_PTR(&pin_GPIO24) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D1), MP_ROM_PTR(&pin_GPIO24) },
+
     { MP_ROM_QSTR(MP_QSTR_GP25), MP_ROM_PTR(&pin_GPIO25) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D2), MP_ROM_PTR(&pin_GPIO25) },
+
     { MP_ROM_QSTR(MP_QSTR_GP26), MP_ROM_PTR(&pin_GPIO26) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D3), MP_ROM_PTR(&pin_GPIO26) },
+
     { MP_ROM_QSTR(MP_QSTR_GP27), MP_ROM_PTR(&pin_GPIO27) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D4), MP_ROM_PTR(&pin_GPIO27) },
 
     { MP_ROM_QSTR(MP_QSTR_GP28), MP_ROM_PTR(&pin_GPIO28) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_DATA_OE), MP_ROM_PTR(&pin_GPIO28) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D5), MP_ROM_PTR(&pin_GPIO28) },
 
     { MP_ROM_QSTR(MP_QSTR_GP29), MP_ROM_PTR(&pin_GPIO29) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D0), MP_ROM_PTR(&pin_GPIO29) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D6), MP_ROM_PTR(&pin_GPIO29) },
 
     { MP_ROM_QSTR(MP_QSTR_GP30), MP_ROM_PTR(&pin_GPIO30) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D1), MP_ROM_PTR(&pin_GPIO30) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D7), MP_ROM_PTR(&pin_GPIO30) },
 
     { MP_ROM_QSTR(MP_QSTR_GP31), MP_ROM_PTR(&pin_GPIO31) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D2), MP_ROM_PTR(&pin_GPIO31) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_RESET), MP_ROM_PTR(&pin_GPIO31) },
 
     { MP_ROM_QSTR(MP_QSTR_GP32), MP_ROM_PTR(&pin_GPIO32) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D3), MP_ROM_PTR(&pin_GPIO32) },
-
     { MP_ROM_QSTR(MP_QSTR_GP33), MP_ROM_PTR(&pin_GPIO33) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D4), MP_ROM_PTR(&pin_GPIO33) },
-
     { MP_ROM_QSTR(MP_QSTR_GP34), MP_ROM_PTR(&pin_GPIO34) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D5), MP_ROM_PTR(&pin_GPIO34) },
-
     { MP_ROM_QSTR(MP_QSTR_GP35), MP_ROM_PTR(&pin_GPIO35) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D6), MP_ROM_PTR(&pin_GPIO35) },
-
     { MP_ROM_QSTR(MP_QSTR_GP36), MP_ROM_PTR(&pin_GPIO36) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_D7), MP_ROM_PTR(&pin_GPIO36) },
-
     { MP_ROM_QSTR(MP_QSTR_GP37), MP_ROM_PTR(&pin_GPIO37) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_GB_RESET), MP_ROM_PTR(&pin_GPIO37) },
 
     { MP_ROM_QSTR(MP_QSTR_GP38), MP_ROM_PTR(&pin_GPIO38) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_AUDIO), MP_ROM_PTR(&pin_GPIO38) },
@@ -139,10 +141,10 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_A1), MP_ROM_PTR(&pin_GPIO41) },
 
     { MP_ROM_QSTR(MP_QSTR_GP42), MP_ROM_PTR(&pin_GPIO42) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_A2), MP_ROM_PTR(&pin_GPIO42) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_DEBUG_TX), MP_ROM_PTR(&pin_GPIO42) },
 
     { MP_ROM_QSTR(MP_QSTR_GP43), MP_ROM_PTR(&pin_GPIO43) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_A3), MP_ROM_PTR(&pin_GPIO43) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_DEBUG_RX), MP_ROM_PTR(&pin_GPIO43) },
 
     { MP_ROM_QSTR(MP_QSTR_GP44), MP_ROM_PTR(&pin_GPIO44) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_A4), MP_ROM_PTR(&pin_GPIO44) },

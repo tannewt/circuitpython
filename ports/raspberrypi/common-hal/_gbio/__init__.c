@@ -8,31 +8,42 @@
 //
 // The RP2350 plays the role of a game boy cartridge: it feeds a stream of SM83
 // opcodes to the game boy CPU one byte at a time, synchronised to the game boy's
-// own read strobes.  Two PIO state machines do the real-time work so the ARM
-// core is free to run Python / USB between game boy accesses:
+// own read strobes.  A single PIO state machine does the real-time work so the
+// ARM core is free to run Python / USB between game boy accesses:
 //
-//   * gbio_ctrl  (GPIO base 0)  watches /RD and A15 and, on every cartridge ROM
-//     read (A15 low, /RD low), pulses an internal handshake pin (GPIO22).
-//   * gbio_data  (GPIO base 16) drives D0..D7 from its TX FIFO.  A DMA channel
-//     keeps the TX FIFO full from a command buffer in RAM.  Each byte is driven
-//     onto D0..D7 BEFORE its matching /RD strobe (mirroring the SAMD port,
-//     whose port-DMA latches the output register at the END of the previous
-//     read so the byte is stable throughout the next), so the GameBoy's
-//     sample point always catches the right byte.  When the FIFO runs dry the
-//     state machine stalls on `pull` and the pins hold the last byte -- this is
-//     the "idle" state in which the game boy spins on a JP (HL) self loop.
+//   gbio_data  drives D0..D7 from its TX FIFO.  A DMA channel keeps the TX FIFO
+//     full from a command buffer in RAM.  gbio_data directly watches /RD and
+//     A15: it spins while A15 is high (non-ROM region), waits for /RD to fall (a
+//     cartridge ROM read at A15 low), lets the read complete, then pulls the
+//     next byte from the FIFO and drives it onto D0..D7 BEFORE its matching /RD
+//     strobe (mirroring the SAMD port, whose port-DMA latches the output
+//     register at the END of the previous read so the byte is stable throughout
+//     the next), so the GameBoy's sample point always catches the right byte.
+//     When the FIFO runs dry the state machine stalls on `pull` and the pins
+//     hold the last byte -- this is the "idle" state in which the game boy spins
+//     on a JP (HL) self loop.  The level-shifter output-enable (DATA_OE) is a
+//     sideset output of this same SM, so the 74LVC4245 only drives D0..D7 onto
+//     the game boy bus during ROM reads (and the idle spin) -- it is held
+//     high-Z (OE de-asserted) outside the ROM region and while the GB is in
+//     reset, instead of permanently outputting.
 //
-// Two PIO instances are required because the PyGameBoy routes D7 to GPIO36
-// (only reachable with GPIO base 16) and /RD to GPIO4 (only reachable with
-// GPIO base 0); a single PIO state machine cannot span both banks.  The
-// handshake is a physical pin (GPIO22) which lies in the 16..31 overlap of the
-// two banks, so it is visible to both state machines regardless of which PIO
-// instance each one ends up on.
+// A single state machine is sufficient because, on the v8 PyGameBoy PCB, every
+// cartridge bus signal lives in the first 32 GPIO bank: A0..A15 = GPIO2..GPIO17,
+// /RD = GPIO20 and D0..D7 = GPIO23..GPIO30.  (The earlier board routed D7 to
+// GPIO36 and /RD to GPIO4, forcing two PIO instances linked by a physical
+// handshake pin in the 16..31 bank overlap; that is no longer needed.)
+//
+// The ARM core still gets a /RD falling-edge interrupt (on demand) for address
+// dispatch: it watches the vblank (0x0040) and joypad (0x0060) interrupt
+// vectors, the 0x3000-0x3FFF gamepad-read encoding region, and -- during boot
+// -- the game boy Color detection pattern, swapping the DMA feeder between
+// command streams.  This runs in parallel with gbio_data and does not gate it.
 //
 // The SM83 command streams and the address-dispatch logic are ported from the
 // original atmel-samd gb_m4 implementation; they are GameBoy-side and therefore
-// portable.  Only the delivery mechanism (SAMD CCL + event system + port DMA)
-// has been replaced with RP2350 PIO + DMA.
+// portable.  Only the delivery mechanism (SAMD CCL + event system + port DMA,
+// or the earlier two-PIO + handshake design) has been replaced with a single
+// RP2350 PIO state machine + DMA.
 
 #include "shared-bindings/_gbio/__init__.h"
 #include "common-hal/_gbio/__init__.h"
@@ -53,36 +64,40 @@
 #include "hardware/pio_instructions.h"
 #include "hardware/structs/sio.h"
 
-// ===== PIN MAP (PyGameBoy RP2350) =====
+// ===== PIN MAP (PyGameBoy RP2350, v8 PCB) =====
 // game boy cartridge bus.  See boards/pygameboy_rp2350/pins.c.
-#define GB_RD_PIN       4    // /RD  (input from GB)
-#define GB_A0_PIN       6    // A0..A15 = GPIO6..GPIO21
-#define GB_A15_PIN      21
-#define GB_DATA_OE_PIN  28   // 74LVC4245 level shifter output enable
-#define GB_D0_PIN       29   // D0..D7 = GPIO29..GPIO36 (3V side of U5)
-#define GB_D7_PIN       36
-#define GB_RESET_PIN    37   // assert (active high) drives /GB_RESET low via Q1
+// On the v8 PCB every cartridge signal lives in the first 32 GPIO bank, so a
+// single PIO state machine (GPIO base 0) can watch /RD and A15 AND drive D0..D7
+// -- no second state machine or inter-SM handshake pin is needed.
+#define GB_RD_PIN       20   // /RD  (input from GB)
+#define GB_A0_PIN       2    // A0..A15 = GPIO2..GPIO17
+#define GB_A15_PIN      17
+#define GB_DATA_OE_PIN  22   // 74LVC4245 level shifter U5 output enable
+#define GB_D0_PIN       23   // D0..D7 = GPIO23..GPIO30 (3V side of U5)
+#define GB_D7_PIN       30
+#define GB_RESET_PIN    31   // assert (active high) drives /GB_RESET low via Q1
 
-// Internal handshake pin shared between the two PIO state machines.  GPIO22
-// lies in the 16..31 overlap of the two GPIO banks so both a base-0 and a
-// base-16 state machine can see it.  Claimed by _gbio when CIRCUITPY_GBIO=1.
-//
-// NOTE on encoding `wait gpio`: when this program is loaded via the pico-SDK
-// `pio_add_program_at_offset()` helper (which rp2pio_statemachine_construct
-// uses), the SDK, with PICO_PIO_USE_GPIO_BASE defined (true on RP2350B with 48
-// GPIOs), XORs each `wait gpio <n>` instruction's encoded 5-bit index with the
-// PIO instance's GPIOBASE register (0 or 16) so that you encode the RAW
-// ABSOLUTE GPIO number, and the hardware's own GPIOBASE pre-add then lands on
-// the real pin.  So both state machines encode `wait gpio` with raw absolute
-// pin numbers (e.g. /RD = 4, handshake = 22) regardless of which PIO base they
-// live on -- exactly like the SM_PERIPHERAL `sm_config_set_*()` helpers, which
-// also take absolute pin numbers and internally subtract the base.
-#define GB_HANDSHAKE_PIN 22
+// NOTE on encoding `wait gpio`: rp2pio_statemachine_construct loads the program
+// via the pico-SDK `pio_add_program_at_offset()` helper.  With
+// PICO_PIO_USE_GPIO_BASE defined (true on RP2350B with 48 GPIOs) the SDK XORs
+// each `wait gpio <n>` instruction's encoded 5-bit index with the PIO instance's
+// GPIOBASE register (0 or 16) so that you encode the RAW ABSOLUTE GPIO number,
+// and the hardware's own GPIOBASE pre-add then lands on the real pin.  This
+// state machine lands on GPIO base 0 (all of /RD, A15 and D0..D7 are below
+// GPIO32), so the rebase is a no-op and we encode /RD with its raw absolute
+// number (GPIO20).  `jmp pin` (A15) and `out pins` (D0..D7) bases are likewise
+// given as absolute pin numbers via sm_config_set_jmp_pin /
+// sm_config_set_out_pins, which store both the low 5 bits and the high bits for
+// the GPIOBASE-aware hardware -- exactly like the SM_PERIPHERAL helpers.
 
-// The level shifter output enable is driven statically so the RP2350 always
-// drives the game boy data bus during reads (this cart never writes to GB
-// cartridge RAM).  Set this to the level that ENABLES the shifter output.  The
-// 74LVC4245 /OE is active low; flip to 1 if this board inverts it.
+// The level-shifter output-enable (DATA_OE, GPIO22) is a SIDESET output of the
+// data SM, not a static GPIO: the SM only asserts it (driving D0..D7 onto the
+// GB bus) during ROM reads and the idle spin, and de-asserts it (high-Z) the
+// rest of the time -- outside the ROM region (A15 high) and while the GB is
+// held in reset -- so the RP2350 does not permanently drive the GB data bus.
+// GB_DATA_OE_ASSERTED is the pin level that ENABLES the shifter output (the
+// 74LVC4245 /OE is active low, so 0).  The SM's sideset encodes the RAW pin
+// value, so a side of 0 enables the buffer and a side of 1 disables it.
 #define GB_DATA_OE_ASSERTED 0
 
 // ===== SM83 COMMAND STREAMS (ported verbatim from gb_m4) =====
@@ -289,8 +304,7 @@ uint8_t change_screen_commands[] = {
 // (JP (HL)) on the bus so the game boy re-reads it forever.
 #define GB_IDLE_ADDR 0x1300
 
-static rp2pio_statemachine_obj_t ctrl_sm;   // watches /RD + A15, pulses handshake
-static rp2pio_statemachine_obj_t data_sm;   // drives D0..D7 from its TX FIFO
+static rp2pio_statemachine_obj_t data_sm;   // watches /RD + A15, drives D0..D7
 
 static int dma_chan = -1;                    // feeds data_sm TX FIFO from RAM
 
@@ -328,73 +342,75 @@ static volatile uint16_t boot_address_i;
 // hand-encode them wrong.  Each is small enough to fit in one PIO instruction
 // memory slot.
 
-#define CTRL_PROG_LEN 6
-#define DATA_PROG_LEN 4
-static uint16_t ctrl_program[CTRL_PROG_LEN];
+// Side-set encodings for the DATA_OE pin.  Optional sideset (sideset_enable =
+// true, 1 data bit): bit 12 of the instruction is the "this instr carries a
+// side" flag, bit 11 is the driven OE pin value.  The 74LVC4245 /OE is active
+// low, so pin 0 = buffer ON (driving D0..D7), pin 1 = buffer OFF (high-Z).
+// OE_SIDE_NONE leaves DATA_OE unchanged so an instruction can be reached from
+// both the "buffer on" and "buffer off" paths without a fixed side value.
+#define OE_SIDE_NONE    0x0000
+#define OE_SIDE_ENABLE  0x1000   // DATA_OE pin = 0 -> buffer drives D0..D7
+#define OE_SIDE_DISABLE 0x1800   // DATA_OE pin = 1 -> buffer high-Z
+
+#define DATA_PROG_LEN 8
 static uint16_t data_program[DATA_PROG_LEN];
 
-static void build_pio_programs(void) {
-    // gbio_ctrl (GPIO base 0).  jmp_pin = A15 (GPIO21).  set pin = handshake
-    // (GPIO22).  wait gpio 4 = /RD.
-    //
-    //   loop:                          ; index 0
-    //     jmp pin loop                 ; while A15 high (not a ROM read) spin
-    //     wait 0 gpio 4                ; wait for /RD falling (read start)
-    //     set pins, 1                  ; raise handshake -> data SM advances
-    //     wait 1 gpio 4                ; wait for /RD rising (read done)
-    //     set pins, 0                  ; lower handshake
-    //     jmp loop
-    ctrl_program[0] = pio_encode_jmp_pin(0);
-    ctrl_program[1] = pio_encode_wait_gpio(false, GB_RD_PIN);
-    ctrl_program[2] = pio_encode_set(pio_pins, 1);
-    ctrl_program[3] = pio_encode_wait_gpio(true, GB_RD_PIN);
-    ctrl_program[4] = pio_encode_set(pio_pins, 0);
-    ctrl_program[5] = pio_encode_jmp(0);
+// The main loop wraps instruction 1 (out) .. instruction 5 (pull).  Instruction
+// 0 is a one-shot prologue (prefetch byte[0] at SM entry with the buffer off).
+// Instructions 6..7 are the A15-high "disabled spin", reached only via the
+// explicit `jmp pin 6` at index 2 (never by falling through the wrap).  See
+// build_pio_program().
+#define DATA_WRAP_TARGET 1
+#define DATA_WRAP        5
 
-    // gbio_data.  out pins = D0..D7 (GPIO29..36).  `wait gpio` references the
-    // handshake pin (GPIO22) by its raw absolute number; the pico-SDK loader
-    // (see the GB_HANDSHAKE_PIN note above) reorganises the encoded index to
-    // match whatever PIO base this SM ends up on.
+static void build_pio_program(void) {
+    // gbio_data, single state machine.  out pins = D0..D7 (GPIO23..GPIO30).
+    // jmp pin = A15 (GPIO17).  wait gpio = /RD (GPIO20).  sideset = DATA_OE
+    // (GPIO22), 1 bit, optional.  Indices:
     //
-    //   pull block              ; (entry) prefetch stream byte[0] into OSR
-    // loop:
-    //     out pins, 8           ; drive the current byte onto D0..D7 NOW, so it
-    //                           ;  is stable on the bus BEFORE the /RD strobe
-    //     wait 1 gpio 22        ; the matching read is in progress (handshake
-    //                           ;  high); the byte was already driven above
-    //     wait 0 gpio 22        ; read finished (handshake low)
-    //   (wrap -> pull)          ; prefetch the next byte; pins keep holding the
-    //                           ;  current byte until the next `out` reloads it
+    //   0: pull block             side=disable  ; (entry prologue) prefetch byte[0],
+    //                                            ;  buffer off
+    //   1: out pins, 8            side=none      ; (WRAP TARGET) drive current byte
+    //                                            ;  onto D0..D7; OE left unchanged
+    //   2: jmp pin 6              side=none      ; if A15 high (non-ROM) -> spin @6
+    //   3: wait 0 gpio /RD        side=enable    ; A15 low: turn buffer ON, then wait
+    //                                            ;  for /RD fall (the read)
+    //   4: wait 1 gpio /RD        side=none      ; wait /RD rise (read done); OE on
+    //   5: pull block             side=none      ; prefetch next byte; stalls here
+    //                                            ;  when FIFO dry -> pins hold last
+    //                                            ;  byte, OE stays on (idle spin)
+    //   (wrap -> 1)                              ; drive freshly-pulled byte; OE on
+    //   6: jmp pin 6              side=disable  ; A15-high spin: buffer OFF, loop
+    //                                            ;  here while A15 high
+    //   7: jmp 3                  side=none      ; A15 went low: go enable the buffer
+    //                                            ;  and wait for the next /RD
     //
-    // WHY drive-before-read (this is the crux of matching the SAMD port):
+    // Drive-before-read alignment (unchanged from the prior single-SM design):
+    // byte[0] is on D0..D7 before reset release; the buffer turns on at index 3,
+    // which we reach when A15 goes low -- and A15 always goes low before /RD
+    // falls (address setup), so OE is asserted in time and the game boy samples a
+    // stable byte.  Exactly one byte is served per ROM read; the A15-high spin
+    // (6/7) never executes `pull` or `out`, so the stream position is preserved
+    // across non-ROM gaps and no extra pipeline delay is introduced.  read#N
+    // still serves byte[N-1], matching the SAMD port (see the alignment note in
+    // common_hal_gbio_reset_gameboy()).
     //
-    // The SAMD gb_m4 port-DMA writes one stream byte into the port output
-    // register on the RISING edge of the read-valid LUT -- i.e. at the END of
-    // the *previous* read -- "so we have almost a full cycle to move the new
-    // data".  So the byte the game boy samples during read N was loaded right
-    // after read N-1 ended and is then stable on D0..D7 for the *entire* read N
-    // window.  read#1 gets stream byte[0] (loaded at reset release); there is
-    // NO extra one-read pipeline delay -- see the alignment note in
-    // common_hal_gbio_reset_gameboy().
-    //
-    // The naive RP2350 program `pull; wait handshake-high; out; wait low`
-    // instead drives the byte only AFTER /RD has already fallen (the ctrl SM
-    // raises the handshake reactively, a few PIO cycles into the read), so the
-    // byte lands late in the read window and races the GameBoy's data-sample
-    // point -- which garbles the boot logo even when the alignment is correct.
-    //
-    // Reordering to `pull; out; wait handshake-high; wait handshake-low`
-    // (wrap->pull) drives each byte during the dead time between reads (the
-    // `wrap->pull` that follows the previous `wait 0`), so by the time the next
-    // /RD falls the byte has already been on the bus -- exactly mirroring the
-    // SAMD port's stable-before-read behaviour.  read#1's byte is driven at SM
-    // entry (well before reset release), and idle behaviour is preserved: when
-    // the FIFO drains the SM stalls on `pull` with the pins holding the last
-    // byte (0xE9 = JP (HL)).
-    data_program[0] = pio_encode_pull(false, true);
+    // The DATA_OE sideset keeps the 74LVC4245 from permanently driving the bus:
+    // the buffer is on only during the ROM region (A15 low, including the idle
+    // spin at 0x1300) and off during the upper address half (A15 high) and during
+    // reset (the entry prologue side=disable, before the first read).  When the
+    // FIFO drains the SM stalls on the `pull` at index 5 (OE on), so the idle
+    // 0xE9 stays readable -- which is exactly when the GB is replaying JP (HL) at
+    // A15-low 0x1300.
+    data_program[0] = pio_encode_pull(false, true) | OE_SIDE_DISABLE;
     data_program[1] = pio_encode_out(pio_pins, 8);
-    data_program[2] = pio_encode_wait_gpio(true, GB_HANDSHAKE_PIN);
-    data_program[3] = pio_encode_wait_gpio(false, GB_HANDSHAKE_PIN);
+    data_program[2] = pio_encode_jmp_pin(6);
+    data_program[3] = pio_encode_wait_gpio(false, GB_RD_PIN) | OE_SIDE_ENABLE;
+    data_program[4] = pio_encode_wait_gpio(true, GB_RD_PIN);
+    data_program[5] = pio_encode_pull(false, true);
+    // wrap -> instruction 1 (out pins, 8) drives the freshly pulled byte.
+    data_program[6] = pio_encode_jmp_pin(6) | OE_SIDE_DISABLE;
+    data_program[7] = pio_encode_jmp(3);
 }
 
 // ===== DMA / FEEDER HELPERS =====
@@ -552,103 +568,77 @@ void gbio_init(void) {
     if (gbio_inited) {
         return;
     }
-    build_pio_programs();
+    build_pio_program();
 
-    // Address bus A0..A14 as plain SIO inputs (A15 is owned by the ctrl SM).
-    // sio_hw->gpio_in reads them regardless of pin function.
+    // Address bus A0..A14 as plain SIO inputs (A15 is owned by the data SM as
+    // its jmp pin).  sio_hw->gpio_in reads them regardless of pin function.
     for (uint8_t p = GB_A0_PIN; p < GB_A15_PIN; p++) {
         gpio_init(p);
         gpio_set_dir(p, GPIO_IN);
         gpio_set_pulls(p, false, false);
     }
     // /RD as an input with a falling-edge interrupt handler registered (armed
-    // only on demand).  It is also watched by the ctrl SM via `wait gpio`, but
+    // only on demand).  It is also watched by the data SM via `wait gpio`, but
     // pad-level interrupt detection works independently of pin function.
     gpio_init(GB_RD_PIN);
     gpio_set_dir(GB_RD_PIN, GPIO_IN);
     gpio_set_pulls(GB_RD_PIN, false, false);
     gpio_add_raw_irq_handler(GB_RD_PIN, gbio_rd_dispatch);
 
-    // /GB_RESET (active high to assert) and level-shifter OE as GPIO outputs.
+    // /GB_RESET (active high to assert) is a static GPIO output.
     gpio_init(GB_RESET_PIN);
     gpio_set_dir(GB_RESET_PIN, GPIO_OUT);
     gpio_put(GB_RESET_PIN, 0);            // de-assert reset (GB running)
+    // The level-shifter /OE is owned by the data SM as a sideset output (it is
+    // only asserted during ROM reads / idle -- see build_pio_program).  Drive it
+    // de-asserted (high = buffer OFF) here as a plain GPIO so the buffer stays
+    // safely off until the SM is constructed and takes the pin over.
     gpio_init(GB_DATA_OE_PIN);
     gpio_set_dir(GB_DATA_OE_PIN, GPIO_OUT);
-    gpio_put(GB_DATA_OE_PIN, GB_DATA_OE_ASSERTED); // enable RP->GB data output
+    gpio_put(GB_DATA_OE_PIN, 1);
 
-    // --- ctrl SM (GPIO base 0): watches /RD + A15, pulses the handshake. ---
+    // --- data SM (GPIO base 0): watches /RD + A15 and drives D0..D7 from its
+    //     TX FIFO.  All of these pins are below GPIO32, so one PIO state machine
+    //     suffices. ---
     const mcu_pin_obj_t *a15_pin = mcu_get_pin_by_number(GB_A15_PIN);
-    const mcu_pin_obj_t *hs_pin = mcu_get_pin_by_number(GB_HANDSHAKE_PIN);
-
-    pio_pinmask_t ctrl_pins = PIO_PINMASK_NONE;
-    PIO_PINMASK_SET(ctrl_pins, GB_RD_PIN);
-    PIO_PINMASK_SET(ctrl_pins, GB_A15_PIN);
-    PIO_PINMASK_SET(ctrl_pins, GB_HANDSHAKE_PIN);
-
-    bool ok = rp2pio_statemachine_construct(&ctrl_sm,
-        ctrl_program, CTRL_PROG_LEN,
-        0 /* frequency: use clk_sys */,
-        NULL, 0,                                   // init
-        NULL, 0,                                   // out
-        NULL, 0,                                   // in
-        PIO_PINMASK_NONE, PIO_PINMASK_NONE,        // pull up/down
-        hs_pin, 1,                                 // set pin = handshake
-        NULL, 0, false,                            // sideset
-        PIO_PINMASK_FROM_VALUE(0),                 // initial pin state
-        PIO_PINMASK_FROM_PIN(GB_HANDSHAKE_PIN),    // handshake is an output
-        a15_pin,                                   // jmp pin = A15
-        ctrl_pins,
-        false, false,                              // no tx/rx fifo
-        false, 0, false,                           // auto_pull, threshold, shift
-        false,                                     // wait_for_txstall
-        false, 0, false,                           // auto_push
-        true,                                      // claim pins
-        false,                                     // not user interruptible
-        false,                                     // sideset_enable
-        0, CTRL_PROG_LEN - 1, PIO_ANY_OFFSET,      // wrap
-        PIO_FIFO_TYPE_DEFAULT,
-        PIO_MOV_STATUS_DEFAULT, PIO_MOV_N_DEFAULT);
-    if (!ok) {
-        mp_printf(&mp_plat_print, "gbio: ctrl state machine init failed\n");
-        return;
-    }
-    rp2pio_statemachine_never_reset(ctrl_sm.pio, ctrl_sm.state_machine);
-
-    // --- data SM (GPIO base 16): drives D0..D7 from its TX FIFO. ---
     const mcu_pin_obj_t *d0_pin = mcu_get_pin_by_number(GB_D0_PIN);
+    const mcu_pin_obj_t *oe_pin = mcu_get_pin_by_number(GB_DATA_OE_PIN);
 
     pio_pinmask_t data_pins = PIO_PINMASK_NONE;
-    // NOTE: the handshake pin (GPIO22) is intentionally NOT in this mask. It is
-    // driven by the ctrl SM (which claims it) and the data SM only *reads* it
-    // with `wait gpio`, which samples the raw pad level regardless of pin
-    // function. Declaring it here would make rp2pio reject the data SM because
-    // the pin is already owned by the ctrl SM's PIO instance.
+    PIO_PINMASK_SET(data_pins, GB_A15_PIN);     // jmp pin (read by `jmp pin`)
+    PIO_PINMASK_SET(data_pins, GB_RD_PIN);       // read by `wait gpio`
     for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
-        PIO_PINMASK_SET(data_pins, p);
+        PIO_PINMASK_SET(data_pins, p);           // out pins (driven by `out pins`)
     }
+    PIO_PINMASK_SET(data_pins, GB_DATA_OE_PIN);  // sideset (driven by side bits)
+    // /RD and A15 are PIO inputs; D0..D7 and DATA_OE are outputs.  DATA_OE
+    // starts de-asserted (the 74LVC4245 /OE is active low, so pin high = high-Z)
+    // so the buffer is off until the SM turns it on for a ROM read.
+    pio_pinmask_t initial_dir = PIO_PINMASK_FROM_VALUE(((uint64_t)0xff) << GB_D0_PIN);
+    PIO_PINMASK_SET(initial_dir, GB_DATA_OE_PIN);
+    pio_pinmask_t initial_state = PIO_PINMASK_FROM_PIN(GB_DATA_OE_PIN);
 
-    ok = rp2pio_statemachine_construct(&data_sm,
+    bool ok = rp2pio_statemachine_construct(&data_sm,
         data_program, DATA_PROG_LEN,
-        0,
-        NULL, 0,
-        d0_pin, 8,                                // out pins = D0..D7
+        0 /* frequency: use clk_sys */,
+        NULL, 0,                                   // init
+        d0_pin, 8,                                 // out pins = D0..D7
         NULL, 0,                                   // in
-        PIO_PINMASK_NONE, PIO_PINMASK_NONE,        // pull
+        PIO_PINMASK_NONE, PIO_PINMASK_NONE,        // pull up/down
         NULL, 0,                                   // set
-        NULL, 0, false,                            // sideset
-        PIO_PINMASK_FROM_VALUE(0),                 // initial pin state (D low)
-        PIO_PINMASK_FROM_VALUE(((uint64_t)0xff) << GB_D0_PIN), // D0..D7 outputs
-        NULL,                                      // no jmp pin
+        oe_pin, 1, false,                          // sideset = DATA_OE (values, not pindirs)
+        initial_state,                             // initial pin state (DATA_OE high)
+        initial_dir,                               // initial pin dirs (D0..D7 + OE out)
+        a15_pin,                                   // jmp pin = A15
         data_pins,
         true, false,                              // tx fifo yes, rx no
-        false, 8, true,                            // manual pull (no auto_pull); shift right (LSB->D0)
+        false, 8, true,                           // manual pull (no auto_pull); shift right (LSB->D0)
         false,                                    // wait_for_txstall
         false, 0, false,                          // auto_push
-        true,                                     // claim pins (shared handshake handled by refcount)
+        true,                                     // claim pins
         false,                                     // not user interruptible
-        false,                                     // sideset_enable
-        0, DATA_PROG_LEN - 1, PIO_ANY_OFFSET,
+        true,                                      // sideset_enable (optional sideset)
+        DATA_WRAP_TARGET, DATA_WRAP, PIO_ANY_OFFSET, // wrap target=1, wrap=5
         PIO_FIFO_TYPE_DEFAULT,
         PIO_MOV_STATUS_DEFAULT, PIO_MOV_N_DEFAULT);
     if (!ok) {
@@ -674,7 +664,6 @@ void gbio_init(void) {
     for (uint8_t p = GB_A0_PIN; p <= GB_A15_PIN; p++) {
         never_reset_pin_number(p);
     }
-    never_reset_pin_number(GB_HANDSHAKE_PIN);
     never_reset_pin_number(GB_DATA_OE_PIN);
     never_reset_pin_number(GB_RESET_PIN);
     for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
@@ -728,7 +717,7 @@ void common_hal_gbio_reset_gameboy(void) {
     //     a false-positive GBC detection AND a corrupt logo -- so we must NOT
     //     prepend a placeholder byte here.
     //
-    // The data SM (build_pio_programs) drives each byte onto D0..D7 BEFORE
+    // The data SM (build_pio_program) drives each byte onto D0..D7 BEFORE
     // its /RD strobe, so it serves gameboy_boot[0] stably on read#1 -- which
     // is exactly how the SAMD port sets its first response byte (loaded at
     // reset release / the previous read's rising edge, stable for the read).
