@@ -16,9 +16,9 @@
 //   AUDIO  = GPIO38 (PWM audio out to cartridge AUDIO pin)
 // MIDI:    GPIO0 = OUT (TX), GPIO1 = IN (RX, via H11L1 optocoupler)
 // J101 debug UART header (3-pin: RX, GND, TX):
-//   DEBUG_TX = GPIO42, DEBUG_RX = GPIO43
-// J14 STEMMA QT connector, used as a UART serial console (NOT I2C):
-//   SDA (GPIO46) = console TX, SCL (GPIO47) = console RX
+//   DEBUG_TX (GPIO42) = console TX, DEBUG_RX (GPIO43) = console RX
+// J14 STEMMA QT connector (NOT I2C):
+//   SDA (GPIO46), SCL (GPIO47)
 // LED (D3): GPIO45 (active low)
 
 #include "shared-bindings/board/__init__.h"
