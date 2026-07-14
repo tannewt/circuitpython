@@ -379,10 +379,6 @@ safe_mode_t port_init(void) {
     // Reset everything into a known state before board_init.
     reset_port();
 
-    #if CIRCUITPY_GBIO
-    gbio_init();
-    #endif
-
     // Initialize RTC
     #if CIRCUITPY_RTC
     common_hal_rtc_init();
@@ -403,6 +399,10 @@ safe_mode_t port_init(void) {
 
     // Initialize heap early to allow for early allocation.
     _port_heap_init();
+
+    #if CIRCUITPY_GBIO
+    gbio_init();
+    #endif
 
     // Check brownout.
 
@@ -469,9 +469,11 @@ void reset_to_bootloader(void) {
 }
 
 void reset_cpu(void) {
-    watchdog_reboot(0, SRAM_END, 0);
-    watchdog_start_tick(12);
+    mp_printf(&mp_plat_print, "reset_cpu\n");
 
+    /* watchdog_reboot(0, SRAM_END, 0);
+    watchdog_start_tick(12);
+    */
     while (true) {
         __wfi();
     }
@@ -600,9 +602,10 @@ extern MP_NORETURN void isr_hardfault(void); // provide a prototype to avoid a m
 __attribute__((used)) void __not_in_flash_func(isr_hardfault)(void) {
     // Only safe mode from core 0 which is running CircuitPython. Core 1 faulting
     // should not be fatal to CP. (Fingers crossed.)
-    if (get_core_num() == 0) {
-        reset_into_safe_mode(SAFE_MODE_HARD_FAULT);
-    }
+    // if (get_core_num() == 0) {
+    //    reset_into_safe_mode(SAFE_MODE_HARD_FAULT);
+    // }
+    mp_printf(&mp_plat_print, "hard fault\n");
     while (true) {
         asm ("nop;");
     }
