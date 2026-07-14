@@ -28,6 +28,7 @@ void reset_pin_number_cyw(uint8_t pin_no) {
 static uint64_t never_reset_pins;
 
 void reset_all_pins(void) {
+    mp_printf(&mp_plat_print, "reset all pins\n");
     for (size_t i = 0; i < NUM_BANK0_GPIOS; i++) {
         if ((never_reset_pins & (1LL << i)) != 0) {
             continue;
