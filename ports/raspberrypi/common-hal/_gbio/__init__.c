@@ -621,7 +621,7 @@ static void setup_dma_chain(void) {
         dma_channel_configure(dma_addr_chan, &c,
             gb_address_buffer,
             &gb_pio0->rxf[address_sm],
-            0, false);
+            1, true);
     }
 
     // Configure DMA sniffer: sum mode, initial value = buffer base
@@ -636,8 +636,22 @@ static void setup_dma_chain(void) {
         channel_config_set_write_increment(&c, false);
         channel_config_set_chain_to(&c, dma_sniff_write_chan);
         dma_channel_configure(dma_sniff_read_chan, &c,
-            &dma_channel_hw_addr(dma_data_read_chan)->read_addr,
+            &dma_channel_hw_addr(dma_data_read_chan)->al3_read_addr_trig,
             &dma_hw->sniff_data,
+            1, false);
+    }
+
+    // ---- DMA_CHAN_DATA_READ: data buffer -> output SM TX FIFO ----
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_data_read_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, true));
+        // channel_config_set_chain_to(&c, dma_sniff_write_chan);
+        dma_channel_configure(dma_data_read_chan, &c,
+            &gb_pio1->txf[output_sm - NUM_PIO_STATE_MACHINES],
+            gb_data_buffer,
             1, false);
     }
 
@@ -649,7 +663,7 @@ static void setup_dma_chain(void) {
         channel_config_set_write_increment(&c, false);
         channel_config_set_chain_to(&c, dma_sniff_reset_chan);
         dma_channel_configure(dma_sniff_write_chan, &c,
-            &dma_channel_hw_addr(dma_data_write_chan)->write_addr,
+            &dma_channel_hw_addr(dma_data_write_chan)->al2_write_addr_trig,
             &dma_hw->sniff_data,
             1, false);
     }
@@ -660,24 +674,10 @@ static void setup_dma_chain(void) {
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, false);
-        channel_config_set_chain_to(&c, dma_data_read_chan);
+        channel_config_set_chain_to(&c, dma_addr_chan);
         dma_channel_configure(dma_sniff_reset_chan, &c,
             &dma_hw->sniff_data,
             &gb_buffer_base,
-            1, false);
-    }
-
-    // ---- DMA_CHAN_DATA_READ: data buffer -> output SM TX FIFO ----
-    {
-        dma_channel_config c = dma_channel_get_default_config(dma_data_read_chan);
-        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-        channel_config_set_read_increment(&c, false);
-        channel_config_set_write_increment(&c, false);
-        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, true));
-        channel_config_set_chain_to(&c, dma_addr_chan);
-        dma_channel_configure(dma_data_read_chan, &c,
-            &gb_pio1->txf[output_sm - NUM_PIO_STATE_MACHINES],
-            gb_data_buffer,
             1, false);
     }
 
@@ -692,7 +692,7 @@ static void setup_dma_chain(void) {
         dma_channel_configure(dma_data_write_chan, &c,
             gb_data_buffer,
             &gb_pio1->rxf[output_sm - NUM_PIO_STATE_MACHINES],
-            0, false);
+            1, false);
     }
 
     mp_printf(&mp_plat_print, "gbio: DMA chain setup complete\n");
