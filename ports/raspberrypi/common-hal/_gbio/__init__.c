@@ -120,59 +120,83 @@ static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(4)
 // value, so a side of 0 enables the buffer and a side of 1 disables it.
 #define GB_DATA_OE_ASSERTED 0
 
-// ===== SM83 COMMAND STREAMS (ported verbatim from gb_m4) =====
+// ===== SM83 COMMAND STREAMS (flat-buffer layout) =====
+//
+// With the 64K flat buffer, each byte is placed at its actual Game Boy
+// address.  The boot sequence works in two phases:
+//   1. Adafruit logo at 0x0104 – the boot ROM reads it for the scrolling
+//      animation.
+//   2. After ~500 ms we overwrite 0x0104..0x0133 with the real Nintendo
+//      logo so that the boot ROM's verification pass succeeds.
 
-uint8_t gameboy_boot[] = {
-    0x00,
-
-    // Adafruit
+// Adafruit logo (48 bytes) – shown during the boot scroll animation.
+static const uint8_t adafruit_logo[48] = {
     0x00, 0x30, 0x00, 0xC6, 0x00, 0x07, 0xCC, 0xCC, 0x00, 0xF1, 0x13, 0x3B, 0xC0, 0xD1, 0x00, 0xBD,
     0x00, 0x66, 0x00, 0x66, 0xC1, 0xDD, 0x08, 0xE8, 0x36, 0x63, 0xE6, 0xE6, 0xCC, 0xC7, 0xCD, 0xDC,
     0xF9, 0xBD, 0xBB, 0xBB, 0x11, 0x11, 0x88, 0x88, 0x66, 0x63, 0x66, 0xE6, 0xDD, 0xDD, 0x88, 0x8E,
+};
 
-    // Nintendo logo 48 bytes
+// Nintendo logo (48 bytes) – required for the boot ROM verification pass.
+static const uint8_t nintendo_logo[48] = {
     0xce, 0xed, 0x66, 0x66, 0xcc, 0x0d, 0x00, 0x0b, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0c, 0x00, 0x0d,
     0x00, 0x08, 0x11, 0x1f, 0x88, 0x89, 0x00, 0x0e, 0xdc, 0xcc, 0x6e, 0xe6, 0xdd, 0xdd, 0xd9, 0x99,
     0xbb, 0xbb, 0x67, 0x63, 0x6e, 0x0e, 0xec, 0xcc, 0xdd, 0xdc, 0x99, 0x9f, 0xbb, 0xb9, 0x33, 0x3e,
+};
 
-    // Cartridge header 28 bytes
-    0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x57, 0x6F, 0x72, 0x6C, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xCA, 0x31, 0x58,
+// Cartridge header (0x0134..0x014F, 28 bytes).
+// Header checksum at 0x014D is computed so that sum(0x0134..0x014D) == 0.
+static const uint8_t cartridge_header[28] = {
+    'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd',  // title (11)
+    0x00, 0x00, 0x00, 0x00,                                   // title padding to 15
+    0x00,                                                      // GBC flag: DMG only
+    0x00, 0x00,                                                // new licensee code
+    0x00,                                                      // SGB flag
+    0x01,                                                      // cartridge type: MBC1
+    0x00,                                                      // ROM size: 32 KB
+    0x00,                                                      // RAM size: none
+    0x00,                                                      // destination: Japanese
+    0xCA,                                                      // old licensee code
+    0x31,                                                      // mask ROM version
+    0xE8,                                                      // header checksum (computed)
+    0x00, 0x00,                                                // global checksum (unused)
+};
 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
+// Boot code placed at 0x0150 (after the cartridge header).
+// Sets up the stack pointer, joypad, interrupts, then spins on JP (HL)
+// at 0x1000 waiting for commands from the ARM core.
+static const uint8_t boot_code[] = {
     // Set the stack pointer
-    0x31, 0x00, 0xe0,
+    0x31, 0x00, 0xe0,                             // LD SP, 0xE000
 
     0x00, 0x00,
 
     // Set both lines low to detect any press.
-    0xf0, 0x00,                             // LD A, FF00 - Poke the gpio by reading from it
-    0x3e, 0x00,                             // LD A, 0x30
-    0xe0, 0x00,                             // LD FF00, A
+    0xf0, 0x00,                                   // LD A, (0xFF00) – poke GPIO
+    0x3e, 0x00,                                   // LD A, 0x30
+    0xe0, 0x00,                                   // LD (0xFF00), A
 
     0x00, 0x00,
 
     // Clear vsync and joypad interrupts
-    0x3e, 0x00,                             // LD A, 0x0
-    0xe0, 0x0f,                             // LD ff0f, A
+    0x3e, 0x00,                                   // LD A, 0x00
+    0xe0, 0x0f,                                   // LD (0xFF0F), A
 
     // Enable vsync and joypad interrupts
-    0x3e, 0x11,                             // LD A, 0x11 (vblank is bit 0)
-    0xe0, 0xff,                             // LD ffff, A
+    0x3e, 0x11,                                   // LD A, 0x11 (vblank is bit 0)
+    0xe0, 0xff,                                   // LD (0xFFFF), A
 
     0x00, 0x00,
 
-    0xfb,                             // enable interrupts
-    0xfb,                             // enable interrupts
-    0xfb,                             // enable interrupts
+    0xfb,                                         // EI
+    0xfb,                                         // EI
+    0xfb,                                         // EI
 
     0x00, 0x00,
 
     // Load 0x1000 into hl and repeatedly jump to it until we do
     // something else. This prevents the program counter from
     // exiting the cartridge address range.
-    0x21, 0x00, 0x10, 0xe9
+    0x21, 0x00, 0x10, 0xe9                        // LD HL, 0x1000; JP (HL)
 };
 
 uint8_t gameboy_color_boot[] = {
@@ -972,23 +996,45 @@ void common_hal_gbio_reset_gameboy(void) {
     gameboy_color_booting = false;
     vsync_count = 0;
 
-    // Fill the 64K buffer with the DMG boot stream at address 0x0000.
-    // The Game Boy reads sequentially from 0x0000 during boot.
-    mp_printf(&mp_plat_print, "  [gbio] stage 2: filling 64K buffer with DMG boot stream\n");
+    // Fill the 64K buffer with the DMG boot image at the correct
+    // Game Boy addresses.  The boot ROM reads the logo from 0x0104
+    // and the cartridge header from 0x0134.
+    mp_printf(&mp_plat_print, "  [gbio] stage 2: filling 64K buffer with DMG boot image\n");
     memset(gb_data_buffer, 0x00, sizeof(gb_data_buffer));
-    memcpy(gb_data_buffer, gameboy_boot, sizeof(gameboy_boot));
-    // Set up interrupt vectors: JP to fixed handlers
-    gb_data_buffer[0x0040] = 0xC3;  // JP
+
+    // ---- Interrupt vectors ----
+    // 0x0040: VBlank – JP to VB_HANDLER_ADDR
+    gb_data_buffer[0x0040] = 0xC3;
     gb_data_buffer[0x0041] = (uint8_t)(VB_HANDLER_ADDR & 0xFF);
     gb_data_buffer[0x0042] = (uint8_t)(VB_HANDLER_ADDR >> 8);
-    gb_data_buffer[0x0060] = 0xC3;  // JP
+    // 0x0060: Joypad – JP to JP_HANDLER_ADDR
+    gb_data_buffer[0x0060] = 0xC3;
     gb_data_buffer[0x0061] = (uint8_t)(JP_HANDLER_ADDR & 0xFF);
     gb_data_buffer[0x0062] = (uint8_t)(JP_HANDLER_ADDR >> 8);
+
+    // ---- Entry point at 0x0100 ----
+    // NOP; JP 0x0150  (the boot ROM jumps here after verification)
+    gb_data_buffer[0x0100] = 0x00;                         // NOP
+    gb_data_buffer[0x0101] = 0xC3;                         // JP
+    gb_data_buffer[0x0102] = 0x50;                         // low byte of 0x0150
+    gb_data_buffer[0x0103] = 0x01;                         // high byte
+
+    // ---- Phase 1: Adafruit logo at 0x0104 (for the scroll animation) ----
+    memcpy(gb_data_buffer + 0x0104, adafruit_logo, sizeof(adafruit_logo));
+
+    // ---- Cartridge header at 0x0134 ----
+    memcpy(gb_data_buffer + 0x0134, cartridge_header, sizeof(cartridge_header));
+
+    // ---- Boot code at 0x0150 ----
+    memcpy(gb_data_buffer + 0x0150, boot_code, sizeof(boot_code));
+
+    // ---- Fixed interrupt handlers ----
     // VBlank handler at VB_HANDLER_ADDR
     memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
     // Joypad handler at JP_HANDLER_ADDR
     memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
-    // Idle spin at GB_IDLE_ADDR
+
+    // ---- Idle spin at GB_IDLE_ADDR ----
     gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
 
     // Start the DMA chain (address -> sniffer -> data -> output SM)
@@ -1028,6 +1074,21 @@ void common_hal_gbio_reset_gameboy(void) {
 
     mp_printf(&mp_plat_print, "  [gbio] stage 4: releasing /GB_RESET\n");
     gpio_put(GB_RESET_PIN, 0);
+
+    // ---- Phase 2: swap to Nintendo logo after the display read ----
+    // The boot ROM reads the logo twice: once for the scrolling animation
+    // (early, ~200 ms after reset) and once for verification (late, ~1.5 s).
+    // We start with the Adafruit logo so it appears during the scroll, then
+    // overwrite it with the real Nintendo logo before verification.
+    mp_printf(&mp_plat_print, "  [gbio] stage 4b: waiting 500 ms for logo display read\n");
+    {
+        uint32_t logo_start = supervisor_ticks_ms64();
+        while (supervisor_ticks_ms64() - logo_start < 500) {
+            RUN_BACKGROUND_TASKS;
+        }
+    }
+    mp_printf(&mp_plat_print, "  [gbio] stage 4c: swapping Adafruit logo -> Nintendo logo at 0x0104\n");
+    memcpy(gb_data_buffer + 0x0104, nintendo_logo, sizeof(nintendo_logo));
 
     // Wait for the boot sequence to complete.
     // The Game Boy reads ~256 bytes during boot at ~1 MHz = ~256 us.
