@@ -17,7 +17,7 @@
 //      program but use different jmp pins.  When their pin goes low they
 //      clear a shared PIO IRQ; when it goes high they set it again.
 //
-//   2. An address SM waits for both IRQs to be cleared, then captures the
+//   2. An address SM waits for the IRQ to be cleared, then captures the
 //      full 16-bit address from A0..A15 into its RX FIFO.
 //
 //   3. A DMA channel copies the address from the RX FIFO into a circular
@@ -74,11 +74,9 @@
 #define GB_RESET_PIN    31   // assert (active high) drives /GB_RESET low via Q1
 
 // ===== PIO IRQ ASSIGNMENTS =====
-// IRQ 0: cleared by CS monitor SM when /CS goes low
-// IRQ 1: cleared by A15 monitor SM when A15 goes low
-// The address SM and output SM both wait for these IRQs to be cleared.
-#define IRQ_CS   0
-#define IRQ_A15  1
+// IRQ 0: cleared by both monitor SMs when their pin goes low.
+// The address SM and output SM both wait for this IRQ to be cleared.
+#define IRQ_ACCESS 0
 
 // ===== 64K DATA BUFFER =====
 // Maps the entire Game Boy address space.  The ARM core writes SM83 opcodes
@@ -349,8 +347,7 @@ uint8_t change_screen_commands[] = {
 #define GB_IDLE_ADDR 0x1000
 
 // PIO instances and state machine indices (raw Pico SDK, not CircuitPython wrapper)
-static PIO gb_pio0;  // monitors + address
-static PIO gb_pio1;  // output
+static PIO gb_pio0;
 static int monitor_cs_sm;
 static int monitor_a15_sm;
 static int address_sm;
@@ -368,6 +365,7 @@ static int dma_sniff_write_chan = -1;  // sniffer -> data write DMA write addr
 static int dma_sniff_reset_chan = -1;  // reset sniffer to buffer base
 static int dma_data_read_chan = -1;    // data buffer -> output SM TX FIFO
 static int dma_data_write_chan = -1;   // output SM RX FIFO -> data buffer
+static int debug_dma_chan = -1;
 
 // Cached base pointer for sniffer reset
 static uint32_t gb_buffer_base;
@@ -387,6 +385,17 @@ static volatile uint32_t total_additional_cycles;
 static volatile bool everything_going = false;     // boot complete?
 static volatile bool gameboy_color_booting = false;
 static volatile bool gameboy_color = false;
+
+// ===== DMA COMPLETION COUNTERS =====
+// Each DMA channel's IRQ handler increments its counter.
+// Printed during debug to see how far the DMA chain is getting.
+static volatile uint32_t dma_irq_count_addr = 0;
+static volatile uint32_t dma_irq_count_sniff_read = 0;
+static volatile uint32_t dma_irq_count_sniff_write = 0;
+static volatile uint32_t dma_irq_count_sniff_reset = 0;
+static volatile uint32_t dma_irq_count_data_read = 0;
+static volatile uint32_t dma_irq_count_data_write = 0;
+static volatile uint32_t dma_irq_count_debug = 0;
 
 // ===== FIXED INTERRUPT HANDLERS IN 64K BUFFER =====
 // These are copied into the 64K buffer at init/reset time.
@@ -471,45 +480,40 @@ static uint8_t joypad_handler[] = {
 #define OE_SIDE_DISABLE 0x1800   // DATA_OE pin = 1 -> buffer high-Z
 
 // ---- Monitor program (shared by CS and A15 SMs) ----
-// Uses jmp pin to monitor the assigned signal.
-// When jmp pin goes low: clear IRQ (signal "access starting")
-// When jmp pin goes high: set IRQ (signal "access complete")
-#define MONITOR_PROG_LEN 5
+// Uses wait jmppin to monitor the assigned signal (jmp pin set via SM config).
+// When pin goes low: clear IRQ (signal "access starting")
+// When pin goes high: set IRQ (signal "access complete")
+
+// pio_encode_wait_jmppin: wait on the SM's configured jmp pin.
+// Added in newer pico-sdk; defined here for compatibility.
+static inline uint pio_encode_wait_jmppin(bool polarity, uint offset) {
+    valid_params_if(PIO_INSTRUCTIONS, offset <= 4);
+    return _pio_encode_instr_and_args(pio_instr_bits_wait, 3u | (polarity ? 4u : 0u), offset);
+}
+
+#define MONITOR_PROG_LEN 4
 static uint16_t monitor_program[MONITOR_PROG_LEN];
 
 static void build_monitor_program(void) {
-    // Instruction 0: jmp pin 0  -- loop while jmp pin is high
-    // Instruction 1: irq clear N -- signal address/output SMs (IRQ patched at init)
-    // Instruction 2: jmp pin 4  -- if jmp pin high, jump to done
-    // Instruction 3: jmp 2      -- loop while jmp pin is low
-    // Instruction 4: irq set N   -- clear signal, wrap to 0
-    monitor_program[0] = pio_encode_jmp_pin(0);
-    monitor_program[1] = pio_encode_irq_clear(false, 0);  // IRQ patched
-    monitor_program[2] = pio_encode_jmp_pin(4);
-    monitor_program[3] = pio_encode_jmp(2);
-    monitor_program[4] = pio_encode_irq_set(false, 0);    // IRQ patched
-}
-
-static void patch_monitor_irq(uint16_t *prog, uint irq_num) {
-    prog[1] = pio_encode_irq_clear(false, irq_num);
-    prog[4] = pio_encode_irq_set(false, irq_num);
+    // Instruction 0: wait 0 jmppin 0 -- wait for jmp pin to go low
+    // Instruction 1: irq clear 0     -- signal address/output SMs
+    // Instruction 2: wait 1 jmppin 0 -- wait for jmp pin to go high
+    // Instruction 3: irq set 0       -- signal complete, wrap to 0
+    monitor_program[0] = pio_encode_wait_jmppin(false, 0);
+    monitor_program[1] = pio_encode_irq_clear(false, IRQ_ACCESS);
+    monitor_program[2] = pio_encode_wait_jmppin(true, 0);
+    monitor_program[3] = pio_encode_irq_set(false, IRQ_ACCESS);
 }
 
 // ---- Address capture program ----
-// Waits for both IRQs to be cleared (CS low AND A15 low),
+// Waits for IRQ to be cleared (an access is starting),
 // then captures the 16-bit address from A0..A15 into RX FIFO.
-#define ADDRESS_PROG_LEN 4
+#define ADDRESS_PROG_LEN 2
 static uint16_t address_program[ADDRESS_PROG_LEN];
 
 static void build_address_program(void) {
-    // Instruction 0: wait 0 irq 0  -- wait for CS low
-    // Instruction 1: wait 0 irq 1  -- wait for A15 low
-    // Instruction 2: in pins, 16   -- capture address
-    // Instruction 3: push          -- push to RX FIFO
-    address_program[0] = pio_encode_wait_irq(false, false, IRQ_CS);
-    address_program[1] = pio_encode_wait_irq(false, false, IRQ_A15);
-    address_program[2] = pio_encode_in(pio_pins, 16);
-    address_program[3] = pio_encode_push(false, false);
+    address_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS);
+    address_program[1] = pio_encode_in(pio_pins, 16);
 }
 
 // ---- Output program ----
@@ -517,37 +521,27 @@ static void build_address_program(void) {
 // Jmp pin = /WR (GPIO19): high = read, low = write
 // Out pins = D0..D7 (GPIO23..30), In pins = D0..D7
 // Sideset = DATA_OE (GPIO22)
-#define OUTPUT_PROG_LEN 12
+#define OUTPUT_PROG_LEN 10
 static uint16_t output_program[OUTPUT_PROG_LEN];
 
+// Note DATA_OE controls the bidirectional buffers OE, so when we're being written to, we still need
+// to enable it.
 static void build_output_program(void) {
-    // Instruction 0:  wait 0 irq 0        -- wait for CS low
-    // Instruction 1:  wait 0 irq 1        -- wait for A15 low
-    // Instruction 2:  wait 0 gpio CLK     -- wait for clock low
-    // Instruction 3:  jmp pin 8           -- if /WR high, it's a read
-    // Instruction 4:  in pins, 8          -- [write] read data from bus
-    // Instruction 5:  push                -- push to RX FIFO
-    // Instruction 6:  pull                -- discard from TX FIFO
-    // Instruction 7:  jmp 10              -- jump to done
-    // Instruction 8:  pull                -- [read] get byte from TX FIFO
-    // Instruction 9:  out pins, 8         -- output to bus + OE enabled
-    // Instruction 10: wait 1 gpio CLK     -- wait for clock high
-    // Instruction 11: nop + OE disable    -- disable OE, wrap to 0
-    output_program[0] = pio_encode_wait_irq(false, false, IRQ_CS) | OE_SIDE_DISABLE;
-    output_program[1] = pio_encode_wait_irq(false, false, IRQ_A15) | OE_SIDE_DISABLE;
-    output_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_DISABLE;
-    output_program[3] = pio_encode_jmp_pin(8);
+    static int pio_pindirs_mov = 3u | _PIO_INVALID_IN_SRC | _PIO_INVALID_MOV_SRC;
+    output_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS) | OE_SIDE_DISABLE;
+    output_program[1] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_DISABLE;
+    output_program[2] = pio_encode_jmp_pin(6) | OE_SIDE_DISABLE;
     // Write path
-    output_program[4] = pio_encode_in(pio_pins, 8) | OE_SIDE_DISABLE;
-    output_program[5] = pio_encode_push(false, false) | OE_SIDE_DISABLE;
-    output_program[6] = pio_encode_pull(false, false) | OE_SIDE_DISABLE;
-    output_program[7] = pio_encode_jmp(10);
+    // Capture the incoming data. (Maybe we want/need to delay a bit before our read?)
+    output_program[3] = pio_encode_pull(false, true /* Block */) | OE_SIDE_ENABLE;
+    output_program[4] = pio_encode_in(pio_pins, 8) | OE_SIDE_ENABLE;
+    output_program[5] = pio_encode_jmp(8) | OE_SIDE_ENABLE;
     // Read path
-    output_program[8] = pio_encode_pull(false, false) | OE_SIDE_DISABLE;
-    output_program[9] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
+    output_program[6] = pio_encode_mov_not(pio_pindirs_mov, pio_null) | OE_SIDE_DISABLE; // Set pins to output.
+    output_program[7] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
     // Done
-    output_program[10] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_ENABLE;
-    output_program[11] = pio_encode_nop() | OE_SIDE_DISABLE;
+    output_program[8] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_ENABLE;
+    output_program[9] = pio_encode_mov(pio_pindirs_mov, pio_null) | OE_SIDE_DISABLE; // Set pins to input.
 }
 
 // ===== DEBUG PIO =====
@@ -585,6 +579,41 @@ static void build_debug_program(void) {
 }
 
 // ===== DMA / SNIFFER CHAIN =====
+
+// DMA IRQ handler: counts completions for each channel so we can see
+// how far the DMA chain is progressing during debug.
+static void dma_irq_handler(void) {
+    // Check IRQ0 status for each of our channels
+    uint32_t ints = dma_hw->ints0;
+    if (ints & (1u << dma_addr_chan)) {
+        dma_irq_count_addr++;
+        dma_hw->ints0 = (1u << dma_addr_chan);
+    }
+    if (ints & (1u << dma_sniff_read_chan)) {
+        dma_irq_count_sniff_read++;
+        dma_hw->ints0 = (1u << dma_sniff_read_chan);
+    }
+    if (ints & (1u << dma_sniff_write_chan)) {
+        dma_irq_count_sniff_write++;
+        dma_hw->ints0 = (1u << dma_sniff_write_chan);
+    }
+    if (ints & (1u << dma_sniff_reset_chan)) {
+        dma_irq_count_sniff_reset++;
+        dma_hw->ints0 = (1u << dma_sniff_reset_chan);
+    }
+    if (ints & (1u << dma_data_read_chan)) {
+        dma_irq_count_data_read++;
+        dma_hw->ints0 = (1u << dma_data_read_chan);
+    }
+    if (ints & (1u << dma_data_write_chan)) {
+        dma_irq_count_data_write++;
+        dma_hw->ints0 = (1u << dma_data_write_chan);
+    }
+    if (debug_dma_chan >= 0 && (ints & (1u << debug_dma_chan))) {
+        dma_irq_count_debug++;
+        dma_hw->ints0 = (1u << debug_dma_chan);
+    }
+}
 
 static void setup_dma_chain(void) {
     dma_addr_chan = (int)dma_claim_unused_channel(false);
@@ -647,10 +676,10 @@ static void setup_dma_chain(void) {
         channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, false);
-        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, true));
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio0, output_sm, true));
         // channel_config_set_chain_to(&c, dma_sniff_write_chan);
         dma_channel_configure(dma_data_read_chan, &c,
-            &gb_pio1->txf[output_sm - NUM_PIO_STATE_MACHINES],
+            &gb_pio0->txf[output_sm],
             gb_data_buffer,
             1, false);
     }
@@ -688,14 +717,26 @@ static void setup_dma_chain(void) {
         channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, false);
-        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, false));
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio0, output_sm, false));
         dma_channel_configure(dma_data_write_chan, &c,
             gb_data_buffer,
-            &gb_pio1->rxf[output_sm - NUM_PIO_STATE_MACHINES],
+            &gb_pio0->rxf[output_sm],
             1, false);
     }
 
-    mp_printf(&mp_plat_print, "gbio: DMA chain setup complete\n");
+    // ---- Enable DMA IRQs for all channels ----
+    // Route all channels to IRQ0 and enable the interrupt.
+    dma_channel_set_irq0_enabled(dma_addr_chan, true);
+    dma_channel_set_irq0_enabled(dma_sniff_read_chan, true);
+    dma_channel_set_irq0_enabled(dma_sniff_write_chan, true);
+    dma_channel_set_irq0_enabled(dma_sniff_reset_chan, true);
+    dma_channel_set_irq0_enabled(dma_data_read_chan, true);
+    dma_channel_set_irq0_enabled(dma_data_write_chan, true);
+
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_irq_handler);
+    irq_set_enabled(DMA_IRQ_0, true);
+
+    mp_printf(&mp_plat_print, "gbio: DMA chain setup complete (IRQs enabled)\n");
 }
 
 // ===== FEEDER HELPERS (for command-stream compatibility) =====
@@ -725,7 +766,6 @@ static void feeder_wait_drained(void) {
 static PIO debug_pio = NULL;
 static int debug_sm = -1;
 static uint debug_prog_offset;
-static int debug_dma_chan = -1;
 static bool debug_configured = false;
 static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(4)));
 
@@ -790,14 +830,12 @@ void gbio_init(void) {
 
     // ---- Claim PIO state machines ----
     // We need 4 SMs: 2 monitors (share program), 1 address, 1 output
-    // Use PIO0 for monitors and address (3 SMs), PIO1 for output (1 SM)
     gb_pio0 = pio0;
-    gb_pio1 = pio1;
 
     int m_cs = pio_claim_unused_sm(gb_pio0, false);
     int m_a15 = pio_claim_unused_sm(gb_pio0, false);
     int a_sm = pio_claim_unused_sm(gb_pio0, false);
-    int o_sm = pio_claim_unused_sm(gb_pio1, false);
+    int o_sm = pio_claim_unused_sm(gb_pio0, false);
 
     if (m_cs < 0 || m_a15 < 0 || a_sm < 0 || o_sm < 0) {
         mp_printf(&mp_plat_print, "gbio: failed to claim state machines\n");
@@ -806,7 +844,7 @@ void gbio_init(void) {
     monitor_cs_sm = m_cs;
     monitor_a15_sm = m_a15;
     address_sm = a_sm;
-    output_sm = o_sm + NUM_PIO_STATE_MACHINES;  // offset for PIO1
+    output_sm = o_sm;
 
     mp_printf(&mp_plat_print, "gbio: SMs - monitor_cs=%d monitor_a15=%d address=%d output=%d\n",
         monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
@@ -829,42 +867,28 @@ void gbio_init(void) {
     pio_program_t output_prog_info = {
         .instructions = output_program,
         .length = OUTPUT_PROG_LEN,
-        .origin = -1,
+        .origin = 0,
     };
-    output_prog_offset = pio_add_program(gb_pio1, &output_prog_info);
+    output_prog_offset = pio_add_program(gb_pio0, &output_prog_info);
 
     mp_printf(&mp_plat_print, "gbio: program offsets - monitor=%d address=%d output=%d\n",
         monitor_prog_offset, address_prog_offset, output_prog_offset);
 
-    // ---- Configure monitor CS SM (jmp pin = /CS, IRQ 0) ----
+    // ---- Configure monitor CS SM (jmp pin = /CS) ----
     {
-        uint16_t cs_prog[MONITOR_PROG_LEN];
-        memcpy(cs_prog, monitor_program, sizeof(cs_prog));
-        patch_monitor_irq(cs_prog, IRQ_CS);
-
         pio_sm_config cfg = pio_get_default_sm_config();
         sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
         sm_config_set_jmp_pin(&cfg, GB_CS_PIN);
         pio_sm_init(gb_pio0, monitor_cs_sm, monitor_prog_offset, &cfg);
-        for (uint i = 0; i < MONITOR_PROG_LEN; i++) {
-            gb_pio0->instr_mem[monitor_prog_offset + i] = cs_prog[i];
-        }
         pio_sm_set_enabled(gb_pio0, monitor_cs_sm, true);
     }
 
-    // ---- Configure monitor A15 SM (jmp pin = A15, IRQ 1) ----
+    // ---- Configure monitor A15 SM (jmp pin = A15) ----
     {
-        uint16_t a15_prog[MONITOR_PROG_LEN];
-        memcpy(a15_prog, monitor_program, sizeof(a15_prog));
-        patch_monitor_irq(a15_prog, IRQ_A15);
-
         pio_sm_config cfg = pio_get_default_sm_config();
         sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
         sm_config_set_jmp_pin(&cfg, GB_A15_PIN);
         pio_sm_init(gb_pio0, monitor_a15_sm, monitor_prog_offset, &cfg);
-        for (uint i = 0; i < MONITOR_PROG_LEN; i++) {
-            gb_pio0->instr_mem[monitor_prog_offset + i] = a15_prog[i];
-        }
         pio_sm_set_enabled(gb_pio0, monitor_a15_sm, true);
     }
 
@@ -888,16 +912,16 @@ void gbio_init(void) {
         sm_config_set_jmp_pin(&cfg, GB_WR_PIN);
         sm_config_set_sideset_pins(&cfg, GB_DATA_OE_PIN);
         sm_config_set_sideset(&cfg, 1, false, false);  // 1 bit, values, no pindirs
-        sm_config_set_out_shift(&cfg, true, false, 8);  // shift right, no autopull
-        sm_config_set_in_shift(&cfg, true, false, 8);   // shift right, no autopush
-        pio_sm_set_pindirs_with_mask(gb_pio1, sm_idx,
+        sm_config_set_out_shift(&cfg, true, true, 8);  // shift right, no autopull
+        sm_config_set_in_shift(&cfg, true, true, 8);   // shift right, no autopush
+        pio_sm_set_pindirs_with_mask(gb_pio0, sm_idx,
             ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN),
                     ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN));
-        pio_sm_set_pins_with_mask(gb_pio1, sm_idx,
+        pio_sm_set_pins_with_mask(gb_pio0, sm_idx,
             (1 << GB_DATA_OE_PIN),
             (1 << GB_DATA_OE_PIN));
-        pio_sm_init(gb_pio1, sm_idx, output_prog_offset, &cfg);
-        pio_sm_set_enabled(gb_pio1, sm_idx, true);
+        pio_sm_init(gb_pio0, sm_idx, output_prog_offset, &cfg);
+        pio_sm_set_enabled(gb_pio0, sm_idx, true);
     }
 
     // ---- Set up DMA chain with sniffer ----
@@ -906,7 +930,7 @@ void gbio_init(void) {
     // --- Debug PIO: samples all GPIOs for bus capture ---
     mp_printf(&mp_plat_print, "setup debug program\n");
     build_debug_program();
-    debug_pio = pio0;
+    debug_pio = pio1;
     debug_sm = (int)pio_claim_unused_sm(debug_pio, false);
     if (debug_sm < 0) {
         mp_printf(&mp_plat_print, "gbio: no free PIO SM for debug\n");
@@ -1070,8 +1094,9 @@ void common_hal_gbio_reset_gameboy(void) {
 
 
     mp_printf(&mp_plat_print, "  [gbio] main tc %d\n", (unsigned)dma_channel_hw_addr(dma_addr_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
-
+    if (debug_configured) {
+        mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
+    }
     mp_printf(&mp_plat_print, "  [gbio] stage 4: releasing /GB_RESET\n");
     gpio_put(GB_RESET_PIN, 0);
 
@@ -1128,18 +1153,67 @@ void common_hal_gbio_reset_gameboy(void) {
         if (++dma_spins > 1000000) {
             if (tc != last_tc) {
                 last_tc = tc;
+                // Print DMA IRQ counts and address SM FIFO level
+                uint addr_fifo = pio_sm_get_rx_fifo_level(gb_pio0, address_sm);
                 mp_printf(&mp_plat_print, "  [gbio] stage 5: still waiting (transfer_count=%u, gbc=%d)\n",
                     (unsigned)tc, (int)gameboy_color_booting);
+                mp_printf(&mp_plat_print, "  [gbio] DMA IRQ counts: addr=%lu sniff_read=%lu sniff_write=%lu sniff_reset=%lu data_read=%lu data_write=%lu debug=%lu\n",
+                    (unsigned long)dma_irq_count_addr,
+                    (unsigned long)dma_irq_count_sniff_read,
+                    (unsigned long)dma_irq_count_sniff_write,
+                    (unsigned long)dma_irq_count_sniff_reset,
+                    (unsigned long)dma_irq_count_data_read,
+                    (unsigned long)dma_irq_count_data_write,
+                    (unsigned long)dma_irq_count_debug);
+                mp_printf(&mp_plat_print, "  [gbio] address SM RX FIFO level: %u\n", addr_fifo);
             }
             dma_spins = 0;
         }
         last_tc = tc;
     }
-    pio_sm_set_enabled(debug_pio, debug_sm, false);
-    dma_channel_abort(debug_dma_chan);
     mp_printf(&mp_plat_print, "  [gbio] stage 5: boot wait complete (first_init=%d)\n", (int)first_init);
 
+    // Print state machine status after boot wait
+    mp_printf(&mp_plat_print, "  [gbio] === SM STATUS AFTER BOOT WAIT ===\n");
+    mp_printf(&mp_plat_print, "  [gbio] monitor_cs_sm (PIO0, sm=%d): enabled=%d rx_fifo=%u tx_fifo=%u\n",
+        monitor_cs_sm,
+        (int)((gb_pio0->ctrl >> monitor_cs_sm) & 1),
+        pio_sm_get_rx_fifo_level(gb_pio0, monitor_cs_sm),
+        pio_sm_get_tx_fifo_level(gb_pio0, monitor_cs_sm));
+    mp_printf(&mp_plat_print, "  [gbio] monitor_a15_sm (PIO0, sm=%d): enabled=%d rx_fifo=%u tx_fifo=%u\n",
+        monitor_a15_sm,
+        (int)((gb_pio0->ctrl >> monitor_a15_sm) & 1),
+        pio_sm_get_rx_fifo_level(gb_pio0, monitor_a15_sm),
+        pio_sm_get_tx_fifo_level(gb_pio0, monitor_a15_sm));
+    mp_printf(&mp_plat_print, "  [gbio] address_sm (PIO0, sm=%d): enabled=%d rx_fifo=%u tx_fifo=%u\n",
+        address_sm,
+        (int)((gb_pio0->ctrl >> address_sm) & 1),
+        pio_sm_get_rx_fifo_level(gb_pio0, address_sm),
+        pio_sm_get_tx_fifo_level(gb_pio0, address_sm));
+    mp_printf(&mp_plat_print, "  [gbio] output_sm (PIO0, sm=%d): enabled=%d rx_fifo=%u tx_fifo=%u\n",
+        output_sm,
+        (int)((gb_pio0->ctrl >> (output_sm)) & 1),
+        pio_sm_get_rx_fifo_level(gb_pio0, output_sm),
+        pio_sm_get_tx_fifo_level(gb_pio0, output_sm));
+    if (debug_sm >= 0) {
+        mp_printf(&mp_plat_print, "  [gbio] debug_sm (PIO0, sm=%d): enabled=%d rx_fifo=%u tx_fifo=%u\n",
+            debug_sm,
+            (int)((debug_pio->ctrl >> debug_sm) & 1),
+            pio_sm_get_rx_fifo_level(debug_pio, debug_sm),
+            pio_sm_get_tx_fifo_level(debug_pio, debug_sm));
+    }
+    mp_printf(&mp_plat_print, "  [gbio] === END SM STATUS ===\n");
+    mp_printf(&mp_plat_print, "  [gbio] DMA IRQ counts: addr=%lu sniff_read=%lu sniff_write=%lu sniff_reset=%lu data_read=%lu data_write=%lu debug=%lu\n",
+        (unsigned long)dma_irq_count_addr,
+        (unsigned long)dma_irq_count_sniff_read,
+        (unsigned long)dma_irq_count_sniff_write,
+        (unsigned long)dma_irq_count_sniff_reset,
+        (unsigned long)dma_irq_count_data_read,
+        (unsigned long)dma_irq_count_data_write,
+        (unsigned long)dma_irq_count_debug);
 
+    pio_sm_set_enabled(debug_pio, debug_sm, false);
+    dma_channel_abort(debug_dma_chan);
     uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
     for (uint32_t i = last_captured; i < captured; i++) {
         uint32_t s = debug_samples[i];
