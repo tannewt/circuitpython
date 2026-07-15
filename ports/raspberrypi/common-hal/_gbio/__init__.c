@@ -6,44 +6,40 @@
 
 // game boy cartridge interface for the PyGameBoy RP2350.
 //
-// The RP2350 plays the role of a game boy cartridge: it feeds a stream of SM83
-// opcodes to the game boy CPU one byte at a time, synchronised to the game boy's
-// own read strobes.  A single PIO state machine does the real-time work so the
-// ARM core is free to run Python / USB between game boy accesses:
+// The RP2350 plays the role of a game boy cartridge.  A 64K buffer in RAM
+// maps the entire Game Boy address space.  PIO state machines and DMA
+// automatically serve reads from this buffer and capture writes into it,
+// leaving the ARM core free to run Python / USB between Game Boy accesses.
 //
-//   gbio_data  drives D0..D7 from its TX FIFO.  A DMA channel keeps the TX FIFO
-//     full from a command buffer in RAM.  gbio_data directly watches /RD and
-//     A15: it spins while A15 is high (non-ROM region), waits for /RD to fall (a
-//     cartridge ROM read at A15 low), lets the read complete, then pulls the
-//     next byte from the FIFO and drives it onto D0..D7 BEFORE its matching /RD
-//     strobe (mirroring the SAMD port, whose port-DMA latches the output
-//     register at the END of the previous read so the byte is stable throughout
-//     the next), so the GameBoy's sample point always catches the right byte.
-//     When the FIFO runs dry the state machine stalls on `pull` and the pins
-//     hold the last byte -- this is the "idle" state in which the game boy spins
-//     on a JP (HL) self loop.  The level-shifter output-enable (DATA_OE) is a
-//     sideset output of this same SM, so the 74LVC4245 only drives D0..D7 onto
-//     the game boy bus during ROM reads (and the idle spin) -- it is held
-//     high-Z (OE de-asserted) outside the ROM region and while the GB is in
-//     reset, instead of permanently outputting.
+// Architecture:
 //
-// A single state machine is sufficient because, on the v8 PyGameBoy PCB, every
-// cartridge bus signal lives in the first 32 GPIO bank: A0..A15 = GPIO2..GPIO17,
-// /RD = GPIO20 and D0..D7 = GPIO23..GPIO30.  (The earlier board routed D7 to
-// GPIO36 and /RD to GPIO4, forcing two PIO instances linked by a physical
-// handshake pin in the 16..31 bank overlap; that is no longer needed.)
+//   1. Two monitor SMs watch /CS (GPIO21) and A15 (GPIO17).  They share a
+//      program but use different jmp pins.  When their pin goes low they
+//      clear a shared PIO IRQ; when it goes high they set it again.
 //
-// The ARM core still gets a /RD falling-edge interrupt (on demand) for address
-// dispatch: it watches the vblank (0x0040) and joypad (0x0060) interrupt
-// vectors, the 0x3000-0x3FFF gamepad-read encoding region, and -- during boot
-// -- the game boy Color detection pattern, swapping the DMA feeder between
-// command streams.  This runs in parallel with gbio_data and does not gate it.
+//   2. An address SM waits for both IRQs to be cleared, then captures the
+//      full 16-bit address from A0..A15 into its RX FIFO.
 //
-// The SM83 command streams and the address-dispatch logic are ported from the
-// original atmel-samd gb_m4 implementation; they are GameBoy-side and therefore
-// portable.  Only the delivery mechanism (SAMD CCL + event system + port DMA,
-// or the earlier two-PIO + handshake design) has been replaced with a single
-// RP2350 PIO state machine + DMA.
+//   3. A DMA channel copies the address from the RX FIFO into a circular
+//      buffer in memory.  The DMA sniffer is set to monitor this channel in
+//      sum mode.  Its initial value is the pointer to the 64K data buffer,
+//      so after the address transfer the sniffer holds buffer_ptr + address.
+//
+//   4. The address DMA chains to a DMA that copies the sniffer value into
+//      the READ DMA's source-address register, causing a read from the
+//      correct offset in the 64K buffer.  That chains to a DMA that resets
+//      the sniffer back to the buffer base pointer.
+//
+//   5. The output SM waits for the shared IRQs, then waits for clock low.
+//      On a Game Boy write (/WR low) it reads 8 bits from the bus into its
+//      RX FIFO and discards 8 bits from its TX FIFO.  On a Game Boy read
+//      (/WR high) it outputs 8 bits from its TX FIFO.  It then waits for
+//      clock high, disables OE, and wraps.
+//
+// The 64K buffer is the primary interface: the ARM core writes SM83 opcodes
+// into it at the addresses the Game Boy will read, and the PIO/DMA hardware
+// serves them automatically.  The command-stream API (queue_commands, etc.)
+// is preserved for compatibility, implemented by writing into the buffer.
 
 #include "shared-bindings/_gbio/__init__.h"
 #include "common-hal/_gbio/__init__.h"
@@ -66,9 +62,6 @@
 
 // ===== PIN MAP (PyGameBoy RP2350, v8 PCB) =====
 // game boy cartridge bus.  See boards/pygameboy_rp2350/pins.c.
-// On the v8 PCB every cartridge signal lives in the first 32 GPIO bank, so a
-// single PIO state machine (GPIO base 0) can watch /RD and A15 AND drive D0..D7
-// -- no second state machine or inter-SM handshake pin is needed.
 #define GB_A0_PIN       2    // A0..A15 = GPIO2..GPIO17
 #define GB_A15_PIN      17
 #define GB_CLK_PIN      18
@@ -79,6 +72,22 @@
 #define GB_D0_PIN       23   // D0..D7 = GPIO23..GPIO30 (3V side of U5)
 #define GB_D7_PIN       30
 #define GB_RESET_PIN    31   // assert (active high) drives /GB_RESET low via Q1
+
+// ===== PIO IRQ ASSIGNMENTS =====
+// IRQ 0: cleared by CS monitor SM when /CS goes low
+// IRQ 1: cleared by A15 monitor SM when A15 goes low
+// The address SM and output SM both wait for these IRQs to be cleared.
+#define IRQ_CS   0
+#define IRQ_A15  1
+
+// ===== 64K DATA BUFFER =====
+// Maps the entire Game Boy address space.  The ARM core writes SM83 opcodes
+// here; the PIO/DMA hardware serves them automatically on every access.
+static uint8_t gb_data_buffer[65536] __attribute__((aligned(4)));
+
+// ===== CIRCULAR ADDRESS BUFFER (for debugging) =====
+#define ADDRESS_BUFFER_SIZE 1024  // must be power of 2
+static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(4)));
 
 // ===== DEBUG PIO =====
 // A second PIO state machine samples all GPIO0..GPIO31 on every falling edge
@@ -312,69 +321,218 @@ uint8_t change_screen_commands[] = {
 
 // ===== STATE =====
 
-// Idle address the game boy spins on between command sequences.  All command
-// streams end by loading this into HL and executing JP (HL), leaving 0xE9
-// (JP (HL)) on the bus so the game boy re-reads it forever.
-#define GB_IDLE_ADDR 0x1300
+// Idle address the game boy spins on between command sequences.
+#define GB_IDLE_ADDR 0x1000
 
-static rp2pio_statemachine_obj_t data_sm;   // watches /RD + A15, drives D0..D7
+// PIO instances and state machine indices (raw Pico SDK, not CircuitPython wrapper)
+static PIO gb_pio0;  // monitors + address
+static PIO gb_pio1;  // output
+static int monitor_cs_sm;
+static int monitor_a15_sm;
+static int address_sm;
+static int output_sm;
 
-static int dma_chan = -1;                    // feeds data_sm TX FIFO from RAM
+// Program offsets in PIO instruction memory
+static uint monitor_prog_offset;
+static uint address_prog_offset;
+static uint output_prog_offset;
+
+// DMA channels for the sniffer chain
+static int dma_addr_chan = -1;         // address SM RX FIFO -> circular buffer
+static int dma_sniff_read_chan = -1;   // sniffer -> data read DMA read addr
+static int dma_sniff_write_chan = -1;  // sniffer -> data write DMA write addr
+static int dma_sniff_reset_chan = -1;  // reset sniffer to buffer base
+static int dma_data_read_chan = -1;    // data buffer -> output SM TX FIFO
+static int dma_data_write_chan = -1;   // output SM RX FIFO -> data buffer
+
+// Cached base pointer for sniffer reset
+static uint32_t gb_buffer_base;
+
+// Legacy dma_chan for feeder compatibility (aliases dma_data_read_chan)
+#define dma_chan dma_data_read_chan
 
 // Command buffers (in ordinary RAM; the SAMD port used backup RAM but the
 // RP2350 keeps these in normal SRAM and re-arms them on reset_gameboy).
 static uint8_t command_cache[1024] __attribute__((aligned(4)));
-static uint8_t vblank_interrupt_response[1024] __attribute__((aligned(4)));
 
-static uint8_t gamepad_state = 0xff;
 static volatile uint32_t vsync_count = 0;
 static volatile uint64_t last_vsync_time = 0;
 
-// Length (in bytes) of the currently staged vblank response, including the
-// leading [NOP, JP(HL)] prefix and the trailing idle-restore epilogue.
-static volatile uint16_t vblank_response_length;
 static volatile uint32_t total_additional_cycles;
-static volatile bool updating_vblank_response;
 
 static volatile bool everything_going = false;     // boot complete?
 static volatile bool gameboy_color_booting = false;
 static volatile bool gameboy_color = false;
 
-// Set true while the /RD address-dispatch interrupt should fire.  It is only
-// enabled on demand (boot detection, vblank waits, gamepad fetch) so the ARM
-// is free while the game boy idles.
-static volatile bool address_dispatch_enabled;
+// ===== FIXED INTERRUPT HANDLERS IN 64K BUFFER =====
+// These are copied into the 64K buffer at init/reset time.
+// The Game Boy interrupt vectors (0x0040, 0x0060) contain JP instructions
+// to these handlers.
 
-// Boot: count of remaining reads during which we look for the GBC signature.
-static volatile uint16_t boot_detect_remaining;
-static volatile uint16_t boot_address_i;
+// Cartridge RAM base address (GB can write here, ARM can read from buffer)
+#define GB_RAM_BASE 0xA000
+#define GB_RAM_VSYNC (GB_RAM_BASE + 0)  // byte: frame counter
+#define GB_RAM_GAMEPAD (GB_RAM_BASE + 1) // byte: button state
+
+// VBlank handler address in buffer
+#define VB_HANDLER_ADDR 0x0200
+// Joypad handler address in buffer
+#define JP_HANDLER_ADDR 0x0280
+
+// VBlank handler: increments frame counter in cartridge RAM, runs user commands, returns.
+// The ARM writes user commands into the user command area (VB_HANDLER_ADDR + prologue size).
+#define VB_USER_AREA (VB_HANDLER_ADDR + 24)  // offset past prologue
+#define VB_USER_AREA_SIZE 128
+
+static uint8_t vblank_handler_prologue[] = {
+    // PUSH AF, PUSH HL
+    0xF5, 0xE5,
+    // Increment frame counter at GB_RAM_VSYNC
+    0x21, (uint8_t)(GB_RAM_VSYNC & 0xFF), (uint8_t)(GB_RAM_VSYNC >> 8), // LD HL, GB_RAM_VSYNC
+    0x7E,                         // LD A, (HL)
+    0x3C,                         // INC A
+    0x77,                         // LD (HL), A
+    // Clear VBlank interrupt flag
+    0x3E, 0xEF,                   // LD A, 0xEF
+    0xE0, 0x0F,                   // LDH (0xFF0F), A
+    // POP HL, POP AF
+    0xE1, 0xF1,
+    0xD9,                         // RETI
+    // User command area follows (filled with NOPs by default)
+};
+
+// Joypad handler: reads joypad register, writes button state to cartridge RAM.
+static uint8_t joypad_handler[] = {
+    // PUSH AF, PUSH BC
+    0xF5, 0xC5,
+    // Select directions (P14=0, P15=1): write 0x20 to 0xFF00
+    0x3E, 0x20,                   // LD A, 0x20
+    0xE0, 0x00,                   // LDH (0xFF00), A
+    0x00,                         // NOP (timing)
+    0xF0, 0x00,                   // LDH A, (0xFF00)
+    0xE6, 0x0F,                   // AND 0x0F
+    0x47,                         // LD B, A
+    // Select buttons (P14=1, P15=0): write 0x10 to 0xFF00
+    0x3E, 0x10,                   // LD A, 0x10
+    0xE0, 0x00,                   // LDH (0xFF00), A
+    0x00,                         // NOP (timing)
+    0xF0, 0x00,                   // LDH A, (0xFF00)
+    0xE6, 0x0F,                   // AND 0x0F
+    0xCB, 0x37,                   // SWAP A
+    0xB0,                         // OR B
+    // Write to cartridge RAM at GB_RAM_GAMEPAD
+    0x21, (uint8_t)(GB_RAM_GAMEPAD & 0xFF), (uint8_t)(GB_RAM_GAMEPAD >> 8), // LD HL, GB_RAM_GAMEPAD
+    0x77,                         // LD (HL), A
+    // Reset joypad (both columns high)
+    0x3E, 0x30,                   // LD A, 0x30
+    0xE0, 0x00,                   // LDH (0xFF00), A
+    // Clear joypad interrupt flag
+    0x3E, 0xEF,                   // LD A, 0xEF
+    0xE0, 0x0F,                   // LDH (0xFF0F), A
+    // POP BC, POP AF
+    0xC1, 0xF1,
+    0xD9,                         // RETI
+};
 
 // ===== PIO PROGRAMS =====
 //
-// Built at runtime with the pio_encode_* helpers so we can't accidentally
-// hand-encode them wrong.  Each is small enough to fit in one PIO instruction
-// memory slot.
+// Built at runtime with the pio_encode_* helpers.
 
 // Side-set encodings for the DATA_OE pin.  Optional sideset (sideset_enable =
 // true, 1 data bit): bit 12 of the instruction is the "this instr carries a
 // side" flag, bit 11 is the driven OE pin value.  The 74LVC4245 /OE is active
 // low, so pin 0 = buffer ON (driving D0..D7), pin 1 = buffer OFF (high-Z).
-// OE_SIDE_NONE leaves DATA_OE unchanged so an instruction can be reached from
-// both the "buffer on" and "buffer off" paths without a fixed side value.
 #define OE_SIDE_NONE    0x0000
 #define OE_SIDE_ENABLE  0x1000   // DATA_OE pin = 0 -> buffer drives D0..D7
 #define OE_SIDE_DISABLE 0x1800   // DATA_OE pin = 1 -> buffer high-Z
 
-#define DATA_PROG_LEN 4
-static uint16_t data_program[DATA_PROG_LEN];
+// ---- Monitor program (shared by CS and A15 SMs) ----
+// Uses jmp pin to monitor the assigned signal.
+// When jmp pin goes low: clear IRQ (signal "access starting")
+// When jmp pin goes high: set IRQ (signal "access complete")
+#define MONITOR_PROG_LEN 5
+static uint16_t monitor_program[MONITOR_PROG_LEN];
 
-// The main loop wraps instruction 1 (out) .. instruction 5 (pull).  Instruction
-// 0 is a one-shot prologue (prefetch byte[0] at SM entry with the buffer off).
-// Instructions 6..7 are the A15-high "disabled spin", reached only via the
-// explicit `jmp pin 6` at index 2 (never by falling through the wrap).  See
-// build_pio_program().
-#define DATA_WRAP_TARGET 0
-#define DATA_WRAP        3
+static void build_monitor_program(void) {
+    // Instruction 0: jmp pin 0  -- loop while jmp pin is high
+    // Instruction 1: irq clear N -- signal address/output SMs (IRQ patched at init)
+    // Instruction 2: jmp pin 4  -- if jmp pin high, jump to done
+    // Instruction 3: jmp 2      -- loop while jmp pin is low
+    // Instruction 4: irq set N   -- clear signal, wrap to 0
+    monitor_program[0] = pio_encode_jmp_pin(0);
+    monitor_program[1] = pio_encode_irq_clear(false, 0);  // IRQ patched
+    monitor_program[2] = pio_encode_jmp_pin(4);
+    monitor_program[3] = pio_encode_jmp(2);
+    monitor_program[4] = pio_encode_irq_set(false, 0);    // IRQ patched
+}
+
+static void patch_monitor_irq(uint16_t *prog, uint irq_num) {
+    prog[1] = pio_encode_irq_clear(false, irq_num);
+    prog[4] = pio_encode_irq_set(false, irq_num);
+}
+
+// ---- Address capture program ----
+// Waits for both IRQs to be cleared (CS low AND A15 low),
+// then captures the 16-bit address from A0..A15 into RX FIFO.
+#define ADDRESS_PROG_LEN 4
+static uint16_t address_program[ADDRESS_PROG_LEN];
+
+static void build_address_program(void) {
+    // Instruction 0: wait 0 irq 0  -- wait for CS low
+    // Instruction 1: wait 0 irq 1  -- wait for A15 low
+    // Instruction 2: in pins, 16   -- capture address
+    // Instruction 3: push          -- push to RX FIFO
+    address_program[0] = pio_encode_wait_irq(false, false, IRQ_CS);
+    address_program[1] = pio_encode_wait_irq(false, false, IRQ_A15);
+    address_program[2] = pio_encode_in(pio_pins, 16);
+    address_program[3] = pio_encode_push(false, false);
+}
+
+// ---- Output program ----
+// Handles both reads and writes on the Game Boy bus.
+// Jmp pin = /WR (GPIO19): high = read, low = write
+// Out pins = D0..D7 (GPIO23..30), In pins = D0..D7
+// Sideset = DATA_OE (GPIO22)
+#define OUTPUT_PROG_LEN 12
+static uint16_t output_program[OUTPUT_PROG_LEN];
+
+static void build_output_program(void) {
+    // Instruction 0:  wait 0 irq 0        -- wait for CS low
+    // Instruction 1:  wait 0 irq 1        -- wait for A15 low
+    // Instruction 2:  wait 0 gpio CLK     -- wait for clock low
+    // Instruction 3:  jmp pin 8           -- if /WR high, it's a read
+    // Instruction 4:  in pins, 8          -- [write] read data from bus
+    // Instruction 5:  push                -- push to RX FIFO
+    // Instruction 6:  pull                -- discard from TX FIFO
+    // Instruction 7:  jmp 10              -- jump to done
+    // Instruction 8:  pull                -- [read] get byte from TX FIFO
+    // Instruction 9:  out pins, 8         -- output to bus + OE enabled
+    // Instruction 10: wait 1 gpio CLK     -- wait for clock high
+    // Instruction 11: nop + OE disable    -- disable OE, wrap to 0
+    output_program[0] = pio_encode_wait_irq(false, false, IRQ_CS) | OE_SIDE_DISABLE;
+    output_program[1] = pio_encode_wait_irq(false, false, IRQ_A15) | OE_SIDE_DISABLE;
+    output_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_DISABLE;
+    output_program[3] = pio_encode_jmp_pin(8);
+    // Write path
+    output_program[4] = pio_encode_in(pio_pins, 8) | OE_SIDE_DISABLE;
+    output_program[5] = pio_encode_push(false, false) | OE_SIDE_DISABLE;
+    output_program[6] = pio_encode_pull(false, false) | OE_SIDE_DISABLE;
+    output_program[7] = pio_encode_jmp(10);
+    // Read path
+    output_program[8] = pio_encode_pull(false, false) | OE_SIDE_DISABLE;
+    output_program[9] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
+    // Done
+    output_program[10] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_ENABLE;
+    output_program[11] = pio_encode_nop() | OE_SIDE_DISABLE;
+}
+
+// ===== DEBUG PIO =====
+// A second PIO state machine samples all GPIO0..GPIO31 on every falling edge
+// of /RD (GPIO20) and pushes 32-bit snapshots into its RX FIFO.  A dedicated
+// DMA channel transfers the first N samples into a RAM buffer for post-mortem
+// analysis after reset_gameboy().  We trigger on /RD because it is the one
+// signal we know is toggling (the data SM already watches it).
+#define DEBUG_SAMPLE_COUNT (114560 / 2)
 
 #define DEBUG_PROG_LEN 5
 static uint16_t debug_program[DEBUG_PROG_LEN];
@@ -402,158 +560,139 @@ static void build_debug_program(void) {
     // wraps automatically from instruction 2 back to 0
 }
 
-static void build_pio_program(void) {
-    data_program[0] = pio_encode_wait_gpio(false, GB_A15_PIN) | OE_SIDE_DISABLE;
-    data_program[1] = pio_encode_out(pio_pins, 8);
-    data_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_ENABLE;
-    data_program[3] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_DISABLE;
+// ===== DMA / SNIFFER CHAIN =====
+
+static void setup_dma_chain(void) {
+    dma_addr_chan = (int)dma_claim_unused_channel(false);
+    dma_sniff_read_chan = (int)dma_claim_unused_channel(false);
+    dma_sniff_write_chan = (int)dma_claim_unused_channel(false);
+    dma_sniff_reset_chan = (int)dma_claim_unused_channel(false);
+    dma_data_read_chan = (int)dma_claim_unused_channel(false);
+    dma_data_write_chan = (int)dma_claim_unused_channel(false);
+
+    if (dma_addr_chan < 0 || dma_sniff_read_chan < 0 ||
+        dma_sniff_write_chan < 0 || dma_sniff_reset_chan < 0 ||
+        dma_data_read_chan < 0 || dma_data_write_chan < 0) {
+        mp_printf(&mp_plat_print, "gbio: failed to claim DMA channels\n");
+        return;
+    }
+
+    mp_printf(&mp_plat_print, "gbio: DMA channels: addr=%d sniff_read=%d sniff_write=%d sniff_reset=%d data_read=%d data_write=%d\n",
+        dma_addr_chan, dma_sniff_read_chan, dma_sniff_write_chan,
+        dma_sniff_reset_chan, dma_data_read_chan, dma_data_write_chan);
+
+    gb_buffer_base = (uint32_t)gb_data_buffer;
+
+    // ---- DMA_CHAN_ADDR: address SM RX FIFO -> circular buffer ----
+    // This channel is watched by the sniffer in sum mode.
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_addr_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, true);
+        channel_config_set_ring(&c, true, 10);  // wrap write at 2^10 = 1024 entries
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio0, address_sm, false));
+        channel_config_set_chain_to(&c, dma_sniff_read_chan);
+        channel_config_set_sniff_enable(&c, true);
+        dma_channel_configure(dma_addr_chan, &c,
+            gb_address_buffer,
+            &gb_pio0->rxf[address_sm],
+            0, false);
+    }
+
+    // Configure DMA sniffer: sum mode, initial value = buffer base
+    dma_sniffer_enable(dma_addr_chan, DMA_SNIFF_CTRL_CALC_VALUE_SUM, true);
+    dma_sniffer_set_data_accumulator(gb_buffer_base);
+
+    // ---- DMA_CHAN_SNIFF_READ: sniffer -> data_read DMA read address ----
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_sniff_read_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_chain_to(&c, dma_sniff_write_chan);
+        dma_channel_configure(dma_sniff_read_chan, &c,
+            &dma_channel_hw_addr(dma_data_read_chan)->read_addr,
+            &dma_hw->sniff_data,
+            1, false);
+    }
+
+    // ---- DMA_CHAN_SNIFF_WRITE: sniffer -> data_write DMA write address ----
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_sniff_write_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_chain_to(&c, dma_sniff_reset_chan);
+        dma_channel_configure(dma_sniff_write_chan, &c,
+            &dma_channel_hw_addr(dma_data_write_chan)->write_addr,
+            &dma_hw->sniff_data,
+            1, false);
+    }
+
+    // ---- DMA_CHAN_SNIFF_RESET: reset sniffer to buffer base ----
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_sniff_reset_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_chain_to(&c, dma_data_read_chan);
+        dma_channel_configure(dma_sniff_reset_chan, &c,
+            &dma_hw->sniff_data,
+            &gb_buffer_base,
+            1, false);
+    }
+
+    // ---- DMA_CHAN_DATA_READ: data buffer -> output SM TX FIFO ----
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_data_read_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, true));
+        channel_config_set_chain_to(&c, dma_addr_chan);
+        dma_channel_configure(dma_data_read_chan, &c,
+            &gb_pio1->txf[output_sm - NUM_PIO_STATE_MACHINES],
+            gb_data_buffer,
+            1, false);
+    }
+
+    // ---- DMA_CHAN_DATA_WRITE: output SM RX FIFO -> data buffer ----
+    // Independent channel, not in the main chain.  Triggered by RX FIFO data.
+    {
+        dma_channel_config c = dma_channel_get_default_config(dma_data_write_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, false);
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio1, output_sm - NUM_PIO_STATE_MACHINES, false));
+        dma_channel_configure(dma_data_write_chan, &c,
+            gb_data_buffer,
+            &gb_pio1->rxf[output_sm - NUM_PIO_STATE_MACHINES],
+            0, false);
+    }
+
+    mp_printf(&mp_plat_print, "gbio: DMA chain setup complete\n");
 }
 
-// ===== DMA / FEEDER HELPERS =====
+// ===== FEEDER HELPERS (for command-stream compatibility) =====
 
 static void feeder_start(const uint8_t *buf, size_t len) {
-    // Stop anything in flight, drain any bytes left in the TX FIFO (e.g. from a
-    // mid-stream abort), then pump `len` bytes from `buf` into the data state
-    // machine's TX FIFO, paced by the SM's TX DREQ.
-    mp_printf(&mp_plat_print, "  [gbio] feeder_start: len=%u\n", (unsigned)len);
-    dma_channel_abort(dma_chan);
-    pio_sm_drain_tx_fifo(data_sm.pio, data_sm.state_machine);
-    dma_channel_config c = dma_channel_get_default_config(dma_chan);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-    channel_config_set_dreq(&c, pio_get_dreq(data_sm.pio, data_sm.state_machine, true));
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-    // out_shift_right == true -> bytes go to the low lane of txf.
-    volatile uint8_t *txf = (volatile uint8_t *)&data_sm.pio->txf[data_sm.state_machine];
-    dma_channel_configure(dma_chan, &c,
-        txf,
-        buf,
-        len,
-        true /* start immediately */);
-    mp_printf(&mp_plat_print, "  [gbio] feeder_start: armed\n");
+    // Write the command bytes into the 64K buffer at GB_IDLE_ADDR.
+    // The Game Boy is spinning on JP (HL) at GB_IDLE_ADDR, reading 0xE9.
+    // We replace the idle bytes with the command sequence.
+    mp_printf(&mp_plat_print, "  [gbio] feeder_start: len=%u at 0x%04X\n",
+        (unsigned)len, GB_IDLE_ADDR);
+    if (len <= sizeof(gb_data_buffer) - GB_IDLE_ADDR) {
+        memcpy(gb_data_buffer + GB_IDLE_ADDR, buf, len);
+    }
 }
 
 static void feeder_wait_drained(void) {
-    // Wait for the DMA to finish pushing bytes into the FIFO, then for the
-    // state machine to consume every one of them (it stalls on `out` when the
-    // FIFO is empty -> TXSTALL asserts).
-    mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: waiting DMA idle\n");
-    uint32_t spins = 0;
-    while (dma_channel_is_busy(dma_chan)) {
-        RUN_BACKGROUND_TASKS;
-        if (++spins > 1000000) {
-            mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: DMA STILL BUSY after 1M spins (trans_count=%u)\n",
-                (unsigned)dma_channel_hw_addr(dma_chan)->transfer_count);
-            spins = 0;
-        }
-    }
-    mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: DMA idle, waiting SM TXSTALL\n");
-    uint32_t stall_mask = 1u << (PIO_FDEBUG_TXSTALL_LSB + data_sm.state_machine);
-    data_sm.pio->fdebug = stall_mask;      // clear
-    spins = 0;
-    while ((data_sm.pio->fdebug & stall_mask) == 0) {
-        // Still draining.  The game boy paces this at ~1us/byte.
-        RUN_BACKGROUND_TASKS;
-        if (++spins > 1000000) {
-            mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: SM NOT stalling after 1M spins (fdebug=0x%08x)\n",
-                (unsigned)data_sm.pio->fdebug);
-            spins = 0;
-        }
-    }
-    mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: drained\n");
-}
-
-// ===== ADDRESS DISPATCH (ARM, on-demand) =====
-//
-// A /RD falling edge fires this handler.  It reads A0..A15 (GPIO6..21) from
-// SIO and reacts to the few addresses that matter: the vblank (0x0040) and
-// joypad (0x0060) interrupt vectors, the 0x3000-0x3FFF gamepad-read encoding
-// region, and -- during boot -- the game boy Color detection pattern.
-
-static inline uint16_t read_gb_address(void) {
-    return (uint16_t)((sio_hw->gpio_in >> GB_A0_PIN) & 0xffff);
-}
-
-// static void gbio_rd_dispatch(void) {
-//     uint16_t address = read_gb_address();
-//
-//     if (!everything_going) {
-//         // Boot: look for the game boy Color signature for the first few reads.
-//         if (boot_detect_remaining) {
-//             boot_detect_remaining--;
-//             boot_address_i++;
-//             if (boot_address_i == 50 && address == 0x0104) {
-//                 gameboy_color_booting = true;
-//             }
-//             if (boot_detect_remaining == 0) {
-//                 gpio_set_irq_enabled(GB_RD_PIN, GPIO_IRQ_EDGE_FALL, false);
-//                 address_dispatch_enabled = false;
-//             }
-//         }
-//         return;
-//     }
-//
-//     if (address == 0x0040) {
-//         // VBlank interrupt vector.
-//         vsync_count++;
-//         last_vsync_time = supervisor_ticks_ms64();
-//         if (!updating_vblank_response && vblank_response_length > 2 &&
-//             !dma_channel_is_busy(dma_chan)) {
-//             // Inject the staged vblank response.  Copy the staged prefix +
-//             // commands into command_cache, append the idle-restore epilogue,
-//             // and re-arm the feeder.  The data SM is stalled on `pull`
-//             // holding the idle byte; refilling the FIFO makes it serve
-//             // response[0] on this very read (if we win the race against /RD
-//             // rising -- see the file header).
-//             uint16_t len = vblank_response_length;
-//             memcpy(command_cache, vblank_interrupt_response, len);
-//             command_cache[len + 0] = 0xd1;     // POP DE (don't leak the frame)
-//             command_cache[len + 1] = 0x21;     // LD HL, GB_IDLE_ADDR
-//             command_cache[len + 2] = (uint8_t)(GB_IDLE_ADDR & 0xff);
-//             command_cache[len + 3] = (uint8_t)(GB_IDLE_ADDR >> 8);
-//             command_cache[len + 4] = 0xfb;     // EI
-//             command_cache[len + 5] = 0xfb;     // EI
-//             command_cache[len + 6] = 0xe9;     // JP (HL) -> idle
-//             len += 7;
-//             vblank_response_length = 2;       // back to the [NOP, JP(HL)] prefix
-//             total_additional_cycles = 0;
-//             feeder_start(command_cache, len);
-//         }
-//     } else if (address == 0x0060) {
-//         // Joypad interrupt vector.  Re-arm the canned response if we're idle.
-//         if (!dma_channel_is_busy(dma_chan)) {
-//             feeder_start(gamepad_interrupt_response, sizeof(gamepad_interrupt_response));
-//         }
-//     } else if ((address & 0xf000) == 0x3000) {
-//         // The game boy encodes the joypad register value into the low byte of a
-//         // dummy cartridge read at 0x30xx / 0x31xx.  Decode it back into a
-//         // pressed-button bitmask (bits low == pressed).
-//         uint8_t nibble = (uint8_t)(address & 0xf);
-//         uint8_t position = (uint8_t)((address & 0x0100) >> 8);
-//         uint8_t data = 0xf0 | nibble;
-//         if (position == 1) {
-//             data = 0x0f | (uint8_t)(nibble << 4);
-//         }
-//         gamepad_state &= data;
-//     }
-// }
-
-static void enable_address_dispatch(void) {
-    if (address_dispatch_enabled) {
-        return;
-    }
-    address_dispatch_enabled = true;
-    // Acknowledge any pending edge before arming.
-    gpio_acknowledge_irq(GB_RD_PIN, GPIO_IRQ_EDGE_FALL);
-    gpio_set_irq_enabled(GB_RD_PIN, GPIO_IRQ_EDGE_FALL, true);
-}
-
-static void disable_address_dispatch(void) {
-    if (!address_dispatch_enabled) {
-        return;
-    }
-    gpio_set_irq_enabled(GB_RD_PIN, GPIO_IRQ_EDGE_FALL, false);
-    address_dispatch_enabled = false;
+    // With the 64K buffer, there's no feeder to drain.
+    // The PIO/DMA serves bytes directly from the buffer.
+    // Give the Game Boy time to consume the commands.
+    mp_printf(&mp_plat_print, "  [gbio] feeder_wait_drained: waiting\n");
+    common_hal_mcu_delay_us(500);
 }
 
 // ===== INIT =====
@@ -573,31 +712,41 @@ void gbio_init(void) {
         return;
     }
     mp_printf(&mp_plat_print, "start gbio_init()\n");
-    build_pio_program();
+    build_monitor_program();
+    build_address_program();
+    build_output_program();
 
     // Address bus A0..A15 as plain SIO inputs.  sio_hw->gpio_in reads them
-    // regardless of pin function.  A15 is also the jmp pin for both the data
-    // SM and the debug PIO, but we still configure it as a SIO input so the
-    // debug PIO's `in pins, 29` captures its real level.
+    // regardless of pin function.
     for (uint8_t p = GB_A0_PIN; p <= GB_A15_PIN; p++) {
         gpio_init(p);
         gpio_set_dir(p, GPIO_IN);
         gpio_set_pulls(p, false, false);
     }
-    // /RD as an input with a falling-edge interrupt handler registered (armed
-    // only on demand).  It is also watched by the data SM via `wait gpio`, but
-    // pad-level interrupt detection works independently of pin function.
+    // /RD, /WR, /CS, CLK as inputs
     gpio_init(GB_RD_PIN);
     gpio_set_dir(GB_RD_PIN, GPIO_IN);
     gpio_set_pulls(GB_RD_PIN, false, false);
-    // gpio_add_raw_irq_handler(GB_RD_PIN, gbio_rd_dispatch);
+
+    gpio_init(GB_WR_PIN);
+    gpio_set_dir(GB_WR_PIN, GPIO_IN);
+    gpio_set_pulls(GB_WR_PIN, false, false);
+
+    gpio_init(GB_CS_PIN);
+    gpio_set_dir(GB_CS_PIN, GPIO_IN);
+    gpio_set_pulls(GB_CS_PIN, false, false);
+
+    gpio_init(GB_CLK_PIN);
+    gpio_set_dir(GB_CLK_PIN, GPIO_IN);
+    gpio_set_pulls(GB_CLK_PIN, false, false);
 
     // Configure any unclaimed pins between A15 and D0 as SIO inputs so the
     // debug PIO's `in pins, 29` (GPIO2..GPIO30) captures clean levels on every
     // pin rather than floating values.
     for (uint8_t p = GB_A15_PIN + 1; p < GB_D0_PIN; p++) {
-        if (p == GB_RD_PIN || p == GB_DATA_OE_PIN) {
-            continue;  // already configured above or below
+        if (p == GB_RD_PIN || p == GB_WR_PIN || p == GB_CS_PIN ||
+            p == GB_CLK_PIN || p == GB_DATA_OE_PIN) {
+            continue;
         }
         gpio_init(p);
         gpio_set_dir(p, GPIO_IN);
@@ -608,93 +757,127 @@ void gbio_init(void) {
     gpio_init(GB_RESET_PIN);
     gpio_set_dir(GB_RESET_PIN, GPIO_OUT);
     gpio_put(GB_RESET_PIN, 0);            // de-assert reset (GB running)
-    // The level-shifter /OE is owned by the data SM as a sideset output (it is
-    // only asserted during ROM reads / idle -- see build_pio_program).  Drive it
-    // de-asserted (high = buffer OFF) here as a plain GPIO so the buffer stays
-    // safely off until the SM is constructed and takes the pin over.
+    // The level-shifter /OE is owned by the output SM as a sideset output.
+    // Drive it de-asserted (high = buffer OFF) here as a plain GPIO so the
+    // buffer stays safely off until the SM is constructed and takes the pin over.
     gpio_init(GB_DATA_OE_PIN);
     gpio_set_dir(GB_DATA_OE_PIN, GPIO_OUT);
     gpio_put(GB_DATA_OE_PIN, 1);
 
-    // --- data SM (GPIO base 0): watches /RD + A15 and drives D0..D7 from its
-    //     TX FIFO.  All of these pins are below GPIO32, so one PIO state machine
-    //     suffices. ---
-    const mcu_pin_obj_t *a15_pin = mcu_get_pin_by_number(GB_A15_PIN);
-    const mcu_pin_obj_t *d0_pin = mcu_get_pin_by_number(GB_D0_PIN);
-    const mcu_pin_obj_t *oe_pin = mcu_get_pin_by_number(GB_DATA_OE_PIN);
+    // ---- Claim PIO state machines ----
+    // We need 4 SMs: 2 monitors (share program), 1 address, 1 output
+    // Use PIO0 for monitors and address (3 SMs), PIO1 for output (1 SM)
+    gb_pio0 = pio0;
+    gb_pio1 = pio1;
 
-    pio_pinmask_t data_pins = PIO_PINMASK_NONE;
-    PIO_PINMASK_SET(data_pins, GB_A15_PIN);     // jmp pin (read by `jmp pin`)
-    PIO_PINMASK_SET(data_pins, GB_RD_PIN);       // read by `wait gpio`
-    for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
-        PIO_PINMASK_SET(data_pins, p);           // out pins (driven by `out pins`)
-    }
-    PIO_PINMASK_SET(data_pins, GB_DATA_OE_PIN);  // sideset (driven by side bits)
-    // /RD and A15 are PIO inputs; D0..D7 and DATA_OE are outputs.  DATA_OE
-    // starts de-asserted (the 74LVC4245 /OE is active low, so pin high = high-Z)
-    // so the buffer is off until the SM turns it on for a ROM read.
-    pio_pinmask_t initial_dir = PIO_PINMASK_FROM_VALUE(((uint64_t)0xff) << GB_D0_PIN);
-    PIO_PINMASK_SET(initial_dir, GB_DATA_OE_PIN);
-    pio_pinmask_t initial_state = PIO_PINMASK_FROM_PIN(GB_DATA_OE_PIN);
+    int m_cs = pio_claim_unused_sm(gb_pio0, false);
+    int m_a15 = pio_claim_unused_sm(gb_pio0, false);
+    int a_sm = pio_claim_unused_sm(gb_pio0, false);
+    int o_sm = pio_claim_unused_sm(gb_pio1, false);
 
-    mp_printf(&mp_plat_print, "sm_construct\n");
-
-    bool ok = rp2pio_statemachine_construct(&data_sm,
-        data_program, DATA_PROG_LEN,
-        0 /* frequency: use clk_sys */,
-        NULL, 0,                                   // init
-        d0_pin, 8,                                 // out pins = D0..D7
-        NULL, 0,                                   // in
-        PIO_PINMASK_NONE, PIO_PINMASK_NONE,        // pull up/down
-        NULL, 0,                                   // set
-        oe_pin, 1, false,                          // sideset = DATA_OE (values, not pindirs)
-        initial_state,                             // initial pin state (DATA_OE high)
-        initial_dir,                               // initial pin dirs (D0..D7 + OE out)
-        a15_pin,                                   // jmp pin = A15
-        data_pins,
-        true, false,                              // tx fifo yes, rx no
-        true, 8, true,                           // manual pull (no auto_pull); shift right (LSB->D0)
-        false,                                    // wait_for_txstall
-        false, 0, false,                          // auto_push
-        true,                                     // claim pins
-        false,                                     // not user interruptible
-        true,                                      // sideset_enable (optional sideset)
-        DATA_WRAP_TARGET, DATA_WRAP, PIO_ANY_OFFSET, // wrap target=1, wrap=5
-        PIO_FIFO_TYPE_DEFAULT,
-        PIO_MOV_STATUS_DEFAULT, PIO_MOV_N_DEFAULT);
-    if (!ok) {
-        mp_printf(&mp_plat_print, "gbio: data state machine init failed\n");
+    if (m_cs < 0 || m_a15 < 0 || a_sm < 0 || o_sm < 0) {
+        mp_printf(&mp_plat_print, "gbio: failed to claim state machines\n");
         return;
-    } else {
-        mp_printf(&mp_plat_print, "sm_construct done\n");
     }
-    rp2pio_statemachine_never_reset(data_sm.pio, data_sm.state_machine);
+    monitor_cs_sm = m_cs;
+    monitor_a15_sm = m_a15;
+    address_sm = a_sm;
+    output_sm = o_sm + NUM_PIO_STATE_MACHINES;  // offset for PIO1
 
-    // Fix the data SM's jmp pin: rp2pio_statemachine_construct stores the raw
-    // absolute pin number in EXECCTRL.JMP_PIN, but the RP2350 hardware adds
-    // GPIOBASE to it.  If the SM landed on a PIO instance with non-zero
-    // GPIOBASE, the jmp pin ends up pointing at the wrong GPIO.  Subtract
-    // GPIOBASE so the hardware addition lands on the correct pin (GPIO17).
+    mp_printf(&mp_plat_print, "gbio: SMs - monitor_cs=%d monitor_a15=%d address=%d output=%d\n",
+        monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
+
+    // ---- Load programs into PIO instruction memory ----
+    pio_program_t monitor_prog_info = {
+        .instructions = monitor_program,
+        .length = MONITOR_PROG_LEN,
+        .origin = -1,
+    };
+    monitor_prog_offset = pio_add_program(gb_pio0, &monitor_prog_info);
+
+    pio_program_t address_prog_info = {
+        .instructions = address_program,
+        .length = ADDRESS_PROG_LEN,
+        .origin = -1,
+    };
+    address_prog_offset = pio_add_program(gb_pio0, &address_prog_info);
+
+    pio_program_t output_prog_info = {
+        .instructions = output_program,
+        .length = OUTPUT_PROG_LEN,
+        .origin = -1,
+    };
+    output_prog_offset = pio_add_program(gb_pio1, &output_prog_info);
+
+    mp_printf(&mp_plat_print, "gbio: program offsets - monitor=%d address=%d output=%d\n",
+        monitor_prog_offset, address_prog_offset, output_prog_offset);
+
+    // ---- Configure monitor CS SM (jmp pin = /CS, IRQ 0) ----
     {
-        uint sm = data_sm.state_machine;
-        PIO pio = data_sm.pio;
-        uint gpbase = pio->gpiobase;
-        if (gpbase != 0) {
-            uint32_t execctrl = pio->sm[sm].execctrl;
-            uint32_t jmp_pin = (execctrl & PIO_SM0_EXECCTRL_JMP_PIN_BITS) >> PIO_SM0_EXECCTRL_JMP_PIN_LSB;
-            uint32_t corrected = (jmp_pin > gpbase) ? (jmp_pin - gpbase) : 0;
-            execctrl = (execctrl & ~PIO_SM0_EXECCTRL_JMP_PIN_BITS) | (corrected << PIO_SM0_EXECCTRL_JMP_PIN_LSB);
-            pio->sm[sm].execctrl = execctrl;
-            mp_printf(&mp_plat_print, "gbio: fixed data SM jmp pin from %u to %u (GPIOBASE=%u)\n",
-                jmp_pin, corrected, gpbase);
+        uint16_t cs_prog[MONITOR_PROG_LEN];
+        memcpy(cs_prog, monitor_program, sizeof(cs_prog));
+        patch_monitor_irq(cs_prog, IRQ_CS);
+
+        pio_sm_config cfg = pio_get_default_sm_config();
+        sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
+        sm_config_set_jmp_pin(&cfg, GB_CS_PIN);
+        pio_sm_init(gb_pio0, monitor_cs_sm, monitor_prog_offset, &cfg);
+        for (uint i = 0; i < MONITOR_PROG_LEN; i++) {
+            gb_pio0->instr_mem[monitor_prog_offset + i] = cs_prog[i];
         }
+        pio_sm_set_enabled(gb_pio0, monitor_cs_sm, true);
     }
 
-    // DMA channel feeding the data SM's TX FIFO.  Claimed once, reused.
-    dma_chan = (int)dma_claim_unused_channel(false);
-    if (dma_chan < 0) {
-        mp_printf(&mp_plat_print, "gbio: no free DMA channel\n");
+    // ---- Configure monitor A15 SM (jmp pin = A15, IRQ 1) ----
+    {
+        uint16_t a15_prog[MONITOR_PROG_LEN];
+        memcpy(a15_prog, monitor_program, sizeof(a15_prog));
+        patch_monitor_irq(a15_prog, IRQ_A15);
+
+        pio_sm_config cfg = pio_get_default_sm_config();
+        sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
+        sm_config_set_jmp_pin(&cfg, GB_A15_PIN);
+        pio_sm_init(gb_pio0, monitor_a15_sm, monitor_prog_offset, &cfg);
+        for (uint i = 0; i < MONITOR_PROG_LEN; i++) {
+            gb_pio0->instr_mem[monitor_prog_offset + i] = a15_prog[i];
+        }
+        pio_sm_set_enabled(gb_pio0, monitor_a15_sm, true);
     }
+
+    // ---- Configure address SM (in pins = A0..A15) ----
+    {
+        pio_sm_config cfg = pio_get_default_sm_config();
+        sm_config_set_wrap(&cfg, address_prog_offset, address_prog_offset + ADDRESS_PROG_LEN - 1);
+        sm_config_set_in_pins(&cfg, GB_A0_PIN);
+        sm_config_set_in_shift(&cfg, false, true, 16);  // shift right, autopush at 16 bits
+        pio_sm_init(gb_pio0, address_sm, address_prog_offset, &cfg);
+        pio_sm_set_enabled(gb_pio0, address_sm, true);
+    }
+
+    // ---- Configure output SM (out/in pins = D0..D7, jmp pin = /WR, sideset = DATA_OE) ----
+    {
+        uint sm_idx = output_sm - NUM_PIO_STATE_MACHINES;
+        pio_sm_config cfg = pio_get_default_sm_config();
+        sm_config_set_wrap(&cfg, output_prog_offset, output_prog_offset + OUTPUT_PROG_LEN - 1);
+        sm_config_set_out_pins(&cfg, GB_D0_PIN, 8);
+        sm_config_set_in_pins(&cfg, GB_D0_PIN);
+        sm_config_set_jmp_pin(&cfg, GB_WR_PIN);
+        sm_config_set_sideset_pins(&cfg, GB_DATA_OE_PIN);
+        sm_config_set_sideset(&cfg, 1, false, false);  // 1 bit, values, no pindirs
+        sm_config_set_out_shift(&cfg, true, false, 8);  // shift right, no autopull
+        sm_config_set_in_shift(&cfg, true, false, 8);   // shift right, no autopush
+        pio_sm_set_pindirs_with_mask(gb_pio1, sm_idx,
+            ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN),
+                    ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN));
+        pio_sm_set_pins_with_mask(gb_pio1, sm_idx,
+            (1 << GB_DATA_OE_PIN),
+            (1 << GB_DATA_OE_PIN));
+        pio_sm_init(gb_pio1, sm_idx, output_prog_offset, &cfg);
+        pio_sm_set_enabled(gb_pio1, sm_idx, true);
+    }
+
+    // ---- Set up DMA chain with sniffer ----
+    setup_dma_chain();
 
     // --- Debug PIO: samples all GPIOs for bus capture ---
     mp_printf(&mp_plat_print, "setup debug program\n");
@@ -737,14 +920,26 @@ void gbio_init(void) {
         }
     }
 
-    // Reset vblank response to the idle-passthrough prefix: NOP; JP (HL).
-    vblank_interrupt_response[0] = 0x00;
-    vblank_interrupt_response[1] = 0xe9;
-    vblank_response_length = 2;
-    total_additional_cycles = 0;
+    // Initialize the 64K buffer: zero it, set up interrupt vectors and handlers
+    memset(gb_data_buffer, 0x00, sizeof(gb_data_buffer));
+    // Interrupt vectors: JP to fixed handlers
+    gb_data_buffer[0x0040] = 0xC3;  // JP
+    gb_data_buffer[0x0041] = (uint8_t)(VB_HANDLER_ADDR & 0xFF);
+    gb_data_buffer[0x0042] = (uint8_t)(VB_HANDLER_ADDR >> 8);
+    gb_data_buffer[0x0060] = 0xC3;  // JP
+    gb_data_buffer[0x0061] = (uint8_t)(JP_HANDLER_ADDR & 0xFF);
+    gb_data_buffer[0x0062] = (uint8_t)(JP_HANDLER_ADDR >> 8);
+    // VBlank handler at VB_HANDLER_ADDR
+    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
+    // Joypad handler at JP_HANDLER_ADDR
+    memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
+    // Idle spin at GB_IDLE_ADDR
+    gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
 
     // Keep our pins across VM resets; reset_port() resets GPIO/PIO generally.
     never_reset_pin_number(GB_RD_PIN);
+    never_reset_pin_number(GB_WR_PIN);
+    never_reset_pin_number(GB_CS_PIN);
     never_reset_pin_number(GB_CLK_PIN);
     for (uint8_t p = GB_A0_PIN; p <= GB_A15_PIN; p++) {
         never_reset_pin_number(p);
@@ -776,41 +971,30 @@ void common_hal_gbio_reset_gameboy(void) {
     everything_going = false;
     gameboy_color_booting = false;
     vsync_count = 0;
-    gamepad_state = 0xff;
-    boot_address_i = 0;
 
-    // Watch the first ~64 reads to detect a game boy Color.
-    boot_detect_remaining = 64;
-    mp_printf(&mp_plat_print, "  [gbio] stage 2: enabling address dispatch\n");
-    enable_address_dispatch();
+    // Fill the 64K buffer with the DMG boot stream at address 0x0000.
+    // The Game Boy reads sequentially from 0x0000 during boot.
+    mp_printf(&mp_plat_print, "  [gbio] stage 2: filling 64K buffer with DMG boot stream\n");
+    memset(gb_data_buffer, 0x00, sizeof(gb_data_buffer));
+    memcpy(gb_data_buffer, gameboy_boot, sizeof(gameboy_boot));
+    // Set up interrupt vectors: JP to fixed handlers
+    gb_data_buffer[0x0040] = 0xC3;  // JP
+    gb_data_buffer[0x0041] = (uint8_t)(VB_HANDLER_ADDR & 0xFF);
+    gb_data_buffer[0x0042] = (uint8_t)(VB_HANDLER_ADDR >> 8);
+    gb_data_buffer[0x0060] = 0xC3;  // JP
+    gb_data_buffer[0x0061] = (uint8_t)(JP_HANDLER_ADDR & 0xFF);
+    gb_data_buffer[0x0062] = (uint8_t)(JP_HANDLER_ADDR >> 8);
+    // VBlank handler at VB_HANDLER_ADDR
+    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
+    // Joypad handler at JP_HANDLER_ADDR
+    memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
+    // Idle spin at GB_IDLE_ADDR
+    gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
 
-    // Feed the DMG boot stream first.  If we detect a GBC we re-boot below.
-    //
-    // Alignment with the SAMD gb_m4 port (the boot streams are byte-identical,
-    // so the served-byte-per-cart-address mapping must match SAMD exactly):
-    //
-    //   * There is NO one-read pipeline delay.  The very first response byte
-    //     is gameboy_boot[0] (read#1), and read#N serves gameboy_boot[N-1].
-    //   * Proof from the SAMD GBC-detection check `address_i == 50 && address
-    //     == 0x0104`: on a DMG the 50th read must NOT be at 0x0104 (else the
-    //     DMG would be falsely detected as a GBC and re-armed with the wrong
-    //     stream).  The DMG reads the logo at 0x0104 at read#K != 50, and 0x0104
-    //     must receive gameboy_boot[48] = 0xCE (start of the "Nintendo logo 48
-    //     bytes" chunk, which the DMG boot ROM compares against its internal
-    //     Nintendo logo).  read#N -> gameboy_boot[N-1] gives K = 49 (and GBC,
-    //     which reads 0x0104 one read later, lands on read#50 -> detected).
-    //     read#N -> gameboy_boot[N-2] (a one-read delay) would force K = 50 --
-    //     a false-positive GBC detection AND a corrupt logo -- so we must NOT
-    //     prepend a placeholder byte here.
-    //
-    // The data SM (build_pio_program) drives each byte onto D0..D7 BEFORE
-    // its /RD strobe, so it serves gameboy_boot[0] stably on read#1 -- which
-    // is exactly how the SAMD port sets its first response byte (loaded at
-    // reset release / the previous read's rising edge, stable for the read).
-    mp_printf(&mp_plat_print, "  [gbio] stage 3: starting DMG feeder (gameboy_boot)\n");
-
-    mp_printf(&mp_plat_print, "  [gbio] game boy boot size %d\n", sizeof(gameboy_boot));
-    feeder_start(gameboy_boot, sizeof(gameboy_boot));
+    // Start the DMA chain (address -> sniffer -> data -> output SM)
+    mp_printf(&mp_plat_print, "  [gbio] stage 3: starting DMA chain\n");
+    dma_channel_start(dma_addr_chan);
+    dma_channel_start(dma_data_write_chan);
 
     // Release reset: the game boy boot ROM starts reading the cartridge header.
     // Start the debug PIO capture BEFORE releasing reset so we see the
@@ -839,38 +1023,26 @@ void common_hal_gbio_reset_gameboy(void) {
     }
 
 
-    mp_printf(&mp_plat_print, "  [gbio] main tc %d\n", (unsigned)dma_channel_hw_addr(dma_chan)->transfer_count);
+    mp_printf(&mp_plat_print, "  [gbio] main tc %d\n", (unsigned)dma_channel_hw_addr(dma_addr_chan)->transfer_count);
     mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
 
     mp_printf(&mp_plat_print, "  [gbio] stage 4: releasing /GB_RESET\n");
     gpio_put(GB_RESET_PIN, 0);
 
-    // Watch the DMA.  If the GBC signature shows up early, immediately re-arm
-    // with the GBC boot stream (mirroring the original gb_m4 port) so the GBC
-    // boot ROM never sees enough of the wrong logo to hang.
+    // Wait for the boot sequence to complete.
+    // The Game Boy reads ~256 bytes during boot at ~1 MHz = ~256 us.
     bool first_init = true;
     bool debug_printed = false;
     uint32_t last_tc = DEBUG_SAMPLE_COUNT;
-    mp_printf(&mp_plat_print, "  [gbio] stage 5: waiting for initial DMA drain (DMG stream)\n");
+    mp_printf(&mp_plat_print, "  [gbio] stage 5: waiting for boot to complete\n");
     uint32_t dma_spins = 0;
     uint32_t last_captured = 0;
-    while (dma_channel_is_busy(dma_chan)) {
+
+    // Wait ~10 ms for the boot sequence, dumping debug samples
+    uint32_t start_ms = supervisor_ticks_ms64();
+    while (supervisor_ticks_ms64() - start_ms < 10) {
         RUN_BACKGROUND_TASKS;
-        // if (gameboy_color_booting && first_init) {
-        //     mp_printf(&mp_plat_print, "  [gbio] stage 5a: GBC detected -> re-arming GBC boot stream\n");
-        //     first_init = false;
-        //     gpio_put(GB_RESET_PIN, 1);     // re-assert /GB_RESET
-        //     common_hal_mcu_delay_us(10);
-        //     disable_address_dispatch();
-        //     // Reset the data SM (clears OSR / shift counters) so no stale DMG
-        //     // byte leaks into the GBC boot stream.
-        //     pio_sm_restart(data_sm.pio, data_sm.state_machine);
-        //     feeder_start(gameboy_color_boot, sizeof(gameboy_color_boot));
-        //     gpio_put(GB_RESET_PIN, 0);
-        // }
-        // When the main DMA's transfer_count reaches 111, stop the debug
-        // capture and print the samples collected so far.
-        uint32_t tc = (uint32_t)dma_channel_hw_addr(dma_chan)->transfer_count;
+        uint32_t tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         if (debug_configured) {
             if (tc != last_tc) {
                 mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
@@ -887,7 +1059,7 @@ void common_hal_gbio_reset_gameboy(void) {
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
                 mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u raw=0x%08X",
                     (unsigned long)i, addr, data, rd, clk, (unsigned)s);
-                uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_chan)->transfer_count;
+                uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
                 mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
             }
             last_captured = captured;
@@ -895,7 +1067,7 @@ void common_hal_gbio_reset_gameboy(void) {
         if (++dma_spins > 1000000) {
             if (tc != last_tc) {
                 last_tc = tc;
-                mp_printf(&mp_plat_print, "  [gbio] stage 5: DMA STILL BUSY after 1M spins (transfer_count=%u, gbc=%d)\n",
+                mp_printf(&mp_plat_print, "  [gbio] stage 5: still waiting (transfer_count=%u, gbc=%d)\n",
                     (unsigned)tc, (int)gameboy_color_booting);
             }
             dma_spins = 0;
@@ -904,7 +1076,7 @@ void common_hal_gbio_reset_gameboy(void) {
     }
     pio_sm_set_enabled(debug_pio, debug_sm, false);
     dma_channel_abort(debug_dma_chan);
-    mp_printf(&mp_plat_print, "  [gbio] stage 5: initial DMA drain complete (first_init=%d)\n", (int)first_init);
+    mp_printf(&mp_plat_print, "  [gbio] stage 5: boot wait complete (first_init=%d)\n", (int)first_init);
 
 
     uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
@@ -919,11 +1091,11 @@ void common_hal_gbio_reset_gameboy(void) {
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
         mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u raw=0x%08X",
             (unsigned long)i, addr, data, rd, clk, (unsigned)s);
-        uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_chan)->transfer_count;
+        uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
     }
 
-    // Wait for whichever stream is active to be fully consumed.
+    // Wait for the boot stream to be fully consumed.
     mp_printf(&mp_plat_print, "  [gbio] stage 6: feeder_wait_drained on active stream\n");
     feeder_wait_drained();
 
@@ -932,17 +1104,9 @@ void common_hal_gbio_reset_gameboy(void) {
     } else {
         gameboy_color = false;
     }
-    mp_printf(&mp_plat_print, "  [gbio] stage 7: disabling address dispatch (gameboy_color=%d)\n", (int)gameboy_color);
-    disable_address_dispatch();
+    mp_printf(&mp_plat_print, "  [gbio] stage 7: boot complete (gameboy_color=%d)\n", (int)gameboy_color);
 
-    // Reset the vblank passthrough.
-    vblank_interrupt_response[0] = 0x00;
-    vblank_interrupt_response[1] = 0xe9;
-    vblank_response_length = 2;
-    total_additional_cycles = 0;
-
-    // If the debug capture wasn't triggered during stage 5 (e.g. the main
-    // DMA finished before reaching transfer_count=111), stop it now.
+    // If the debug capture wasn't triggered during stage 5, stop it now.
     if (debug_configured && !debug_printed) {
         pio_sm_set_enabled(debug_pio, debug_sm, false);
         dma_channel_abort(debug_dma_chan);
@@ -988,42 +1152,19 @@ void common_hal_gbio_queue_commands(const uint8_t *buf, uint32_t len) {
 }
 
 void common_hal_gbio_queue_vblank_commands(const uint8_t *buf, uint32_t len, uint32_t additional_cycles) {
-    if (!gbio_inited || dma_chan < 0) {
+    if (!gbio_inited || dma_data_read_chan < 0) {
         return;
     }
     if (!everything_going || supervisor_ticks_ms64() - last_vsync_time > 600) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("game boy not running"));
     }
-    // The vblank response buffer holds [NOP, JP(HL)] + the user commands.  The
-    // idle-restore epilogue is appended at serve time (in the /RD handler on
-    // 0x0040) so repeated calls accumulate commands without piling up
-    // epilogues.  Append as much as fits; if there's no room, wait a frame and
-    // start fresh (the staged response is consumed by a vblank first).
-    if (dma_channel_is_busy(dma_chan)) {
-        // A response is currently being served; wait for it to finish.
-        while (dma_channel_is_busy(dma_chan)) {
-            RUN_BACKGROUND_TASKS;
-        }
+    // Write commands into the vblank handler's user command area.
+    // The handler executes them during the next vblank.
+    if (len > VB_USER_AREA_SIZE) {
+        len = VB_USER_AREA_SIZE;
     }
-    uint32_t remaining = sizeof(vblank_interrupt_response) - vblank_response_length - 7 /* epilogue */;
-    if (len > remaining) {
-        common_hal_gbio_wait_for_vblank();
-        while (dma_channel_is_busy(dma_chan)) {
-            RUN_BACKGROUND_TASKS;
-        }
-        // The previous response was served; the ISR reset the prefix.
-    }
-
-    updating_vblank_response = true;
-    memcpy(vblank_interrupt_response + vblank_response_length, buf, len);
-    vblank_response_length += len;
+    memcpy(gb_data_buffer + VB_USER_AREA, buf, len);
     total_additional_cycles += additional_cycles;
-    updating_vblank_response = false;
-
-    // Watch for the next 0x0040 read so the handler can swap the feeder over
-    // to the staged response.  This raises the /RD interrupt at the GameBoy's
-    // read rate (see the file header) for the duration of the wait.
-    enable_address_dispatch();
 }
 
 void common_hal_gbio_set_lcdc(uint8_t value) {
@@ -1049,12 +1190,13 @@ void common_hal_gbio_wait_for_vblank(void) {
     if (!everything_going || supervisor_ticks_ms64() - last_vsync_time > 600) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("game boy not running"));
     }
-    uint32_t start = vsync_count;
-    enable_address_dispatch();
-    while (start == vsync_count) {
+    // Poll the frame counter in cartridge RAM (written by vblank handler)
+    uint8_t start = gb_data_buffer[GB_RAM_VSYNC];
+    while (gb_data_buffer[GB_RAM_VSYNC] == start) {
         RUN_BACKGROUND_TASKS;
     }
-    disable_address_dispatch();
+    vsync_count++;
+    last_vsync_time = supervisor_ticks_ms64();
 }
 
 uint32_t common_hal_gbio_get_vsync_count(void) {
@@ -1065,16 +1207,14 @@ uint8_t common_hal_gbio_get_pressed(void) {
     if (!gbio_inited) {
         return 0xff;
     }
-    uint8_t current = gamepad_state;
-    gamepad_state = 0xff;
-    // The fetch reads the joypad register and then does dummy cartridge reads
-    // at 0x30xx whose address encodes the button state; the dispatch handler
-    // decodes them into gamepad_state.  Watch /RD only for the duration of the
-    // fetch sequence.
-    enable_address_dispatch();
-    common_hal_gbio_queue_commands(fetch_gamepad_commands, sizeof(fetch_gamepad_commands));
-    disable_address_dispatch();
-    return current;
+    // Read button state from cartridge RAM (written by joypad handler).
+    // The joypad handler writes the combined button/direction state to GB_RAM_GAMEPAD.
+    // Bits: high nibble = buttons (Start, Select, B, A), low nibble = directions (D, U, L, R)
+    // 0 = pressed, 1 = released (inverted from Game Boy convention)
+    uint8_t raw = gb_data_buffer[GB_RAM_GAMEPAD];
+    // Reset for next read
+    gb_data_buffer[GB_RAM_GAMEPAD] = 0xFF;
+    return raw;
 }
 
 bool common_hal_gbio_is_color(void) {
