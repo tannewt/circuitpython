@@ -87,12 +87,6 @@ static uint8_t gb_data_buffer[65536] __attribute__((aligned(4)));
 #define ADDRESS_BUFFER_SIZE 1024  // must be power of 2
 static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(2048)));
 
-// ===== SNIFFER DEBUG RING BUFFER =====
-// Captures the sniffer value (buffer_ptr + address) after the read copy
-// but before the write, so we can see the sequence of addresses accessed.
-#define SNIFF_DEBUG_BUFFER_SIZE 1024  // must be power of 2
-static uint32_t gb_sniff_debug_buffer[SNIFF_DEBUG_BUFFER_SIZE] __attribute__((aligned(4096)));
-
 // ===== DEBUG PIO =====
 // A second PIO state machine samples all GPIO0..GPIO31 on every falling edge
 // of /RD (GPIO20) and pushes 32-bit snapshots into its RX FIFO.  A dedicated
@@ -149,20 +143,22 @@ static const uint8_t nintendo_logo[48] = {
 
 // Cartridge header (0x0134..0x014F, 28 bytes).
 // Header checksum at 0x014D is computed so that sum(0x0134..0x014D) == 0.
-static const uint8_t cartridge_header[28] = {
+static const uint8_t cartridge_header[30] = {
     'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd',  // title (11)
-    0x00, 0x00, 0x00, 0x00,                                   // title padding to 15
-    0x00,                                                      // GBC flag: DMG only
-    0x00, 0x00,                                                // new licensee code
-    0x00,                                                      // SGB flag
-    0x01,                                                      // cartridge type: MBC1
-    0x00,                                                      // ROM size: 32 KB
-    0x00,                                                      // RAM size: none
-    0x00,                                                      // destination: Japanese
-    0xCA,                                                      // old licensee code
-    0x31,                                                      // mask ROM version
-    0xE8,                                                      // header checksum (computed)
-    0x00, 0x00,                                                // global checksum (unused)
+    0x00, 0x00, 0x00, 0x00, 0x00,                              // title padding to 16
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0xCA,
+    0x31,
+    0x58,
+    0x00, 0x00,
 };
 
 // Boot code placed at 0x0150 (after the cartridge header).
@@ -367,7 +363,6 @@ static uint output_prog_offset;
 // DMA channels for the sniffer chain
 static int dma_addr_chan = -1;         // address SM RX FIFO -> circular buffer
 static int dma_sniff_read_chan = -1;   // sniffer -> data read DMA read addr
-static int dma_sniff_debug_chan = -1;  // sniffer -> ring buffer (debug, after read, before write)
 static int dma_sniff_write_chan = -1;  // sniffer -> data write DMA write addr
 static int dma_sniff_reset_chan = -1;  // reset sniffer to buffer base
 static int dma_data_read_chan = -1;    // data buffer -> output SM TX FIFO
@@ -398,7 +393,6 @@ static volatile bool gameboy_color = false;
 // Printed during debug to see how far the DMA chain is getting.
 static volatile uint32_t dma_irq_count_addr = 0;
 static volatile uint32_t dma_irq_count_sniff_read = 0;
-static volatile uint32_t dma_irq_count_sniff_debug = 0;
 static volatile uint32_t dma_irq_count_sniff_write = 0;
 static volatile uint32_t dma_irq_count_sniff_reset = 0;
 static volatile uint32_t dma_irq_count_data_read = 0;
@@ -600,10 +594,6 @@ static void dma_irq_handler(void) {
         dma_irq_count_sniff_read++;
         dma_channel_acknowledge_irq1(dma_sniff_read_chan);
     }
-    if (ints & (1u << dma_sniff_debug_chan)) {
-        dma_irq_count_sniff_debug++;
-        dma_channel_acknowledge_irq1(dma_sniff_debug_chan);
-    }
     if (ints & (1u << dma_sniff_write_chan)) {
         dma_irq_count_sniff_write++;
         dma_channel_acknowledge_irq1(dma_sniff_write_chan);
@@ -631,14 +621,12 @@ static void dma_irq_handler(void) {
 static void setup_dma_chain(void) {
     dma_addr_chan = (int)dma_claim_unused_channel(false);
     dma_sniff_read_chan = (int)dma_claim_unused_channel(false);
-    dma_sniff_debug_chan = (int)dma_claim_unused_channel(false);
     dma_sniff_write_chan = (int)dma_claim_unused_channel(false);
     dma_sniff_reset_chan = (int)dma_claim_unused_channel(false);
     dma_data_read_chan = (int)dma_claim_unused_channel(false);
     dma_data_write_chan = (int)dma_claim_unused_channel(false);
 
     if (dma_addr_chan < 0 || dma_sniff_read_chan < 0 ||
-        dma_sniff_debug_chan < 0 ||
         dma_sniff_write_chan < 0 || dma_sniff_reset_chan < 0 ||
         dma_data_read_chan < 0 || dma_data_write_chan < 0) {
         mp_printf(&mp_plat_print, "gbio: failed to claim DMA channels\n");
@@ -674,23 +662,9 @@ static void setup_dma_chain(void) {
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, false);
-        channel_config_set_chain_to(&c, dma_sniff_debug_chan);
+        channel_config_set_chain_to(&c, dma_sniff_write_chan);
         dma_channel_configure(dma_sniff_read_chan, &c,
             &dma_channel_hw_addr(dma_data_read_chan)->al3_read_addr_trig,
-            &dma_hw->sniff_data,
-            1, false);
-    }
-
-    // ---- DMA_CHAN_SNIFF_DEBUG: sniffer -> ring buffer (debug, after read, before write) ----
-    {
-        dma_channel_config c = dma_channel_get_default_config(dma_sniff_debug_chan);
-        channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-        channel_config_set_read_increment(&c, false);
-        channel_config_set_write_increment(&c, true);
-        channel_config_set_ring(&c, true, 10);  // wrap write at 2^10 = 1024 entries
-        channel_config_set_chain_to(&c, dma_sniff_write_chan);
-        dma_channel_configure(dma_sniff_debug_chan, &c,
-            gb_sniff_debug_buffer,
             &dma_hw->sniff_data,
             1, false);
     }
@@ -756,7 +730,6 @@ static void setup_dma_chain(void) {
     dma_channel_acknowledge_irq1(dma_addr_chan);
     dma_channel_set_irq1_enabled(dma_addr_chan, true);
     dma_channel_set_irq1_enabled(dma_sniff_read_chan, true);
-    dma_channel_set_irq1_enabled(dma_sniff_debug_chan, true);
     dma_channel_set_irq1_enabled(dma_sniff_write_chan, true);
     dma_channel_set_irq1_enabled(dma_sniff_reset_chan, true);
     dma_channel_set_irq1_enabled(dma_data_read_chan, true);
@@ -797,100 +770,6 @@ static int debug_sm = -1;
 static uint debug_prog_offset;
 static bool debug_configured = false;
 static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(4)));
-
-// ===== SM STATUS DUMP =====
-static void print_sm_status(const char *label) {
-    mp_printf(&mp_plat_print, "  [gbio] === SM STATUS %s ===\n", label);
-    mp_printf(&mp_plat_print, " &gb_pio0 = %p gb_pio = %p\n", &gb_pio0, gb_pio0);
-    mp_printf(&mp_plat_print, "  [gbio] monitor_cs_sm (PIO0, sm=%d): enabled=%d pc=%u wrap_bottom=%u wrap_top=%u rx_fifo=%u tx_fifo=%u\n",
-        monitor_cs_sm,
-        (int)((gb_pio0->ctrl >> monitor_cs_sm) & 1),
-        (unsigned)(gb_pio0->sm[monitor_cs_sm].addr),
-        (unsigned)((gb_pio0->sm[monitor_cs_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) & 0x1f),
-        (unsigned)((gb_pio0->sm[monitor_cs_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB) & 0x1f),
-        pio_sm_get_rx_fifo_level(gb_pio0, monitor_cs_sm),
-        pio_sm_get_tx_fifo_level(gb_pio0, monitor_cs_sm));
-    mp_printf(&mp_plat_print, "  [gbio] monitor_a15_sm (PIO0, sm=%d): enabled=%d pc=%u wrap_bottom=%u wrap_top=%u rx_fifo=%u tx_fifo=%u\n",
-        monitor_a15_sm,
-        (int)((gb_pio0->ctrl >> monitor_a15_sm) & 1),
-        (unsigned)(gb_pio0->sm[monitor_a15_sm].addr),
-        (unsigned)((gb_pio0->sm[monitor_a15_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) & 0x1f),
-        (unsigned)((gb_pio0->sm[monitor_a15_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB) & 0x1f),
-        pio_sm_get_rx_fifo_level(gb_pio0, monitor_a15_sm),
-        pio_sm_get_tx_fifo_level(gb_pio0, monitor_a15_sm));
-    mp_printf(&mp_plat_print, "  [gbio] address_sm (PIO0, sm=%d): enabled=%d pc=%u wrap_bottom=%u wrap_top=%u rx_fifo=%u tx_fifo=%u\n",
-        address_sm,
-        (int)((gb_pio0->ctrl >> address_sm) & 1),
-        (unsigned)(gb_pio0->sm[address_sm].addr),
-        (unsigned)((gb_pio0->sm[address_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) & 0x1f),
-        (unsigned)((gb_pio0->sm[address_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB) & 0x1f),
-        pio_sm_get_rx_fifo_level(gb_pio0, address_sm),
-        pio_sm_get_tx_fifo_level(gb_pio0, address_sm));
-    mp_printf(&mp_plat_print, "  [gbio] output_sm (PIO0, sm=%d): enabled=%d pc=%u wrap_bottom=%u wrap_top=%u rx_fifo=%u tx_fifo=%u\n",
-        output_sm,
-        (int)((gb_pio0->ctrl >> (output_sm)) & 1),
-        (unsigned)(gb_pio0->sm[output_sm].addr),
-        (unsigned)((gb_pio0->sm[output_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) & 0x1f),
-        (unsigned)((gb_pio0->sm[output_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB) & 0x1f),
-        pio_sm_get_rx_fifo_level(gb_pio0, output_sm),
-        pio_sm_get_tx_fifo_level(gb_pio0, output_sm));
-    if (debug_sm >= 0) {
-        mp_printf(&mp_plat_print, "  [gbio] debug_sm (PIO1, sm=%d): enabled=%d pc=%u wrap_bottom=%u wrap_top=%u rx_fifo=%u tx_fifo=%u\n",
-            debug_sm,
-            (int)((debug_pio->ctrl >> debug_sm) & 1),
-            (unsigned)(debug_pio->sm[debug_sm].addr),
-            (unsigned)((debug_pio->sm[debug_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) & 0x1f),
-            (unsigned)((debug_pio->sm[debug_sm].execctrl >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB) & 0x1f),
-            pio_sm_get_rx_fifo_level(debug_pio, debug_sm),
-            pio_sm_get_tx_fifo_level(debug_pio, debug_sm));
-    }
-    mp_printf(&mp_plat_print, "  [gbio] === END SM STATUS ===\n");
-    // ---- Print DMA channel status from peripheral registers ----
-    if (dma_addr_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA addr=%d        r=%p w=%p\n",
-            dma_addr_chan,
-            (void *)dma_channel_hw_addr(dma_addr_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_addr_chan)->write_addr);
-    }
-    if (dma_sniff_read_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA sniff_read=%d  r=%p w=%p\n",
-            dma_sniff_read_chan,
-            (void *)dma_channel_hw_addr(dma_sniff_read_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_sniff_read_chan)->write_addr);
-    }
-    if (dma_sniff_debug_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA sniff_debug=%d r=%p w=%p\n",
-            dma_sniff_debug_chan,
-            (void *)dma_channel_hw_addr(dma_sniff_debug_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_sniff_debug_chan)->write_addr);
-    }
-    if (dma_sniff_write_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA sniff_write=%d r=%p w=%p\n",
-            dma_sniff_write_chan,
-            (void *)dma_channel_hw_addr(dma_sniff_write_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_sniff_write_chan)->write_addr);
-    }
-    if (dma_sniff_reset_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA sniff_reset=%d r=%p w=%p\n",
-            dma_sniff_reset_chan,
-            (void *)dma_channel_hw_addr(dma_sniff_reset_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_sniff_reset_chan)->write_addr);
-    }
-    if (dma_data_read_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA data_read=%d   r=%p w=%p\n",
-            dma_data_read_chan,
-            (void *)dma_channel_hw_addr(dma_data_read_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_data_read_chan)->write_addr);
-    }
-    if (dma_data_write_chan >= 0) {
-        mp_printf(&mp_plat_print, "gbio: DMA data_write=%d  r=%p w=%p\n",
-            dma_data_write_chan,
-            (void *)dma_channel_hw_addr(dma_data_write_chan)->read_addr,
-            (void *)dma_channel_hw_addr(dma_data_write_chan)->write_addr);
-    }
-}
-
-
 static bool gbio_inited = false;
 
 void gbio_init(void) {
@@ -1006,20 +885,6 @@ void gbio_init(void) {
     mp_printf(&mp_plat_print, "gbio: program offsets - monitor=%d address=%d output=%d\n",
         monitor_prog_offset, address_prog_offset, output_prog_offset);
 
-    // Debug: print output_program instructions
-    mp_printf(&mp_plat_print, "gbio: output_program (%d instructions):\n", OUTPUT_PROG_LEN);
-    for (int i = 0; i < OUTPUT_PROG_LEN; i++) {
-        uint16_t instr = output_program[i];
-        mp_printf(&mp_plat_print, "  [%2d] 0x%04X  ", i, instr);
-        for (int b = 15; b >= 0; b--) {
-            mp_printf(&mp_plat_print, "%c", (instr >> b) & 1 ? '1' : '0');
-            if (b == 12 || b == 8 || b == 4) {
-                mp_printf(&mp_plat_print, " ");
-            }
-        }
-        mp_printf(&mp_plat_print, "\n");
-    }
-
     // ---- Configure monitor CS SM (jmp pin = /CS) ----
     {
         pio_sm_config cfg = pio_get_default_sm_config();
@@ -1064,8 +929,6 @@ void gbio_init(void) {
             (1 << GB_DATA_OE_PIN));
         pio_sm_init(gb_pio0, output_sm, output_prog_offset, &cfg);
     }
-
-    print_sm_status("AFTER INIT");
 
     // ---- Set up DMA chain with sniffer ----
     setup_dma_chain();
@@ -1208,16 +1071,9 @@ void common_hal_gbio_reset_gameboy(void) {
     gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
 
     // Enable the PIO state machines before starting DMA.
-    // Pre-set IRQ_ACCESS so the address/output SMs block on their
-    // wait_irq instructions until a monitor SM clears it on the first bus cycle.
-    // gb_pio0->irq_force = (1u << IRQ_ACCESS);
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabling PIO state machines (gb_pio0=%p monitor_cs_sm=%d monitor_a15_sm=%d address_sm=%d output_sm=%d)\n",
         gb_pio0, monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
-    print_sm_status("BEFORE ENABLE");
-    pio_enable_sm_mask_in_sync(gb_pio0, 0x2 | 0x8);
-    mp_printf(&mp_plat_print, "  [gbio] stage 3: enabled monitor_cs_sm=%d monitor_a15_sm=%d\n", monitor_cs_sm, monitor_a15_sm);
-    pio_sm_set_enabled(gb_pio0, address_sm, true);
-    mp_printf(&mp_plat_print, "  [gbio] stage 3: enabled address_sm=%d\n", address_sm);
+    pio_enable_sm_mask_in_sync(gb_pio0, 0x8 | 0x4 | 0x2);
 
     // Start the DMA chain (address -> sniffer -> data -> output SM)
     mp_printf(&mp_plat_print, "  [gbio] stage 4: starting DMA chain\n");
@@ -1281,7 +1137,6 @@ void common_hal_gbio_reset_gameboy(void) {
     bool debug_printed = false;
     uint32_t last_tc = DEBUG_SAMPLE_COUNT;
     mp_printf(&mp_plat_print, "  [gbio] stage 6: waiting for boot to complete\n");
-    uint32_t dma_spins = 0;
     uint32_t last_captured = 0;
 
     // Wait ~10 ms for the boot sequence, dumping debug samples
@@ -1300,6 +1155,9 @@ void common_hal_gbio_reset_gameboy(void) {
                     continue;                   // skip canary (untouched buffer)
                 }
                 uint16_t addr = (uint16_t)((s >> GB_A0_PIN) & 0xffff);  // A0..A15 at GPIO2..GPIO17
+                if (addr == 0x1000) {
+                    continue;
+                }
                 uint8_t data = (uint8_t)((s >> GB_D0_PIN) & 0xff);    // D0..D7 at GPIO23..GPIO30
                 uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);         // /RD at GPIO20
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
@@ -1310,118 +1168,7 @@ void common_hal_gbio_reset_gameboy(void) {
             }
             last_captured = captured;
         }
-        if (++dma_spins > 1000000) {
-            if (tc != last_tc) {
-                last_tc = tc;
-                // Print DMA IRQ counts and address SM FIFO level
-                uint addr_fifo = pio_sm_get_rx_fifo_level(gb_pio0, address_sm);
-                mp_printf(&mp_plat_print, "  [gbio] stage 6: still waiting (transfer_count=%u, gbc=%d)\n",
-                    (unsigned)tc, (int)gameboy_color_booting);
-                mp_printf(&mp_plat_print, "  [gbio] DMA IRQ counts: addr=%lu sniff_read=%lu sniff_debug=%lu sniff_write=%lu sniff_reset=%lu data_read=%lu data_write=%lu debug=%lu\n",
-                    (unsigned long)dma_irq_count_addr,
-                    (unsigned long)dma_irq_count_sniff_read,
-                    (unsigned long)dma_irq_count_sniff_debug,
-                    (unsigned long)dma_irq_count_sniff_write,
-                    (unsigned long)dma_irq_count_sniff_reset,
-                    (unsigned long)dma_irq_count_data_read,
-                    (unsigned long)dma_irq_count_data_write,
-                    (unsigned long)dma_irq_count_debug);
-                mp_printf(&mp_plat_print, "  [gbio] address SM RX FIFO level: %u\n", addr_fifo);
-            }
-            dma_spins = 0;
-        }
         last_tc = tc;
-    }
-    mp_printf(&mp_plat_print, "  [gbio] stage 6: boot wait complete (first_init=%d)\n", (int)first_init);
-
-    print_sm_status("AFTER BOOT WAIT");
-    mp_printf(&mp_plat_print, "  [gbio] DMA IRQ counts: addr=%lu sniff_read=%lu sniff_debug=%lu sniff_write=%lu sniff_reset=%lu data_read=%lu data_write=%lu debug=%lu\n",
-        (unsigned long)dma_irq_count_addr,
-        (unsigned long)dma_irq_count_sniff_read,
-        (unsigned long)dma_irq_count_sniff_debug,
-        (unsigned long)dma_irq_count_sniff_write,
-        (unsigned long)dma_irq_count_sniff_reset,
-        (unsigned long)dma_irq_count_data_read,
-        (unsigned long)dma_irq_count_data_write,
-        (unsigned long)dma_irq_count_debug);
-    mp_printf(&mp_plat_print, "  [gbio] 64K buffer base: 0x%08lX\n", (unsigned long)gb_data_buffer);
-    mp_printf(&mp_plat_print, "  [gbio] DMA channel status:\n");
-    mp_printf(&mp_plat_print, "    addr_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_addr_chan,
-        (int)dma_channel_is_busy(dma_addr_chan),
-        (int)((dma_channel_hw_addr(dma_addr_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_addr_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_addr_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_addr_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_addr_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    sniff_read_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_sniff_read_chan,
-        (int)dma_channel_is_busy(dma_sniff_read_chan),
-        (int)((dma_channel_hw_addr(dma_sniff_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_sniff_read_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    sniff_debug_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_sniff_debug_chan,
-        (int)dma_channel_is_busy(dma_sniff_debug_chan),
-        (int)((dma_channel_hw_addr(dma_sniff_debug_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_debug_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_debug_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_debug_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_sniff_debug_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    sniff_write_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_sniff_write_chan,
-        (int)dma_channel_is_busy(dma_sniff_write_chan),
-        (int)((dma_channel_hw_addr(dma_sniff_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_sniff_write_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    sniff_reset_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_sniff_reset_chan,
-        (int)dma_channel_is_busy(dma_sniff_reset_chan),
-        (int)((dma_channel_hw_addr(dma_sniff_reset_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_reset_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_reset_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_sniff_reset_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_sniff_reset_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    data_read_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_data_read_chan,
-        (int)dma_channel_is_busy(dma_data_read_chan),
-        (int)((dma_channel_hw_addr(dma_data_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_read_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_data_read_chan)->transfer_count);
-    mp_printf(&mp_plat_print, "    data_write_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-        dma_data_write_chan,
-        (int)dma_channel_is_busy(dma_data_write_chan),
-        (int)((dma_channel_hw_addr(dma_data_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-        (int)((dma_channel_hw_addr(dma_data_write_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-        (unsigned long)dma_channel_hw_addr(dma_data_write_chan)->transfer_count);
-    if (debug_dma_chan >= 0) {
-        mp_printf(&mp_plat_print, "    debug_chan=%d: busy=%d en=%d ahb_err=%d rd_err=%d wr_err=%d tc=%lu\n",
-            debug_dma_chan,
-            (int)dma_channel_is_busy(debug_dma_chan),
-            (int)((dma_channel_hw_addr(debug_dma_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_EN_LSB) & 1),
-            (int)((dma_channel_hw_addr(debug_dma_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_AHB_ERROR_LSB) & 1),
-            (int)((dma_channel_hw_addr(debug_dma_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_READ_ERROR_LSB) & 1),
-            (int)((dma_channel_hw_addr(debug_dma_chan)->ctrl_trig >> DMA_CH0_CTRL_TRIG_WRITE_ERROR_LSB) & 1),
-            (unsigned long)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
-    }
-
-    // Print address buffer contents
-    {
-        uint32_t addr_count = dma_irq_count_addr;
-        mp_printf(&mp_plat_print, "  [gbio] address buffer %lu entries:\n",
-            (unsigned long)addr_count);
-        for (uint32_t i = 0; i < addr_count; i++) {
-            mp_printf(&mp_plat_print, "    [%3lu] 0x%04X\n",
-                (unsigned long)i, gb_address_buffer[i]);
-        }
     }
 
     pio_sm_set_enabled(debug_pio, debug_sm, false);
@@ -1433,6 +1180,9 @@ void common_hal_gbio_reset_gameboy(void) {
             continue;                           // skip canary (untouched buffer)
         }
         uint16_t addr = (uint16_t)((s >> 2) & 0xffff);          // A0..A15 at GPIO2..GPIO17
+        if (addr == 0x1000) {
+            continue;
+        }
         uint8_t data = (uint8_t)((s >> 23) & 0xff);            // D0..D7 at GPIO23..GPIO30
         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);                 // /RD at GPIO20
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
