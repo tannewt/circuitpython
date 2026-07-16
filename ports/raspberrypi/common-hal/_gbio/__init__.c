@@ -85,13 +85,13 @@ static uint8_t gb_data_buffer[65536] __attribute__((aligned(4)));
 
 // ===== CIRCULAR ADDRESS BUFFER (for debugging) =====
 #define ADDRESS_BUFFER_SIZE 1024  // must be power of 2
-static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(4)));
+static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(2048)));
 
 // ===== SNIFFER DEBUG RING BUFFER =====
 // Captures the sniffer value (buffer_ptr + address) after the read copy
 // but before the write, so we can see the sequence of addresses accessed.
 #define SNIFF_DEBUG_BUFFER_SIZE 1024  // must be power of 2
-static uint32_t gb_sniff_debug_buffer[SNIFF_DEBUG_BUFFER_SIZE] __attribute__((aligned(4)));
+static uint32_t gb_sniff_debug_buffer[SNIFF_DEBUG_BUFFER_SIZE] __attribute__((aligned(4096)));
 
 // ===== DEBUG PIO =====
 // A second PIO state machine samples all GPIO0..GPIO31 on every falling edge
@@ -516,12 +516,13 @@ static void build_monitor_program(void) {
 // ---- Address capture program ----
 // Waits for IRQ to be cleared (an access is starting),
 // then captures the 16-bit address from A0..A15 into RX FIFO.
-#define ADDRESS_PROG_LEN 2
+#define ADDRESS_PROG_LEN 3
 static uint16_t address_program[ADDRESS_PROG_LEN];
 
 static void build_address_program(void) {
     address_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS);
     address_program[1] = pio_encode_in(pio_pins, 16);
+    address_program[2] = pio_encode_wait_irq(true, false, IRQ_ACCESS);
 }
 
 // ---- Output program ----
@@ -591,8 +592,11 @@ static void build_debug_program(void) {
 // DMA IRQ handler: counts completions for each channel so we can see
 // how far the DMA chain is progressing during debug.
 static void dma_irq_handler(void) {
+    gpio_put(45, 0);  // turn on IO45 to indicate DMA IRQ activity
+
     // Check IRQ0 status for each of our channels
     uint32_t ints = dma_hw->ints1;
+    // mp_printf(&mp_plat_print, "%04x %d %d\n", ints, dma_addr_chan, dma_irq_count_addr);
     if (ints & (1u << dma_addr_chan)) {
         dma_irq_count_addr++;
         dma_channel_acknowledge_irq1(dma_addr_chan);
@@ -626,6 +630,7 @@ static void dma_irq_handler(void) {
         dma_channel_acknowledge_irq1(debug_dma_chan);
     }
     dma_hw->ints1 = ints;
+    gpio_put(45, 1);
 }
 
 static void setup_dma_chain(void) {
@@ -753,7 +758,7 @@ static void setup_dma_chain(void) {
     mp_printf(&mp_plat_print, "  [gbio] enabling DMA IRQs\n");
 
     // Route all channels to IRQ0 and enable the interrupt.
-    // dma_channel_acknowledge_irq1(dma_addr_chan);
+    dma_channel_acknowledge_irq1(dma_addr_chan);
     dma_channel_set_irq1_enabled(dma_addr_chan, true);
     dma_channel_set_irq1_enabled(dma_sniff_read_chan, true);
     dma_channel_set_irq1_enabled(dma_sniff_debug_chan, true);
@@ -763,7 +768,7 @@ static void setup_dma_chain(void) {
     dma_channel_set_irq1_enabled(dma_data_write_chan, true);
 
     irq_set_exclusive_handler(DMA_IRQ_1, dma_irq_handler);
-    // irq_set_enabled(DMA_IRQ_1, true);
+    irq_set_enabled(DMA_IRQ_1, true);
 
     mp_printf(&mp_plat_print, "gbio: DMA chain setup complete (IRQs enabled)\n");
 }
@@ -943,6 +948,11 @@ void gbio_init(void) {
     gpio_init(GB_RESET_PIN);
     gpio_set_dir(GB_RESET_PIN, GPIO_OUT);
     gpio_put(GB_RESET_PIN, 0);            // de-assert reset (GB running)
+
+    // IO45: debug output, set high in dma_irq_handler to indicate DMA activity
+    gpio_init(45);
+    gpio_set_dir(45, GPIO_OUT);
+    gpio_put(45, 0);
     // The level-shifter /OE is owned by the output SM as a sideset output.
     // Drive it de-asserted (high = buffer OFF) here as a plain GPIO so the
     // buffer stays safely off until the SM is constructed and takes the pin over.
@@ -1016,7 +1026,7 @@ void gbio_init(void) {
     {
         pio_sm_config cfg = pio_get_default_sm_config();
         sm_config_set_wrap(&cfg, address_prog_offset, address_prog_offset + ADDRESS_PROG_LEN - 1);
-        sm_config_set_in_pins(&cfg, GB_A0_PIN);
+        sm_config_set_in_pins(&cfg, 0);
         sm_config_set_in_shift(&cfg, false, true, 16);  // shift right, autopush at 16 bits
         pio_sm_init(gb_pio0, address_sm, address_prog_offset, &cfg);
     }
@@ -1128,6 +1138,9 @@ void common_hal_gbio_reset_gameboy(void) {
         mp_printf(&mp_plat_print, "GBIO not initialized\n");
         return;
     }
+    gpio_init(45);
+    gpio_set_dir(45, GPIO_OUT);
+    gpio_put(45, 1);
     mp_printf(&mp_plat_print, "Resetting game boy...\n");
 
     // Hold the game boy in reset while we arm the boot stream.
@@ -1183,11 +1196,11 @@ void common_hal_gbio_reset_gameboy(void) {
     // Enable the PIO state machines before starting DMA.
     // Pre-set IRQ_ACCESS so the address/output SMs block on their
     // wait_irq instructions until a monitor SM clears it on the first bus cycle.
-    gb_pio0->irq_force = (1u << IRQ_ACCESS);
+    gb_pio0->irq_force = (0u << IRQ_ACCESS);
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabling PIO state machines (gb_pio0=%p monitor_cs_sm=%d monitor_a15_sm=%d address_sm=%d output_sm=%d)\n",
         gb_pio0, monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
     print_sm_status("BEFORE ENABLE");
-    pio_enable_sm_mask_in_sync(gb_pio0, 0x3 | 0x8);
+    pio_enable_sm_mask_in_sync(gb_pio0, 0x2 | 0x8);
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabled monitor_cs_sm=%d monitor_a15_sm=%d\n", monitor_cs_sm, monitor_a15_sm);
     pio_sm_set_enabled(gb_pio0, address_sm, true);
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabled address_sm=%d\n", address_sm);
@@ -1259,9 +1272,9 @@ void common_hal_gbio_reset_gameboy(void) {
 
     // Wait ~10 ms for the boot sequence, dumping debug samples
     uint32_t start_ms = supervisor_ticks_ms64();
-    while (supervisor_ticks_ms64() - start_ms < 10) {
+    while (supervisor_ticks_ms64() - start_ms < 6 * 1000) {
         RUN_BACKGROUND_TASKS;
-        uint32_t tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
+        uint32_t tc = dma_addr_chan;
         if (debug_configured) {
             if (tc != last_tc) {
                 mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
@@ -1278,8 +1291,7 @@ void common_hal_gbio_reset_gameboy(void) {
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
                 mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u raw=0x%08X",
                     (unsigned long)i, addr, data, rd, clk, (unsigned)s);
-                uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
-                mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
+                mp_printf(&mp_plat_print, " main tc %d\n", tc);
             }
             last_captured = captured;
         }
@@ -1388,10 +1400,9 @@ void common_hal_gbio_reset_gameboy(void) {
 
     // Print address buffer contents
     {
-        uint32_t addr_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
-        uint32_t addr_count = addr_tc < 32 ? addr_tc : 32;
-        mp_printf(&mp_plat_print, "  [gbio] address buffer (first %lu of %lu entries):\n",
-            (unsigned long)addr_count, (unsigned long)addr_tc);
+        uint32_t addr_count = dma_irq_count_addr;
+        mp_printf(&mp_plat_print, "  [gbio] address buffer %lu entries:\n",
+            (unsigned long)addr_count);
         for (uint32_t i = 0; i < addr_count; i++) {
             mp_printf(&mp_plat_print, "    [%3lu] 0x%04X\n",
                 (unsigned long)i, gb_address_buffer[i]);
