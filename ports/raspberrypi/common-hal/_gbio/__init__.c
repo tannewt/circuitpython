@@ -135,7 +135,7 @@ static uint32_t gb_sniff_debug_buffer[SNIFF_DEBUG_BUFFER_SIZE] __attribute__((al
 
 // Adafruit logo (48 bytes) – shown during the boot scroll animation.
 static const uint8_t adafruit_logo[48] = {
-    0xaa, 0x30, 0x00, 0xC6, 0x00, 0x07, 0xCC, 0xCC, 0x00, 0xF1, 0x13, 0x3B, 0xC0, 0xD1, 0x00, 0xBD,
+    0x00, 0x30, 0x00, 0xC6, 0x00, 0x07, 0xCC, 0xCC, 0x00, 0xF1, 0x13, 0x3B, 0xC0, 0xD1, 0x00, 0xBD,
     0x00, 0x66, 0x00, 0x66, 0xC1, 0xDD, 0x08, 0xE8, 0x36, 0x63, 0xE6, 0xE6, 0xCC, 0xC7, 0xCD, 0xDC,
     0xF9, 0xBD, 0xBB, 0xBB, 0x11, 0x11, 0x88, 0x88, 0x66, 0x63, 0x66, 0xE6, 0xDD, 0xDD, 0x88, 0x8E,
 };
@@ -479,13 +479,10 @@ static uint8_t joypad_handler[] = {
 //
 // Built at runtime with the pio_encode_* helpers.
 
-// Side-set encodings for the DATA_OE pin.  Optional sideset (sideset_enable =
-// true, 1 data bit): bit 12 of the instruction is the "this instr carries a
-// side" flag, bit 11 is the driven OE pin value.  The 74LVC4245 /OE is active
+// Side-set encodings for the DATA_OE pin.  The 74LVC4245 /OE is active
 // low, so pin 0 = buffer ON (driving D0..D7), pin 1 = buffer OFF (high-Z).
-#define OE_SIDE_NONE    0x0000
-#define OE_SIDE_ENABLE  0x1000   // DATA_OE pin = 0 -> buffer drives D0..D7
-#define OE_SIDE_DISABLE 0x1800   // DATA_OE pin = 1 -> buffer high-Z
+#define OE_SIDE_ENABLE  0x0000   // DATA_OE pin = 0 -> buffer drives D0..D7
+#define OE_SIDE_DISABLE 0x1000   // DATA_OE pin = 1 -> buffer high-Z
 
 // ---- Monitor program (shared by CS and A15 SMs) ----
 // Uses wait jmppin to monitor the assigned signal (jmp pin set via SM config).
@@ -499,7 +496,7 @@ static inline uint pio_encode_wait_jmppin(bool polarity, uint offset) {
     return _pio_encode_instr_and_args(pio_instr_bits_wait, 3u | (polarity ? 4u : 0u), offset);
 }
 
-#define MONITOR_PROG_LEN 4
+#define MONITOR_PROG_LEN 3
 static uint16_t monitor_program[MONITOR_PROG_LEN];
 
 static void build_monitor_program(void) {
@@ -508,21 +505,19 @@ static void build_monitor_program(void) {
     // Instruction 2: wait 1 jmppin 0 -- wait for jmp pin to go high
     // Instruction 3: irq set 0       -- signal complete, wrap to 0
     monitor_program[0] = pio_encode_wait_jmppin(false, 0);
-    monitor_program[1] = pio_encode_irq_clear(false, IRQ_ACCESS);
+    monitor_program[1] = pio_encode_irq_set(false, IRQ_ACCESS);
     monitor_program[2] = pio_encode_wait_jmppin(true, 0);
-    monitor_program[3] = pio_encode_irq_set(false, IRQ_ACCESS);
 }
 
 // ---- Address capture program ----
 // Waits for IRQ to be cleared (an access is starting),
 // then captures the 16-bit address from A0..A15 into RX FIFO.
-#define ADDRESS_PROG_LEN 3
+#define ADDRESS_PROG_LEN 2
 static uint16_t address_program[ADDRESS_PROG_LEN];
 
 static void build_address_program(void) {
-    address_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS) | pio_encode_delay(31);
+    address_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS) | pio_encode_delay(0);
     address_program[1] = pio_encode_in(pio_pins, 16);
-    address_program[2] = pio_encode_wait_irq(true, false, IRQ_ACCESS);
 }
 
 // ---- Output program ----
@@ -581,7 +576,7 @@ static void build_debug_program(void) {
     //   bit 31:      /GB_RESET (GPIO31)
     debug_program[0] = pio_encode_wait_gpio(false, GB_A15_PIN);  // wait for A15 falling edge to indicate ROM access
     debug_program[1] = pio_encode_in(pio_pins, 32);             // sample address (and everything else)
-    debug_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(31);   // wait for clock low because the data is read in the middle of the low pulse
+    debug_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(0);   // wait for clock low because the data is read in the middle of the low pulse
     debug_program[3] = pio_encode_in(pio_pins, 32);             // sample data we're responding with
     debug_program[4] = pio_encode_wait_gpio(true, GB_A15_PIN);  // wait for A15 to rise again to complete the cycle
     // wraps automatically from instruction 2 back to 0
@@ -956,9 +951,8 @@ void gbio_init(void) {
     // The level-shifter /OE is owned by the output SM as a sideset output.
     // Drive it de-asserted (high = buffer OFF) here as a plain GPIO so the
     // buffer stays safely off until the SM is constructed and takes the pin over.
-    gpio_init(GB_DATA_OE_PIN);
-    gpio_set_dir(GB_DATA_OE_PIN, GPIO_OUT);
-    gpio_put(GB_DATA_OE_PIN, 1);
+    pio_gpio_init(pio0, GB_DATA_OE_PIN);
+    never_reset_pin_number(GB_DATA_OE_PIN);
 
     // D0..D7 data bus pins: set function to PIO so the output SM can drive/read them.
     for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
@@ -1216,7 +1210,7 @@ void common_hal_gbio_reset_gameboy(void) {
     // Enable the PIO state machines before starting DMA.
     // Pre-set IRQ_ACCESS so the address/output SMs block on their
     // wait_irq instructions until a monitor SM clears it on the first bus cycle.
-    gb_pio0->irq_force = (0u << IRQ_ACCESS);
+    // gb_pio0->irq_force = (1u << IRQ_ACCESS);
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabling PIO state machines (gb_pio0=%p monitor_cs_sm=%d monitor_a15_sm=%d address_sm=%d output_sm=%d)\n",
         gb_pio0, monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
     print_sm_status("BEFORE ENABLE");
@@ -1292,7 +1286,7 @@ void common_hal_gbio_reset_gameboy(void) {
 
     // Wait ~10 ms for the boot sequence, dumping debug samples
     uint32_t start_ms = supervisor_ticks_ms64();
-    while (supervisor_ticks_ms64() - start_ms < 6 * 1000) {
+    while (supervisor_ticks_ms64() - start_ms < 10 * 1000) {
         RUN_BACKGROUND_TASKS;
         uint32_t tc = dma_addr_chan;
         if (debug_configured) {
@@ -1309,8 +1303,9 @@ void common_hal_gbio_reset_gameboy(void) {
                 uint8_t data = (uint8_t)((s >> GB_D0_PIN) & 0xff);    // D0..D7 at GPIO23..GPIO30
                 uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);         // /RD at GPIO20
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
-                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u raw=0x%08X",
-                    (unsigned long)i, addr, data, rd, clk, (unsigned)s);
+                uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);     // DATA_OE at GPIO22
+                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u OE=%u raw=0x%08X",
+                    (unsigned long)i, addr, data, rd, clk, oe, (unsigned)s);
                 mp_printf(&mp_plat_print, " main tc %d\n", tc);
             }
             last_captured = captured;
@@ -1441,8 +1436,9 @@ void common_hal_gbio_reset_gameboy(void) {
         uint8_t data = (uint8_t)((s >> 23) & 0xff);            // D0..D7 at GPIO23..GPIO30
         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);                 // /RD at GPIO20
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
-        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u raw=0x%08X",
-            (unsigned long)i, addr, data, rd, clk, (unsigned)s);
+        uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);             // DATA_OE at GPIO22
+        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u OE=%u raw=0x%08X",
+            (unsigned long)i, addr, data, rd, clk, oe, (unsigned)s);
         uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
     }
