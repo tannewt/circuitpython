@@ -520,7 +520,7 @@ static void build_monitor_program(void) {
 static uint16_t address_program[ADDRESS_PROG_LEN];
 
 static void build_address_program(void) {
-    address_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS);
+    address_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS) | pio_encode_delay(31);
     address_program[1] = pio_encode_in(pio_pins, 16);
     address_program[2] = pio_encode_wait_irq(true, false, IRQ_ACCESS);
 }
@@ -960,6 +960,12 @@ void gbio_init(void) {
     gpio_set_dir(GB_DATA_OE_PIN, GPIO_OUT);
     gpio_put(GB_DATA_OE_PIN, 1);
 
+    // D0..D7 data bus pins: set function to PIO so the output SM can drive/read them.
+    for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
+        pio_gpio_init(pio0, p);
+        never_reset_pin_number(p);
+    }
+
     // ---- Claim PIO state machines ----
     // We need 4 SMs: 2 monitors (share program), 1 address, 1 output
     gb_pio0 = pio0;
@@ -1006,6 +1012,20 @@ void gbio_init(void) {
     mp_printf(&mp_plat_print, "gbio: program offsets - monitor=%d address=%d output=%d\n",
         monitor_prog_offset, address_prog_offset, output_prog_offset);
 
+    // Debug: print output_program instructions
+    mp_printf(&mp_plat_print, "gbio: output_program (%d instructions):\n", OUTPUT_PROG_LEN);
+    for (int i = 0; i < OUTPUT_PROG_LEN; i++) {
+        uint16_t instr = output_program[i];
+        mp_printf(&mp_plat_print, "  [%2d] 0x%04X  ", i, instr);
+        for (int b = 15; b >= 0; b--) {
+            mp_printf(&mp_plat_print, "%c", (instr >> b) & 1 ? '1' : '0');
+            if (b == 12 || b == 8 || b == 4) {
+                mp_printf(&mp_plat_print, " ");
+            }
+        }
+        mp_printf(&mp_plat_print, "\n");
+    }
+
     // ---- Configure monitor CS SM (jmp pin = /CS) ----
     {
         pio_sm_config cfg = pio_get_default_sm_config();
@@ -1026,7 +1046,7 @@ void gbio_init(void) {
     {
         pio_sm_config cfg = pio_get_default_sm_config();
         sm_config_set_wrap(&cfg, address_prog_offset, address_prog_offset + ADDRESS_PROG_LEN - 1);
-        sm_config_set_in_pins(&cfg, 0);
+        sm_config_set_in_pins(&cfg, GB_A0_PIN);
         sm_config_set_in_shift(&cfg, false, true, 16);  // shift right, autopush at 16 bits
         pio_sm_init(gb_pio0, address_sm, address_prog_offset, &cfg);
     }
