@@ -526,7 +526,7 @@ static uint16_t output_program[OUTPUT_PROG_LEN];
 // to enable it.
 static void build_output_program(void) {
     static int pio_pindirs_mov = 3u | _PIO_INVALID_IN_SRC | _PIO_INVALID_MOV_SRC;
-    output_program[0] = pio_encode_wait_irq(false, false, IRQ_ACCESS) | OE_SIDE_DISABLE;
+    output_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS) | OE_SIDE_DISABLE;
     output_program[1] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_DISABLE;
     output_program[2] = pio_encode_jmp_pin(6) | OE_SIDE_DISABLE;
     // Write path
@@ -1040,10 +1040,12 @@ void common_hal_gbio_reset_gameboy(void) {
     gb_data_buffer[0x0040] = 0xC3;
     gb_data_buffer[0x0041] = (uint8_t)(VB_HANDLER_ADDR & 0xFF);
     gb_data_buffer[0x0042] = (uint8_t)(VB_HANDLER_ADDR >> 8);
+    gbio_print_memory_range(0x0040, 4);
     // 0x0060: Joypad – JP to JP_HANDLER_ADDR
     gb_data_buffer[0x0060] = 0xC3;
     gb_data_buffer[0x0061] = (uint8_t)(JP_HANDLER_ADDR & 0xFF);
     gb_data_buffer[0x0062] = (uint8_t)(JP_HANDLER_ADDR >> 8);
+    gbio_print_memory_range(0x0060, 4);
 
     // ---- Entry point at 0x0100 ----
     // NOP; JP 0x0150  (the boot ROM jumps here after verification)
@@ -1051,6 +1053,7 @@ void common_hal_gbio_reset_gameboy(void) {
     gb_data_buffer[0x0101] = 0xC3;                         // JP
     gb_data_buffer[0x0102] = 0x50;                         // low byte of 0x0150
     gb_data_buffer[0x0103] = 0x01;                         // high byte
+    gbio_print_memory_range(0x0100, 4);
 
     // ---- Phase 1: Adafruit logo at 0x0104 (for the scroll animation) ----
     memcpy(gb_data_buffer + 0x0104, adafruit_logo, sizeof(adafruit_logo));
@@ -1165,6 +1168,7 @@ void common_hal_gbio_reset_gameboy(void) {
                 mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u OE=%u raw=0x%08X",
                     (unsigned long)i, addr, data, rd, clk, oe, (unsigned)s);
                 mp_printf(&mp_plat_print, " main tc %d\n", tc);
+                gbio_print_memory_range(addr, 1);
             }
             last_captured = captured;
         }
@@ -1317,4 +1321,46 @@ uint8_t common_hal_gbio_get_pressed(void) {
 
 bool common_hal_gbio_is_color(void) {
     return gameboy_color;
+}
+
+// ===== DEBUG HELPERS =====
+
+void gbio_print_memory_range(uint16_t start, uint16_t len) {
+    if (!gbio_inited) {
+        mp_printf(&mp_plat_print, "gbio: not initialized\n");
+        return;
+    }
+    if (start + len > sizeof(gb_data_buffer)) {
+        len = sizeof(gb_data_buffer) - start;
+    }
+    if (len == 0) {
+        return;
+    }
+
+    mp_printf(&mp_plat_print, "gb_data_buffer[0x%04X..0x%04X] (%u bytes):\n",
+        start, start + len - 1, len);
+
+    for (uint16_t offset = 0; offset < len; offset += 16) {
+        // Print address
+        mp_printf(&mp_plat_print, "%04X: ", start + offset);
+
+        // Print hex bytes
+        for (uint16_t i = 0; i < 16; i++) {
+            if (offset + i < len) {
+                mp_printf(&mp_plat_print, "%02X ", gb_data_buffer[start + offset + i]);
+            } else {
+                mp_printf(&mp_plat_print, "   ");
+            }
+        }
+
+        // Print ASCII representation
+        mp_printf(&mp_plat_print, " ");
+        for (uint16_t i = 0; i < 16; i++) {
+            if (offset + i < len) {
+                uint8_t c = gb_data_buffer[start + offset + i];
+                mp_printf(&mp_plat_print, "%c", (c >= 0x20 && c < 0x7F) ? c : '.');
+            }
+        }
+        mp_printf(&mp_plat_print, "\n");
+    }
 }

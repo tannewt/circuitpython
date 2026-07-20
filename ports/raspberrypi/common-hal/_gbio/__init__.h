@@ -12,4 +12,8 @@
 // is connected.
 void gbio_init(void);
 
+// Debug helper: print a hex dump of gb_data_buffer[start..start+len-1].
+// Useful for tracking memory corruption in the 64K buffer.
+void gbio_print_memory_range(uint16_t start, uint16_t len);
+
 #endif  // MICROPY_INCLUDED_RASPBERRYPI_COMMON_HAL_GBIO___INIT___H
