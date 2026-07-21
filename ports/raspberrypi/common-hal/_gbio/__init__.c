@@ -110,13 +110,16 @@ static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(20
 
 // The level-shifter output-enable (DATA_OE, GPIO22) is a SIDESET output of the
 // data SM, not a static GPIO: the SM only asserts it (driving D0..D7 onto the
-// GB bus) during ROM reads and the idle spin, and de-asserts it (high-Z) the
+// GB bus) during ROM reads and the idle halt, and de-asserts it (high-Z) the
 // rest of the time -- outside the ROM region (A15 high) and while the GB is
 // held in reset -- so the RP2350 does not permanently drive the GB data bus.
 // GB_DATA_OE_ASSERTED is the pin level that ENABLES the shifter output (the
 // 74LVC4245 /OE is active low, so 0).  The SM's sideset encodes the RAW pin
 // value, so a side of 0 enables the buffer and a side of 1 disables it.
 #define GB_DATA_OE_ASSERTED 0
+
+// Idle address the game boy halts at between command sequences.
+#define GB_IDLE_ADDR 0x1000
 
 // ===== SM83 COMMAND STREAMS (flat-buffer layout) =====
 //
@@ -162,8 +165,8 @@ static const uint8_t cartridge_header[30] = {
 };
 
 // Boot code placed at 0x0150 (after the cartridge header).
-// Sets up the stack pointer, joypad, interrupts, then spins on JP (HL)
-// at 0x1000 waiting for commands from the ARM core.
+// Sets up the stack pointer, joypad, interrupts, then halts at 0x1000
+// waiting for VBlank interrupts. Work is done in the VBlank handler.
 static const uint8_t boot_code[] = {
     // Set the stack pointer
     0x31, 0x00, 0xe0,                             // LD SP, 0xE000
@@ -193,10 +196,8 @@ static const uint8_t boot_code[] = {
 
     0x00, 0x00,
 
-    // Load 0x1000 into hl and repeatedly jump to it until we do
-    // something else. This prevents the program counter from
-    // exiting the cartridge address range.
-    0x21, 0x00, 0x10, 0xe9                        // LD HL, 0x1000; JP (HL)
+    // Jump to the idle address
+    0xc3, (uint8_t)(GB_IDLE_ADDR & 0xFF), (uint8_t)(GB_IDLE_ADDR >> 8)// JP 0x1000
 };
 
 uint8_t gameboy_color_boot[] = {
@@ -270,10 +271,8 @@ uint8_t gameboy_color_boot[] = {
 
     0x00, 0x00,
 
-    // Load 0x1000 into hl and repeatedly jump to it until we do
-    // something else. This prevents the program counter from
-    // exiting the cartridge address range.
-    0x21, 0x00, 0x10, 0xe9
+    // Halt the CPU until the next interrupt, then jump back.
+    0x76, 0xc3, 0x00, 0x10
 };
 
 uint8_t gamepad_interrupt_response[] = {
@@ -345,9 +344,6 @@ uint8_t change_screen_commands[] = {
 
 // ===== STATE =====
 
-// Idle address the game boy spins on between command sequences.
-#define GB_IDLE_ADDR 0x1000
-
 // PIO instances and state machine indices (raw Pico SDK, not CircuitPython wrapper)
 static PIO gb_pio0;
 static int monitor_cs_sm;
@@ -356,7 +352,8 @@ static int address_sm;
 static int output_sm;
 
 // Program offsets in PIO instruction memory
-static uint monitor_prog_offset;
+static uint monitor_a15_prog_offset;
+static uint monitor_cs_prog_offset;
 static uint address_prog_offset;
 static uint output_prog_offset;
 
@@ -490,17 +487,57 @@ static inline uint pio_encode_wait_jmppin(bool polarity, uint offset) {
     return _pio_encode_instr_and_args(pio_instr_bits_wait, 3u | (polarity ? 4u : 0u), offset);
 }
 
-#define MONITOR_PROG_LEN 3
-static uint16_t monitor_program[MONITOR_PROG_LEN];
+// ---- Monitor A15 program (simple) ----
+// jmp pin = A15.  Watches for the configured jmp pin to go low,
+// clears IRQ, then waits for it to go high.  Used by the A15 monitor
+// SMs on both pio0 (real) and pio1 (debug).
+#define MONITOR_A15_PROG_LEN 3
+static uint16_t monitor_a15_program[MONITOR_A15_PROG_LEN];
 
-static void build_monitor_program(void) {
-    // Instruction 0: wait 0 jmppin 0 -- wait for jmp pin to go low
-    // Instruction 1: irq clear 0     -- signal address/output SMs
-    // Instruction 2: wait 1 jmppin 0 -- wait for jmp pin to go high
-    // Instruction 3: irq set 0       -- signal complete, wrap to 0
-    monitor_program[0] = pio_encode_wait_jmppin(false, 0);
-    monitor_program[1] = pio_encode_irq_set(false, IRQ_ACCESS);
-    monitor_program[2] = pio_encode_wait_jmppin(true, 0);
+static void build_monitor_a15_program(void) {
+    // 0: wait 0 jmppin  — wait for jmp pin (A15) to go low
+    // 1: irq clear 0    — signal address/output / capture SMs
+    // 2: wait 1 jmppin  — wait for jmp pin to go high; wrap to 0
+    monitor_a15_program[0] = pio_encode_wait_jmppin(false, 0);
+    monitor_a15_program[1] = pio_encode_irq_set(false, IRQ_ACCESS);
+    monitor_a15_program[2] = pio_encode_wait_jmppin(true, 0);
+}
+
+// ---- Monitor CS program (A13-aware) ----
+// jmp pin = A13 (GPIO15).  Uses wait gpio for /CS.  Only clears IRQ
+// when A13 is high, filtering out non-cartridge accesses.  Used by the
+// CS monitor SMs on both pio0 (real) and pio1 (debug).
+#define MONITOR_CS_PROG_LEN 6
+static uint16_t monitor_cs_program[MONITOR_CS_PROG_LEN];
+
+static void build_monitor_cs_program(void) {
+    // 0: wait 0 gpio, CS    — wait for /CS low
+    // 1: jmp pin, 4         — if A13 high, jump to trigger path
+    // 2: wait 1 gpio, CS    — A13=0: wait for /CS high (no trigger)
+    // 3: jmp 0              — wrap back
+    // 4: irq clear 0        — A13=1: clear IRQ (trigger)
+    // 5: wait 1 gpio, CS    — wait for /CS high; wrap to 0
+    monitor_cs_program[0] = pio_encode_wait_gpio(false, GB_CS_PIN);
+    monitor_cs_program[1] = pio_encode_jmp_pin(4);
+    monitor_cs_program[2] = pio_encode_wait_gpio(true, GB_CS_PIN);
+    monitor_cs_program[3] = pio_encode_jmp(0);
+    monitor_cs_program[4] = pio_encode_irq_set(false, IRQ_ACCESS);
+    monitor_cs_program[5] = pio_encode_wait_gpio(true, GB_CS_PIN);
+}
+
+// ---- Debug monitor CS program (all CS, no A13 filter) ----
+// Simpler version that triggers on every /CS low, regardless of A13.
+// Used by the debug PIO when debug_sniffer_all_cs is true.
+#define DEBUG_MONITOR_CS_ALL_PROG_LEN 3
+static uint16_t debug_monitor_cs_all_program[DEBUG_MONITOR_CS_ALL_PROG_LEN];
+
+static void build_debug_monitor_cs_all_program(void) {
+    // 0: wait 0 gpio, CS    — wait for /CS low
+    // 1: irq clear 0        — clear IRQ (trigger capture)
+    // 2: wait 1 gpio, CS    — wait for /CS high; wrap to 0
+    debug_monitor_cs_all_program[0] = pio_encode_wait_gpio(false, GB_CS_PIN);
+    debug_monitor_cs_all_program[1] = pio_encode_irq_set(false, IRQ_ACCESS);
+    debug_monitor_cs_all_program[2] = pio_encode_wait_gpio(true, GB_CS_PIN);
 }
 
 // ---- Address capture program ----
@@ -531,7 +568,7 @@ static void build_output_program(void) {
     output_program[2] = pio_encode_jmp_pin(6) | OE_SIDE_DISABLE;
     // Write path
     // Capture the incoming data. (Maybe we want/need to delay a bit before our read?)
-    output_program[3] = pio_encode_pull(false, true /* Block */) | OE_SIDE_ENABLE;
+    output_program[3] = pio_encode_out(pio_null, 8) | OE_SIDE_ENABLE;
     output_program[4] = pio_encode_in(pio_pins, 8) | OE_SIDE_ENABLE;
     output_program[5] = pio_encode_jmp(8) | OE_SIDE_ENABLE;
     // Read path
@@ -567,7 +604,7 @@ static void build_debug_capture_program(void) {
     //   bit 31:      /GB_RESET (GPIO31)
     debug_capture_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS);  // wait for monitor SM to clear IRQ
     debug_capture_program[1] = pio_encode_in(pio_pins, 32);                   // sample address
-    debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(0);  // wait for clock low
+    debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(4);  // wait for clock low
     debug_capture_program[3] = pio_encode_in(pio_pins, 32);                   // sample data
     // wraps back to 0, waits for next monitor clear
 }
@@ -741,7 +778,7 @@ static void setup_dma_chain(void) {
 
 static void feeder_start(const uint8_t *buf, size_t len) {
     // Write the command bytes into the 64K buffer at GB_IDLE_ADDR.
-    // The Game Boy is spinning on JP (HL) at GB_IDLE_ADDR, reading 0xE9.
+    // The Game Boy is halted at GB_IDLE_ADDR, reading 0x76 (HALT).
     // We replace the idle bytes with the command sequence.
     mp_printf(&mp_plat_print, "  [gbio] feeder_start: len=%u at 0x%04X\n",
         (unsigned)len, GB_IDLE_ADDR);
@@ -765,9 +802,14 @@ static PIO debug_pio = NULL;
 static int debug_monitor_cs_sm = -1;
 static int debug_monitor_a15_sm = -1;
 static int debug_sm = -1;
-static uint debug_monitor_prog_offset;
+static uint debug_monitor_a15_prog_offset;
+static uint debug_monitor_cs_prog_offset;
 static uint debug_prog_offset;
 static bool debug_configured = false;
+
+// When true, the debug sniffer captures ALL /CS transactions (no A13 filter).
+// When false, only captures when A13 is high (cartridge RAM access).
+static bool debug_sniffer_all_cs = false;
 static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(4)));
 static bool gbio_inited = false;
 
@@ -776,7 +818,9 @@ void gbio_init(void) {
         return;
     }
     mp_printf(&mp_plat_print, "start gbio_init()\n");
-    build_monitor_program();
+    build_monitor_a15_program();
+    build_monitor_cs_program();
+    build_debug_monitor_cs_all_program();
     build_address_program();
     build_output_program();
 
@@ -860,12 +904,19 @@ void gbio_init(void) {
         monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
 
     // ---- Load programs into PIO instruction memory ----
-    pio_program_t monitor_prog_info = {
-        .instructions = monitor_program,
-        .length = MONITOR_PROG_LEN,
+    pio_program_t monitor_a15_prog_info = {
+        .instructions = monitor_a15_program,
+        .length = MONITOR_A15_PROG_LEN,
         .origin = -1,
     };
-    monitor_prog_offset = pio_add_program(gb_pio0, &monitor_prog_info);
+    monitor_a15_prog_offset = pio_add_program(gb_pio0, &monitor_a15_prog_info);
+
+    pio_program_t monitor_cs_prog_info = {
+        .instructions = monitor_cs_program,
+        .length = MONITOR_CS_PROG_LEN,
+        .origin = -1,
+    };
+    monitor_cs_prog_offset = pio_add_program(gb_pio0, &monitor_cs_prog_info);
 
     pio_program_t address_prog_info = {
         .instructions = address_program,
@@ -881,23 +932,23 @@ void gbio_init(void) {
     };
     output_prog_offset = pio_add_program(gb_pio0, &output_prog_info);
 
-    mp_printf(&mp_plat_print, "gbio: program offsets - monitor=%d address=%d output=%d\n",
-        monitor_prog_offset, address_prog_offset, output_prog_offset);
+    mp_printf(&mp_plat_print, "gbio: program offsets - a15=%d cs=%d address=%d output=%d\n",
+        monitor_a15_prog_offset, monitor_cs_prog_offset, address_prog_offset, output_prog_offset);
 
-    // ---- Configure monitor CS SM (jmp pin = /CS) ----
+    // ---- Configure monitor CS SM (jmp pin = A13, /CS via wait gpio) ----
     {
         pio_sm_config cfg = pio_get_default_sm_config();
-        sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
-        sm_config_set_jmp_pin(&cfg, GB_CS_PIN);
-        pio_sm_init(gb_pio0, monitor_cs_sm, monitor_prog_offset, &cfg);
+        sm_config_set_wrap(&cfg, monitor_cs_prog_offset, monitor_cs_prog_offset + MONITOR_CS_PROG_LEN - 1);
+        sm_config_set_jmp_pin(&cfg, GB_A0_PIN + 13);  // A13 = GPIO15
+        pio_sm_init(gb_pio0, monitor_cs_sm, monitor_cs_prog_offset, &cfg);
     }
 
     // ---- Configure monitor A15 SM (jmp pin = A15) ----
     {
         pio_sm_config cfg = pio_get_default_sm_config();
-        sm_config_set_wrap(&cfg, monitor_prog_offset, monitor_prog_offset + MONITOR_PROG_LEN - 1);
+        sm_config_set_wrap(&cfg, monitor_a15_prog_offset, monitor_a15_prog_offset + MONITOR_A15_PROG_LEN - 1);
         sm_config_set_jmp_pin(&cfg, GB_A15_PIN);
-        pio_sm_init(gb_pio0, monitor_a15_sm, monitor_prog_offset, &cfg);
+        pio_sm_init(gb_pio0, monitor_a15_sm, monitor_a15_prog_offset, &cfg);
     }
 
     // ---- Configure address SM (in pins = A0..A15) ----
@@ -941,13 +992,31 @@ void gbio_init(void) {
     build_debug_capture_program();
     debug_pio = pio1;
 
-    // Load the monitor program onto pio1 (same program as pio0 monitors).
-    pio_program_t dbg_monitor_prog_info = {
-        .instructions = monitor_program,
-        .length = MONITOR_PROG_LEN,
+    // Load the A15 monitor program onto pio1 (same as pio0 A15 monitor).
+    pio_program_t dbg_monitor_a15_prog_info = {
+        .instructions = monitor_a15_program,
+        .length = MONITOR_A15_PROG_LEN,
         .origin = -1,
     };
-    debug_monitor_prog_offset = pio_add_program(debug_pio, &dbg_monitor_prog_info);
+    debug_monitor_a15_prog_offset = pio_add_program(debug_pio, &dbg_monitor_a15_prog_info);
+
+    // Load the CS monitor program onto pio1.  Choose between the original
+    // A13-filtered version and the all-CS version based on the toggle.
+    uint16_t *debug_cs_prog_instructions;
+    uint debug_cs_prog_len;
+    if (debug_sniffer_all_cs) {
+        debug_cs_prog_instructions = debug_monitor_cs_all_program;
+        debug_cs_prog_len = DEBUG_MONITOR_CS_ALL_PROG_LEN;
+    } else {
+        debug_cs_prog_instructions = monitor_cs_program;
+        debug_cs_prog_len = MONITOR_CS_PROG_LEN;
+    }
+    pio_program_t dbg_monitor_cs_prog_info = {
+        .instructions = debug_cs_prog_instructions,
+        .length = debug_cs_prog_len,
+        .origin = -1,
+    };
+    debug_monitor_cs_prog_offset = pio_add_program(debug_pio, &dbg_monitor_cs_prog_info);
 
     // Load the capture program onto pio1.
     pio_program_t debug_prog_info = {
@@ -956,8 +1025,8 @@ void gbio_init(void) {
         .origin = -1,
     };
     debug_prog_offset = pio_add_program(debug_pio, &debug_prog_info);
-    mp_printf(&mp_plat_print, "gbio: debug program offsets - monitor=%d capture=%d\n",
-        debug_monitor_prog_offset, debug_prog_offset);
+    mp_printf(&mp_plat_print, "gbio: debug program offsets - a15=%d cs=%d capture=%d\n",
+        debug_monitor_a15_prog_offset, debug_monitor_cs_prog_offset, debug_prog_offset);
 
     // Claim three SMs: two monitors + one capture.
     debug_monitor_cs_sm = (int)pio_claim_unused_sm(debug_pio, false);
@@ -966,7 +1035,8 @@ void gbio_init(void) {
     if (debug_monitor_cs_sm < 0 || debug_monitor_a15_sm < 0 || debug_sm < 0) {
         mp_printf(&mp_plat_print, "gbio: no free PIO SMs for debug\n");
         pio_remove_program(debug_pio, &debug_prog_info, debug_prog_offset);
-        pio_remove_program(debug_pio, &dbg_monitor_prog_info, debug_monitor_prog_offset);
+        pio_remove_program(debug_pio, &dbg_monitor_cs_prog_info, debug_monitor_cs_prog_offset);
+        pio_remove_program(debug_pio, &dbg_monitor_a15_prog_info, debug_monitor_a15_prog_offset);
         if (debug_sm >= 0) {
             pio_sm_unclaim(debug_pio, debug_sm);
         }
@@ -983,20 +1053,23 @@ void gbio_init(void) {
         mp_printf(&mp_plat_print, "gbio: debug SMs - monitor_cs=%d monitor_a15=%d capture=%d\n",
             debug_monitor_cs_sm, debug_monitor_a15_sm, debug_sm);
 
-        // ---- Configure debug monitor CS SM (jmp pin = /CS) ----
+        // ---- Configure debug monitor CS SM ----
         {
             pio_sm_config cfg = pio_get_default_sm_config();
-            sm_config_set_wrap(&cfg, debug_monitor_prog_offset, debug_monitor_prog_offset + MONITOR_PROG_LEN - 1);
-            sm_config_set_jmp_pin(&cfg, GB_CS_PIN);
-            pio_sm_init(debug_pio, debug_monitor_cs_sm, debug_monitor_prog_offset, &cfg);
+            sm_config_set_wrap(&cfg, debug_monitor_cs_prog_offset, debug_monitor_cs_prog_offset + debug_cs_prog_len - 1);
+            if (!debug_sniffer_all_cs) {
+                // A13-filtered mode: needs jmp pin for A13 check
+                sm_config_set_jmp_pin(&cfg, GB_A0_PIN + 13);  // A13 = GPIO15
+            }
+            pio_sm_init(debug_pio, debug_monitor_cs_sm, debug_monitor_cs_prog_offset, &cfg);
         }
 
         // ---- Configure debug monitor A15 SM (jmp pin = A15) ----
         {
             pio_sm_config cfg = pio_get_default_sm_config();
-            sm_config_set_wrap(&cfg, debug_monitor_prog_offset, debug_monitor_prog_offset + MONITOR_PROG_LEN - 1);
+            sm_config_set_wrap(&cfg, debug_monitor_a15_prog_offset, debug_monitor_a15_prog_offset + MONITOR_A15_PROG_LEN - 1);
             sm_config_set_jmp_pin(&cfg, GB_A15_PIN);
-            pio_sm_init(debug_pio, debug_monitor_a15_sm, debug_monitor_prog_offset, &cfg);
+            pio_sm_init(debug_pio, debug_monitor_a15_sm, debug_monitor_a15_prog_offset, &cfg);
         }
 
         // ---- Configure debug capture SM ----
@@ -1017,7 +1090,8 @@ void gbio_init(void) {
         if (debug_dma_chan < 0) {
             mp_printf(&mp_plat_print, "gbio: no free DMA channel for debug\n");
             pio_remove_program(debug_pio, &debug_prog_info, debug_prog_offset);
-            pio_remove_program(debug_pio, &dbg_monitor_prog_info, debug_monitor_prog_offset);
+            pio_remove_program(debug_pio, &dbg_monitor_cs_prog_info, debug_monitor_cs_prog_offset);
+            pio_remove_program(debug_pio, &dbg_monitor_a15_prog_info, debug_monitor_a15_prog_offset);
             pio_sm_unclaim(debug_pio, debug_sm);
             pio_sm_unclaim(debug_pio, debug_monitor_a15_sm);
             pio_sm_unclaim(debug_pio, debug_monitor_cs_sm);
@@ -1043,8 +1117,12 @@ void gbio_init(void) {
     memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
     // Joypad handler at JP_HANDLER_ADDR
     memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
-    // Idle spin at GB_IDLE_ADDR
-    gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
+    // Idle halt at GB_IDLE_ADDR: HALT; JP 0x1000
+    gb_data_buffer[GB_IDLE_ADDR] = 0x76;      // HALT
+    gb_data_buffer[GB_IDLE_ADDR + 1] = 0x00;      // nop
+    gb_data_buffer[GB_IDLE_ADDR + 2] = 0xC3;   // JP
+    gb_data_buffer[GB_IDLE_ADDR + 3] = (uint8_t)(GB_IDLE_ADDR & 0xFF);
+    gb_data_buffer[GB_IDLE_ADDR + 4] = (uint8_t)(GB_IDLE_ADDR >> 8);
 
     // Keep our pins across VM resets; reset_port() resets GPIO/PIO generally.
     never_reset_pin_number(GB_RD_PIN);
@@ -1089,7 +1167,7 @@ void common_hal_gbio_reset_gameboy(void) {
     // Game Boy addresses.  The boot ROM reads the logo from 0x0104
     // and the cartridge header from 0x0134.
     mp_printf(&mp_plat_print, "  [gbio] stage 2: filling 64K buffer with DMG boot image\n");
-    memset(gb_data_buffer, 0xcc, sizeof(gb_data_buffer));
+    memset(gb_data_buffer, 0xe9, sizeof(gb_data_buffer));
 
     // ---- Interrupt vectors ----
     // 0x0040: VBlank – JP to VB_HANDLER_ADDR
@@ -1126,13 +1204,18 @@ void common_hal_gbio_reset_gameboy(void) {
     // Joypad handler at JP_HANDLER_ADDR
     memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
 
-    // ---- Idle spin at GB_IDLE_ADDR ----
-    gb_data_buffer[GB_IDLE_ADDR] = 0xE9;  // JP (HL)
+    // ---- Idle halt at GB_IDLE_ADDR: HALT; JP 0x1000 ----
+    gb_data_buffer[GB_IDLE_ADDR] = 0x76;      // HALT
+    gb_data_buffer[GB_IDLE_ADDR + 1] = 0xC3;   // JP
+    gb_data_buffer[GB_IDLE_ADDR + 2] = (uint8_t)(GB_IDLE_ADDR & 0xFF);
+    gb_data_buffer[GB_IDLE_ADDR + 3] = (uint8_t)(GB_IDLE_ADDR >> 8);
+
+    gb_data_buffer[0xa000] = 0;
 
     // Enable the PIO state machines before starting DMA.
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabling PIO state machines (gb_pio0=%p monitor_cs_sm=%d monitor_a15_sm=%d address_sm=%d output_sm=%d)\n",
         gb_pio0, monitor_cs_sm, monitor_a15_sm, address_sm, output_sm);
-    pio_enable_sm_mask_in_sync(gb_pio0, 0x8 | 0x4 | 0x2);
+    pio_enable_sm_mask_in_sync(gb_pio0, 0x8 | 0x4 | 0x2 | 0x1);
 
     // Start the DMA chain (address -> sniffer -> data -> output SM)
     mp_printf(&mp_plat_print, "  [gbio] stage 4: starting DMA chain\n");
@@ -1217,26 +1300,25 @@ void common_hal_gbio_reset_gameboy(void) {
             }
             uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
             for (uint32_t i = last_captured; i < captured; i++) {
+                if (i > 361) {
+                    continue;
+                }
                 uint32_t s = debug_samples[i];
                 if (s == 0xDEDEDEDE) {
                     continue;                   // skip canary (untouched buffer)
                 }
                 uint16_t addr = (uint16_t)((s >> GB_A0_PIN) & 0xffff);  // A0..A15 at GPIO2..GPIO17
-                if (addr == 0x1000) {
-                    continue;
-                }
                 uint8_t data = (uint8_t)((s >> GB_D0_PIN) & 0xff);    // D0..D7 at GPIO23..GPIO30
                 uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);         // /RD at GPIO20
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
                 uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);     // DATA_OE at GPIO22
                 uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);          // /CS at GPIO21
-                if (cs != 0) {
-                    continue;
-                }
-                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
-                    (unsigned long)i, addr, data, cs, rd, clk, oe, (unsigned)s);
+                // if (cs != 0) {
+                //     continue;
+                // }
+                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X DATA=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
+                    (unsigned long)i, addr, data, gb_data_buffer[addr], cs, rd, clk, oe, (unsigned)s);
                 mp_printf(&mp_plat_print, " main tc %d\n", tc);
-                gbio_print_memory_range(addr, 1);
             }
             last_captured = captured;
         }
@@ -1253,20 +1335,20 @@ void common_hal_gbio_reset_gameboy(void) {
         if (s == 0xDEDEDEDE) {
             continue;                           // skip canary (untouched buffer)
         }
-        uint16_t addr = (uint16_t)((s >> 2) & 0xffff);          // A0..A15 at GPIO2..GPIO17
-        if (addr == 0x1000) {
+        if (i > 361) {
             continue;
         }
+        uint16_t addr = (uint16_t)((s >> 2) & 0xffff);          // A0..A15 at GPIO2..GPIO17
         uint8_t data = (uint8_t)((s >> 23) & 0xff);            // D0..D7 at GPIO23..GPIO30
         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);                 // /RD at GPIO20
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
         uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);             // DATA_OE at GPIO22
         uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);                  // /CS at GPIO21
-        if (cs != 0) {
-            continue;
-        }
-        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
-            (unsigned long)i, addr, data, cs, rd, clk, oe, (unsigned)s);
+        // if (cs != 0) {
+        //     continue;
+        // }
+        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X DATA=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
+            (unsigned long)i, addr, data, gb_data_buffer[addr], cs, rd, clk, oe, (unsigned)s);
         uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
     }
@@ -1281,6 +1363,10 @@ void common_hal_gbio_reset_gameboy(void) {
         gameboy_color = false;
     }
     mp_printf(&mp_plat_print, "  [gbio] stage 8: boot complete (gameboy_color=%d)\n", (int)gameboy_color);
+
+    mp_printf(&mp_plat_print, "  read calls %d write calls %d\n", dma_irq_count_data_read, dma_irq_count_data_write);
+
+    gbio_print_memory_range(0xa000, 4);
 
     // If the debug capture wasn't triggered during stage 5, stop it now.
     if (debug_configured && !debug_printed) {
@@ -1311,19 +1397,19 @@ void common_hal_gbio_queue_commands(const uint8_t *buf, uint32_t len) {
 
     // Disable game boy interrupts while we swap in new code (an interrupt
     // mid-sequence would read our bytes as a garbage vector), then run the
-    // user's commands, then restore the idle spin on GB_IDLE_ADDR.
+    // user's commands, then restore the idle halt on GB_IDLE_ADDR.
     uint32_t total_len = 0;
     command_cache[total_len++] = 0x00;     // noop (DMA sync)
     command_cache[total_len++] = 0xf3;     // DI (disable interrupts)
     command_cache[total_len++] = 0x00;     // noop while DI takes effect
     memcpy(command_cache + total_len, buf, len);
     total_len += len;
-    command_cache[total_len++] = 0x21;     // LD HL, GB_IDLE_ADDR
-    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR & 0xff);
-    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR >> 8);
     command_cache[total_len++] = 0xfb;     // EI
     command_cache[total_len++] = 0xfb;     // EI (delayed by one insn)
-    command_cache[total_len++] = 0xe9;     // JP (HL) -> idle spin on GB_IDLE_ADDR
+    command_cache[total_len++] = 0x76;     // HALT (wait for VBlank)
+    command_cache[total_len++] = 0xc3;     // JP 0x1000
+    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR & 0xff);
+    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR >> 8);
 
     feeder_start(command_cache, total_len);
     feeder_wait_drained();
