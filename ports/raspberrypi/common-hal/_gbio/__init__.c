@@ -58,6 +58,7 @@
 #include "hardware/irq.h"
 #include "hardware/pio.h"
 #include "hardware/pio_instructions.h"
+#include "hardware/structs/pads_bank0.h"
 #include "hardware/structs/sio.h"
 
 // ===== PIN MAP (PyGameBoy RP2350, v8 PCB) =====
@@ -565,15 +566,16 @@ static void build_output_program(void) {
     static int pio_pindirs_mov = 3u | _PIO_INVALID_IN_SRC | _PIO_INVALID_MOV_SRC;
     output_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS) | OE_SIDE_DISABLE;
     output_program[1] = pio_encode_wait_gpio(false, GB_CLK_PIN) | OE_SIDE_DISABLE;
+    // Jump based on !RD. Jump taken on write.
     output_program[2] = pio_encode_jmp_pin(6) | OE_SIDE_DISABLE;
+    // Read path
+    output_program[3] = pio_encode_mov_not(pio_pindirs_mov, pio_null) | OE_SIDE_DISABLE; // Set pins to output.
+    output_program[4] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
+    output_program[5] = pio_encode_jmp(8) | OE_SIDE_ENABLE;
     // Write path
     // Capture the incoming data. (Maybe we want/need to delay a bit before our read?)
-    output_program[3] = pio_encode_out(pio_null, 8) | OE_SIDE_ENABLE;
-    output_program[4] = pio_encode_in(pio_pins, 8) | OE_SIDE_ENABLE;
-    output_program[5] = pio_encode_jmp(8) | OE_SIDE_ENABLE;
-    // Read path
-    output_program[6] = pio_encode_mov_not(pio_pindirs_mov, pio_null) | OE_SIDE_DISABLE; // Set pins to output.
-    output_program[7] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
+    output_program[6] = pio_encode_out(pio_null, 8) | OE_SIDE_ENABLE;
+    output_program[7] = pio_encode_in(pio_pins, 8) | OE_SIDE_ENABLE;
     // Done
     output_program[8] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_ENABLE;
     output_program[9] = pio_encode_mov(pio_pindirs_mov, pio_null) | OE_SIDE_DISABLE; // Set pins to input.
@@ -588,7 +590,7 @@ static void build_output_program(void) {
 // interleaved in the same debug buffer for post-mortem analysis.
 #define DEBUG_SAMPLE_COUNT (114560 / 2)
 
-#define DEBUG_CAPTURE_PROG_LEN 4
+#define DEBUG_CAPTURE_PROG_LEN 6
 static uint16_t debug_capture_program[DEBUG_CAPTURE_PROG_LEN];
 
 static void build_debug_capture_program(void) {
@@ -605,7 +607,11 @@ static void build_debug_capture_program(void) {
     debug_capture_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS);  // wait for monitor SM to clear IRQ
     debug_capture_program[1] = pio_encode_in(pio_pins, 32);                   // sample address
     debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(4);  // wait for clock low
+    // OE is low with data valid at delay 8 - 31. Incoming data is valid at 8 - 31.
+    // WR is low at 4 but OE isn't.
     debug_capture_program[3] = pio_encode_in(pio_pins, 32);                   // sample data
+    debug_capture_program[4] = pio_encode_wait_gpio(true, GB_CLK_PIN);
+    debug_capture_program[5] = pio_encode_in(pio_pins, 32);
     // wraps back to 0, waits for next monitor clear
 }
 
@@ -797,6 +803,9 @@ static void feeder_wait_drained(void) {
 
 // ===== INIT =====
 
+// Forward declarations
+void gbio_print_pad_state(void);
+
 // ===== DEBUG PIO STATE =====
 static PIO debug_pio = NULL;
 static int debug_monitor_cs_sm = -1;
@@ -882,6 +891,9 @@ void gbio_init(void) {
         never_reset_pin_number(p);
     }
 
+    // Debug: print pad control register state after pin configuration
+    gbio_print_pad_state();
+
     // ---- Claim PIO state machines ----
     // We need 4 SMs: 2 monitors (share program), 1 address, 1 output
     gb_pio0 = pio0;
@@ -966,7 +978,7 @@ void gbio_init(void) {
         sm_config_set_wrap(&cfg, output_prog_offset, output_prog_offset + OUTPUT_PROG_LEN - 1);
         sm_config_set_out_pins(&cfg, GB_D0_PIN, 8);
         sm_config_set_in_pins(&cfg, GB_D0_PIN);
-        sm_config_set_jmp_pin(&cfg, GB_WR_PIN);
+        sm_config_set_jmp_pin(&cfg, GB_RD_PIN);
         sm_config_set_sideset_pins(&cfg, GB_DATA_OE_PIN);
         sm_config_set_sideset(&cfg, 1, false, false);  // 1 bit, values, no pindirs
         sm_config_set_out_shift(&cfg, true, true, 8);  // shift right, autopull
@@ -1210,7 +1222,7 @@ void common_hal_gbio_reset_gameboy(void) {
     gb_data_buffer[GB_IDLE_ADDR + 2] = (uint8_t)(GB_IDLE_ADDR & 0xFF);
     gb_data_buffer[GB_IDLE_ADDR + 3] = (uint8_t)(GB_IDLE_ADDR >> 8);
 
-    gb_data_buffer[0xa000] = 0;
+    gb_data_buffer[0xa000] = 10;
 
     // Enable the PIO state machines before starting DMA.
     mp_printf(&mp_plat_print, "  [gbio] stage 3: enabling PIO state machines (gb_pio0=%p monitor_cs_sm=%d monitor_a15_sm=%d address_sm=%d output_sm=%d)\n",
@@ -1264,6 +1276,8 @@ void common_hal_gbio_reset_gameboy(void) {
         mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
     }
     mp_printf(&mp_plat_print, "  [gbio] stage 5: releasing /GB_RESET\n");
+    // Debug: print pad state right before releasing reset
+    gbio_print_pad_state();
     gpio_put(GB_RESET_PIN, 0);
 
     // ---- Phase 2: swap to Nintendo logo after the display read ----
@@ -1300,7 +1314,7 @@ void common_hal_gbio_reset_gameboy(void) {
             }
             uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
             for (uint32_t i = last_captured; i < captured; i++) {
-                if (i > 361) {
+                if (i > 180 * 3) {
                     continue;
                 }
                 uint32_t s = debug_samples[i];
@@ -1310,14 +1324,15 @@ void common_hal_gbio_reset_gameboy(void) {
                 uint16_t addr = (uint16_t)((s >> GB_A0_PIN) & 0xffff);  // A0..A15 at GPIO2..GPIO17
                 uint8_t data = (uint8_t)((s >> GB_D0_PIN) & 0xff);    // D0..D7 at GPIO23..GPIO30
                 uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);         // /RD at GPIO20
+                uint8_t wr = (uint8_t)((s >> GB_WR_PIN) & 1);         // /WR at GPIO19
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
                 uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);     // DATA_OE at GPIO22
                 uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);          // /CS at GPIO21
                 // if (cs != 0) {
                 //     continue;
                 // }
-                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X DATA=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
-                    (unsigned long)i, addr, data, gb_data_buffer[addr], cs, rd, clk, oe, (unsigned)s);
+                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X DATA=0x%02X /CS=%u /RD=%u /WR=%u CLK=%u OE=%u raw=0x%08X",
+                    (unsigned long)i, addr, data, cs, rd, wr, clk, oe, (unsigned)s);
                 mp_printf(&mp_plat_print, " main tc %d\n", tc);
             }
             last_captured = captured;
@@ -1335,20 +1350,21 @@ void common_hal_gbio_reset_gameboy(void) {
         if (s == 0xDEDEDEDE) {
             continue;                           // skip canary (untouched buffer)
         }
-        if (i > 361) {
+        if (i > 180 * 3) {
             continue;
         }
         uint16_t addr = (uint16_t)((s >> 2) & 0xffff);          // A0..A15 at GPIO2..GPIO17
         uint8_t data = (uint8_t)((s >> 23) & 0xff);            // D0..D7 at GPIO23..GPIO30
         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);                 // /RD at GPIO20
+        uint8_t wr = (uint8_t)((s >> GB_WR_PIN) & 1);                 // /WR at GPIO19
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
         uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);             // DATA_OE at GPIO22
         uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);                  // /CS at GPIO21
         // if (cs != 0) {
         //     continue;
         // }
-        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X DATA=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
-            (unsigned long)i, addr, data, gb_data_buffer[addr], cs, rd, clk, oe, (unsigned)s);
+        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X DATA=0x%02X /CS=%u /RD=%u /WR=%u CLK=%u OE=%u raw=0x%08X",
+            (unsigned long)i, addr, data, cs, rd, wr, clk, oe, (unsigned)s);
         uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
     }
@@ -1486,6 +1502,51 @@ bool common_hal_gbio_is_color(void) {
 }
 
 // ===== DEBUG HELPERS =====
+
+// Print pad control register state for data (D0-D7) and output enable (DATA_OE) pins.
+// Useful for debugging input buffer enable (IE) and output disable (OD) issues.
+void gbio_print_pad_state(void) {
+    mp_printf(&mp_plat_print, "gbio: PAD CONTROL REGISTERS for data + OE pins:\n");
+    mp_printf(&mp_plat_print, "  Pin       | PAD_REG  | ISO | OD  | IE  | DRIVE | PUE | PDE | SCHMITT | SLEW\n");
+    mp_printf(&mp_plat_print, "  ----------+----------+-----+-----+-----+-------+-----+-----+---------+-----\n");
+
+    // Print D0..D7 (GPIO23..GPIO30)
+    for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
+        uint32_t reg = pads_bank0_hw->io[p];
+        uint8_t iso = (reg >> 8) & 1;
+        uint8_t od = (reg >> 7) & 1;
+        uint8_t ie = (reg >> 6) & 1;
+        uint8_t drive = (reg >> 4) & 3;
+        uint8_t pue = (reg >> 3) & 1;
+        uint8_t pde = (reg >> 2) & 1;
+        uint8_t schmitt = (reg >> 1) & 1;
+        uint8_t slew = (reg >> 0) & 1;
+        mp_printf(&mp_plat_print, "  D%-1d (GPIO%02u) | 0x%05lX  |  %u   |  %u   |  %u   |   %u    |  %u   |  %u   |    %u     |  %u\n",
+            p - GB_D0_PIN, (unsigned)p, (unsigned long)reg, iso, od, ie, drive, pue, pde, schmitt, slew);
+    }
+
+    // Print DATA_OE (GPIO22)
+    {
+        uint32_t reg = pads_bank0_hw->io[GB_DATA_OE_PIN];
+        uint8_t iso = (reg >> 8) & 1;
+        uint8_t od = (reg >> 7) & 1;
+        uint8_t ie = (reg >> 6) & 1;
+        uint8_t drive = (reg >> 4) & 3;
+        uint8_t pue = (reg >> 3) & 1;
+        uint8_t pde = (reg >> 2) & 1;
+        uint8_t schmitt = (reg >> 1) & 1;
+        uint8_t slew = (reg >> 0) & 1;
+        mp_printf(&mp_plat_print, "  OE (GPIO%02u) | 0x%05lX  |  %u   |  %u   |  %u   |   %u    |  %u   |  %u   |    %u     |  %u\n",
+            (unsigned)GB_DATA_OE_PIN, (unsigned long)reg, iso, od, ie, drive, pue, pde, schmitt, slew);
+    }
+
+    // Print current SIO input levels
+    uint32_t gpio_in = sio_hw->gpio_in;
+    uint8_t d_in = (gpio_in >> GB_D0_PIN) & 0xFF;
+    uint8_t oe_in = (gpio_in >> GB_DATA_OE_PIN) & 1;
+    mp_printf(&mp_plat_print, "  Current SIO gpio_in: D[7:0]=0x%02X  OE=%u  (full=0x%08lX)\n",
+        d_in, oe_in, (unsigned long)gpio_in);
+}
 
 void gbio_print_memory_range(uint16_t start, uint16_t len) {
     if (!gbio_inited) {
