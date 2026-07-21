@@ -543,37 +543,33 @@ static void build_output_program(void) {
 }
 
 // ===== DEBUG PIO =====
-// A second PIO state machine samples all GPIO0..GPIO31 on every falling edge
-// of /RD (GPIO20) and pushes 32-bit snapshots into its RX FIFO.  A dedicated
-// DMA channel transfers the first N samples into a RAM buffer for post-mortem
-// analysis after reset_gameboy().  We trigger on /RD because it is the one
-// signal we know is toggling (the data SM already watches it).
+// Two monitor SMs on pio1 watch /CS and A15 using jmp pin (same technique as
+// the real monitor SMs on pio0).  They share the monitor program which clears
+// PIO IRQ 0 when their pin goes low.  A capture SM waits for that IRQ,
+// samples all 32 low GPIOs, then sets the IRQ to block re-trigger.  This way
+// both ROM accesses (A15=0, CS=0) and RAM accesses (A15=1, CS=0) are captured
+// interleaved in the same debug buffer for post-mortem analysis.
 #define DEBUG_SAMPLE_COUNT (114560 / 2)
 
-#define DEBUG_PROG_LEN 5
-static uint16_t debug_program[DEBUG_PROG_LEN];
+#define DEBUG_CAPTURE_PROG_LEN 4
+static uint16_t debug_capture_program[DEBUG_CAPTURE_PROG_LEN];
 
-static void build_debug_program(void) {
-    // Capture all 32 low GPIO bits (GPIO0..GPIO31) on every /RD falling edge.
-    // No A15 gating — capture all bus activity (ROM, I/O, everything).
-    // in_base = GPIO0, autopush at 32 bits.
-    //
+static void build_debug_capture_program(void) {
     // Bit layout in each 32-bit sample:
     //   bits 0..1:   GPIO0..GPIO1
     //   bits 2..17:  A0..A15 (GPIO2..GPIO17)
     //   bit 18:      (GPIO18)
     //   bit 19:      (GPIO19)
     //   bit 20:      /RD (GPIO20)
-    //   bit 21:      (GPIO21)
+    //   bit 21:      /CS (GPIO21)
     //   bit 22:      DATA_OE (GPIO22)
     //   bits 23..30: D0..D7 (GPIO23..GPIO30)
     //   bit 31:      /GB_RESET (GPIO31)
-    debug_program[0] = pio_encode_wait_gpio(false, GB_A15_PIN);  // wait for A15 falling edge to indicate ROM access
-    debug_program[1] = pio_encode_in(pio_pins, 32);             // sample address (and everything else)
-    debug_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(0);   // wait for clock low because the data is read in the middle of the low pulse
-    debug_program[3] = pio_encode_in(pio_pins, 32);             // sample data we're responding with
-    debug_program[4] = pio_encode_wait_gpio(true, GB_A15_PIN);  // wait for A15 to rise again to complete the cycle
-    // wraps automatically from instruction 2 back to 0
+    debug_capture_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS);  // wait for monitor SM to clear IRQ
+    debug_capture_program[1] = pio_encode_in(pio_pins, 32);                   // sample address
+    debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(0);  // wait for clock low
+    debug_capture_program[3] = pio_encode_in(pio_pins, 32);                   // sample data
+    // wraps back to 0, waits for next monitor clear
 }
 
 // ===== DMA / SNIFFER CHAIN =====
@@ -766,7 +762,10 @@ static void feeder_wait_drained(void) {
 
 // ===== DEBUG PIO STATE =====
 static PIO debug_pio = NULL;
+static int debug_monitor_cs_sm = -1;
+static int debug_monitor_a15_sm = -1;
 static int debug_sm = -1;
+static uint debug_monitor_prog_offset;
 static uint debug_prog_offset;
 static bool debug_configured = false;
 static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(4)));
@@ -933,41 +932,98 @@ void gbio_init(void) {
     // ---- Set up DMA chain with sniffer ----
     setup_dma_chain();
 
-    // --- Debug PIO: samples all GPIOs for bus capture ---
-    mp_printf(&mp_plat_print, "setup debug program\n");
-    build_debug_program();
+    // --- Debug PIO: monitor SMs + capture SM on pio1 ---
+    // Same technique as the real SMs: two monitor SMs watch /CS and A15
+    // via jmp pin, clearing IRQ on falling edge.  The capture SM wakes on
+    // IRQ=0, samples both address-phase and data-phase GPIO state, then
+    // sets IRQ to block until the next cycle.
+    mp_printf(&mp_plat_print, "setup debug PIO\n");
+    build_debug_capture_program();
     debug_pio = pio1;
+
+    // Load the monitor program onto pio1 (same program as pio0 monitors).
+    pio_program_t dbg_monitor_prog_info = {
+        .instructions = monitor_program,
+        .length = MONITOR_PROG_LEN,
+        .origin = -1,
+    };
+    debug_monitor_prog_offset = pio_add_program(debug_pio, &dbg_monitor_prog_info);
+
+    // Load the capture program onto pio1.
+    pio_program_t debug_prog_info = {
+        .instructions = debug_capture_program,
+        .length = DEBUG_CAPTURE_PROG_LEN,
+        .origin = -1,
+    };
+    debug_prog_offset = pio_add_program(debug_pio, &debug_prog_info);
+    mp_printf(&mp_plat_print, "gbio: debug program offsets - monitor=%d capture=%d\n",
+        debug_monitor_prog_offset, debug_prog_offset);
+
+    // Claim three SMs: two monitors + one capture.
+    debug_monitor_cs_sm = (int)pio_claim_unused_sm(debug_pio, false);
+    debug_monitor_a15_sm = (int)pio_claim_unused_sm(debug_pio, false);
     debug_sm = (int)pio_claim_unused_sm(debug_pio, false);
-    if (debug_sm < 0) {
-        mp_printf(&mp_plat_print, "gbio: no free PIO SM for debug\n");
-    } else {
-        // Load the debug program into PIO instruction memory.
-        pio_program_t debug_prog_info = {
-            .instructions = debug_program,
-            .length = DEBUG_PROG_LEN,
-            .origin = -1,
-        };
-        debug_prog_offset = pio_add_program(debug_pio, &debug_prog_info);
-        mp_printf(&mp_plat_print, "gbio: debug program offset %d\n", debug_prog_offset);
-
-        // Configure: in_base = GPIO0, autopush at 32 bits (all 32 low GPIOs).
-        pio_sm_config cfg = pio_get_default_sm_config();
-        sm_config_set_wrap(&cfg, debug_prog_offset, debug_prog_offset + DEBUG_PROG_LEN - 1);  // auto-wrap from last instruction back to 0
-        sm_config_set_in_pins(&cfg, 0);
-        sm_config_set_in_shift(&cfg, false, true, 32);  // shift right, autopush at 32 bits
-        int err = pio_sm_init(debug_pio, debug_sm, debug_prog_offset, &cfg);
-        if (err < 0) {
-            mp_printf(&mp_plat_print, "gbio: debug sm init failed %d\n", err);
+    if (debug_monitor_cs_sm < 0 || debug_monitor_a15_sm < 0 || debug_sm < 0) {
+        mp_printf(&mp_plat_print, "gbio: no free PIO SMs for debug\n");
+        pio_remove_program(debug_pio, &debug_prog_info, debug_prog_offset);
+        pio_remove_program(debug_pio, &dbg_monitor_prog_info, debug_monitor_prog_offset);
+        if (debug_sm >= 0) {
+            pio_sm_unclaim(debug_pio, debug_sm);
         }
-        pio_sm_set_enabled(debug_pio, debug_sm, false);
+        if (debug_monitor_a15_sm >= 0) {
+            pio_sm_unclaim(debug_pio, debug_monitor_a15_sm);
+        }
+        if (debug_monitor_cs_sm >= 0) {
+            pio_sm_unclaim(debug_pio, debug_monitor_cs_sm);
+        }
+        debug_sm = -1;
+        debug_monitor_a15_sm = -1;
+        debug_monitor_cs_sm = -1;
+    } else {
+        mp_printf(&mp_plat_print, "gbio: debug SMs - monitor_cs=%d monitor_a15=%d capture=%d\n",
+            debug_monitor_cs_sm, debug_monitor_a15_sm, debug_sm);
 
-        // Claim a DMA channel to drain the debug PIO's RX FIFO into the buffer.
+        // ---- Configure debug monitor CS SM (jmp pin = /CS) ----
+        {
+            pio_sm_config cfg = pio_get_default_sm_config();
+            sm_config_set_wrap(&cfg, debug_monitor_prog_offset, debug_monitor_prog_offset + MONITOR_PROG_LEN - 1);
+            sm_config_set_jmp_pin(&cfg, GB_CS_PIN);
+            pio_sm_init(debug_pio, debug_monitor_cs_sm, debug_monitor_prog_offset, &cfg);
+        }
+
+        // ---- Configure debug monitor A15 SM (jmp pin = A15) ----
+        {
+            pio_sm_config cfg = pio_get_default_sm_config();
+            sm_config_set_wrap(&cfg, debug_monitor_prog_offset, debug_monitor_prog_offset + MONITOR_PROG_LEN - 1);
+            sm_config_set_jmp_pin(&cfg, GB_A15_PIN);
+            pio_sm_init(debug_pio, debug_monitor_a15_sm, debug_monitor_prog_offset, &cfg);
+        }
+
+        // ---- Configure debug capture SM ----
+        {
+            pio_sm_config cfg = pio_get_default_sm_config();
+            sm_config_set_wrap(&cfg, debug_prog_offset, debug_prog_offset + DEBUG_CAPTURE_PROG_LEN - 1);
+            sm_config_set_in_pins(&cfg, 0);
+            sm_config_set_in_shift(&cfg, false, true, 32);  // shift right, autopush at 32 bits
+            int err = pio_sm_init(debug_pio, debug_sm, debug_prog_offset, &cfg);
+            if (err < 0) {
+                mp_printf(&mp_plat_print, "gbio: debug capture sm init failed %d\n", err);
+            }
+            pio_sm_set_enabled(debug_pio, debug_sm, false);
+        }
+
+        // Claim a DMA channel to drain the capture SM's RX FIFO into the buffer.
         debug_dma_chan = (int)dma_claim_unused_channel(false);
         if (debug_dma_chan < 0) {
             mp_printf(&mp_plat_print, "gbio: no free DMA channel for debug\n");
             pio_remove_program(debug_pio, &debug_prog_info, debug_prog_offset);
+            pio_remove_program(debug_pio, &dbg_monitor_prog_info, debug_monitor_prog_offset);
             pio_sm_unclaim(debug_pio, debug_sm);
+            pio_sm_unclaim(debug_pio, debug_monitor_a15_sm);
+            pio_sm_unclaim(debug_pio, debug_monitor_cs_sm);
             debug_sm = -1;
+            debug_monitor_a15_sm = -1;
+            debug_monitor_cs_sm = -1;
         } else {
             mp_printf(&mp_plat_print, "gbio: debug dma channel %d\n", debug_dma_chan);
             debug_configured = true;
@@ -1092,6 +1148,14 @@ void common_hal_gbio_reset_gameboy(void) {
         // Fill the buffer with a canary so we can see which samples the DMA
         // actually overwrites vs. untouched.
         memset(debug_samples, 0xDE, sizeof(debug_samples));
+
+        // Start monitor SMs first (they clear IRQ when pins go low).
+        pio_sm_restart(debug_pio, debug_monitor_cs_sm);
+        pio_sm_restart(debug_pio, debug_monitor_a15_sm);
+        pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, true);
+        pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, true);
+
+        // Start the capture SM and its DMA.
         pio_sm_restart(debug_pio, debug_sm);
         pio_sm_clear_fifos(debug_pio, debug_sm);
         dma_channel_config dc = dma_channel_get_default_config(debug_dma_chan);
@@ -1165,8 +1229,12 @@ void common_hal_gbio_reset_gameboy(void) {
                 uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);         // /RD at GPIO20
                 uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
                 uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);     // DATA_OE at GPIO22
-                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u OE=%u raw=0x%08X",
-                    (unsigned long)i, addr, data, rd, clk, oe, (unsigned)s);
+                uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);          // /CS at GPIO21
+                if (cs != 0) {
+                    continue;
+                }
+                mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
+                    (unsigned long)i, addr, data, cs, rd, clk, oe, (unsigned)s);
                 mp_printf(&mp_plat_print, " main tc %d\n", tc);
                 gbio_print_memory_range(addr, 1);
             }
@@ -1176,6 +1244,8 @@ void common_hal_gbio_reset_gameboy(void) {
     }
 
     pio_sm_set_enabled(debug_pio, debug_sm, false);
+    pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, false);
+    pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, false);
     dma_channel_abort(debug_dma_chan);
     uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
     for (uint32_t i = last_captured; i < captured; i++) {
@@ -1191,8 +1261,12 @@ void common_hal_gbio_reset_gameboy(void) {
         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);                 // /RD at GPIO20
         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
         uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);             // DATA_OE at GPIO22
-        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /RD=%u CLK=%u OE=%u raw=0x%08X",
-            (unsigned long)i, addr, data, rd, clk, oe, (unsigned)s);
+        uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);                  // /CS at GPIO21
+        if (cs != 0) {
+            continue;
+        }
+        mp_printf(&mp_plat_print, "[%5lu] A=0x%04X D=0x%02X /CS=%u /RD=%u CLK=%u OE=%u raw=0x%08X",
+            (unsigned long)i, addr, data, cs, rd, clk, oe, (unsigned)s);
         uint32_t main_tc = (uint32_t)dma_channel_hw_addr(dma_addr_chan)->transfer_count;
         mp_printf(&mp_plat_print, " main tc %d\n", main_tc);
     }
@@ -1211,6 +1285,8 @@ void common_hal_gbio_reset_gameboy(void) {
     // If the debug capture wasn't triggered during stage 5, stop it now.
     if (debug_configured && !debug_printed) {
         pio_sm_set_enabled(debug_pio, debug_sm, false);
+        pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, false);
+        pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, false);
         dma_channel_abort(debug_dma_chan);
     }
 
