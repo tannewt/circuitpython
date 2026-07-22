@@ -96,6 +96,9 @@ static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(20
 // signal we know is toggling (the data SM already watches it).
 #define DEBUG_SAMPLE_COUNT (114560 / 2)
 
+// How many debug samples to print after capture.
+#define DEBUG_PRINT_COUNT 1000
+
 // NOTE on encoding `wait gpio`: rp2pio_statemachine_construct loads the program
 // via the pico-SDK `pio_add_program_at_offset()` helper.  With
 // PICO_PIO_USE_GPIO_BASE defined (true on RP2350B with 48 GPIOs) the SDK XORs
@@ -186,7 +189,7 @@ static const uint8_t boot_code[] = {
     0xe0, 0x0f,                                   // LD (0xFF0F), A
 
     // Enable vsync and joypad interrupts
-    0x3e, 0x11,                                   // LD A, 0x11 (vblank is bit 0)
+    0x3e, 0x01,                                   // LD A, 0x11 (vblank is bit 0)
     0xe0, 0xff,                                   // LD (0xFFFF), A
 
     0x00, 0x00,
@@ -414,10 +417,13 @@ static volatile uint32_t dma_irq_count_debug = 0;
 
 // VBlank handler: increments frame counter in cartridge RAM, runs user commands, returns.
 // The ARM writes user commands into the user command area (VB_HANDLER_ADDR + prologue size).
-#define VB_USER_AREA (VB_HANDLER_ADDR + 24)  // offset past prologue
+#define VB_USER_AREA (VB_HANDLER_ADDR + 30)  // offset past prologue
 #define VB_USER_AREA_SIZE 128
 
 static uint8_t vblank_handler_prologue[] = {
+    // STAGE: start = 0xA1
+    0x3E, 0xA1,                   // LD A, 0xA1
+    0xEA, 0x01, 0xA0,             // LD (0xA001), A
     // PUSH AF, PUSH HL
     0xF5, 0xE5,
     // Increment frame counter at GB_RAM_VSYNC
@@ -425,11 +431,14 @@ static uint8_t vblank_handler_prologue[] = {
     0x7E,                         // LD A, (HL)
     0x3C,                         // INC A
     0x77,                         // LD (HL), A
-    // Clear VBlank interrupt flag
-    0x3E, 0xEF,                   // LD A, 0xEF
-    0xE0, 0x0F,                   // LDH (0xFF0F), A
+    // STAGE: middle = 0xA2
+    0x3E, 0xA2,                   // LD A, 0xA2
+    0xEA, 0x01, 0xA0,             // LD (0xA001), A
     // POP HL, POP AF
     0xE1, 0xF1,
+    // STAGE: end = 0xA3
+    0x3E, 0xA3,                   // LD A, 0xA3
+    0xEA, 0x01, 0xA0,             // LD (0xA001), A
     0xD9,                         // RETI
     // User command area follows (filled with NOPs by default)
 };
@@ -573,8 +582,10 @@ static void build_output_program(void) {
     output_program[4] = pio_encode_out(pio_pins, 8) | OE_SIDE_ENABLE;
     output_program[5] = pio_encode_jmp(8) | OE_SIDE_ENABLE;
     // Write path
-    // Capture the incoming data. (Maybe we want/need to delay a bit before our read?)
-    output_program[6] = pio_encode_out(pio_null, 8) | OE_SIDE_ENABLE;
+    // Capture the incoming data. Delay 5 because the debug PIO needs 7. We have an extra JUMP and
+    // OUT to take two cycles at least. Data is still valid at delay 15 too so it's ok if OUT waits
+    // a little.
+    output_program[6] = pio_encode_out(pio_null, 8) | pio_encode_delay(7) | OE_SIDE_ENABLE;
     output_program[7] = pio_encode_in(pio_pins, 8) | OE_SIDE_ENABLE;
     // Done
     output_program[8] = pio_encode_wait_gpio(true, GB_CLK_PIN) | OE_SIDE_ENABLE;
@@ -606,9 +617,9 @@ static void build_debug_capture_program(void) {
     //   bit 31:      /GB_RESET (GPIO31)
     debug_capture_program[0] = pio_encode_wait_irq(true, false, IRQ_ACCESS);  // wait for monitor SM to clear IRQ
     debug_capture_program[1] = pio_encode_in(pio_pins, 32);                   // sample address
-    debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(4);  // wait for clock low
-    // OE is low with data valid at delay 8 - 31. Incoming data is valid at 8 - 31.
-    // WR is low at 4 but OE isn't.
+    // Delay 7 because WR, OE and data take time to settle. Six looks to be minimum.
+    // WR is low at 4 but OE isn't. OE is low at delay 5. Incoming data is valid at 6.
+    debug_capture_program[2] = pio_encode_wait_gpio(false, GB_CLK_PIN) | pio_encode_delay(7);  // wait for clock low
     debug_capture_program[3] = pio_encode_in(pio_pins, 32);                   // sample data
     debug_capture_program[4] = pio_encode_wait_gpio(true, GB_CLK_PIN);
     debug_capture_program[5] = pio_encode_in(pio_pins, 32);
@@ -616,12 +627,13 @@ static void build_debug_capture_program(void) {
 }
 
 // ===== DMA / SNIFFER CHAIN =====
+//
+size_t vblank_count = 0;
+uint8_t last_stage = 0;
 
 // DMA IRQ handler: counts completions for each channel so we can see
 // how far the DMA chain is progressing during debug.
 static void dma_irq_handler(void) {
-    gpio_put(45, 0);  // turn on IO45 to indicate DMA IRQ activity
-
     // Check IRQ0 status for each of our channels
     uint32_t ints = dma_hw->ints1;
     // mp_printf(&mp_plat_print, "%04x %d %d\n", ints, dma_addr_chan, dma_irq_count_addr);
@@ -648,13 +660,19 @@ static void dma_irq_handler(void) {
     if (ints & (1u << dma_data_write_chan)) {
         dma_irq_count_data_write++;
         dma_channel_acknowledge_irq1(dma_data_write_chan);
+
+        if (gb_data_buffer[0xa001] == 0xa1 && last_stage != 0xa1) {
+            if (vblank_count++ % 60 == 0) {
+                gpio_put(45, (vblank_count / 60) % 2);
+            }
+        }
+        last_stage = gb_data_buffer[0xa001];
     }
     if (debug_dma_chan >= 0 && (ints & (1u << debug_dma_chan))) {
         dma_irq_count_debug++;
         dma_channel_acknowledge_irq1(debug_dma_chan);
     }
     dma_hw->ints1 = ints;
-    gpio_put(45, 1);
 }
 
 static void setup_dma_chain(void) {
@@ -755,7 +773,7 @@ static void setup_dma_chain(void) {
         channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, false);
-        channel_config_set_dreq(&c, pio_get_dreq(gb_pio0, output_sm, false));
+        channel_config_set_dreq(&c, pio_get_dreq(gb_pio0, output_sm, false /* is_tx */));
         dma_channel_configure(dma_data_write_chan, &c,
             gb_data_buffer,
             &gb_pio0->rxf[output_sm],
@@ -982,10 +1000,9 @@ void gbio_init(void) {
         sm_config_set_sideset_pins(&cfg, GB_DATA_OE_PIN);
         sm_config_set_sideset(&cfg, 1, false, false);  // 1 bit, values, no pindirs
         sm_config_set_out_shift(&cfg, true, true, 8);  // shift right, autopull
-        sm_config_set_in_shift(&cfg, true, true, 8);   // shift right, autopush
+        sm_config_set_in_shift(&cfg, false, true, 8);   // shift right, autopush
         pio_sm_set_pindirs_with_mask(gb_pio0, output_sm,
-            ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN),
-                    ((1 << 8) - 1) << GB_D0_PIN | (1 << GB_DATA_OE_PIN));
+            (1 << GB_DATA_OE_PIN), (1 << GB_DATA_OE_PIN));
         pio_sm_set_pins_with_mask(gb_pio0, output_sm,
             (1 << GB_DATA_OE_PIN),
             (1 << GB_DATA_OE_PIN));
@@ -1149,6 +1166,7 @@ void gbio_init(void) {
     for (uint8_t p = GB_D0_PIN; p <= GB_D7_PIN; p++) {
         never_reset_pin_number(p);
     }
+    never_reset_pin_number(45);
 
     gbio_inited = true;
     mp_printf(&mp_plat_print, "gbio: init done\n");
@@ -1314,7 +1332,7 @@ void common_hal_gbio_reset_gameboy(void) {
             }
             uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
             for (uint32_t i = last_captured; i < captured; i++) {
-                if (i > 180 * 3) {
+                if (i >= DEBUG_PRINT_COUNT) {
                     continue;
                 }
                 uint32_t s = debug_samples[i];
@@ -1350,7 +1368,7 @@ void common_hal_gbio_reset_gameboy(void) {
         if (s == 0xDEDEDEDE) {
             continue;                           // skip canary (untouched buffer)
         }
-        if (i > 180 * 3) {
+        if (i >= DEBUG_PRINT_COUNT) {
             continue;
         }
         uint16_t addr = (uint16_t)((s >> 2) & 0xffff);          // A0..A15 at GPIO2..GPIO17
@@ -1381,6 +1399,47 @@ void common_hal_gbio_reset_gameboy(void) {
     mp_printf(&mp_plat_print, "  [gbio] stage 8: boot complete (gameboy_color=%d)\n", (int)gameboy_color);
 
     mp_printf(&mp_plat_print, "  read calls %d write calls %d\n", dma_irq_count_data_read, dma_irq_count_data_write);
+
+    // --- Write DMA path debug state ---
+    if (dma_data_write_chan >= 0) {
+        dma_channel_hw_t *write_ch = dma_channel_hw_addr(dma_data_write_chan);
+        bool write_busy = dma_channel_is_busy(dma_data_write_chan);
+        uint32_t write_tc = (uint32_t)write_ch->transfer_count;
+        uint32_t write_addr = (uint32_t)write_ch->write_addr;
+        uint32_t write_read_addr = (uint32_t)write_ch->read_addr;
+        mp_printf(&mp_plat_print, "  [gbio] write DMA: chan=%d busy=%d tc=%u write_addr=0x%08lX read_addr=0x%08lX irq_cnt=%lu\n",
+            dma_data_write_chan, write_busy, write_tc, write_addr, write_read_addr, dma_irq_count_data_write);
+    }
+    if (dma_sniff_write_chan >= 0) {
+        dma_channel_hw_t *sw_ch = dma_channel_hw_addr(dma_sniff_write_chan);
+        bool sw_busy = dma_channel_is_busy(dma_sniff_write_chan);
+        uint32_t sw_tc = (uint32_t)sw_ch->transfer_count;
+        mp_printf(&mp_plat_print, "  [gbio] sniff_write DMA: chan=%d busy=%d tc=%u irq_cnt=%lu\n",
+            dma_sniff_write_chan, sw_busy, sw_tc, dma_irq_count_sniff_write);
+    }
+    if (dma_sniff_reset_chan >= 0) {
+        dma_channel_hw_t *sr_ch = dma_channel_hw_addr(dma_sniff_reset_chan);
+        bool sr_busy = dma_channel_is_busy(dma_sniff_reset_chan);
+        uint32_t sr_tc = (uint32_t)sr_ch->transfer_count;
+        mp_printf(&mp_plat_print, "  [gbio] sniff_reset DMA: chan=%d busy=%d tc=%u irq_cnt=%lu\n",
+            dma_sniff_reset_chan, sr_busy, sr_tc, dma_irq_count_sniff_reset);
+    }
+    if (dma_sniff_read_chan >= 0) {
+        dma_channel_hw_t *srd_ch = dma_channel_hw_addr(dma_sniff_read_chan);
+        bool srd_busy = dma_channel_is_busy(dma_sniff_read_chan);
+        uint32_t srd_tc = (uint32_t)srd_ch->transfer_count;
+        mp_printf(&mp_plat_print, "  [gbio] sniff_read DMA: chan=%d busy=%d tc=%u irq_cnt=%lu\n",
+            dma_sniff_read_chan, srd_busy, srd_tc, dma_irq_count_sniff_read);
+    }
+    if (dma_addr_chan >= 0) {
+        dma_channel_hw_t *a_ch = dma_channel_hw_addr(dma_addr_chan);
+        bool a_busy = dma_channel_is_busy(dma_addr_chan);
+        uint32_t a_tc = (uint32_t)a_ch->transfer_count;
+        mp_printf(&mp_plat_print, "  [gbio] addr DMA: chan=%d busy=%d tc=%u irq_cnt=%lu\n",
+            dma_addr_chan, a_busy, a_tc, dma_irq_count_addr);
+    }
+    mp_printf(&mp_plat_print, "  [gbio] sniffer_data=0x%08lX buffer_base=0x%08lX\n",
+        dma_hw->sniff_data, gb_buffer_base);
 
     gbio_print_memory_range(0xa000, 4);
 
