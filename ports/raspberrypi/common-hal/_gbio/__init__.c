@@ -94,10 +94,20 @@ static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(20
 // DMA channel transfers the first N samples into a RAM buffer for post-mortem
 // analysis after reset_gameboy().  We trigger on /RD because it is the one
 // signal we know is toggling (the data SM already watches it).
-#define DEBUG_SAMPLE_COUNT (114560 / 2)
+//
+// Buffer size must be a power of 2 for DMA ring-mode address wrapping.
+// 2^15 = 32768 entries × 4 bytes = 128 KB.
+#define DEBUG_SAMPLE_COUNT_BITS 15
+#define DEBUG_SAMPLE_COUNT (1 << DEBUG_SAMPLE_COUNT_BITS)
+#define DEBUG_BUFFER_SIZE_BYTES (DEBUG_SAMPLE_COUNT * sizeof(uint32_t))
+#define DEBUG_BUFFER_SIZE_BITS (DEBUG_SAMPLE_COUNT_BITS + 2)  // ×4 bytes = +2 bits
+#define DEBUG_DMA_INITIAL_TC 0xFFFFFFFF  // large transfer count for continuous capture
 
 // How many debug samples to print after capture.
 #define DEBUG_PRINT_COUNT 1000
+
+// How many recent samples to print when queue_commands is called.
+#define DEBUG_PRINT_LAST_N 20
 
 // NOTE on encoding `wait gpio`: rp2pio_statemachine_construct loads the program
 // via the pico-SDK `pio_add_program_at_offset()` helper.  With
@@ -124,6 +134,27 @@ static uint16_t gb_address_buffer[ADDRESS_BUFFER_SIZE] __attribute__((aligned(20
 
 // Idle address the game boy halts at between command sequences.
 #define GB_IDLE_ADDR 0x1000
+
+// ===== BUFFER ADDRESS LAYOUT =====
+#define GB_RAM_BASE 0xA000
+#define GB_RAM_VSYNC (GB_RAM_BASE + 0)  // byte: frame counter
+#define GB_RAM_GAMEPAD (GB_RAM_BASE + 1) // byte: button state
+#define GB_RAM_STAGE (GB_RAM_BASE + 2)   // byte: vblank stage marker (0xA1..0xA4)
+
+// VBlank handler address in buffer
+#define VB_HANDLER_ADDR 0x0200
+#define JP_HANDLER_ADDR 0x0280
+
+// Ping-pong command buffers (two each for vblank and non-vblank commands)
+#define VB_CMD_BUF_A_ADDR    0x0300
+#define VB_CMD_BUF_B_ADDR    0x0380
+#define NONVB_CMD_BUF_A_ADDR 0x0400
+#define NONVB_CMD_BUF_B_ADDR 0x0480
+#define CMD_BUF_SIZE         128
+
+// Offsets within the vblank handler where the ARM patches CALL targets
+#define VB_HANDLER_VB_CALL_OFFSET    0x07  // offset of CALL opcode byte 0xCD
+#define VB_HANDLER_NONVB_CALL_OFFSET 0x34  // offset of CALL opcode for non-vblank
 
 // ===== SM83 COMMAND STREAMS (flat-buffer layout) =====
 //
@@ -184,11 +215,11 @@ static const uint8_t boot_code[] = {
 
     0x00, 0x00,
 
-    // Clear vsync and joypad interrupts
+    // Clear interrupts
     0x3e, 0x00,                                   // LD A, 0x00
     0xe0, 0x0f,                                   // LD (0xFF0F), A
 
-    // Enable vsync and joypad interrupts
+    // Enable vblank interrupts
     0x3e, 0x01,                                   // LD A, 0x11 (vblank is bit 0)
     0xe0, 0xff,                                   // LD (0xFFFF), A
 
@@ -279,64 +310,6 @@ uint8_t gameboy_color_boot[] = {
     0x76, 0xc3, 0x00, 0x10
 };
 
-uint8_t gamepad_interrupt_response[] = {
-    0x00, 0x00,
-    0x16, 0x30, // Load 0x30 into D
-    0x0e, 0x00, // Load 0x00 into C
-
-    0x3e, 0x20, // Turn on only one column
-    0xe2, // Load A into 0xff00
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0xf2, // read register 0xff + C into A
-    0x5f, // Put A into E
-    0x3e, 0x10, // Turn on the other column
-    0xe2, // Load A into 0xff00
-    0x1a, 0x00, // Load dummy from (DE) into
-
-    0x00, 0x00, 0x00, 0x00, 0x00,
-
-    0x14, // Increment D
-    0xf2, // read register 0xff + C into A
-    0x5f, // Put A into E
-    0x1a, 0x00, // Load dummy from (DE)
-
-    0x3e, 0x00, // Turn on both columns so any press is detected
-    0xe2, // Load A into 0xff00
-    0x21, 0x00, 0x11, // Load 0x1100 into hl
-    0x3e, 0xef, // Clear the interrupt before it's enabled
-    0x0e, 0x0f, // Load 0x0f into C
-    0xe2, // Load A into 0xff0f
-
-    0xd9, // Return from the interrupt
-    0xe9
-};
-
-uint8_t fetch_gamepad_commands[] = {
-    0x16, 0x30,                          // Load 0x30 into D
-    0x0e, 0x00,                           // Load 0x00 into C
-
-    0x3e, 0x20,                          // Turn on only one column
-    0xe2,                          // Load A into 0xff00
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0xf2,                          // read register 0xff + C into A
-    0x5f,                          // Put A into E
-    0x3e, 0x10,                          // Turn on the other column
-    0xe2,                          // Load A into 0xff00
-    0x1a, 0x00,                          // Load dummy from (DE) into
-
-    0x14,                          // Increment D
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0xf2,                          // read register 0xff + C into A
-    0x5f,                          // Put A into E
-    0x1a, 0x00,                          // Load dummy from (DE)
-
-    0x3e, 0x00,                          // Turn on both columns so any press is detected
-    0xe2,                          // Load A into 0xff00
-    0x3e, 0xef,                          // Clear the interrupt before it's enabled
-    0x0e, 0x0f,                           // Load 0x0f into C
-    0xe2,                          // Load A into 0xff0f
-};
-
 uint8_t change_screen_commands[] = {
     0x00,     // Noop to sync DMA to GB clock
     0x0e,     // Load next value into C
@@ -376,12 +349,64 @@ static uint32_t gb_buffer_base;
 // Legacy dma_chan for feeder compatibility (aliases dma_data_read_chan)
 #define dma_chan dma_data_read_chan
 
-// Command buffers (in ordinary RAM; the SAMD port used backup RAM but the
-// RP2350 keeps these in normal SRAM and re-arms them on reset_gameboy).
-static uint8_t command_cache[1024] __attribute__((aligned(4)));
-
 static volatile uint32_t vsync_count = 0;
 static volatile uint64_t last_vsync_time = 0;
+
+// ===== PING-PONG COMMAND BUFFER STATE =====
+// Two buffers per command type.  At vblank START (0xA1) the active/
+// inactive indices flip so CP queue functions write to a fresh buffer.
+// At vblank END (0xA4) — after the GB has finished executing both
+// buffers — the CALL targets are patched and the old buffers cleared.
+//
+// vb_active: 0 = VB_CMD_BUF_A, 1 = VB_CMD_BUF_B
+// nonvb_active: 0 = NONVB_CMD_BUF_A, 1 = NONVB_CMD_BUF_B
+static volatile int vb_active_buf = 0;
+static volatile int nonvb_active_buf = 0;
+// Written length in each buffer (reset to 0 when cleared)
+static volatile int vb_write_len[2] = {0, 0};
+static volatile int nonvb_write_len[2] = {0, 0};
+
+// Helper: get the address of a vblank command buffer by index
+static inline uint16_t vb_cmd_buf_addr(int idx) {
+    return idx == 0 ? VB_CMD_BUF_A_ADDR : VB_CMD_BUF_B_ADDR;
+}
+// Helper: get the address of a non-vblank command buffer by index
+static inline uint16_t nonvb_cmd_buf_addr(int idx) {
+    return idx == 0 ? NONVB_CMD_BUF_A_ADDR : NONVB_CMD_BUF_B_ADDR;
+}
+
+// Flip vblank command buffer index.  Called from DMA IRQ at vblank START
+// (stage 0xA1).  Toggles the active/inactive index so CP queue functions
+// write to the other buffer.  Does NOT clear or patch — that happens at 0xA4.
+static void ping_pong_flip_vb_buffers(void) {
+    vb_active_buf = 1 - vb_active_buf;
+}
+
+// Flip non-vblank command buffer index.  Same scheme.
+static void ping_pong_flip_nonvb_buffers(void) {
+    nonvb_active_buf = 1 - nonvb_active_buf;
+}
+
+// Patch the CALL target in the vblank handler and clear the old vblank
+// buffer.  Called at stage 0xA4 (vblank complete).
+static void ping_pong_finish_vb_buffers(void) {
+    uint16_t addr = vb_cmd_buf_addr(vb_active_buf);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 1] = (uint8_t)(addr & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 2] = (uint8_t)(addr >> 8);
+    int inactive = 1 - vb_active_buf;
+    memset(gb_data_buffer + vb_cmd_buf_addr(inactive), 0xC9, CMD_BUF_SIZE);
+    vb_write_len[inactive] = 0;
+}
+
+// Patch the CALL target for non-vblank and clear the old buffer.
+static void ping_pong_finish_nonvb_buffers(void) {
+    uint16_t addr = nonvb_cmd_buf_addr(nonvb_active_buf);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 1] = (uint8_t)(addr & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 2] = (uint8_t)(addr >> 8);
+    int inactive = 1 - nonvb_active_buf;
+    memset(gb_data_buffer + nonvb_cmd_buf_addr(inactive), 0xC9, CMD_BUF_SIZE);
+    nonvb_write_len[inactive] = 0;
+}
 
 static volatile uint32_t total_additional_cycles;
 
@@ -405,75 +430,96 @@ static volatile uint32_t dma_irq_count_debug = 0;
 // The Game Boy interrupt vectors (0x0040, 0x0060) contain JP instructions
 // to these handlers.
 
-// Cartridge RAM base address (GB can write here, ARM can read from buffer)
-#define GB_RAM_BASE 0xA000
-#define GB_RAM_VSYNC (GB_RAM_BASE + 0)  // byte: frame counter
-#define GB_RAM_GAMEPAD (GB_RAM_BASE + 1) // byte: button state
+// ===== VBLANK HANDLER (3 phases) =====
+//
+// Phase 1 (offset 0x07): CALL to the active vblank command buffer.
+//   The ARM patches the two address bytes after the 0xCD opcode.
+//   The buffer is pre-filled with 0xC9 (RET), so an idle buffer
+//   returns immediately.
+//
+// Phase 2 (offset 0x0F): Capture joypad state and write to cartridge RAM.
+//
+// Phase 3 (offset 0x34): CALL to the active non-vblank command buffer.
+//   Same patching scheme as Phase 1.
+//
+// After all phases: increments frame counter, clears joypad interrupt
+// flag, and returns with RETI.
+//
+// Stage markers written to GB_RAM_STAGE (0xA002):
+//   0xA1 = vblank start (ARM flips active/inactive indices)
+//   0xA2 = vblank commands done, joypad capture starting
+//   0xA3 = joypad done, non-vblank commands starting
+//   0xA4 = vblank complete (ARM patches CALL targets + clears buffers)
 
-// VBlank handler address in buffer
-#define VB_HANDLER_ADDR 0x0200
-// Joypad handler address in buffer
-#define JP_HANDLER_ADDR 0x0280
+static uint8_t vblank_handler[] = {
+    // ---- Save registers ----
+    0xF5,                                           // [0x00] PUSH AF
+    0xE5,                                           // [0x01] PUSH HL
 
-// VBlank handler: increments frame counter in cartridge RAM, runs user commands, returns.
-// The ARM writes user commands into the user command area (VB_HANDLER_ADDR + prologue size).
-#define VB_USER_AREA (VB_HANDLER_ADDR + 30)  // offset past prologue
-#define VB_USER_AREA_SIZE 128
+    // ---- Mark vblank start (stage 0xA1) ----
+    0x3E, 0xA1,                                     // [0x02] LD A, 0xA1
+    0xEA, (uint8_t)(GB_RAM_STAGE & 0xFF), (uint8_t)(GB_RAM_STAGE >> 8), // [0x04] LD (GB_RAM_STAGE), A
 
-static uint8_t vblank_handler_prologue[] = {
-    // STAGE: start = 0xA1
-    0x3E, 0xA1,                   // LD A, 0xA1
-    0xEA, 0x01, 0xA0,             // LD (0xA001), A
-    // PUSH AF, PUSH HL
-    0xF5, 0xE5,
-    // Increment frame counter at GB_RAM_VSYNC
-    0x21, (uint8_t)(GB_RAM_VSYNC & 0xFF), (uint8_t)(GB_RAM_VSYNC >> 8), // LD HL, GB_RAM_VSYNC
-    0x7E,                         // LD A, (HL)
-    0x3C,                         // INC A
-    0x77,                         // LD (HL), A
-    // STAGE: middle = 0xA2
-    0x3E, 0xA2,                   // LD A, 0xA2
-    0xEA, 0x01, 0xA0,             // LD (0xA001), A
-    // POP HL, POP AF
-    0xE1, 0xF1,
-    // STAGE: end = 0xA3
-    0x3E, 0xA3,                   // LD A, 0xA3
-    0xEA, 0x01, 0xA0,             // LD (0xA001), A
-    0xD9,                         // RETI
-    // User command area follows (filled with NOPs by default)
+    // ==== Phase 1: Execute vblank commands ====
+    // The ARM patches the address bytes below to point to the active buffer.
+    0xCD, 0x00, 0x03,                               // [0x07] CALL VB_CMD_BUF_A (ARM updates addr)
+
+    // ---- Mark phase 2 (stage 0xA2) ----
+    0x3E, 0xA2,                                     // [0x0A] LD A, 0xA2
+    0xEA, (uint8_t)(GB_RAM_STAGE & 0xFF), (uint8_t)(GB_RAM_STAGE >> 8), // [0x0C] LD (GB_RAM_STAGE), A
+
+    // ==== Phase 2: Capture joypad state ====
+    0xC5,                                           // [0x0F] PUSH BC
+    0x3E, 0x20,                                     // [0x10] LD A, 0x20
+    0xE0, 0x00,                                     // [0x12] LDH (0xFF00), A
+    0x00,                                           // [0x14] NOP
+    0xF0, 0x00,                                     // [0x15] LDH A, (0xFF00)
+    0xE6, 0x0F,                                     // [0x17] AND 0x0F
+    0x47,                                           // [0x19] LD B, A
+    0x3E, 0x10,                                     // [0x1A] LD A, 0x10
+    0xE0, 0x00,                                     // [0x1C] LDH (0xFF00), A
+    0x00,                                           // [0x1E] NOP
+    0xF0, 0x00,                                     // [0x1F] LDH A, (0xFF00)
+    0xE6, 0x0F,                                     // [0x21] AND 0x0F
+    0xCB, 0x37,                                     // [0x23] SWAP A
+    0xB0,                                           // [0x25] OR B
+    0x21, 0x01, 0xA0,                               // [0x26] LD HL, GB_RAM_GAMEPAD
+    0x77,                                           // [0x29] LD (HL), A
+    0x3E, 0x30,                                     // [0x2A] LD A, 0x30
+    0xE0, 0x00,                                     // [0x2C] LDH (0xFF00), A
+    0xC1,                                           // [0x2E] POP BC
+
+    // ---- Mark phase 3 (stage 0xA3) ----
+    0x3E, 0xA3,                                     // [0x2F] LD A, 0xA3
+    0xEA, (uint8_t)(GB_RAM_STAGE & 0xFF), (uint8_t)(GB_RAM_STAGE >> 8), // [0x31] LD (GB_RAM_STAGE), A
+
+    // ==== Phase 3: Execute non-vblank commands ====
+    0xCD, 0x00, 0x04,                               // [0x34] CALL NONVB_CMD_BUF_A (ARM updates addr)
+
+    // ---- Increment frame counter at GB_RAM_VSYNC ----
+    0x21, (uint8_t)(GB_RAM_VSYNC & 0xFF), (uint8_t)(GB_RAM_VSYNC >> 8), // [0x37] LD HL, GB_RAM_VSYNC
+    0x7E,                                           // [0x3A] LD A, (HL)
+    0x3C,                                           // [0x3B] INC A
+    0x77,                                           // [0x3C] LD (HL), A
+
+    // ---- Mark vblank complete (stage 0xA4) ----
+    0x3E, 0xA4,                                     // [0x41] LD A, 0xA4
+    0xEA, (uint8_t)(GB_RAM_STAGE & 0xFF), (uint8_t)(GB_RAM_STAGE >> 8), // [0x43] LD (GB_RAM_STAGE), A
+
+    // ---- Restore registers and return from interrupt ----
+    0xE1,                                           // [0x46] POP HL
+    0xF1,                                           // [0x47] POP AF
+    0xD9,                                           // [0x48] RETI
 };
 
-// Joypad handler: reads joypad register, writes button state to cartridge RAM.
+// Minimal joypad handler: clears the joypad interrupt flag and returns.
+// The actual joypad reading is done in the vblank handler (Phase 2).
+// This handler exists so that joypad interrupts between vblanks wake
+// the CPU from HALT without leaving the interrupt flag set.
 static uint8_t joypad_handler[] = {
-    // PUSH AF, PUSH BC
-    0xF5, 0xC5,
-    // Select directions (P14=0, P15=1): write 0x20 to 0xFF00
-    0x3E, 0x20,                   // LD A, 0x20
-    0xE0, 0x00,                   // LDH (0xFF00), A
-    0x00,                         // NOP (timing)
-    0xF0, 0x00,                   // LDH A, (0xFF00)
-    0xE6, 0x0F,                   // AND 0x0F
-    0x47,                         // LD B, A
-    // Select buttons (P14=1, P15=0): write 0x10 to 0xFF00
-    0x3E, 0x10,                   // LD A, 0x10
-    0xE0, 0x00,                   // LDH (0xFF00), A
-    0x00,                         // NOP (timing)
-    0xF0, 0x00,                   // LDH A, (0xFF00)
-    0xE6, 0x0F,                   // AND 0x0F
-    0xCB, 0x37,                   // SWAP A
-    0xB0,                         // OR B
-    // Write to cartridge RAM at GB_RAM_GAMEPAD
-    0x21, (uint8_t)(GB_RAM_GAMEPAD & 0xFF), (uint8_t)(GB_RAM_GAMEPAD >> 8), // LD HL, GB_RAM_GAMEPAD
-    0x77,                         // LD (HL), A
-    // Reset joypad (both columns high)
-    0x3E, 0x30,                   // LD A, 0x30
-    0xE0, 0x00,                   // LDH (0xFF00), A
-    // Clear joypad interrupt flag
-    0x3E, 0xEF,                   // LD A, 0xEF
-    0xE0, 0x0F,                   // LDH (0xFF0F), A
-    // POP BC, POP AF
-    0xC1, 0xF1,
-    0xD9,                         // RETI
+    0x3E, 0xEF,                                     // LD A, 0xEF
+    0xE0, 0x0F,                                     // LDH (0xFF0F), A
+    0xD9,                                           // RETI
 };
 
 // ===== PIO PROGRAMS =====
@@ -599,7 +645,7 @@ static void build_output_program(void) {
 // samples all 32 low GPIOs, then sets the IRQ to block re-trigger.  This way
 // both ROM accesses (A15=0, CS=0) and RAM accesses (A15=1, CS=0) are captured
 // interleaved in the same debug buffer for post-mortem analysis.
-#define DEBUG_SAMPLE_COUNT (114560 / 2)
+// (DEBUG_SAMPLE_COUNT is defined above.)
 
 #define DEBUG_CAPTURE_PROG_LEN 6
 static uint16_t debug_capture_program[DEBUG_CAPTURE_PROG_LEN];
@@ -628,7 +674,7 @@ static void build_debug_capture_program(void) {
 
 // ===== DMA / SNIFFER CHAIN =====
 //
-size_t vblank_count = 0;
+volatile size_t vblank_count = 0;
 uint8_t last_stage = 0;
 
 // DMA IRQ handler: counts completions for each channel so we can see
@@ -656,17 +702,36 @@ static void dma_irq_handler(void) {
     if (ints & (1u << dma_data_read_chan)) {
         dma_irq_count_data_read++;
         dma_channel_acknowledge_irq1(dma_data_read_chan);
+        if (dma_irq_count_data_read % 1000000 == 0) {
+            mp_printf(&mp_plat_print, "  [gbio] dma_irq_count_data_read=%d\n", dma_irq_count_data_read);
+        }
     }
     if (ints & (1u << dma_data_write_chan)) {
         dma_irq_count_data_write++;
         dma_channel_acknowledge_irq1(dma_data_write_chan);
 
-        if (gb_data_buffer[0xa001] == 0xa1 && last_stage != 0xa1) {
+        // Ping-pong buffer management across vblank stages:
+        //
+        // 0xA1 (vblank START): Flip active/inactive indices so CP
+        //   queue functions immediately write to fresh space.  No
+        //   clearing or patching — the GB is still reading the buffers.
+        //
+        // 0xA4 (vblank END): All phases complete, GB is done with
+        //   both buffers.  Patch both CALL targets and clear the
+        //   inactive buffers (fill with RET) for the next frame.
+        uint8_t stage = gb_data_buffer[GB_RAM_STAGE];
+        if (stage == 0xa1 && last_stage != 0xa1) {
+            ping_pong_flip_vb_buffers();
+            ping_pong_flip_nonvb_buffers();
             if (vblank_count++ % 60 == 0) {
                 gpio_put(45, (vblank_count / 60) % 2);
             }
+            last_vsync_time = supervisor_ticks_ms64();
+        } else if (stage == 0xa4 && last_stage == 0xa3) {
+            ping_pong_finish_vb_buffers();
+            ping_pong_finish_nonvb_buffers();
         }
-        last_stage = gb_data_buffer[0xa001];
+        last_stage = stage;
     }
     if (debug_dma_chan >= 0 && (ints & (1u << debug_dma_chan))) {
         dma_irq_count_debug++;
@@ -800,17 +865,6 @@ static void setup_dma_chain(void) {
 
 // ===== FEEDER HELPERS (for command-stream compatibility) =====
 
-static void feeder_start(const uint8_t *buf, size_t len) {
-    // Write the command bytes into the 64K buffer at GB_IDLE_ADDR.
-    // The Game Boy is halted at GB_IDLE_ADDR, reading 0x76 (HALT).
-    // We replace the idle bytes with the command sequence.
-    mp_printf(&mp_plat_print, "  [gbio] feeder_start: len=%u at 0x%04X\n",
-        (unsigned)len, GB_IDLE_ADDR);
-    if (len <= sizeof(gb_data_buffer) - GB_IDLE_ADDR) {
-        memcpy(gb_data_buffer + GB_IDLE_ADDR, buf, len);
-    }
-}
-
 static void feeder_wait_drained(void) {
     // With the 64K buffer, there's no feeder to drain.
     // The PIO/DMA serves bytes directly from the buffer.
@@ -837,7 +891,7 @@ static bool debug_configured = false;
 // When true, the debug sniffer captures ALL /CS transactions (no A13 filter).
 // When false, only captures when A13 is high (cartridge RAM access).
 static bool debug_sniffer_all_cs = false;
-static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(4)));
+static uint32_t debug_samples[DEBUG_SAMPLE_COUNT] __attribute__((aligned(DEBUG_BUFFER_SIZE_BYTES)));
 static bool gbio_inited = false;
 
 void gbio_init(void) {
@@ -1143,9 +1197,26 @@ void gbio_init(void) {
     gb_data_buffer[0x0061] = (uint8_t)(JP_HANDLER_ADDR & 0xFF);
     gb_data_buffer[0x0062] = (uint8_t)(JP_HANDLER_ADDR >> 8);
     // VBlank handler at VB_HANDLER_ADDR
-    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
-    // Joypad handler at JP_HANDLER_ADDR
+    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler, sizeof(vblank_handler));
+    // Joypad handler at JP_HANDLER_ADDR (minimal: just clears flag and RETIs)
     memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
+    // Initialize ping-pong command buffers: fill with RET (0xC9)
+    memset(gb_data_buffer + VB_CMD_BUF_A_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + VB_CMD_BUF_B_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + NONVB_CMD_BUF_A_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + NONVB_CMD_BUF_B_ADDR, 0xC9, CMD_BUF_SIZE);
+    // Patch initial CALL targets in vblank handler to point to buffer A
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 1] = (uint8_t)(VB_CMD_BUF_A_ADDR & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 2] = (uint8_t)(VB_CMD_BUF_A_ADDR >> 8);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 1] = (uint8_t)(NONVB_CMD_BUF_A_ADDR & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 2] = (uint8_t)(NONVB_CMD_BUF_A_ADDR >> 8);
+    // Reset ping-pong state
+    vb_active_buf = 0;
+    nonvb_active_buf = 0;
+    vb_write_len[0] = 0;
+    vb_write_len[1] = 0;
+    nonvb_write_len[0] = 0;
+    nonvb_write_len[1] = 0;
     // Idle halt at GB_IDLE_ADDR: HALT; JP 0x1000
     gb_data_buffer[GB_IDLE_ADDR] = 0x76;      // HALT
     gb_data_buffer[GB_IDLE_ADDR + 1] = 0x00;      // nop
@@ -1230,9 +1301,26 @@ void common_hal_gbio_reset_gameboy(void) {
 
     // ---- Fixed interrupt handlers ----
     // VBlank handler at VB_HANDLER_ADDR
-    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler_prologue, sizeof(vblank_handler_prologue));
-    // Joypad handler at JP_HANDLER_ADDR
+    memcpy(gb_data_buffer + VB_HANDLER_ADDR, vblank_handler, sizeof(vblank_handler));
+    // Joypad handler at JP_HANDLER_ADDR (minimal: clears flag and RETIs)
     memcpy(gb_data_buffer + JP_HANDLER_ADDR, joypad_handler, sizeof(joypad_handler));
+    // Initialize ping-pong command buffers: fill with RET (0xC9)
+    memset(gb_data_buffer + VB_CMD_BUF_A_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + VB_CMD_BUF_B_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + NONVB_CMD_BUF_A_ADDR, 0xC9, CMD_BUF_SIZE);
+    memset(gb_data_buffer + NONVB_CMD_BUF_B_ADDR, 0xC9, CMD_BUF_SIZE);
+    // Patch initial CALL targets in vblank handler to point to buffer A
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 1] = (uint8_t)(VB_CMD_BUF_A_ADDR & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_VB_CALL_OFFSET + 2] = (uint8_t)(VB_CMD_BUF_A_ADDR >> 8);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 1] = (uint8_t)(NONVB_CMD_BUF_A_ADDR & 0xFF);
+    gb_data_buffer[VB_HANDLER_ADDR + VB_HANDLER_NONVB_CALL_OFFSET + 2] = (uint8_t)(NONVB_CMD_BUF_A_ADDR >> 8);
+    // Reset ping-pong state
+    vb_active_buf = 0;
+    nonvb_active_buf = 0;
+    vb_write_len[0] = 0;
+    vb_write_len[1] = 0;
+    nonvb_write_len[0] = 0;
+    nonvb_write_len[1] = 0;
 
     // ---- Idle halt at GB_IDLE_ADDR: HALT; JP 0x1000 ----
     gb_data_buffer[GB_IDLE_ADDR] = 0x76;      // HALT
@@ -1268,6 +1356,10 @@ void common_hal_gbio_reset_gameboy(void) {
         pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, true);
         pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, true);
 
+        // Abort any previously running debug DMA before reconfiguring.
+        if (dma_channel_is_busy(debug_dma_chan)) {
+            dma_channel_abort(debug_dma_chan);
+        }
         // Start the capture SM and its DMA.
         pio_sm_restart(debug_pio, debug_sm);
         pio_sm_clear_fifos(debug_pio, debug_sm);
@@ -1276,16 +1368,14 @@ void common_hal_gbio_reset_gameboy(void) {
         channel_config_set_dreq(&dc, pio_get_dreq(debug_pio, debug_sm, false));
         channel_config_set_read_increment(&dc, false);
         channel_config_set_write_increment(&dc, true);
+        channel_config_set_ring(&dc, true, DEBUG_BUFFER_SIZE_BITS);  // wrap write addr within buffer
         dma_channel_configure(debug_dma_chan, &dc,
             debug_samples,
             (void *)&debug_pio->rxf[debug_sm],
-            DEBUG_SAMPLE_COUNT,
+            DEBUG_DMA_INITIAL_TC,
             true);
         dma_channel_set_irq1_enabled(debug_dma_chan, true);
         pio_sm_set_enabled(debug_pio, debug_sm, true);
-        if (dma_channel_is_busy(debug_dma_chan)) {
-            mp_printf(&mp_plat_print, "  [gbio] debug dma channel busy\n");
-        }
     }
 
 
@@ -1316,7 +1406,6 @@ void common_hal_gbio_reset_gameboy(void) {
     // Wait for the boot sequence to complete.
     // The Game Boy reads ~256 bytes during boot at ~1 MHz = ~256 us.
     bool first_init = true;
-    bool debug_printed = false;
     uint32_t last_tc = DEBUG_SAMPLE_COUNT;
     mp_printf(&mp_plat_print, "  [gbio] stage 6: waiting for boot to complete\n");
     uint32_t last_captured = 0;
@@ -1330,12 +1419,12 @@ void common_hal_gbio_reset_gameboy(void) {
             if (tc != last_tc) {
                 mp_printf(&mp_plat_print, "  [gbio] debug tc %d\n", (unsigned)dma_channel_hw_addr(debug_dma_chan)->transfer_count);
             }
-            uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
+            uint32_t captured = DEBUG_DMA_INITIAL_TC - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
             for (uint32_t i = last_captured; i < captured; i++) {
                 if (i >= DEBUG_PRINT_COUNT) {
                     continue;
                 }
-                uint32_t s = debug_samples[i];
+                uint32_t s = debug_samples[i & (DEBUG_SAMPLE_COUNT - 1)];
                 if (s == 0xDEDEDEDE) {
                     continue;                   // skip canary (untouched buffer)
                 }
@@ -1358,13 +1447,9 @@ void common_hal_gbio_reset_gameboy(void) {
         last_tc = tc;
     }
 
-    pio_sm_set_enabled(debug_pio, debug_sm, false);
-    pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, false);
-    pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, false);
-    dma_channel_abort(debug_dma_chan);
-    uint32_t captured = DEBUG_SAMPLE_COUNT - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
+    uint32_t captured = DEBUG_DMA_INITIAL_TC - dma_channel_hw_addr(debug_dma_chan)->transfer_count;
     for (uint32_t i = last_captured; i < captured; i++) {
-        uint32_t s = debug_samples[i];
+        uint32_t s = debug_samples[i & (DEBUG_SAMPLE_COUNT - 1)];
         if (s == 0xDEDEDEDE) {
             continue;                           // skip canary (untouched buffer)
         }
@@ -1443,13 +1528,8 @@ void common_hal_gbio_reset_gameboy(void) {
 
     gbio_print_memory_range(0xa000, 4);
 
-    // If the debug capture wasn't triggered during stage 5, stop it now.
-    if (debug_configured && !debug_printed) {
-        pio_sm_set_enabled(debug_pio, debug_sm, false);
-        pio_sm_set_enabled(debug_pio, debug_monitor_cs_sm, false);
-        pio_sm_set_enabled(debug_pio, debug_monitor_a15_sm, false);
-        dma_channel_abort(debug_dma_chan);
-    }
+    // Debug capture runs continuously for queue_commands diagnostics.
+    // (No longer stopped here — the circular buffer wraps via DMA ring mode.)
 
     last_vsync_time = supervisor_ticks_ms64();
     everything_going = true;
@@ -1461,33 +1541,67 @@ void common_hal_gbio_queue_commands(const uint8_t *buf, uint32_t len) {
     if (!gbio_inited || dma_chan < 0) {
         return;
     }
-    if (len > sizeof(command_cache) - 5 - 3) {
-        mp_raise_ValueError(MP_ERROR_TEXT("Too many commands"));
-    }
+    // mp_printf(&mp_plat_print, "  [gbio] queue_commands: len=%u\n", len);
+    // mp_printf(&mp_plat_print, "  [gbio] queue_commands: last_vsync_time=%u\n", last_vsync_time);
+    // mp_printf(&mp_plat_print, "  [gbio] queue_commands: vblank_count %d\n", vblank_count);
+    // mp_printf(&mp_plat_print, "  read calls %d write calls %d\n", dma_irq_count_data_read, dma_irq_count_data_write);
+    // mp_printf(&mp_plat_print, "  [gbio] now=%u\n", supervisor_ticks_ms64());
+    // mp_printf(&mp_plat_print, "  everything_going=%d\n", everything_going);
+
+    // Print the last N entries from the circular debug buffer.
+    // if (debug_configured && debug_dma_chan >= 0) {
+    //     bool busy = dma_channel_is_busy(debug_dma_chan);
+    //     uint32_t tc = (uint32_t)dma_channel_hw_addr(debug_dma_chan)->transfer_count;
+    //     uint32_t write_addr = (uint32_t)dma_channel_hw_addr(debug_dma_chan)->write_addr;
+    //     uint32_t buf_start = (uint32_t)debug_samples;
+    //     uint32_t current_idx = (write_addr - buf_start) / sizeof(uint32_t);
+    //     uint32_t total_transferred = DEBUG_DMA_INITIAL_TC - tc;
+    // mp_printf(&mp_plat_print, "  [gbio] debug dma: busy=%d tc=%lu transferred=%lu write_idx=%lu\n",
+    //     busy, (unsigned long)tc, (unsigned long)total_transferred, (unsigned long)current_idx);
+    // if (!busy && total_transferred == 0) {
+    //     mp_printf(&mp_plat_print, "  [gbio] debug dma not started (call reset_gameboy first)\n");
+    // } else {
+    //     // current_idx is where the next sample will be written,
+    //     // so the most recent sample is at (current_idx - 1).
+    //     mp_printf(&mp_plat_print, "  [gbio] debug buffer (last %d entries):\n",
+    //         DEBUG_PRINT_LAST_N);
+    //     for (int i = 0; i < DEBUG_PRINT_LAST_N; i++) {
+    //         uint32_t idx = (current_idx - DEBUG_PRINT_LAST_N + i) & (DEBUG_SAMPLE_COUNT - 1);
+    //         uint32_t s = debug_samples[idx];
+    //         uint16_t addr = (uint16_t)((s >> GB_A0_PIN) & 0xffff);
+    //         uint8_t data = (uint8_t)((s >> GB_D0_PIN) & 0xff);
+    //         uint8_t rd = (uint8_t)((s >> GB_RD_PIN) & 1);
+    //         uint8_t wr = (uint8_t)((s >> GB_WR_PIN) & 1);
+    //         uint8_t clk = (uint8_t)((s >> GB_CLK_PIN) & 1);
+    //         uint8_t oe = (uint8_t)((s >> GB_DATA_OE_PIN) & 1);
+    //         uint8_t cs = (uint8_t)((s >> GB_CS_PIN) & 1);
+    //         mp_printf(&mp_plat_print, "  [dbg %3lu] A=0x%04X D=0x%02X /CS=%u /RD=%u /WR=%u CLK=%u OE=%u raw=0x%08lX\n",
+    //             (unsigned long)idx, addr, data, cs, rd, wr, clk, oe, (unsigned long)s);
+    //     }
+    // }
+    // }
+
     if (!everything_going || supervisor_ticks_ms64() - last_vsync_time > 600) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("game boy not running"));
     }
-
-    feeder_wait_drained();
-
-    // Disable game boy interrupts while we swap in new code (an interrupt
-    // mid-sequence would read our bytes as a garbage vector), then run the
-    // user's commands, then restore the idle halt on GB_IDLE_ADDR.
-    uint32_t total_len = 0;
-    command_cache[total_len++] = 0x00;     // noop (DMA sync)
-    command_cache[total_len++] = 0xf3;     // DI (disable interrupts)
-    command_cache[total_len++] = 0x00;     // noop while DI takes effect
-    memcpy(command_cache + total_len, buf, len);
-    total_len += len;
-    command_cache[total_len++] = 0xfb;     // EI
-    command_cache[total_len++] = 0xfb;     // EI (delayed by one insn)
-    command_cache[total_len++] = 0x76;     // HALT (wait for VBlank)
-    command_cache[total_len++] = 0xc3;     // JP 0x1000
-    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR & 0xff);
-    command_cache[total_len++] = (uint8_t)(GB_IDLE_ADDR >> 8);
-
-    feeder_start(command_cache, total_len);
-    feeder_wait_drained();
+    // Write commands into the inactive non-vblank buffer (the one the GB
+    // is NOT currently executing).  The active/inactive flip happens at
+    // vblank START (0xA1); clearing and CALL patching at vblank END (0xA4).
+    // These commands execute during Phase 3 of the vblank handler.  Since
+    // the handler runs with interrupts disabled (hardware behaviour), we
+    // no longer need explicit DI/EI wrapping — the CALL/RET handles flow.
+    // Buffers are pre-filled with 0xC9 (RET) so an idle buffer returns
+    // immediately.
+    int inactive = 1 - nonvb_active_buf;
+    int written = nonvb_write_len[inactive];
+    uint32_t remaining = CMD_BUF_SIZE - written;
+    if (len >= remaining) {
+        len = remaining > 0 ? remaining - 1 : 0;  // always leave at least one RET
+    }
+    if (len > 0) {
+        memcpy(gb_data_buffer + nonvb_cmd_buf_addr(inactive) + written, buf, len);
+        nonvb_write_len[inactive] = written + len;
+    }
 }
 
 void common_hal_gbio_queue_vblank_commands(const uint8_t *buf, uint32_t len, uint32_t additional_cycles) {
@@ -1497,32 +1611,26 @@ void common_hal_gbio_queue_vblank_commands(const uint8_t *buf, uint32_t len, uin
     if (!everything_going || supervisor_ticks_ms64() - last_vsync_time > 600) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("game boy not running"));
     }
-    // Write commands into the vblank handler's user command area.
-    // The handler executes them during the next vblank.
-    if (len > VB_USER_AREA_SIZE) {
-        len = VB_USER_AREA_SIZE;
+    // Write commands into the inactive vblank buffer (the one the GB is
+    // NOT currently executing).  The active/inactive flip happens at
+    // vblank START (0xA1); clearing and CALL patching at vblank END (0xA4).
+    // Buffers are pre-filled with 0xC9 (RET) so an idle buffer returns
+    // immediately when CALLed by the vblank handler.
+    int inactive = 1 - vb_active_buf;
+    int written = vb_write_len[inactive];
+    uint32_t remaining = CMD_BUF_SIZE - written;
+    if (len >= remaining) {
+        len = remaining > 0 ? remaining - 1 : 0;  // always leave at least one RET
     }
-    memcpy(gb_data_buffer + VB_USER_AREA, buf, len);
+    if (len > 0) {
+        memcpy(gb_data_buffer + vb_cmd_buf_addr(inactive) + written, buf, len);
+        vb_write_len[inactive] = written + len;
+    }
     total_additional_cycles += additional_cycles;
 }
 
-void common_hal_gbio_set_lcdc(uint8_t value) {
-    uint8_t previous = change_screen_commands[4];
-    change_screen_commands[4] = value;
-    // Turning the LCD off must happen during vblank to avoid tearing.
-    if ((previous & 0x80) == 0x80 && (value & 0x80) == 0) {
-        common_hal_gbio_queue_vblank_commands(change_screen_commands, sizeof(change_screen_commands), 1);
-        common_hal_gbio_wait_for_vblank();
-        return;
-    }
-    common_hal_gbio_queue_commands(change_screen_commands, sizeof(change_screen_commands));
-}
-
-uint8_t common_hal_gbio_get_lcdc(void) {
-    return change_screen_commands[4];
-}
-
 void common_hal_gbio_wait_for_vblank(void) {
+    mp_printf(&mp_plat_print, "wait_for_vblank: ");
     if (!gbio_inited) {
         return;
     }
@@ -1530,12 +1638,11 @@ void common_hal_gbio_wait_for_vblank(void) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("game boy not running"));
     }
     // Poll the frame counter in cartridge RAM (written by vblank handler)
-    uint8_t start = gb_data_buffer[GB_RAM_VSYNC];
-    while (gb_data_buffer[GB_RAM_VSYNC] == start) {
+    size_t start = vblank_count;
+    while (vblank_count == start) {
         RUN_BACKGROUND_TASKS;
     }
-    vsync_count++;
-    last_vsync_time = supervisor_ticks_ms64();
+    mp_printf(&mp_plat_print, "done\n");
 }
 
 uint32_t common_hal_gbio_get_vsync_count(void) {
@@ -1546,8 +1653,7 @@ uint8_t common_hal_gbio_get_pressed(void) {
     if (!gbio_inited) {
         return 0xff;
     }
-    // Read button state from cartridge RAM (written by joypad handler).
-    // The joypad handler writes the combined button/direction state to GB_RAM_GAMEPAD.
+    // Read button state from cartridge RAM (written by vblank handler Phase 2).
     // Bits: high nibble = buttons (Start, Select, B, A), low nibble = directions (D, U, L, R)
     // 0 = pressed, 1 = released (inverted from Game Boy convention)
     uint8_t raw = gb_data_buffer[GB_RAM_GAMEPAD];
