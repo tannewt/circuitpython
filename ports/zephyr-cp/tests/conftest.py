@@ -3,6 +3,7 @@
 
 """Pytest fixtures for CircuitPython native_sim and hardware-in-the-loop testing."""
 
+import gc
 import logging
 import os
 import subprocess
@@ -11,12 +12,14 @@ from pathlib import Path
 import pytest
 import serial
 
+from .board_cache import BoardCache, BOARD_CONFIG, DEFAULT_CACHE_PATH
 from .perfetto_input_trace import write_input_trace
 
 from perfetto.trace_processor import TraceProcessor
 
 from . import NativeSimProcess
-from .esp import EspProcess, SumpLogicAnalyzer, find_user_fs_partition
+from .esp import EspProcess, SumpLogicAnalyzer, find_user_fs_partition, flash_firmware
+from .harness_client import Harness, HarnessSerial
 
 logger = logging.getLogger(__name__)
 
@@ -29,36 +32,13 @@ def pytest_addoption(parser):
         help="Overwrite golden images with captured output instead of comparing.",
     )
     parser.addoption(
-        "--esp-port",
+        "--board-cache",
         default=None,
-        help="Serial port for ESP32 hardware-in-the-loop testing (e.g. /dev/ttyACM0).",
-    )
-    parser.addoption(
-        "--esp-chip",
-        default="auto",
-        help="ESP chip type for esptool (default: auto).",
-    )
-    parser.addoption(
-        "--esp-flash-size",
-        default="4MB",
-        help="ESP flash size (2MB, 4MB, 8MB, 16MB, 32MB). Default: 4MB.",
-    )
-    parser.addoption(
-        "--esp-uf2",
-        action="store_true",
-        default=False,
-        help="Board uses UF2 bootloader partition layout.",
-    )
-    parser.addoption(
-        "--logic-port",
-        default=None,
-        help="Serial port for esp-perfetto-logic analyzer (e.g. /dev/ttyACM1).",
-    )
-    parser.addoption(
-        "--logic-baud",
-        type=int,
-        default=115200,
-        help="Baud rate for logic analyzer (default: 115200).",
+        help=(
+            "Path to board-cache JSON file. "
+            "Maps board_id → mDNS hostname for hardware-in-the-loop testing. "
+            "Defaults to <tests_dir>/.board_cache.json"
+        ),
     )
 
 
@@ -112,9 +92,89 @@ def pytest_configure(config):
     )
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Discover hardware boards via mDNS and populate the board cache.
+
+    Runs once per session so that :func:`pytest_generate_tests` has
+    up-to-date board availability without making network calls during
+    collection.
+    """
+    cache = _get_board_cache(session.config)
+    for board_id in list(BOARD_CONFIG):
+        # If already cached and accessible, nothing to do.
+        if cache.is_accessible(board_id):
+            continue
+        # Stale or missing — remove old entry, then try mDNS discovery.
+        if board_id in cache.list_cached():
+            cache.remove(board_id)
+        entry = cache.discover(board_id)
+        if entry is not None:
+            cache.put(board_id, entry["host"], entry.get("port", 3240))
+
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    """Auto-parameterize ``circuitpython`` tests with available boards.
+
+    - Tests that already have an explicit ``circuitpython_board`` marker
+      (including those using :func:`pytest.mark.parametrize`) are left
+      as-is — the marker drives board selection directly.
+    - Tests using native_sim-only markers (``input_trace``, ``display``,
+      etc.) run on ``native_native_sim`` only.
+    - All other tests are parametrized across ``native_native_sim`` plus
+      every cached hardware board (reachability is verified at fixture
+      time, not during collection).
+    """
+    if "circuitpython" not in metafunc.fixturenames:
+        return
+
+    # Test already declares its own board(s) — leave it alone.
+    if metafunc.definition.get_closest_marker("circuitpython_board") is not None:
+        return
+
+    marker_names = {m.name for m in metafunc.definition.iter_markers()}
+
+    if marker_names & NATIVE_SIM_ONLY_MARKERS:
+        # Native-sim-only test; no parametrization needed.
+        return
+
+    cache = _get_board_cache(metafunc.config)
+    # Only look at the cache — no network calls during collection.
+    # Actual reachability is checked at fixture time.
+    hardware_boards = [b for b in BOARD_CONFIG if cache.get(b) is not None]
+
+    if not hardware_boards:
+        return
+
+    params = [pytest.param(marks=pytest.mark.circuitpython_board("native_native_sim"))] + [
+        pytest.param(marks=pytest.mark.circuitpython_board(b)) for b in hardware_boards
+    ]
+    metafunc.parametrize("", params)
+
+
 ZEPHYR_CP = Path(__file__).parent.parent
-BUILD_DIR = ZEPHYR_CP / "build-native_native_sim"
-BINARY = BUILD_DIR / "zephyr-cp/zephyr/zephyr.exe"
+
+# Markers that indicate native_sim-only features.
+# Tests using any of these markers will only run on native_sim.
+NATIVE_SIM_ONLY_MARKERS: set[str] = {
+    "input_trace",
+    "display",
+    "display_capture",
+    "display_pixel_format",
+    "display_mono_vtiled",
+    "disable_i2c_devices",
+    "flash_config",
+    "native_sim_rt",
+}
+
+
+def _get_board_cache(config: pytest.Config) -> BoardCache:
+    """Return the :class:`BoardCache` for the current session."""
+    cache_path = config.getoption("--board-cache", default=None)
+    if cache_path is None:
+        cache_path = DEFAULT_CACHE_PATH
+    else:
+        cache_path = Path(cache_path)
+    return BoardCache(cache_path)
 
 
 def _iter_uart_tx_slices(trace_file: Path) -> list[tuple[int, int, str, str]]:
@@ -258,17 +318,136 @@ def _create_flash_image(tmp_path, drive_marker, flash_total_size, index=0):
     return flash
 
 
+def _harness_url_for(cache: BoardCache, board_id: str | None = None) -> str | None:
+    """Return a ``pyusb://`` URL for the harness on a cached board's bridge.
+
+    The harness (VID:PID 0xCAFE:0x4002) exposes an SCPI interface for
+    GPIO/bus control and has a built-in logic analyzer.  It lives on the
+    same USB/IP bridge as the DUT.
+
+    If *board_id* is given the harness is looked up on that board's
+    bridge; otherwise the first cached board is used.
+    """
+    if board_id is not None:
+        entry = cache.get(board_id)
+    else:
+        for bid in cache.list_cached():
+            entry = cache.get(bid)
+            if entry is not None:
+                board_id = bid
+                break
+        else:
+            entry = None
+
+    if entry is None:
+        return None
+    return f"pyusb://{entry['host']}/cafe:4002"
+
+
+def _logic_analyzer_for(
+    cache: BoardCache, board_id: str | None = None
+) -> SumpLogicAnalyzer | None:
+    """Return a :class:`SumpLogicAnalyzer` for the given board's harness.
+
+    The logic analyzer is built into every harness, so if the harness is
+    reachable the LA is available at the same URL (the LA speaks SUMP
+    over the same serial channel).
+    """
+    url = _harness_url_for(cache, board_id)
+    if url is None:
+        return None
+    try:
+        return SumpLogicAnalyzer(url, baud=115200)
+    except Exception:
+        return None
+
+
+@pytest.fixture(scope="session")
+def harness(request):
+    """Connect to the esp-harness SCPI interface for GPIO/bus control.
+
+    Returns a :class:`HarnessSerial` instance or *None* if no cached
+    board with a harness is found.
+    """
+    cache = _get_board_cache(request.config)
+    url = _harness_url_for(cache)
+    if url is None:
+        return None
+    logger.info("Connecting to harness at %s", url)
+    h = HarnessSerial(port=url)
+    try:
+        ident = h.idn()
+    except Exception as e:
+        logger.warning("Harness at %s did not respond: %s", url, e)
+        h.close()
+        return None
+    logger.info("Harness connected: %s", ident)
+    yield h
+    h.close()
+
+
+@pytest.fixture(scope="session")
+def harness_board(request):
+    """Board-like harness fixture for CircuitPython-compatible digital I/O tests.
+
+    Returns a :class:`Harness` instance (board-like API) or ``None`` if
+    the harness is not discovered.
+
+    Usage::
+
+        from harness_client import digitalio
+
+        def test_led_blink(harness_board):
+            if harness_board is None:
+                pytest.skip("harness not available")
+            harness_board.dut_pin("LED", 12)
+            dio = digitalio.DigitalInOut(harness_board.LED)
+            dio.direction = digitalio.Direction.OUTPUT
+            dio.value = True
+    """
+    cache = _get_board_cache(request.config)
+    url = _harness_url_for(cache)
+    if url is None:
+        return None
+    logger.info("Connecting to harness (board) at %s", url)
+    h = Harness(port=url)
+    try:
+        ident = h.idn()
+    except Exception as e:
+        logger.warning("Harness at %s did not respond: %s", url, e)
+        h.close()
+        return None
+    logger.info("Harness (board) connected: %s", ident)
+    yield h
+    h.close()
+
+
 @pytest.fixture
 def circuitpython(request, board, sim_id, tmp_path):
     """Run CircuitPython and return a process with serial access.
 
-    Targets native_sim by default, or ESP32 hardware when --esp-port is given.
-    """
-    esp_port = request.config.getoption("--esp-port")
-    if esp_port is not None:
-        yield from _circuitpython_esp(request, tmp_path, esp_port)
-        return
+    The target board is set by ``@pytest.mark.circuitpython_board``
+    (or auto-parametrized via :func:`pytest_generate_tests`).
 
+    ``native_native_sim`` and ``native_nrf5340bsim`` use the local
+    native simulator.  ``espressif_*`` boards use USB/IP hardware
+    discovered via mDNS and cached in the board-cache file.
+    """
+    if board.startswith("native_"):
+        yield from _circuitpython_native(request, board, sim_id, tmp_path)
+    elif board.startswith("espressif_"):
+        yield from _circuitpython_esp(request, board, tmp_path)
+    else:
+        pytest.skip(f"Unsupported board: {board}")
+
+
+def _circuitpython_native(
+    request: pytest.FixtureRequest,
+    board: str,
+    sim_id: str,
+    tmp_path: Path,
+):
+    """Run CircuitPython on a ``native_*`` board (simulator)."""
     native_sim_binary = request.getfixturevalue("native_sim_binary")
     native_sim_env = request.getfixturevalue("native_sim_env")
 
@@ -323,7 +502,6 @@ def circuitpython(request, board, sim_id, tmp_path):
     if mono_vtiled_marker is not None and mono_vtiled_marker.args:
         mono_vtiled = mono_vtiled_marker.args[0]
 
-    # If capture_times_ns is set, merge display_capture track into input trace.
     if capture_times_ns is not None:
         if input_trace is None:
             input_trace = {}
@@ -337,7 +515,7 @@ def circuitpython(request, board, sim_id, tmp_path):
     use_realtime = request.node.get_closest_marker("native_sim_rt") is not None
 
     flash_config_marker = request.node.get_closest_marker("flash_config")
-    flash_total_size = 2 * 1024 * 1024  # default 2MB
+    flash_total_size = 2 * 1024 * 1024
     flash_erase_block_size = None
     flash_write_block_size = None
     if flash_config_marker:
@@ -368,7 +546,6 @@ def circuitpython(request, board, sim_id, tmp_path):
             )
         else:
             cmd = [str(native_sim_binary), f"--flash={flash}"]
-            # native_sim vm-runs includes the boot VM setup run.
             realtime_flag = "-rt" if use_realtime else "-no-rt"
             cmd.extend(
                 (
@@ -390,9 +567,9 @@ def circuitpython(request, board, sim_id, tmp_path):
         if input_trace_file is not None:
             cmd.append(f"--input-trace={input_trace_file}")
 
-        marker = request.node.get_closest_marker("disable_i2c_devices")
-        if marker and len(marker.args) > 0:
-            for device in marker.args:
+        disable_marker = request.node.get_closest_marker("disable_i2c_devices")
+        if disable_marker and len(disable_marker.args) > 0:
+            for device in disable_marker.args:
                 cmd.append(f"--disable-i2c={device}")
 
         if pixel_format is not None:
@@ -417,16 +594,18 @@ def circuitpython(request, board, sim_id, tmp_path):
         proc.display_dump = None
         proc._capture_png_pattern = capture_png_pattern
         proc._capture_count = len(capture_times_ns) if capture_times_ns is not None else 0
+        proc.board_id = board
         procs.append(proc)
+
     if instance_count == 1:
         yield procs[0]
     else:
         yield procs
+
     for i, proc in enumerate(procs):
         if instance_count > 1:
             print(f"---------- Instance {i} -----------")
         proc.shutdown()
-
         print("All serial output:")
         print(proc.serial.all_output)
         print()
@@ -434,8 +613,78 @@ def circuitpython(request, board, sim_id, tmp_path):
         print(proc.debug_serial.all_output)
 
 
-def _circuitpython_esp(request, tmp_path, esp_port):
-    """ESP32 hardware-in-the-loop variant of the circuitpython fixture."""
+@pytest.fixture(scope="session", autouse=True)
+def _close_usbip_backends(request):
+    """Session teardown: force-close every leaked USB/IP backend TCP socket."""
+    gc.collect()
+    yield
+    _close_all_usbip_backends()
+
+
+@pytest.fixture(scope="session")
+def _hw_firmware_flashed(request):
+    """Flash full CircuitPython firmware to every cached hardware board.
+
+    Runs once per session.  Each per-test fixture then only refreshes
+    the ``user_fs`` partition.
+    """
+    cache = _get_board_cache(request.config)
+    for board_id in cache.list_cached():
+        if not board_id.startswith("espressif_"):
+            continue
+        board_cfg = BOARD_CONFIG.get(board_id, {})
+        firmware_path = ZEPHYR_CP / f"build-{board_id}" / "firmware.bin"
+        if not firmware_path.is_file():
+            continue
+        entry = cache.get(board_id)
+        assert entry is not None
+        host = entry["host"]
+        flash_vid = board_cfg.get("flash_vid")
+        flash_pid = board_cfg.get("flash_pid")
+        if flash_vid and flash_pid:
+            flash_port = f"pyusb://{host}/{flash_vid:04x}:{flash_pid:04x}"
+        else:
+            dut_vid = board_cfg.get("dut_vid", 0x303A)
+            dut_pid = board_cfg.get("dut_pid", 0x1001)
+            flash_port = f"pyusb://{host}/{dut_vid:04x}:{dut_pid:04x}"
+        logger.info("Flashing firmware for %s: %s", board_id, firmware_path)
+        flash_firmware(flash_port, firmware_path, chip=board_cfg.get("chip", "auto"))
+    return True
+
+
+def _circuitpython_esp(
+    request: pytest.FixtureRequest,
+    board: str,
+    tmp_path: Path,
+):
+    """ESP32 hardware-in-the-loop variant of the circuitpython fixture.
+
+    Uses the board cache to find the device via USB/IP.  Skips if the
+    board is not reachable.
+    """
+    cache = _get_board_cache(request.config)
+    if not cache.ensure_accessible(board):
+        pytest.skip(f"Board {board} not reachable via USB/IP")
+
+    # Trigger session-level firmware flash once.
+    request.getfixturevalue("_hw_firmware_flashed")
+
+    entry = cache.get(board)
+    assert entry is not None
+    board_cfg = BOARD_CONFIG.get(board, {})
+
+    # Build pyusb:// URLs for the DUT and optional flash port.
+    host = entry["host"]
+
+    dut_vid = board_cfg.get("dut_vid", 0x303A)
+    dut_pid = board_cfg.get("dut_pid", 0x1001)
+    esp_port = f"pyusb://{host}/{dut_vid:04x}:{dut_pid:04x}"
+
+    flash_port = esp_port
+    flash_vid = board_cfg.get("flash_vid")
+    flash_pid = board_cfg.get("flash_pid")
+    if flash_vid and flash_pid:
+        flash_port = f"pyusb://{host}/{flash_vid:04x}:{flash_pid:04x}"
 
     drives = list(request.node.iter_markers_with_node("circuitpy_drive"))
     if len(drives) != 1:
@@ -451,9 +700,9 @@ def _circuitpython_esp(request, tmp_path, esp_port):
     if request.node.get_closest_marker("flash_config") is not None:
         pytest.skip("flash_config not supported on ESP hardware")
 
-    flash_size = request.config.getoption("--esp-flash-size")
-    uf2 = request.config.getoption("--esp-uf2")
-    chip = request.config.getoption("--esp-chip")
+    flash_size = board_cfg.get("flash_size", "4MB")
+    uf2 = board_cfg.get("uf2", False)
+    chip = board_cfg.get("chip", "auto")
 
     user_fs_offset, user_fs_size = find_user_fs_partition(flash_size, uf2)
 
@@ -465,14 +714,9 @@ def _circuitpython_esp(request, tmp_path, esp_port):
 
     flash = _create_flash_image(tmp_path, drives[0][1], user_fs_size, index=0)
 
-    # Set up logic analyzer if configured.
-    logic_port = request.config.getoption("--logic-port")
-    logic_analyzer = None
-    trace_file = None
-    if logic_port is not None:
-        logic_baud = request.config.getoption("--logic-baud")
-        logic_analyzer = SumpLogicAnalyzer(logic_port, baud=logic_baud)
-        trace_file = tmp_path / "trace-0.perfetto"
+    # Logic analyzer is built into the harness on the same bridge.
+    logic_analyzer = _logic_analyzer_for(cache, board)
+    trace_file = tmp_path / "trace-0.perfetto" if logic_analyzer is not None else None
 
     proc = EspProcess(
         port=esp_port,
@@ -483,13 +727,50 @@ def _circuitpython_esp(request, tmp_path, esp_port):
         timeout=timeout,
         logic_analyzer=logic_analyzer,
         trace_file=trace_file,
+        flash_port=flash_port,
     )
     proc._expected_runs = code_py_runs
+    proc.board_id = board
 
-    yield proc
+    try:
+        yield proc
+    finally:
+        try:
+            print("All serial output:")
+            if proc.serial is not None:
+                print(proc.serial.all_output)
+            else:
+                print("(closed)")
+        except Exception:
+            pass
+        proc.shutdown()
+        if logic_analyzer is not None:
+            try:
+                logic_analyzer.close()
+            except Exception:
+                pass
 
-    print("All serial output:")
-    print(proc.serial.all_output if proc.serial else "(closed)")
-    proc.shutdown()
-    if logic_analyzer is not None:
-        logic_analyzer.close()
+
+def _close_all_usbip_backends():
+    """Find every USBIPBackend still alive in the heap and close it.
+
+    pyserial-pyusb Serial ↔ USBIPBackend ↔ _UsbipConnection form a
+    reference cycle that the garbage collector must break before the
+    backend's ``__del__`` fires.  Between tests the collector may not
+    run, so callers should ``gc.collect()`` first, then this function.
+    """
+    try:
+        from usbip_backend.backend import USBIPBackend
+    except ImportError:
+        return
+
+    closed = 0
+    for obj in gc.get_objects():
+        if isinstance(obj, USBIPBackend):
+            try:
+                obj.close()
+                closed += 1
+            except Exception:
+                pass
+    if closed:
+        logger.info("Closed %d leaked USBIPBackend instance(s)", closed)

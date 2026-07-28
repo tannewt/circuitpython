@@ -117,8 +117,17 @@ def test_digitalio_blink_output(circuitpython):
     assert "LED off 2" in output
     assert "done" in output
 
-    # Check GPIO traces - LED is on gpio_emul.00
-    gpio_trace = parse_gpio_trace(circuitpython.trace_file, "gpio_emul.00")
+    # Check GPIO traces (when trace file is available).
+    if circuitpython.trace_file is None:
+        return
+
+    # Determine the pin name for the LED on this board.
+    # native_sim uses gpio_emul.00; hardware boards use the harness
+    # pin label that was registered via dut_pin("LED", ...).
+    board_id = getattr(circuitpython, "board_id", "native_native_sim")
+    pin_name = "gpio_emul.00" if board_id.startswith("native_") else "LED"
+
+    gpio_trace = parse_gpio_trace(circuitpython.trace_file, pin_name)
 
     # Deduplicate by timestamp (keep last value at each timestamp)
     by_timestamp = {}

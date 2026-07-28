@@ -1,0 +1,533 @@
+# SPDX-FileCopyrightText: 2026 Scott Shawcroft for Adafruit Industries
+# SPDX-License-Identifier: MIT
+
+"""ESP32 hardware-in-the-loop test backend.
+
+Uses esptool.py to flash the CIRCUITPY FAT image to the user_fs partition
+and communicates over serial (local or via pyserial-pyusb over USB/IP).
+
+Optionally captures Perfetto traces from an esp-perfetto-logic device
+running alongside the DUT (Device Under Test).
+"""
+
+import csv
+import gc
+import logging
+import os
+import struct
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+import serial
+import serial.tools.list_ports
+
+from . import SerialSaver
+
+
+def _ensure_pyusb_handler():
+    """Register pyserial-pyusb URL handler if available.
+
+    Bumps the reconnect timeout for the cases where auto-reconnect is on
+    (e.g. native USB JTAG/Serial paths), and disables auto-reconnect for
+    our usage. Auto-reconnect is harmful when going through a CP2102N:
+    the C6 reset doesn't make the CP210x disappear from USB, so the
+    transient ENODEV/RST from the bridge during the reset window
+    shouldn't drive a fresh `OP_REQ_IMPORT` (which on the bridge
+    accumulates client sockets and eventually triggers ENFILE). esptool's
+    own ``connect_attempts`` loop handles legitimate retry.
+    """
+    try:
+        import serial_pyusb  # noqa: F401 — registers pyusb:// on import
+        from serial_pyusb.serial import Serial as _PyusbSerial
+
+        _PyusbSerial._RECONNECT_TIMEOUT = max(_PyusbSerial._RECONNECT_TIMEOUT, 30.0)
+        _PyusbSerial._AUTO_RECONNECT = False
+    except ImportError:
+        pass
+
+
+def _open_serial(port, **kwargs):
+    """Open a serial port, supporting both device paths and pyusb:// URLs."""
+    if port.startswith("pyusb://"):
+        _ensure_pyusb_handler()
+        return serial.serial_for_url(port, **kwargs)
+    return serial.Serial(port, **kwargs)
+
+
+logger = logging.getLogger(__name__)
+
+# Sentinel printed by main.c after every code.py run.
+CODE_PY_DONE = "Press any key to enter the REPL"
+
+
+def _esptool_before_arg(port):
+    """Pick the right --before reset strategy for the given port.
+
+    For HIL setups going through an on-board USB-UART (CP2102N etc.) whose
+    DTR/RTS lines are wired to the DUT's BOOT/EN pins, we want ClassicReset
+    -- it holds BOOT (DTR-driven GPIO) low through the EN pulse so the chip
+    exits reset already in download mode. ClassicReset uses pyserial's
+    setDTR/setRTS API which the pyserial-pyusb CDC/CP210x drivers implement,
+    so it works equally well over pyusb:// URLs.
+
+    "default-reset" on Linux first tries UnixTightReset (fcntl ioctl, fails
+    on URL ports with a one-time warning) then cycles to ClassicReset, so we
+    just always select it.
+
+    "usb-reset" would be appropriate only when flashing through the chip's
+    own native USB-Serial/JTAG peripheral (e.g. ESP32-C3/C6/S3 boards with
+    no on-board USB-UART), where the chip's USB hardware -- not external
+    GPIO -- interprets the DTR/RTS pattern.
+    """
+    return "default-reset"
+
+
+def flash_firmware(port, firmware_bin, chip="auto", baud=921600, offset=0x0):
+    """Flash a combined CircuitPython firmware image to an ESP device.
+
+    Done once at session start (e.g. via a session-scoped pytest fixture)
+    so that subsequent per-test fixtures only need to refresh the user_fs
+    partition. `firmware_bin` is the combined image (bootloader +
+    partition table + app) produced by the espressif Makefile, written at
+    flash offset 0x0.
+    """
+    before = _esptool_before_arg(port)
+    args = [
+        "--chip",
+        chip,
+        "-p",
+        port,
+        "--baud",
+        str(baud),
+        f"--before={before}",
+        "--after=hard-reset",
+        "write-flash",
+        hex(offset),
+        str(firmware_bin),
+    ]
+    if port.startswith("pyusb://"):
+        _ensure_pyusb_handler()
+        import esptool
+
+        logger.info("flash_firmware (python): %s", " ".join(args))
+        try:
+            esptool.main(args)
+        finally:
+            # esptool normally calls esp._port.close() on its happy path,
+            # which now also tears down the underlying USB/IP backend's
+            # TCP socket. Force a GC pass to reclaim any backend objects
+            # left dangling by exception paths (Serial ↔ backend hold a
+            # reference cycle, so without this they linger on the bridge
+            # until the cycle collector decides to run).
+            gc.collect()
+        return
+    cmd = [sys.executable, "-m", "esptool"] + args
+    logger.info("flash_firmware: %s", " ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"flash_firmware failed: {result.stderr}")
+
+
+# Partition table CSV files, keyed by (flash_size, uf2).
+# Paths are relative to ports/espressif/.
+ESPRESSIF_PORT = Path(__file__).parent.parent.parent / "espressif"
+PARTITION_CSVS = {
+    ("2MB", False): "esp-idf-config/partitions-2MB-no-ota-no-uf2.csv",
+    ("4MB", False): "esp-idf-config/partitions-4MB-no-uf2.csv",
+    ("4MB", True): "esp-idf-config/partitions-4MB.csv",
+    ("8MB", False): "esp-idf-config/partitions-8MB-no-uf2.csv",
+    ("8MB", True): "esp-idf-config/partitions-8MB.csv",
+    ("16MB", False): "esp-idf-config/partitions-16MB-no-uf2.csv",
+    ("16MB", True): "esp-idf-config/partitions-16MB.csv",
+    ("32MB", True): "esp-idf-config/partitions-32MB.csv",
+}
+
+
+def _parse_size(s):
+    """Parse a size string like '1216K' or '4MB' into bytes."""
+    s = s.strip()
+    if s.upper().endswith("K"):
+        return int(s[:-1]) * 1024
+    if s.upper().endswith("MB"):
+        return int(s[:-2]) * 1024 * 1024
+    if s.upper().endswith("M"):
+        return int(s[:-1]) * 1024 * 1024
+    return int(s, 0)
+
+
+def find_user_fs_partition(flash_size, uf2=False):
+    """Return (offset, size) in bytes for the user_fs partition.
+
+    Parses the appropriate partition CSV for the given flash configuration.
+    """
+    key = (flash_size, uf2)
+    csv_rel = PARTITION_CSVS.get(key)
+    if csv_rel is None:
+        raise ValueError(
+            f"No partition table for flash_size={flash_size}, uf2={uf2}. "
+            f"Known configs: {list(PARTITION_CSVS.keys())}"
+        )
+    csv_path = ESPRESSIF_PORT / csv_rel
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Partition CSV not found: {csv_path}")
+
+    with open(csv_path) as f:
+        for row in csv.reader(f):
+            # Skip comments and empty lines.
+            if not row or row[0].strip().startswith("#"):
+                continue
+            name = row[0].strip()
+            if name == "user_fs":
+                offset = int(row[3].strip(), 0)
+                size = _parse_size(row[4])
+                return offset, size
+
+    raise ValueError(f"user_fs partition not found in {csv_path}")
+
+
+# ---------------------------------------------------------------------------
+# SUMP protocol constants for esp-perfetto-logic
+# ---------------------------------------------------------------------------
+
+SUMP_RESET = b"\x00"
+SUMP_RUN = b"\x01"
+SUMP_ID = b"\x02"
+SUMP_METADATA = b"\x04"
+SUMP_SET_FORMAT = b"\x05"
+SUMP_FORMAT_PERFETTO = b"\x01"
+SUMP_SET_DIVIDER = b"\x80"
+SUMP_SET_READ_DELAY = b"\x81"
+SUMP_SET_FLAGS = b"\x82"
+SUMP_SET_PIN_MAP = b"\x83"
+SUMP_SET_ENABLE_PIN = b"\x84"
+SUMP_SET_EXT_READ_COUNT = b"\x85"
+
+# Perfetto trace framing
+TRACE_PACKET_TAG = 0x0A
+END_SENTINEL = bytes([TRACE_PACKET_TAG, 0x00])
+
+
+def _sump_long_cmd(cmd_byte, data_u32):
+    """Build a 5-byte SUMP long command."""
+    return cmd_byte + struct.pack("<I", data_u32)
+
+
+class SumpLogicAnalyzer:
+    """Driver for an esp-perfetto-logic device over serial.
+
+    Sends SUMP commands to configure the logic analyzer, triggers a capture
+    in Perfetto streaming mode, and collects the trace in a background thread.
+    """
+
+    def __init__(self, port, baud=115200, timeout=1):
+        self._port_name = port
+        self._baud = baud
+        self._ser = _open_serial(port, baudrate=baud, timeout=timeout)
+        self._capture_thread = None
+        self._trace_data = b""
+        self._capture_done = threading.Event()
+        self._reset()
+
+    def _reset(self):
+        """Send 5x reset to ensure known state."""
+        for _ in range(5):
+            self._ser.write(SUMP_RESET)
+        time.sleep(0.1)
+        self._ser.reset_input_buffer()
+
+    def set_pin_mapping(self, channel_gpio_map):
+        """Map logical channels to GPIOs.
+
+        channel_gpio_map: dict of {channel_num: gpio_num}
+        """
+        for channel, gpio in channel_gpio_map.items():
+            self._ser.write(_sump_long_cmd(SUMP_SET_PIN_MAP, channel | (gpio << 8)))
+
+    def set_sample_rate(self, clock_hz, rate_hz):
+        """Set the sample rate via the divider register."""
+        divider = max(0, (clock_hz // rate_hz) - 1)
+        self._ser.write(_sump_long_cmd(SUMP_SET_DIVIDER, divider))
+
+    def set_sample_count(self, count):
+        """Set the number of samples to capture (0 = streaming/unlimited)."""
+        self._ser.write(_sump_long_cmd(SUMP_SET_EXT_READ_COUNT, count))
+
+    def start_perfetto_capture(self, trace_file):
+        """Configure Perfetto output and start capture.
+
+        The capture runs in a background thread. Call stop_capture() or
+        wait for the device to send the end sentinel.
+        """
+        self._trace_file = Path(trace_file)
+        self._trace_data = b""
+        self._capture_done.clear()
+
+        # Select Perfetto output format.
+        self._ser.write(SUMP_SET_FORMAT + SUMP_FORMAT_PERFETTO)
+        time.sleep(0.05)
+
+        # Arm and run.
+        self._ser.write(SUMP_RUN)
+
+        self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._capture_thread.start()
+
+    def _capture_loop(self):
+        """Background thread: read Perfetto trace from serial until sentinel."""
+        buf = b""
+        # Skip any boot log text and find the trace start.
+        while not self._capture_done.is_set():
+            chunk = self._ser.read(self._ser.in_waiting or 1)
+            if not chunk:
+                continue
+            buf += chunk
+            # Look for the Perfetto trace start (0x0A followed by non-text).
+            while len(buf) >= 2:
+                idx = buf.find(bytes([TRACE_PACKET_TAG]))
+                if idx == -1:
+                    buf = buf[-1:]
+                    break
+                next_byte = buf[idx + 1]
+                if next_byte > 0x7F or (0 < next_byte < 0x20 and next_byte not in (0x0A, 0x0D)):
+                    # Found trace start.
+                    buf = buf[idx:]
+                    self._stream_trace(buf)
+                    return
+                buf = buf[idx + 1 :]
+            if len(buf) > 4096:
+                buf = buf[-256:]
+
+    def _stream_trace(self, leading):
+        """Read trace data until the end sentinel or capture is stopped."""
+        data = bytearray(leading)
+        tail = leading[-1:] if leading else b""
+
+        while not self._capture_done.is_set():
+            chunk = self._ser.read(self._ser.in_waiting or 1)
+            if not chunk:
+                continue
+
+            combined = tail + chunk
+            sentinel_pos = combined.find(END_SENTINEL)
+            if sentinel_pos != -1:
+                keep = sentinel_pos - len(tail)
+                if keep > 0:
+                    data.extend(chunk[:keep])
+                break
+
+            data.extend(chunk)
+            tail = combined[-len(END_SENTINEL) + 1 :]
+
+        self._trace_data = bytes(data)
+        self._trace_file.write_bytes(self._trace_data)
+        self._capture_done.set()
+        logger.info(
+            "Logic analyzer: captured %d bytes to %s",
+            len(self._trace_data),
+            self._trace_file,
+        )
+
+    def stop_capture(self, timeout=10):
+        """Wait for capture to finish and return the trace file path."""
+        if self._capture_thread is None:
+            return self._trace_file
+        self._capture_done.wait(timeout=timeout)
+        if not self._capture_done.is_set():
+            # Force stop if the device didn't send the sentinel.
+            self._capture_done.set()
+            logger.warning("Logic analyzer capture timed out")
+        self._capture_thread.join(timeout=2)
+        self._capture_thread = None
+        return self._trace_file
+
+    def close(self):
+        """Stop any in-progress capture and close the serial port."""
+        self._capture_done.set()
+        if self._capture_thread is not None:
+            self._capture_thread.join(timeout=2)
+            self._capture_thread = None
+        self._reset()
+        self._ser.close()
+
+
+class EspProcess:
+    """Hardware-in-the-loop backend for ESP32 boards.
+
+    Provides the same interface as NativeSimProcess:
+      .serial      - SerialSaver wrapping the board's serial port
+      .flash_file  - path to the local FAT image (for mcopy readback)
+      .wait_until_done()
+      .shutdown()
+    """
+
+    def __init__(
+        self,
+        port,
+        flash_file,
+        user_fs_offset,
+        user_fs_size,
+        chip="auto",
+        timeout=10,
+        baud=921600,
+        serial_baud=115200,
+        logic_analyzer=None,
+        trace_file=None,
+        flash_port=None,
+    ):
+        self.port = port
+        # Port that esptool talks to. For boards like the ESP32-C6-DevKitM
+        # the on-board CP2102N's DTR/RTS are wired to GPIO9 (BOOT) and EN,
+        # so flashing must go through it; the chip's native USB CDC
+        # (`port`) is reserved for monitoring CircuitPython's REPL output.
+        # If unspecified, flash and monitor share the same port.
+        self.flash_port = flash_port or port
+        self.flash_file = flash_file
+        self.trace_file = trace_file
+        self._user_fs_offset = user_fs_offset
+        self._user_fs_size = user_fs_size
+        self._chip = chip
+        self._timeout = timeout
+        self._baud = baud
+        self._serial_baud = serial_baud
+        self.serial = None
+        self._logic_analyzer = logic_analyzer
+        self._code_py_runs_seen = 0
+        self._expected_runs = 1
+
+        self._flash_user_fs()
+        self._reset_and_connect()
+
+    def _esptool(self, *args):
+        """Run esptool.py as a Python module against self.flash_port.
+
+        Using ``python -m esptool`` ensures pyserial-pyusb's URL handler
+        is available when the port is a ``pyusb://`` URL.
+        """
+        cmd = [
+            sys.executable,
+            "-m",
+            "esptool",
+            "--chip",
+            self._chip,
+            "-p",
+            self.flash_port,
+            "--baud",
+            str(self._baud),
+        ]
+        cmd.extend(args)
+        logger.info("esptool: %s", " ".join(cmd))
+
+        env = os.environ.copy()
+        if self.flash_port.startswith("pyusb://"):
+            _ensure_pyusb_handler()
+            self._esptool_python(*args)
+            return ""
+
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        if result.returncode != 0:
+            raise RuntimeError(f"esptool failed: {result.stderr}")
+        return result.stdout
+
+    def _esptool_python(self, *args):
+        """Run esptool commands via its Python API (for pyusb:// ports)."""
+        import esptool
+
+        argv = [
+            "--chip",
+            self._chip,
+            "-p",
+            self.flash_port,
+            "--baud",
+            str(self._baud),
+        ]
+        argv.extend(args)
+        logger.info("esptool (python): %s", " ".join(argv))
+        try:
+            esptool.main(argv)
+        finally:
+            # See flash_firmware: drop any backend cycle that survived
+            # esptool's port-close path so the bridge sees the TCP
+            # socket close before the next per-test invocation.
+            gc.collect()
+
+    def _flash_user_fs(self):
+        """Write the FAT image to the user_fs partition."""
+        size = Path(self.flash_file).stat().st_size
+        sample = Path(self.flash_file).read_bytes()[:512]
+        all_ff = all(b == 0xFF for b in sample)
+        logger.info(
+            "Flashing user_fs image: %s (%d bytes, offset=%s, first-512-bytes=%s)",
+            self.flash_file,
+            size,
+            hex(self._user_fs_offset),
+            "all 0xFF (blank/erased)" if all_ff else f"FAT-like ({sample[:16].hex()}...)",
+        )
+        before = _esptool_before_arg(self.flash_port)
+        self._esptool(
+            f"--before={before}",
+            "--after=no-reset",
+            "write-flash",
+            hex(self._user_fs_offset),
+            str(self.flash_file),
+        )
+
+    def _reset_and_connect(self):
+        """Hard-reset the board and open serial for test communication."""
+        # Start logic analyzer capture before reset so we catch boot signals.
+        if self._logic_analyzer is not None and self.trace_file is not None:
+            self._logic_analyzer.start_perfetto_capture(self.trace_file)
+
+        before = _esptool_before_arg(self.flash_port)
+        self._esptool(f"--before={before}", "--after=hard-reset", "read-mac")
+
+        # Give the board a moment to boot.
+        time.sleep(0.5)
+
+        ser = _open_serial(self.port, baudrate=self._serial_baud, timeout=0.05, write_timeout=1)
+        self.serial = SerialSaver(ser, name="esp-serial")
+
+    def wait_until_done(self, runs=None):
+        """Wait for code.py to finish by watching for the REPL prompt."""
+        if runs is None:
+            runs = self._expected_runs
+        target_runs = self._code_py_runs_seen + runs
+        while self._code_py_runs_seen < target_runs:
+            self.serial.wait_for(CODE_PY_DONE, timeout=self._timeout)
+            self._code_py_runs_seen += 1
+
+    def read_back_flash(self):
+        """Read the user_fs partition back from hardware into flash_file.
+
+        Call this before using mcopy to inspect the on-device filesystem.
+        """
+        self.shutdown()
+        readback = str(self.flash_file) + ".readback"
+        before = _esptool_before_arg(self.flash_port)
+        self._esptool(
+            f"--before={before}",
+            "--after=no-reset",
+            "read-flash",
+            hex(self._user_fs_offset),
+            hex(self._user_fs_size),
+            readback,
+        )
+        # Overwrite local flash_file so mcopy-based assertions work unchanged.
+        Path(readback).rename(self.flash_file)
+
+    def shutdown(self):
+        """Stop logic analyzer capture and close the serial connection."""
+        if self._logic_analyzer is not None:
+            try:
+                self._logic_analyzer.stop_capture(timeout=self._timeout)
+            except Exception as e:
+                logger.warning("Logic analyzer stop_capture failed: %s", e)
+        if self.serial is not None:
+            try:
+                self.serial.close()
+            except Exception as e:
+                logger.warning("Serial close failed: %s", e)
+            finally:
+                self.serial = None
