@@ -32,9 +32,9 @@
 
 #include "shared-bindings/_gbio/__init__.h"
 
-//| """Interface with GameBoy hardware
+//| """Interface with game boy hardware
 //|
-//| The `_gbio` module manages GameBoy hardware. This module is private and may
+//| The `_gbio` module manages game boy hardware. This module is private and may
 //| change without a major version bump. Use the `adafruit_gbio` library for
 //| stability instead.
 //| """
@@ -86,27 +86,6 @@ static mp_obj_t gbio_queue_vblank_commands(size_t n_args, const mp_obj_t *pos_ar
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(gbio_queue_vblank_commands_obj, 1, gbio_queue_vblank_commands);
 
-//| def set_lcdc(value: int) -> None:
-//|     """Set the value of the LCD control register."""
-//|     ...
-//|
-//|
-static mp_obj_t gbio_set_lcdc(mp_obj_t value_obj) {
-    common_hal_gbio_set_lcdc(MP_OBJ_SMALL_INT_VALUE(value_obj));
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_1(gbio_set_lcdc_obj, gbio_set_lcdc);
-
-//| def get_lcdc() -> int:
-//|     """Return the value of the LCDC register."""
-//|     ...
-//|
-//|
-static mp_obj_t gbio_get_lcdc(void) {
-    return MP_OBJ_NEW_SMALL_INT(common_hal_gbio_get_lcdc());
-}
-MP_DEFINE_CONST_FUN_OBJ_0(gbio_get_lcdc_obj, gbio_get_lcdc);
-
 //| def get_pressed() -> int:
 //|     """Return a bitmask of buttons pressed since the last call."""
 //|     ...
@@ -140,7 +119,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(gbio_get_vsync_count_obj, gbio_get_vsync_count);
 
 
 //| def reset_gameboy() -> None:
-//|     """Reset the GameBoy."""
+//|     """Reset the game boy."""
 //|     ...
 //|
 //|
@@ -152,7 +131,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(gbio_reset_gameboy_obj, gbio_reset_gameboy);
 
 
 //| def is_color() -> bool:
-//|     """Return ``True`` when the cart is in a GameBoy Color."""
+//|     """Return ``True`` when the cart is in a game boy Color."""
 //|     ...
 //|
 //|
@@ -165,9 +144,6 @@ static const mp_rom_map_elem_t gbio_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__gbio) },
     { MP_ROM_QSTR(MP_QSTR_queue_commands), MP_ROM_PTR(&gbio_queue_commands_obj) },
     { MP_ROM_QSTR(MP_QSTR_queue_vblank_commands), MP_ROM_PTR(&gbio_queue_vblank_commands_obj) },
-
-    { MP_ROM_QSTR(MP_QSTR_set_lcdc), MP_ROM_PTR(&gbio_set_lcdc_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_lcdc), MP_ROM_PTR(&gbio_get_lcdc_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_get_pressed), MP_ROM_PTR(&gbio_get_pressed_obj) },
     { MP_ROM_QSTR(MP_QSTR_wait_for_vblank), MP_ROM_PTR(&gbio_wait_for_vblank_obj) },
