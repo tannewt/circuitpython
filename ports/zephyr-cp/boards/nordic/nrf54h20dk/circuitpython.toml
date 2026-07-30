@@ -1,2 +1,7 @@
-CIRCUITPY_BUILD_EXTENSIONS = ["elf", "hex"]
+adaboot = true
+CIRCUITPY_BUILD_EXTENSIONS = ["elf"]
 DISABLED_MODULES=["jpegio", "gifio", "tilepalettemapper"]
+
+[external_flash]
+label = "mx25uw63"
+erase_block_size = 4096

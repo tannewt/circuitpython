@@ -8,22 +8,6 @@
 	};
 };
 
-// Enable the external MX25R6435F 8MB QSPI flash (connected via SPIM00).
-&mx25r64 {
-	status = "okay";
-
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		circuitpy_partition: partition@0 {
-			label = "circuitpy";
-			reg = <0x00000000 DT_SIZE_M(8)>;
-		};
-	};
-};
-
 // I2C bus on P1.13 (SDA) and P1.23 (SCL).
 &pinctrl {
 	i2c21_default: i2c21_default {

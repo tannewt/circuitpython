@@ -102,3 +102,56 @@ config BT_SETTINGS
 
 config BT_KEYS_OVERWRITE_OLDEST
 	default y
+
+# ===== OTA firmware updates over BLE (SMP/MCUmgr) =====
+#
+# Boards that boot under MCUboot opt in via boards/<vendor>/<board>/sysbuild.conf
+# setting CONFIG_BOOTLOADER_MCUBOOT, which sysbuild turns into an app-side
+# CONFIG_BOOTLOADER_MCUBOOT. OTA is enabled when the app boots from slot0 under
+# MCUboot and has Bluetooth; the app boots with the image upload in slot1.
+#
+# Gating on BOOTLOADER_MCUBOOT (not just on a slot1_partition existing) keeps
+# boards that link the app over the whole flash (e.g. nrf54lm20dk) from letting
+# an upload erase the running image that happens to overlap slot1.
+
+config ZCBOR
+	default y if BT && BOOTLOADER_MCUBOOT
+
+config MCUMGR
+	default y if BT && BOOTLOADER_MCUBOOT
+
+config MCUMGR_TRANSPORT_BT
+	default y if BT && BOOTLOADER_MCUBOOT
+
+config MCUMGR_TRANSPORT_BT_REASSEMBLY
+	default y if MCUMGR_TRANSPORT_BT
+
+# Request a fast connection interval while an upload is in progress.
+config MCUMGR_TRANSPORT_BT_CONN_PARAM_CONTROL
+	default y if MCUMGR_TRANSPORT_BT
+
+config IMG_MANAGER
+	default y if MCUMGR_TRANSPORT_BT
+
+# IMG_MANAGER ("DFU image manager") depends on STREAM_FLASH, which has no
+# default of its own, so enable it with the same gate as IMG_MANAGER.
+config STREAM_FLASH
+	default y if MCUMGR_TRANSPORT_BT
+
+config MCUMGR_GRP_IMG
+	default y if IMG_MANAGER
+
+config MCUMGR_GRP_OS
+	default y if MCUMGR_TRANSPORT_BT
+
+# Let clients discover the SMP buffer count/size so they can use optimal
+# upload chunking and window sizes (the nRF Connect Device Manager apps do
+# this automatically).
+config MCUMGR_GRP_OS_MCUMGR_PARAMS
+	default y if MCUMGR_GRP_OS
+
+# Fit a full ATT write (the port raises BT_L2CAP_TX_MTU to 515) plus the
+# 8-byte MCUmgr BT overhead in each buffer, so one upload packet fills one
+# buffer instead of needing reassembly.
+config MCUMGR_TRANSPORT_NETBUF_SIZE
+	default 528 if MCUMGR_TRANSPORT_BT

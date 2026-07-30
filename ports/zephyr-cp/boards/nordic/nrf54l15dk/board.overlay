@@ -26,3 +26,10 @@
 	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
+
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};

@@ -20,7 +20,7 @@
 #include <zephyr/drivers/flash.h>
 #include <zephyr/storage/flash_map.h>
 
-#define CIRCUITPY_PARTITION circuitpy_partition
+#define CIRCUITPY_PARTITION fatfs_partition
 static const struct flash_area *filesystem_area = NULL;
 
 #if !FIXED_PARTITION_EXISTS(CIRCUITPY_PARTITION)

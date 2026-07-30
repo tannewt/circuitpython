@@ -1,1 +1,2 @@
-CIRCUITPY_BUILD_EXTENSIONS = ["exe"]
+adaboot = false
+CIRCUITPY_BUILD_EXTENSIONS = ["elf"]

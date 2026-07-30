@@ -1,3 +1,8 @@
-CIRCUITPY_BUILD_EXTENSIONS = ["hex"]
+adaboot = true
+CIRCUITPY_BUILD_EXTENSIONS = ["elf"]
 USB_VID=0x239A
 USB_PID=0x8166
+
+[external_flash]
+label = "mx25r64"
+erase_block_size = 4096

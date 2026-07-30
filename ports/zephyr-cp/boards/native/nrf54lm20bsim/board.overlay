@@ -20,9 +20,9 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		circuitpy_partition: partition@0 {
+		fatfs_partition: partition@0 {
 			compatible = "zephyr,mapped-partition";
-			label = "circuitpy";
+			label = "fatfs";
 			reg = <0x00000000 (DT_SIZE_K(2036) - DT_SIZE_K(32))>;
 		};
 

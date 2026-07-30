@@ -38,10 +38,7 @@ static bool ensure_nvm_open(void) {
 }
 
 uint32_t common_hal_nvm_bytearray_get_length(const nvm_bytearray_obj_t *self) {
-    if (!ensure_nvm_open()) {
-        return 0;
-    }
-    return nvm_area->fa_size;
+    return self->len;
 }
 
 bool common_hal_nvm_bytearray_set_bytes(const nvm_bytearray_obj_t *self,

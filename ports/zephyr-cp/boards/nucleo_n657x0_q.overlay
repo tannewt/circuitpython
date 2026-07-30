@@ -1,0 +1,10 @@
+
+/ {
+	chosen {
+		zephyr,flash-controller = &xspi2;
+		zephyr,flash = &mx25um51245g;
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+#include "../app.overlay"

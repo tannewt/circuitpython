@@ -99,6 +99,44 @@ Behavior and precedence:
 - If neither is provided, defaults from `circuitpython.toml` are used.
 - Use `SHIELD=` (empty) to disable a board default shield for one build.
 
+## OTA firmware updates over BLE
+
+Boards with Bluetooth and a `slot1_partition` can update CircuitPython
+itself over the air. A board opts in by shipping a `sysbuild.conf` in its
+board folder:
+
+```
+boards/<vendor>/<board>/sysbuild.conf:
+
+SB_CONFIG_BOOTLOADER_MCUBOOT=y
+```
+
+That makes sysbuild build the MCUboot bootloader into the board's
+`boot_partition` and link the application into `slot0_partition` (it must
+link into slot0 — see `nrf54lm20dk` for an example of a board that does
+not). The app image is wrapped with an MCUboot header using imgtool —
+signed, or hash-only when the board sets `SB_CONFIG_BOOT_SIGNATURE_TYPE_NONE`
+(like `nordic_nrf54l15dk` does). The port Kconfig then enables Zephyr's
+MCUmgr/SMP server over the Bluetooth SMP service:
+
+- `img upload` writes the uploaded image into slot 1
+- `img test`/`img confirm` plus `os reset` reboot into the new image
+- the app confirms the running image once it has booted, so an update that
+  fails to start is automatically reverted (the `TEST_AND_CONFIRM` flow in
+  the reference clients)
+
+The service requires a paired/bonded connection, matching the port's
+existing BLE pairing support.
+
+To update a device, flash it with `make BOARD=<board> flash` (which flashes
+both MCUboot and the app) and then use an SMP client such as Nordic's open
+source [nRF Connect Device Manager](https://github.com/nordicsemi/Android-nRF-Connect-Device-Manager)
+apps (the sample app is what's published on the app stores) or the `mcumgr`
+CLI, uploading the signed app image (`zephyr.signed.bin` from the build
+directory).
+
+`nordic_nrf54l15dk` is the first board with this enabled.
+
 ## Testing other boards
 
 [Any Zephyr board](https://docs.zephyrproject.org/latest/boards/index.html#) can

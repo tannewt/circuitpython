@@ -1,7 +1,26 @@
-ALL_BOARDS_IN_PORT := $($(wildcard boards/*/*):boards/=:/=)
+ALL_BOARDS_IN_PORT := $(patsubst boards/%,%,$(wildcard boards/*/*))
+
+# Needed to print the board list one board per line below.
+empty :=
+space := $(empty) $(empty)
+define newline
+
+
+endef
 # An incorrect BOARD might have been specified, so check against the list.
-# There is deliberately no space after the :=
-VALID_BOARD :=$(filter $(BOARD),$(ALL_BOARDS_IN_PORT))
+# Boards are stored as vendor/name but BOARD is the flattened vendor_name, so
+# flatten the list the same way (vendors contain no underscores). There is
+# deliberately no space after the :=
+VALID_BOARD :=$(filter $(BOARD),$(subst /,_,$(ALL_BOARDS_IN_PORT)))
+
+# Fail fast on a mistyped BOARD instead of letting west build a board the port
+# isn't configured for (which dies later with confusing Kconfig errors). Targets
+# like `clean` don't take a BOARD, so only check when one is given.
+ifneq ($(strip $(BOARD)),)
+ifeq ($(strip $(VALID_BOARD)),)
+$(error Invalid BOARD '$(BOARD)'. Valid boards:$(newline)$(subst $(space),$(newline),$(subst /,_,$(ALL_BOARDS_IN_PORT))))
+endif
+endif
 
 # If the build directory is not given, make it reflect the board name.
 BUILD ?= build-$(BOARD)
@@ -44,10 +63,22 @@ ifneq ($(CP_BOARD_CONF),)
 WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(CP_BOARD_CONF)
 endif
 
-.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules
+# Boards can opt into building the MCUboot bootloader (and thus BLE OTA
+# updates) by shipping a sysbuild.conf fragment. It sets sysbuild-level
+# Kconfig (SB_CONFIG_BOOTLOADER_MCUBOOT, bootloader mode, signing keys, ...).
+CP_BOARD_SYSBUILD_CONF := $(wildcard $(CP_BOARD_DIR)/sysbuild.conf)
+ifneq ($(CP_BOARD_SYSBUILD_CONF),)
+WEST_CMAKE_ARGS += -DSB_EXTRA_CONF_FILE=$(CP_BOARD_SYSBUILD_CONF)
+endif
 
-export BSIM_COMPONENTS_PATH := $(CURDIR)/tools/bsim/components
-export BSIM_OUT_PATH := $(CURDIR)/tools/bsim
+# Boards that enable the bootloader can also tune the MCUboot image itself
+# (Kconfig for the bootloader build) via a mcuboot.conf fragment.
+CP_BOARD_MCUBOOT_CONF := $(wildcard $(CP_BOARD_DIR)/mcuboot.conf)
+ifneq ($(CP_BOARD_MCUBOOT_CONF),)
+WEST_CMAKE_ARGS += -Dmcuboot_EXTRA_CONF_FILE=$(CP_BOARD_MCUBOOT_CONF)
+endif
+
+.PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules mcuboot
 
 $(BUILD)/zephyr-cp/zephyr/zephyr.elf:
 	python cptools/pre_zephyr_build_prep.py $(BOARD)
@@ -63,7 +94,7 @@ $(BUILD)/firmware.exe: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $(BUILD)/zephyr-cp/zephyr/zephyr.exe $@
 
 $(BUILD)/firmware.uf2: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
-	cp $(BUILD)/zephyr-cp/zephyr/zephyr.uf2 $@
+	python zephyr/scripts/build/uf2conv.py -c -b $(shell grep CONFIG_FLASH_LOAD_OFFSET $(BUILD)/zephyr-cp/zephyr/.config | cut -d= -f2) -o $@ $(BUILD)/zephyr-cp/zephyr/zephyr.signed.bin
 
 $(BUILD)/firmware.rps: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $(BUILD)/zephyr-cp/zephyr/zephyr.rps $@
@@ -97,10 +128,13 @@ run-sim:
 		echo "Populating build-native_native_sim/flash.bin from ./CIRCUITPY"; \
 		mcopy -s -i build-native_native_sim/flash.bin CIRCUITPY/* ::; \
 	fi
-	build-native_native_sim/firmware.exe --flash=build-native_native_sim/flash.bin --flash_rm -wait_uart -rt --i2s_capture=build-native_native_sim/i2s_capture.wav
+	build-native_native_sim/firmware.exe --flash=build-native_native_sim/flash.bin --flash_rm -wait_uart -rt
 
 menuconfig:
 	west build $(WEST_SHIELD_ARGS) --sysbuild -d $(BUILD) -t menuconfig -- $(WEST_CMAKE_ARGS)
+
+mcuboot:
+	west build -d $(BUILD) --domain mcuboot
 
 clean:
 	rm -rf $(BUILD)

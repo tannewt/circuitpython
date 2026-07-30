@@ -1,3 +1,4 @@
+adaboot = true
 CIRCUITPY_BUILD_EXTENSIONS = ["hex"]
 
 # This part executes from RAM and is already at 93% of it, so it cannot

@@ -381,25 +381,6 @@ def find_flash_devices(device_tree):
             )
             continue
 
-        # Skip soc-nv-flash nodes whose parent is itself a flash device — the
-        # parent is the real Zephyr device (e.g. nxp,imx-flexspi-nor) and the
-        # child has no driver-instantiated symbol.
-        if "soc-nv-flash" in compatible and node.parent is not None:
-            parent_compat = []
-            if "compatible" in node.parent.props:
-                parent_compat = node.parent.props["compatible"].to_strings()
-            parent_drivers = []
-            for c in parent_compat:
-                underscored = c.replace(",", "_").replace("-", "_")
-                d = COMPAT_TO_DRIVER.get(underscored) or MANUAL_COMPAT_TO_DRIVER.get(underscored)
-                if d:
-                    parent_drivers.append(d)
-            if "flash" in parent_drivers:
-                logger.debug(
-                    f"  skipping flash {node.labels[0] if node.labels else node.name} (parent is flash device)"
-                )
-                continue
-
         if node.labels:
             flashes.append(node.labels[0])
 
@@ -710,11 +691,11 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                     num = int.from_bytes(gpio_map.value[offset + 4 : offset + 8], "big")
                     if (label, num) not in board_names:
                         board_names[(label, num)] = []
-                    pin_entry = connector_pins[i]
-                    if isinstance(pin_entry, list):
-                        board_names[(label, num)].extend(pin_entry)
+                    connector_name = connector_pins[i]
+                    if isinstance(connector_name, list):
+                        board_names[(label, num)].extend(connector_name)
                     else:
-                        board_names[(label, num)].append(pin_entry)
+                        board_names[(label, num)].append(connector_name)
                     i += 1
         if "gpio-leds" in compatible:
             for led in node.nodes:
@@ -1077,8 +1058,11 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     board_info["rotaryio"] = bool(ioports)
     board_info["usb_num_endpoint_pairs"] = usb_num_endpoint_pairs
 
-    # Detect NVM partition from the device tree.
+    # Detect NVM partition size from the device tree.
+    nvm_size = 0
     nvm_node = device_tree.label2node.get("nvm_partition")
-    board_info["nvm"] = nvm_node is not None
+    if nvm_node and "reg" in nvm_node.props:
+        nvm_size = nvm_node.props["reg"].to_nums()[1]
+    board_info["nvm_size"] = nvm_size
 
     return board_info

@@ -28,9 +28,9 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-        circuitpy_partition: partition@0 {
+        filesystem_partition: partition@0 {
 			compatible = "zephyr,mapped-partition";
-            label = "circuitpy";
+            label = "filesystem";
 			reg = <0x00000000 DT_SIZE_K(2032)>;
 		};
 

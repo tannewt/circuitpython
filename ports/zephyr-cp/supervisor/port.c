@@ -34,6 +34,10 @@
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 
+#if defined(CONFIG_IMG_MANAGER)
+#include <zephyr/dfu/mcuboot.h>
+#endif
+
 #if defined(CONFIG_TRACING_PERFETTO) && defined(CONFIG_BOARD_NATIVE_SIM)
 #include "perfetto_encoder.h"
 #include <zephyr/sys/mem_stats.h>
@@ -205,6 +209,17 @@ safe_mode_t port_init(void) {
     // We run CircuitPython at the lowest priority (just higher than idle.)
     // This allows networking and USB to preempt us.
     k_thread_priority_set(k_current_get(), CONFIG_NUM_PREEMPT_PRIORITIES - 1);
+
+    #if defined(CONFIG_IMG_MANAGER)
+    // Confirm the running image so MCUboot treats it as permanent instead of
+    // reverting to the other slot on the next boot. Reaching here means the
+    // image booted far enough to run the port, which is the usual recovery
+    // criterion for a test (TEST_AND_CONFIRM) OTA upgrade.
+    if (!boot_is_img_confirmed()) {
+        (void)boot_write_img_confirmed();
+    }
+    #endif
+
     k_timer_init(&tick_timer, _tick_function, NULL);
     perfetto_emit_circuitpython_tracks();
     return SAFE_MODE_NONE;
