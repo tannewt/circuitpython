@@ -18,7 +18,12 @@ from .perfetto_input_trace import write_input_trace
 from perfetto.trace_processor import TraceProcessor
 
 from . import NativeSimProcess
-from .esp import EspProcess, SumpLogicAnalyzer, find_user_fs_partition, flash_firmware
+from .esp import (
+    EspProcess,
+    SumpLogicAnalyzer,
+    find_user_fs_partition,
+    flash_firmware,
+)
 from .harness_client import Harness, HarnessSerial
 
 logger = logging.getLogger(__name__)
@@ -43,6 +48,12 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    # Enable DEBUG logging for USB/IP and pyserial-pyusb to trace
+    # endpoint validation and config descriptor issues.
+    import logging
+
+    for name in ("usbip_backend", "serial_pyusb", "usb.core"):
+        logging.getLogger(name).setLevel(logging.DEBUG)
     config.addinivalue_line(
         "markers", "circuitpy_drive(files): run CircuitPython with files in the flash image"
     )
@@ -100,16 +111,8 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     collection.
     """
     cache = _get_board_cache(session.config)
-    for board_id in list(BOARD_CONFIG):
-        # If already cached and accessible, nothing to do.
-        if cache.is_accessible(board_id):
-            continue
-        # Stale or missing — remove old entry, then try mDNS discovery.
-        if board_id in cache.list_cached():
-            cache.remove(board_id)
-        entry = cache.discover(board_id)
-        if entry is not None:
-            cache.put(board_id, entry["host"], entry.get("port", 3240))
+    # Single mDNS scan to find all boards on the network.
+    cache.discover_all()
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -145,18 +148,38 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if not hardware_boards:
         return
 
-    params = [pytest.param(marks=pytest.mark.circuitpython_board("native_native_sim"))] + [
-        pytest.param(marks=pytest.mark.circuitpython_board(b)) for b in hardware_boards
-    ]
+    params = [
+        pytest.param(
+            marks=pytest.mark.circuitpython_board("native_native_sim"),
+            id="native_native_sim",
+        )
+    ] + [pytest.param(marks=pytest.mark.circuitpython_board(b), id=b) for b in hardware_boards]
     metafunc.parametrize("", params)
 
 
 ZEPHYR_CP = Path(__file__).parent.parent
+PORTS_DIR = ZEPHYR_CP.parent
+
+
+def _find_firmware(board_id):
+    """Search all port build directories for a board's firmware.bin.
+
+    Returns the Path to firmware.bin, or None if not found.
+    """
+    for port_dir in sorted(PORTS_DIR.iterdir()):
+        if not port_dir.is_dir():
+            continue
+        if port_dir.name == "__pycache__":
+            continue
+        candidate = port_dir / f"build-{board_id}" / "firmware.bin"
+        if candidate.is_file():
+            return candidate
+    return None
+
 
 # Markers that indicate native_sim-only features.
 # Tests using any of these markers will only run on native_sim.
 NATIVE_SIM_ONLY_MARKERS: set[str] = {
-    "input_trace",
     "display",
     "display_capture",
     "display_pixel_format",
@@ -627,15 +650,24 @@ def _hw_firmware_flashed(request):
 
     Runs once per session.  Each per-test fixture then only refreshes
     the ``user_fs`` partition.
+
+    Returns a set of board IDs that were successfully flashed (or are
+    non-espressif boards that don't need flashing).
     """
     cache = _get_board_cache(request.config)
+    flashed = set()
     for board_id in cache.list_cached():
         if not board_id.startswith("espressif_"):
+            flashed.add(board_id)
             continue
         board_cfg = BOARD_CONFIG.get(board_id, {})
-        firmware_path = ZEPHYR_CP / f"build-{board_id}" / "firmware.bin"
-        if not firmware_path.is_file():
-            continue
+        firmware_path = _find_firmware(board_id)
+        if firmware_path is None:
+            raise FileNotFoundError(
+                f"firmware.bin not found for {board_id} in any port build directory. "
+                f"Build it first (e.g. with the espressif port Makefile) "
+                f"to ensure the device firmware matches the current build."
+            )
         entry = cache.get(board_id)
         assert entry is not None
         host = entry["host"]
@@ -649,7 +681,8 @@ def _hw_firmware_flashed(request):
             flash_port = f"pyusb://{host}/{dut_vid:04x}:{dut_pid:04x}"
         logger.info("Flashing firmware for %s: %s", board_id, firmware_path)
         flash_firmware(flash_port, firmware_path, chip=board_cfg.get("chip", "auto"))
-    return True
+        flashed.add(board_id)
+    return flashed
 
 
 def _circuitpython_esp(
@@ -667,7 +700,13 @@ def _circuitpython_esp(
         pytest.skip(f"Board {board} not reachable via USB/IP")
 
     # Trigger session-level firmware flash once.
-    request.getfixturevalue("_hw_firmware_flashed")
+    print("[DEBUG _circuitpython_esp] Getting _hw_firmware_flashed fixture...")
+    flashed = request.getfixturevalue("_hw_firmware_flashed")
+    if board not in flashed:
+        pytest.fail(
+            f"firmware.bin for {board} was not flashed. "
+            f"Build it first to ensure the device firmware matches the current build."
+        )
 
     entry = cache.get(board)
     assert entry is not None

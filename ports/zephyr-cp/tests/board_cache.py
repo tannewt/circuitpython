@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 # Maps board_id to hardware properties for testing.
 # Native sim boards (native_*) don't need entries here.
 BOARD_CONFIG: dict[str, dict] = {
-    "espressif_esp32c61_devkitm_1_n8r2": {
-        "chip": "esp32c6",
-        "flash_size": "4MB",
+    "espressif_esp32c61_devkitc_1_n8r2": {
+        "chip": "esp32c61",
+        "flash_size": "8MB",
         "uf2": False,
         "dut_vid": 0x303A,  # Espressif USB JTAG/Serial
         "dut_pid": 0x1001,
@@ -57,7 +57,7 @@ class BoardCache:
     Cache file format (JSON)::
 
         {
-          "espressif_esp32c61_devkitm_1_n8r2": {
+          "espressif_esp32c61_devkitc_1_n8r2": {
             "host": "usbip-aabbcc.local",
             "port": 3240,
             "last_seen": 1700000000
@@ -103,8 +103,19 @@ class BoardCache:
             del self._data[board_id]
             self._save()
 
+    def _find_board_by_host(self, host: str) -> str | None:
+        """Return the *board_id* that already uses *host*, or *None*."""
+        for bid, entry in self._data.items():
+            if entry.get("host") == host:
+                return bid
+        return None
+
     def put(self, board_id: str, host: str, port: int = 3240) -> None:
-        """Add or update a cache entry programmatically."""
+        """Add or update a cache entry, evicting any other entry for *host*."""
+        # Only one entry per .local address.
+        existing = self._find_board_by_host(host)
+        if existing is not None and existing != board_id:
+            del self._data[existing]
         self._data[board_id] = {
             "host": host,
             "port": port,
@@ -145,22 +156,43 @@ class BoardCache:
 
         The returned dict has keys ``host`` and ``port``.
         """
-        config = BOARD_CONFIG.get(board_id)
-        if config is None:
-            logger.debug("No BOARD_CONFIG for %s, skipping discovery.", board_id)
-            return None
-        if discover_usbip_servers is None:
-            logger.debug("usbip_backend not available, skipping mDNS discovery.")
-            return None
+        all_found = self.discover_all()
+        return all_found.get(board_id)
 
-        dut_vid = config.get("dut_vid")
-        dut_pid = config.get("dut_pid")
+    def discover_all(self) -> dict[str, dict]:
+        """Run a single mDNS scan and find **all** boards on the network.
+
+        Connects to each discovered USB/IP server once, enumerates all
+        devices, and matches them against every :data:`BOARD_CONFIG` entry
+        by VID/PID.  Every match is automatically cached.
+
+        Returns:
+            Dict mapping ``board_id`` → ``{"host": …, "port": …}``.
+        """
+        if discover_usbip_servers is None or _get_usbip_backend is None:
+            logger.debug("usbip_backend not available, skipping discovery.")
+            return {}
+
+        # Build reverse lookup: (vid, pid) → board_id
+        vid_pid_to_board: dict[tuple[int, int], str] = {}
+        for bid, cfg in BOARD_CONFIG.items():
+            vid = cfg.get("dut_vid")
+            pid = cfg.get("dut_pid")
+            if vid is not None:
+                vid_pid_to_board[(vid, pid)] = bid
+
+        found: dict[str, dict] = {}
+        claimed_hosts: set[str] = set()  # only one entry per .local host
 
         services = discover_usbip_servers(timeout=3.0)
         for svc in services:
             host = svc["host"].rstrip(".")
             address = svc["address"]
             port = svc["port"]
+
+            hostname = host if host.endswith(".local") else host + ".local"
+            if hostname in claimed_hosts:
+                continue
 
             try:
                 backend = _get_usbip_backend(address, port, timeout=2.0)
@@ -174,21 +206,24 @@ class BoardCache:
             finally:
                 backend.close()
 
-            # Match by DUT VID/PID.
             for dev in devices:
-                if dut_vid and dev.id_vendor == dut_vid:
-                    if dut_pid is None or dev.id_product == dut_pid:
-                        hostname = host if host.endswith(".local") else host + ".local"
-                        logger.info(
-                            "mDNS: discovered %s at %s (%s:%d)",
-                            board_id,
-                            hostname,
-                            address,
-                            port,
-                        )
-                        return {"host": hostname, "port": port}
+                # Match by VID/PID against all known board configs.
+                board_id = vid_pid_to_board.get((dev.id_vendor, dev.id_product))
+                if board_id is not None:
+                    logger.info(
+                        "mDNS: discovered %s at %s (%s:%d)",
+                        board_id,
+                        hostname,
+                        address,
+                        port,
+                    )
+                    entry = {"host": hostname, "port": port}
+                    found[board_id] = entry
+                    self.put(board_id, hostname, port)
+                    claimed_hosts.add(hostname)
+                    break  # one board per host
 
-        return None
+        return found
 
     def ensure_accessible(self, board_id: str) -> bool:
         """Full accessibility check with mDNS fallback.
@@ -246,19 +281,29 @@ def _cli_list(cache: BoardCache, verbose: bool = False) -> int:
 
 def _cli_discover(cache: BoardCache, board_id: str | None = None) -> int:
     """``discover`` subcommand."""
-    targets = [board_id] if board_id else list(BOARD_CONFIG)
-    found = 0
-    for bid in targets:
-        print(f"Discovering {bid} ... ", end="", flush=True)
-        entry = cache.discover(bid)
+    if board_id:
+        # Single-board targeted discovery.
+        print(f"Discovering {board_id} ... ", end="", flush=True)
+        entry = cache.discover(board_id)
         if entry is not None:
-            cache.put(bid, entry["host"], entry.get("port", 3240))
+            cache.put(board_id, entry["host"], entry.get("port", 3240))
             print(f"found at {entry['host']}:{entry.get('port', 3240)}")
-            found += 1
+            return 0
         else:
             print("not found")
-    print(f"\n{found}/{len(targets)} board(s) discovered.")
-    return 0 if found > 0 else 1
+            return 1
+
+    # Discover all boards on the network in a single mDNS scan.
+    print("Scanning network for USB/IP servers …")
+    all_found = cache.discover_all()
+    if not all_found:
+        print("No boards discovered.")
+        return 1
+
+    for bid, entry in all_found.items():
+        print(f"  {bid}: {entry['host']}:{entry.get('port', 3240)}")
+    print(f"\n{len(all_found)} board(s) discovered.")
+    return 0
 
 
 def _cli_check(cache: BoardCache, board_id: str) -> int:
