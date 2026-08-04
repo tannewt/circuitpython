@@ -1,7 +1,16 @@
 cmake_minimum_required(VERSION 3.20.0)
 
+set(CMAKE_EXPERIMENTAL_INSTRUMENTATION "ec7aa2dc-b87f-45a3-8022-fe01c5f59984")
+
 find_package(Zephyr REQUIRED HINTS lib/zephyr)
 project(circuitpython)
+
+cmake_instrumentation(
+  API_VERSION 1
+  DATA_VERSION 1
+  HOOKS postCMakeBuild
+  OPTIONS trace
+)
 
 target_sources(app PRIVATE zephyr_main.c)
 

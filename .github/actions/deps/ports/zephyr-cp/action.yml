@@ -19,3 +19,7 @@ runs:
       run: west zephyr-export
       shell: bash
       working-directory: ports/zephyr-cp
+    - name: Print make version
+      run: make --version
+      shell: bash
+      working-directory: ports/zephyr-cp

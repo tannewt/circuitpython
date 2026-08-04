@@ -100,7 +100,7 @@ for board in build_boards:
 
         artifacts = [os.path.join(build_dir, "firmware." + extension) for extension in extensions]
         make_result = subprocess.run(
-            "make -C ../ports/{port} TRANSLATION={language} BOARD={board} BUILD={build} -j {cores} {artifacts}".format(
+            "make -C ../ports/{port} TRANSLATION={language} BOARD={board} BUILD={build} -j {cores} --jobserver-style=fifo {artifacts}".format(
                 port=board_info["port"],
                 language=language,
                 board=board,

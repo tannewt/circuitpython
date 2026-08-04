@@ -7,7 +7,7 @@ from compat2driver import COMPAT_TO_DRIVER
 from devicetree import dtlib
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 # GPIO flags defined here: include/zephyr/dt-bindings/gpio/gpio.h
 GPIO_ACTIVE_LOW = 1 << 0

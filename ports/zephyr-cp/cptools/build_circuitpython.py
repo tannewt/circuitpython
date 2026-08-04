@@ -641,6 +641,6 @@ async def main():
 handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter("%(log_color)s%(levelname)s:%(name)s:%(message)s"))
 
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=logging.WARN, handlers=[handler])
 
 asyncio.run(main())
