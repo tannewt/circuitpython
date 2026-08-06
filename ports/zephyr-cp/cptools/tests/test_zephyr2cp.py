@@ -264,7 +264,7 @@ class TestFindRAMRegions:
         result = find_ram_regions(dt)
 
         assert len(result) == 1
-        label, start, end, size, path = result[0]
+        label, start, end, size, path, is_symbol = result[0]
 
         assert label == "sram0"
         assert start == "z_mapped_end"
@@ -309,9 +309,9 @@ class TestFindRAMRegions:
         assert result[0][0] == "sram0"
 
         # Second should be custom region
-        label, start, end, size, path = result[1]
+        label, start, end, size, path, is_symbol = result[1]
         assert label == "reserved_mem"
-        assert start == "__CUSTOM_REGION_end"
+        assert start == "(uint32_t*) DT_REG_ADDR(DT_NODELABEL(reserved_mem))"
 
     def test_memory_region_requires_sram_or_device_type(self):
         """Test memory regions require mmio-sram compatibility or device_type=memory."""

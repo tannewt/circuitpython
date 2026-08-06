@@ -379,7 +379,10 @@ def find_flash_devices(device_tree):
     return flashes
 
 
-def _label_to_end(label):
+def _label_to_addr(label, start=False):
+    """Return a C expression for the start or end address of a device tree node."""
+    if start:
+        return f"(uint32_t*) DT_REG_ADDR(DT_NODELABEL({label}))"
     return f"(uint32_t*) (DT_REG_ADDR(DT_NODELABEL({label})) + DT_REG_SIZE(DT_NODELABEL({label})))"
 
 
@@ -399,7 +402,7 @@ def find_ram_regions(device_tree):
         label = chosen.labels[0]
         size = chosen.props["reg"].to_nums()[1]
         logger.debug(f"Found chosen SRAM node: {label} with size {size}")
-        rams.append((label, "z_mapped_end", _label_to_end(label), size, chosen.path))
+        rams.append((label, "z_mapped_end", _label_to_addr(label), size, chosen.path, True))
 
     # Traverse all nodes in the device tree to find memory-region nodes
     remaining_nodes = set([device_tree.root])
@@ -435,17 +438,29 @@ def find_ram_regions(device_tree):
         if not (is_mmio_sram or has_memory_device_type):
             continue
 
+        # Skip memory-region nodes whose parent is itself a memory region —
+        # the parent already covers this address range.
+        if node.parent is not None and "compatible" in node.parent.props:
+            parent_compat = node.parent.props["compatible"].to_strings()
+            if "zephyr,memory-region" in parent_compat:
+                logger.debug(
+                    f"  skipping ram {node.labels[0] if node.labels else node.name} (parent is memory region)"
+                )
+                continue
+
         size = node.props["reg"].to_nums()[1]
 
-        start = "__" + node.props["zephyr,memory-region"].to_string() + "_end"
-        end = _label_to_end(node.labels[0])
+        # Use the device tree start address for non-chosen regions, since the
+        # linker may not define __<REGION>_end for regions Zephyr doesn't use.
+        start = _label_to_addr(node.labels[0], start=True)
+        end = _label_to_addr(node.labels[0])
 
         # Filter by minimum size
         if size >= MINIMUM_RAM_SIZE:
             logger.debug(
                 f"Adding extra RAM info: ({node.labels[0]}, {start}, {end}, {size}, {node.path})"
             )
-            info = (node.labels[0], start, end, size, node.path)
+            info = (node.labels[0], start, end, size, node.path, False)
             rams.append(info)
 
     return rams
@@ -874,7 +889,7 @@ void board_init(void) {
     ram_externs = []
     max_size = 0
     for ram in rams:
-        device, start, end, size, path = ram
+        device, start, end, size, path, is_symbol = ram
         max_size = max(max_size, size)
         # We always start at the end of a Zephyr linker section so we need the externs and &.
         # Native/simulated boards don't have real memory-mapped RAM, so we allocate static arrays.
@@ -883,9 +898,10 @@ void board_init(void) {
             ram_externs.append(f"static uint32_t _{device}[{size // 4}]; // {path}")
             start = f"(const uint32_t *) (_{device})"
             end = f"(const uint32_t *)(_{device} + {size // 4})"
-        else:
+        elif is_symbol:
             ram_externs.append(f"extern uint32_t {start};")
             start = "&" + start
+        # else: start is already a C expression, no extern needed
         ram_list.append(f"    {start}, {end}, // {path}")
     ram_list = "\n".join(ram_list)
     ram_externs = "\n".join(ram_externs)
