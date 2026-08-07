@@ -90,28 +90,11 @@ static K_MUTEX_DEFINE(_mutex);
 static void fa_cb(const struct flash_area *fa, void *user_data) {
     bool *covered_by_areas = user_data;
 
-    const char *fa_label = flash_area_label(fa);
-
-    if (fa_label == NULL) {
-        fa_label = "-";
-    }
-    printk("%s %p %d dev %p\n", fa_label, fa, fa->fa_id, fa->fa_dev);
-
     for (int i = 0; i < circuitpy_flash_device_count; i++) {
         const struct device *d = flashes[i];
 
         if (d == fa->fa_dev) {
             covered_by_areas[i] = true;
-        }
-    }
-
-    uint32_t count = 10;
-    struct flash_sector sectors[count];
-    if (flash_area_get_sectors(fa->fa_id, &count, sectors) != 0) {
-        printk("Unable to get sectors\n");
-    } else {
-        for (int i = 0; i < count; i++) {
-            printk("  0x%lx 0x%x\n", sectors[i].fs_off, sectors[i].fs_size);
         }
     }
 }
@@ -129,43 +112,33 @@ void supervisor_flash_init(void) {
     #else
     // Use spi_nor if it exists and no
     // flash_area_open(FIXED_PARTITION_ID(storage_partition), &filesystem_area);
-    // printk("flash area %d %d\n", filesystem_area->fa_id, filesystem_area->fa_size);
-    printk("hello from flash init\n");
     bool covered_by_areas[circuitpy_flash_device_count];
+    memset(covered_by_areas, 0, sizeof(covered_by_areas));
     flash_area_foreach(fa_cb, covered_by_areas);
     for (int i = 0; i < circuitpy_flash_device_count; i++) {
         const struct device *d = flashes[i];
 
-        printk("flash %p %s\n", d, d->name);
         if (!device_is_ready(d)) {
-            printk("  not ready\n");
             continue;
         }
         if (covered_by_areas[i]) {
-            printk("  covered by flash area\n");
             continue;
         }
         if (d->api == NULL) {
-            printk("  no api\n");
             continue;
         }
         size_t page_count = flash_get_page_count(d);
-        printk("  %d pages\n", page_count);
         if (page_count == 0) {
             continue;
         }
         struct flash_pages_info first_info;
         flash_get_page_info_by_idx(d, 0, &first_info);
-        printk("  page 0: %lx %x\n", first_info.start_offset, first_info.size);
         struct flash_pages_info last_info;
         flash_get_page_info_by_idx(d, page_count - 1, &last_info);
-        printk("  page %d: %lx %x\n", page_count - 1, last_info.start_offset, last_info.size);
 
         // Assume uniform page sizes if the first and last are the same size.
-        size_t uniform_page_count;
-        if (first_info.size == last_info.size) {
-            uniform_page_count = page_count;
-        } else {
+        size_t uniform_page_count = page_count;
+        if (first_info.size != last_info.size) {
             for (size_t i = 1; i < page_count; i++) {
                 struct flash_pages_info info;
                 flash_get_page_info_by_idx(d, i, &info);
@@ -176,11 +149,9 @@ void supervisor_flash_init(void) {
             }
         }
         if (uniform_page_count * first_info.size < 64 * 1024) {
-            printk("Uniform region too small\n");
             continue;
         }
 
-        printk("  %d uniform pages\n", uniform_page_count);
         _page_size = first_info.size;
 
         _dynamic_area.fa_dev = d;
@@ -188,7 +159,6 @@ void supervisor_flash_init(void) {
         _dynamic_area.fa_off = 0;
         _dynamic_area.fa_size = uniform_page_count * first_info.size;
         filesystem_area = &_dynamic_area;
-        printk("setup flash\n");
         break;
     }
     #endif
@@ -210,8 +180,6 @@ void supervisor_flash_init(void) {
     }
     _blocks_per_page = _page_size / FILESYSTEM_BLOCK_SIZE;
     _page_mask = ~(_page_size - 1);
-    printk("  erase page size %d\n", _page_size);
-    printk("  blocks per page %d\n", _blocks_per_page);
 
     _row_flags = port_malloc(_blocks_per_page, false);
     if (_row_flags == NULL) {
