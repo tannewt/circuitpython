@@ -543,6 +543,10 @@ void background_callback_run_all(void);
 #define CIRCUITPY_DEBUG_TINYUSB 0
 #endif
 
+#ifndef CIRCUITPY_USB_DEVICE_DUAL
+#define CIRCUITPY_USB_DEVICE_DUAL 0
+#endif
+
 #ifndef CIRCUITPY_USB_DEVICE_INSTANCE
 #define CIRCUITPY_USB_DEVICE_INSTANCE 0
 #endif

@@ -49,14 +49,16 @@ void usb_disconnect(void) {
 }
 
 // Invoked when device is mounted
-void tud_mount_cb(void) {
+void tud_mount_cb(uint8_t rhport) {
+    (void)rhport;
     #if CIRCUITPY_USB_MSC
     usb_msc_mount();
     #endif
 }
 
 // Invoked when device is unmounted
-void tud_umount_cb(void) {
+void tud_umount_cb(uint8_t rhport) {
+    (void)rhport;
     #if CIRCUITPY_USB_MSC
     usb_msc_umount();
     #endif

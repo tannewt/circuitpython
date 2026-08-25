@@ -19,6 +19,8 @@
 #define DEFAULT_I2C_BUS_SCL         (&pin_GPIO8)
 #define DEFAULT_I2C_BUS_SDA         (&pin_GPIO7)
 
+// Dual USB device mode: both FS (port 0) and HS (port 1)
+#define CIRCUITPY_USB_DEVICE_DUAL (1)
 // Use the second USB device (numbered 0 and 1)
 #define CIRCUITPY_USB_DEVICE_INSTANCE 1
 #define CIRCUITPY_USB_DEVICE_HIGH_SPEED (1)

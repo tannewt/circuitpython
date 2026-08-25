@@ -411,11 +411,18 @@ endif
 # Six additional endpoints (endpoint numbers 1 to 6), configurable as IN or OUT
 # Maximum of five IN endpoints concurrently active at any time (including EP0 IN)
 #
+# For P4 dual device: FS port has 7 endpoints/5 IN, HS port has 16 endpoints/8 IN.
+# Use the higher limits since endpoints are per-port.
 # Due to the limited number of endpoints, some USB devices will be off by default.
 # For instance MIDI is available, but the device is turned off. It can be turned on
 # only if something else is turned off, such as HID.
+ifeq ($(CIRCUITPY_USB_DEVICE_DUAL),1)
+USB_NUM_ENDPOINT_PAIRS = 16
+USB_NUM_IN_ENDPOINTS = 8
+else
 USB_NUM_ENDPOINT_PAIRS = 7
 USB_NUM_IN_ENDPOINTS = 5
+endif
 
 # Usually lots of flash space available
 CIRCUITPY_MESSAGE_COMPRESSION_LEVEL ?= 1

@@ -296,7 +296,8 @@ IDF_TARGET_ROM_FLOAT_LD ?= $(IDF_TARGET).rom.libgcc.ld
 CFLAGS += $(INC) -Werror -Wall -std=gnu11 -Wl,--gc-sections $(BASE_CFLAGS) $(C_DEFS) $(CFLAGS_MOD) $(COPT) -Werror=missing-prototypes -Werror=old-style-definition -Wno-error=cpp -Wno-cpp
 
 # ESP-IDF v6.0 uses picolibc instead of newlib.
-CFLAGS += --specs=picolibc.specs
+# Use the IDF-generated picolibc.specs which properly handles include ordering.
+CFLAGS += -specs=$(BUILD)/esp-idf/specs/picolibc.specs
 
 ifeq ($(IDF_TARGET_ARCH),xtensa)
 # Remove the last two flags once TinyUSB is updated with the `#include <xtensa_api.h>` instead of

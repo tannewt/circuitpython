@@ -131,7 +131,22 @@ void usb_init(void) {
     #endif
 
     // Only init device. Host gets inited by the `usb_host` module common-hal.
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    // Init FS device on port 0
+    const tusb_rhport_init_t fs_init = {
+        .role = TUSB_ROLE_DEVICE,
+        .speed = TUSB_SPEED_FULL
+    };
+    tud_rhport_init(0, &fs_init);
+    // Init HS device on port 1
+    const tusb_rhport_init_t hs_init = {
+        .role = TUSB_ROLE_DEVICE,
+        .speed = TUSB_SPEED_HIGH
+    };
+    tud_rhport_init(1, &hs_init);
+    #else
     tud_init(TUD_OPT_RHPORT);
+    #endif
     #endif
 
     post_usb_init();
@@ -204,9 +219,15 @@ void PLACE_IN_ITCM(usb_irq_handler)(int instance) {
     #if CFG_TUSB_MCU != OPT_MCU_RP2040
     #if CIRCUITPY_USB_DEVICE
     // For rp2040, IRQ handler is already installed and invoked automatically
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    if (instance == 0 || instance == 1) {
+        tud_int_handler(instance);
+    }
+    #else
     if (instance == CIRCUITPY_USB_DEVICE_INSTANCE) {
         tud_int_handler(instance);
     }
+    #endif
     #endif
     #if CIRCUITPY_USB_HOST
     if (instance == CIRCUITPY_USB_HOST_INSTANCE) {

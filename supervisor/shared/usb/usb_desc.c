@@ -54,6 +54,9 @@ static uint8_t current_interface_string;
 
 static uint8_t *device_descriptor;
 static uint8_t *configuration_descriptor;
+#if CIRCUITPY_USB_DEVICE_DUAL
+static uint8_t *configuration_descriptor_hs;
+#endif
 static uint16_t *string_descriptors;
 
 // Serial number string is UID length * 2 (2 nibbles per byte) + 1 byte for null termination.
@@ -126,23 +129,48 @@ static bool usb_build_device_descriptor(const usb_identification_t *identificati
     return true;
 }
 
-static bool usb_build_configuration_descriptor(void) {
+// Build a configuration descriptor for a specific port.
+// is_hs: true for HS port (MSC + CDC console), false for FS port (CDC data + HID + MIDI)
+// In non-dual mode, all interfaces are included regardless of is_hs.
+static bool build_one_configuration(bool is_hs, uint8_t **out_descriptor) {
     size_t total_descriptor_length = sizeof(configuration_descriptor_template);
+
+    // In dual mode, split interfaces by port.
+    // In single mode, include everything.
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    bool include_console_cdc = is_hs;
+    bool include_data_cdc = !is_hs;
+    bool include_msc = is_hs;
+    bool include_hid = !is_hs;
+    bool include_midi = !is_hs;
+    #else
+    bool include_console_cdc = true;
+    bool include_data_cdc = true;
+    bool include_msc = true;
+    bool include_hid = true;
+    bool include_midi = true;
+    #endif
+    // Suppress unused warnings when features are disabled
+    (void)include_console_cdc;
+    (void)include_data_cdc;
+    (void)include_msc;
+    (void)include_hid;
+    (void)include_midi;
 
     // CDC should be first, for compatibility with Adafruit Windows 7 drivers.
     // In the past, the order has been CDC, MSC, MIDI, HID, so preserve that order.
     #if CIRCUITPY_USB_CDC
-    if (usb_cdc_console_enabled()) {
+    if (include_console_cdc && usb_cdc_console_enabled()) {
         total_descriptor_length += usb_cdc_descriptor_length();
     }
-    if (usb_cdc_data_enabled()) {
+    if (include_data_cdc && usb_cdc_data_enabled()) {
         total_descriptor_length += usb_cdc_descriptor_length();
     }
     #endif
 
     #if CIRCUITPY_USB_MSC
     #if CIRCUITPY_STORAGE
-    if (storage_usb_enabled()) {
+    if (include_msc && storage_usb_enabled()) {
     #endif
     total_descriptor_length += usb_msc_descriptor_length();
     #if CIRCUITPY_STORAGE
@@ -151,13 +179,13 @@ static bool usb_build_configuration_descriptor(void) {
     #endif
 
     #if CIRCUITPY_USB_HID
-    if (usb_hid_enabled()) {
+    if (include_hid && usb_hid_enabled()) {
         total_descriptor_length += usb_hid_descriptor_length();
     }
     #endif
 
     #if CIRCUITPY_USB_MIDI
-    if (usb_midi_enabled()) {
+    if (include_midi && usb_midi_enabled()) {
         total_descriptor_length += usb_midi_descriptor_length();
     }
     #endif
@@ -181,19 +209,19 @@ static bool usb_build_configuration_descriptor(void) {
     #endif
 
     // Now we know how big the configuration descriptor will be, so we can allocate space for it.
-    configuration_descriptor =
+    *out_descriptor =
         (uint8_t *)port_malloc(total_descriptor_length,
             /*dma_capable*/ false);
-    if (configuration_descriptor == NULL) {
+    if (*out_descriptor == NULL) {
         return false;
     }
 
     // Copy the template, which is the first part of the descriptor, and fix up its length.
 
-    memcpy(configuration_descriptor, configuration_descriptor_template, sizeof(configuration_descriptor_template));
+    memcpy(*out_descriptor, configuration_descriptor_template, sizeof(configuration_descriptor_template));
 
-    configuration_descriptor[CONFIG_TOTAL_LENGTH_LO_INDEX] = total_descriptor_length & 0xFF;
-    configuration_descriptor[CONFIG_TOTAL_LENGTH_HI_INDEX] = (total_descriptor_length >> 8) & 0xFF;
+    (*out_descriptor)[CONFIG_TOTAL_LENGTH_LO_INDEX] = total_descriptor_length & 0xFF;
+    (*out_descriptor)[CONFIG_TOTAL_LENGTH_HI_INDEX] = (total_descriptor_length >> 8) & 0xFF;
 
     // Number interfaces and endpoints.
     // Endpoint 0 is already used for USB control,
@@ -207,16 +235,16 @@ static bool usb_build_configuration_descriptor(void) {
         .num_out_endpoints = 1,
     };
 
-    uint8_t *descriptor_buf_remaining = configuration_descriptor + sizeof(configuration_descriptor_template);
+    uint8_t *descriptor_buf_remaining = *out_descriptor + sizeof(configuration_descriptor_template);
 
     #if CIRCUITPY_USB_CDC
-    if (usb_cdc_console_enabled()) {
+    if (include_console_cdc && usb_cdc_console_enabled()) {
         // Concatenate and fix up the CDC REPL descriptor.
         descriptor_buf_remaining += usb_cdc_add_descriptor(
             descriptor_buf_remaining, &descriptor_counts, &current_interface_string, true /*console*/);
 
     }
-    if (usb_cdc_data_enabled()) {
+    if (include_data_cdc && usb_cdc_data_enabled()) {
         // Concatenate and fix up the CDC data descriptor.
         descriptor_buf_remaining += usb_cdc_add_descriptor(
             descriptor_buf_remaining, &descriptor_counts, &current_interface_string, false /*console*/);
@@ -225,7 +253,7 @@ static bool usb_build_configuration_descriptor(void) {
 
     #if CIRCUITPY_USB_MSC
     #if CIRCUITPY_STORAGE
-    if (storage_usb_enabled()) {
+    if (include_msc && storage_usb_enabled()) {
     #endif
     // Concatenate and fix up the MSC descriptor.
     descriptor_buf_remaining += usb_msc_add_descriptor(
@@ -236,7 +264,7 @@ static bool usb_build_configuration_descriptor(void) {
     #endif
 
     #if CIRCUITPY_USB_HID
-    if (usb_hid_enabled()) {
+    if (include_hid && usb_hid_enabled()) {
         if (usb_hid_boot_device() > 0 && descriptor_counts.current_interface > 0) {
             // Hosts using boot devices generally to expect them to be at interface zero,
             // and will not work properly otherwise.
@@ -249,7 +277,7 @@ static bool usb_build_configuration_descriptor(void) {
     #endif
 
     #if CIRCUITPY_USB_MIDI
-    if (usb_midi_enabled()) {
+    if (include_midi && usb_midi_enabled()) {
         // Concatenate and fix up the MIDI descriptor.
         descriptor_buf_remaining += usb_midi_add_descriptor(
             descriptor_buf_remaining, &descriptor_counts, &current_interface_string);
@@ -277,7 +305,7 @@ static bool usb_build_configuration_descriptor(void) {
     }
     #endif
     // Now we know how many interfaces have been used.
-    configuration_descriptor[CONFIG_NUM_INTERFACES_INDEX] = descriptor_counts.current_interface;
+    (*out_descriptor)[CONFIG_NUM_INTERFACES_INDEX] = descriptor_counts.current_interface;
 
     // Did we run out of endpoints?
     if (descriptor_counts.current_endpoint > USB_NUM_ENDPOINT_PAIRS ||
@@ -287,6 +315,16 @@ static bool usb_build_configuration_descriptor(void) {
     }
     return true;
 }
+
+static bool usb_build_configuration_descriptor(void) {
+    return build_one_configuration(false, &configuration_descriptor);
+}
+
+#if CIRCUITPY_USB_DEVICE_DUAL
+static bool usb_build_configuration_descriptor_hs(void) {
+    return build_one_configuration(true, &configuration_descriptor_hs);
+}
+#endif
 
 // str must not be on the heap.
 void usb_add_interface_string(uint8_t interface_string_index, const char str[]) {
@@ -360,28 +398,41 @@ bool usb_build_descriptors(const usb_identification_t *identification) {
     current_interface_string = 1;
     collected_interface_strings_length = 0;
 
-    return usb_build_device_descriptor(identification) &&
-           usb_build_configuration_descriptor() &&
-           usb_build_interface_string_table();
+    bool ok = usb_build_device_descriptor(identification) &&
+        usb_build_configuration_descriptor();
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    // Build second configuration descriptor for the HS port
+    // before building the string table so all strings are collected.
+    ok = ok && usb_build_configuration_descriptor_hs();
+    #endif
+    ok = ok && usb_build_interface_string_table();
+    return ok;
 }
 
 // Invoked when GET DEVICE DESCRIPTOR is received.
 // Application return pointer to descriptor
-uint8_t const *tud_descriptor_device_cb(void) {
+uint8_t const *tud_descriptor_device_cb(uint8_t rhport) {
+    (void)rhport;
     return device_descriptor;
 }
 
 // Invoked when GET CONFIGURATION DESCRIPTOR is received.
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
-uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
+uint8_t const *tud_descriptor_configuration_cb(uint8_t rhport, uint8_t index) {
     (void)index;  // for multiple configurations
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    if (rhport == 1) {
+        return configuration_descriptor_hs;
+    }
+    #endif
     return configuration_descriptor;
 }
 
 // Invoked when GET STRING DESCRIPTOR request is received.
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
-uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+uint16_t const *tud_descriptor_string_cb(uint8_t rhport, uint8_t index, uint16_t langid) {
+    (void)rhport;
     if (index > MAX_INTERFACE_STRINGS) {
         return NULL;
     }

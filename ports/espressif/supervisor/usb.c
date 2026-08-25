@@ -40,7 +40,12 @@
 StackType_t usb_device_stack[USBD_STACK_SIZE];
 StaticTask_t usb_device_taskdef;
 
+#if CIRCUITPY_USB_DEVICE_DUAL
+static usb_phy_handle_t device_fs_phy_hdl;
+static usb_phy_handle_t device_hs_phy_hdl;
+#else
 static usb_phy_handle_t device_phy_hdl;
+#endif
 
 // USB Device Driver task
 // This top level thread process all usb events and invoke callbacks
@@ -49,7 +54,7 @@ static void usb_device_task(void *param) {
 
     // RTOS forever loop
     while (1) {
-        // tinyusb device task
+        // tinyusb device task - handles events for all initialized ports
         if (tusb_inited()) {
             tud_task();
             tud_cdc_write_flush();
@@ -62,6 +67,25 @@ static void usb_device_task(void *param) {
 
 void init_usb_hardware(void) {
     #if CIRCUITPY_USB_DEVICE
+    #if CIRCUITPY_USB_DEVICE_DUAL
+    // Configure FS USB PHY (port 0, internal PHY)
+    usb_phy_config_t fs_phy_conf = {
+        .controller = USB_PHY_CTRL_OTG,
+        .target = USB_PHY_TARGET_INT,
+        .otg_mode = USB_OTG_MODE_DEVICE,
+        .otg_speed = USB_PHY_SPEED_FULL,
+    };
+    usb_new_phy(&fs_phy_conf, &device_fs_phy_hdl);
+
+    // Configure HS USB PHY (port 1, UTMI PHY)
+    usb_phy_config_t hs_phy_conf = {
+        .controller = USB_PHY_CTRL_OTG,
+        .target = USB_PHY_TARGET_UTMI,
+        .otg_mode = USB_OTG_MODE_DEVICE,
+        .otg_speed = USB_PHY_SPEED_UNDEFINED,
+    };
+    usb_new_phy(&hs_phy_conf, &device_hs_phy_hdl);
+    #else
     // Configure USB PHY
     usb_phy_config_t phy_conf = {
         .controller = USB_PHY_CTRL_OTG,
@@ -80,6 +104,7 @@ void init_usb_hardware(void) {
         #endif
     };
     usb_new_phy(&phy_conf, &device_phy_hdl);
+    #endif
 
     #if CIRCUITPY_ESP32P4_SWAP_LSFS == 1
     #ifndef CONFIG_IDF_TARGET_ESP32P4
