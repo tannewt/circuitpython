@@ -644,7 +644,23 @@ async def build_circuitpython():  # noqa: C901
         enabled = mpflag in DEFAULT_MODULES
         circuitpython_flags.append(f"-DCIRCUITPY_{mpflag.upper()}={1 if enabled else 0}")
 
+    # ulab is on by default and boards that cannot spare the flash set
+    # CIRCUITPY_ULAB = false in their circuitpython.toml. Flags mirror py/py.mk.
+    ulab_enabled = mpconfigboard.get("CIRCUITPY_ULAB", True)
+    circuitpython_flags.append(f"-DCIRCUITPY_ULAB={1 if ulab_enabled else 0}")
+    if ulab_enabled:
+        circuitpython_flags.extend(
+            (
+                "-DMODULE_ULAB_ENABLED=1",
+                "-DULAB_HAS_USER_MODULE=0",
+                "-iquote",
+                str(top / "extmod" / "ulab" / "code"),
+            )
+        )
+
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
+    if ulab_enabled:
+        source_files.extend(sorted((top / "extmod" / "ulab" / "code").rglob("*.c")))
     assembly_files = []
     for file in top.glob("py/*.c"):
         source_files.append(file)

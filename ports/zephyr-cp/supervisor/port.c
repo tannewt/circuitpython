@@ -294,6 +294,14 @@ void port_heap_init(void) {
         // If this crashes, then make sure you've enabled all of the Kconfig needed for the drivers.
         if (valid_pool_count == 0) {
             heap = tlsf_create_with_pool(heap_bottom, size, circuitpy_max_ram_size);
+            if (heap == NULL) {
+                // Can happen for a region the linker filled almost to the top,
+                // which the build-time MINIMUM_RAM_SIZE filter cannot predict
+                // because it only sees the devicetree size.
+                printk("Heap creation failed at %p; trying the next region\n", heap_bottom);
+                pools[i] = NULL;
+                continue;
+            }
             pools[i] = tlsf_get_pool(heap);
         } else {
             pools[i] = tlsf_add_pool(heap, heap_bottom + 1, size - sizeof(uint32_t));

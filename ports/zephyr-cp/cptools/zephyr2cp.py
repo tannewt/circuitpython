@@ -13,7 +13,14 @@ logger.setLevel(logging.DEBUG)
 # GPIO flags defined here: include/zephyr/dt-bindings/gpio/gpio.h
 GPIO_ACTIVE_LOW = 1 << 0
 
-MINIMUM_RAM_SIZE = 1024
+# A region has to be big enough to host TLSF's control structure to be usable as
+# the first heap pool, and TLSF sizes that structure from the maximum heap size
+# rather than from the region: at an 8 MB maximum it is 2412 bytes. Anything
+# smaller than this is not worth adding as a later pool either. The previous
+# value of 1024 let through two SiWx917 regions that are exactly 0x400 bytes,
+# /memory@0 (reserved for the network processor) and /memory-dma@24061c00,
+# neither of which should ever be in the Python heap.
+MINIMUM_RAM_SIZE = 8192
 
 MANUAL_COMPAT_TO_DRIVER = {
     "renesas_ra_nv_flash": "flash",
