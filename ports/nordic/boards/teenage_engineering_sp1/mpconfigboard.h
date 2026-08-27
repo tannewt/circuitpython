@@ -56,6 +56,10 @@
 #define BOOTLOADER_UF2_MAGIC        (0xB3)
 #define BOOTLOADER_UF2_MAGIC2       (0x7E)
 
+// For a bootloader that starts a watchdog before our first instruction and
+// locks its configuration.
+#define CIRCUITPY_BOOTLOADER_ARMED_WDT (1)
+
 // TWIM to the CS42L42 (0x48) and TAS2505 (0x18).
 #define DEFAULT_I2C_BUS_SCL         (&pin_P1_11)
 #define DEFAULT_I2C_BUS_SDA         (&pin_P1_07)

@@ -38,7 +38,6 @@
 #include "common-hal/watchdog/WatchDogTimer.h"
 #include "common-hal/alarm/__init__.h"
 
-#include "shared-bindings/_bleio/__init__.h"
 #include "shared-bindings/microcontroller/__init__.h"
 #include "shared-bindings/rtc/__init__.h"
 
