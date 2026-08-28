@@ -33,7 +33,6 @@
 #include "lib/sdmmc/include/sdmmc_defs.h" // MMC_* command numbers
 #include "py/mphal.h"
 #include "py/runtime.h"          // RUN_BACKGROUND_TASKS
-#include "background.h"          // board_wdt_feed()
 #include "shared-bindings/microcontroller/__init__.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "peripherals/nrf/nrf52840/pins.h"
@@ -87,9 +86,6 @@ static bool emmc_deadline_expired(void) {
     return s_deadline_armed && ticks_since(s_deadline_t0) >= s_deadline_lim;
 }
 
-// Long-wait service: run background tasks, which on a board with a watchdog
-// it cannot stop is also where the feed lives. board_wdt_feed() is the
-// feed-only alternative, for waits that must not let anything else run.
 static inline void emmc_yield(void) {
     RUN_BACKGROUND_TASKS;
 }
@@ -393,7 +389,7 @@ static bool emmc_init(emmcio_emmc_obj_t *self) {
     uint8_t r3[6] = {0};
     for (int retry = 0; retry < 1000; retry++) {
         bool ok = send_command(1, 0x40FF8000, r3);
-        board_wdt_feed();
+        emmc_yield();
         mp_hal_delay_ms(1);
         if (ok && (r3[1] & 0x80)) {      // response seen AND busy bit set = ready
             self->cmd1_retries = retry;
@@ -514,17 +510,6 @@ bool common_hal_emmcio_emmc_read_ext_csd(uint8_t *buf) {
 
 #define EMMC_BUSY_LEADIN_CLOCKS 16
 
-// run_bg picks the service call for a long stall.
-//   true  -- emmc_yield(): feed the watchdog AND run background tasks. The
-//            wait is between transfers, so it is safe to let the rest of the
-//            system have a turn.
-//   false -- board_wdt_feed(): feed the watchdog ONLY. The wait is inside a
-//            write, with the card mid-program, so no background task can
-//            re-enter this driver or change the board's state out from under
-//            a programming card -- on this board that includes the power-off
-//            gesture, which would drop the card's rail. Detection is deferred
-//            by at most one bounded wait (<=500 ms) against a 3 s hold;
-//            between blocks and between calls background tasks run as usual.
 static bool dat0_busy_wait(uint32_t timeout_us, bool run_bg) {
     DAT0_IN();                                   // never drive against a busy card
     for (int i = 0; i < EMMC_BUSY_LEADIN_CLOCKS; i++) {
@@ -553,8 +538,6 @@ static bool dat0_busy_wait(uint32_t timeout_us, bool run_bg) {
         }
         if (run_bg) {
             emmc_yield();
-        } else {
-            board_wdt_feed();
         }
     }
 }
