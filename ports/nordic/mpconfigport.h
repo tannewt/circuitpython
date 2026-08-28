@@ -142,6 +142,7 @@
 #endif
 
 // Whether this board's bootloader starts a watchdog before CircuitPython
+#ifndef CIRCUITPY_BOOTLOADER_ARMED_WDT
 #define CIRCUITPY_BOOTLOADER_ARMED_WDT (0)
 #endif
 

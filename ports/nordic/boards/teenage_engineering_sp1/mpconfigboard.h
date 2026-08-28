@@ -60,6 +60,9 @@
 // locks its configuration.
 #define CIRCUITPY_BOOTLOADER_ARMED_WDT (1)
 
+// No SD card LUN. There is no card slot on this device.
+#define CIRCUITPY_SDCARD_USB        (0)
+
 // TWIM to the CS42L42 (0x48) and TAS2505 (0x18).
 #define DEFAULT_I2C_BUS_SCL         (&pin_P1_11)
 #define DEFAULT_I2C_BUS_SDA         (&pin_P1_07)
