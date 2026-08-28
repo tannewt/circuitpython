@@ -40,9 +40,6 @@ void port_background_tick(void) {
 MP_WEAK void board_background_task(void) {
 }
 
-MP_WEAK void board_wdt_feed(void) {
-}
-
 void port_background_task(void) {
     board_background_task();
 }

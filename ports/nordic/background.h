@@ -7,6 +7,3 @@
 #pragma once
 
 void board_background_task(void);
-
-// Feed a watchdog that wasn't armed by CircuitPython i.e. a boards custom bootloader
-void board_wdt_feed(void);

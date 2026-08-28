@@ -10,6 +10,7 @@
 
 #include "py/misc.h"
 
+#include "supervisor/filesystem.h"
 #include "supervisor/flash.h"
 
 #include "wdt.h"
@@ -61,7 +62,9 @@ static void power_off(void) {
     // 0. Commit the filesystem. Hold-to-power-off is this device's normal
     //    "off", so the dirty page sitting in the flash cache is typically the
     //    last thing FAT wrote.
-    supervisor_flash_flush();
+    if (filesystem_present()) {
+        supervisor_flash_flush();
+    }
 
     // 1. Let the board put its own hardware to bed first, while everything is
     //    still powered and predictable.
