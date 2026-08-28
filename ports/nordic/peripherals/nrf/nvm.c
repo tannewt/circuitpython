@@ -12,8 +12,6 @@
 
 #include "nrfx_nvmc.h"
 
-#include "background.h"
-
 #define FLASH_PAGE_SIZE (4096)
 
 #ifdef BLUETOOTH_SD
@@ -112,10 +110,6 @@ bool nrf_nvm_safe_flash_page_write(uint32_t page_addr, uint8_t *data) {
 
         return true;
     }
-    #endif
-
-    #if CIRCUITPY_BOOTLOADER_ARMED_WDT
-    board_wdt_feed();
     #endif
 
     nrfx_nvmc_page_erase(page_addr);

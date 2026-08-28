@@ -10,6 +10,7 @@
 
 #include "py/misc.h"
 
+#include "supervisor/filesystem.h"
 #include "supervisor/flash.h"
 
 #include "wdt.h"
@@ -26,6 +27,12 @@
 #define POLL_INTERVAL_SUBTICKS      (1024)      // ~31 ms
 #define POWER_OFF_HOLD_SUBTICKS     (BOARD_POWER_OFF_HOLD_SECONDS * 32768)
 #define RELEASE_DEBOUNCE_SUBTICKS   (1638)      // ~50 ms
+
+// How long the gesture will wait for a filesystem that is being built
+#ifndef BOARD_POWER_OFF_FILESYSTEM_GRACE_SECONDS
+#define BOARD_POWER_OFF_FILESYSTEM_GRACE_SECONDS (30)
+#endif
+#define FILESYSTEM_GRACE_SUBTICKS   (BOARD_POWER_OFF_FILESYSTEM_GRACE_SECONDS * 32768)
 
 // The RTC that port.c runs the tick from, read straight out of its counter.
 #define POWER_OFF_RTC (NRF_RTC2)
@@ -61,7 +68,9 @@ static void power_off(void) {
     // 0. Commit the filesystem. Hold-to-power-off is this device's normal
     //    "off", so the dirty page sitting in the flash cache is typically the
     //    last thing FAT wrote.
-    supervisor_flash_flush();
+    if (filesystem_present()) {
+        supervisor_flash_flush();
+    }
 
     // 1. Let the board put its own hardware to bed first, while everything is
     //    still powered and predictable.
@@ -129,6 +138,22 @@ static void ensure_input_buffer_connected(void) {
     }
 }
 
+static bool power_off_deferred(uint32_t now) {
+    static uint32_t absent_since_subticks;
+    static bool was_absent;
+
+    if (filesystem_present()) {
+        was_absent = false;
+        return false;
+    }
+
+    if (!was_absent) {
+        was_absent = true;
+        absent_since_subticks = now;
+    }
+    return ((now - absent_since_subticks) & RTC_COUNTER_MASK) < FILESYSTEM_GRACE_SUBTICKS;
+}
+
 void power_off_tick(void) {
     uint32_t now = POWER_OFF_RTC->COUNTER;
     static uint32_t last_poll_subticks;
@@ -136,6 +161,10 @@ void power_off_tick(void) {
         return;
     }
     last_poll_subticks = now;
+
+    if (power_off_deferred(now)) {
+        return;
+    }
 
     ensure_input_buffer_connected();
 

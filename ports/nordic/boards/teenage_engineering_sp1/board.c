@@ -295,11 +295,6 @@ void board_init(void) {
     nrf_gpio_pin_clear(PIN_LED_HEARTBEAT);
 }
 
-// The feed on its own
-void board_wdt_feed(void) {
-    bootloader_wdt_feed();
-}
-
 void board_background_task(void) {
     bootloader_wdt_feed();
 

@@ -24,6 +24,10 @@
 // The board does not have to configure that pin. If its input buffer is found
 // disconnected the poll reconnects it with a pull-up. A board is still free to
 // configure it, and anything already configured is left alone.
+//
+// The gesture holds off while the supervisor is building the filesystem, so
+// that a press during a format cannot leave a half-written FAT behind. The
+// press is not lost: it takes effect as soon as the filesystem is mounted.
 
 
 #include "py/mpconfig.h"
