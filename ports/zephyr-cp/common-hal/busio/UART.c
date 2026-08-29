@@ -6,10 +6,14 @@
 
 #include "shared-bindings/microcontroller/__init__.h"
 #include "shared-bindings/busio/UART.h"
+#include "shared-bindings/microcontroller/Pin.h"
+
+#include "common-hal/busio/dynamic_bus.h"
 
 #include "shared/runtime/interrupt_char.h"
 #include "py/mpconfig.h"
 #include "py/gc.h"
+#include "py/mphal.h"
 #include "py/mperrno.h"
 #include "py/runtime.h"
 #include "py/stream.h"
@@ -50,13 +54,25 @@ static void serial_cb(const struct device *dev, void *user_data) {
 }
 
 void common_hal_busio_uart_never_reset(busio_uart_obj_t *self) {
-    // Not needed for Zephyr port (devices are managed by Zephyr)
+    if (self->dynamic) {
+        dynamic_bus_never_reset(self->uart_device);
+        common_hal_never_reset_pin(self->tx);
+        common_hal_never_reset_pin(self->rx);
+        common_hal_never_reset_pin(self->rts);
+        common_hal_never_reset_pin(self->cts);
+    }
 }
 
 // Helper function for Zephyr-specific initialization from device tree
 mp_obj_t common_hal_busio_uart_construct_from_device(busio_uart_obj_t *self, const struct device *uart_device, uint16_t receiver_buffer_size, byte *receiver_buffer) {
     self->base.type = &busio_uart_type;
     self->uart_device = uart_device;
+    self->dynamic = false;
+    self->receiver_buffer = NULL;
+    self->tx = NULL;
+    self->rx = NULL;
+    self->rts = NULL;
+    self->cts = NULL;
     int ret = uart_irq_callback_user_data_set(uart_device, serial_cb, self);
 
     if (ret < 0) {
@@ -73,7 +89,8 @@ mp_obj_t common_hal_busio_uart_construct_from_device(busio_uart_obj_t *self, con
     return MP_OBJ_FROM_PTR(self);
 }
 
-// Standard busio construct - not used in Zephyr port (devices come from device tree)
+// Standard busio construct: pick a free peripheral instance and route it to
+// the requested pins at runtime (supported on nRF SoCs).
 void common_hal_busio_uart_construct(busio_uart_obj_t *self,
     const mcu_pin_obj_t *tx, const mcu_pin_obj_t *rx,
     const mcu_pin_obj_t *rts, const mcu_pin_obj_t *cts,
@@ -81,15 +98,99 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
     uint32_t baudrate, uint8_t bits, busio_uart_parity_t parity, uint8_t stop,
     mp_float_t timeout, uint16_t receiver_buffer_size, byte *receiver_buffer,
     bool sigint_enabled) {
-    mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_UART);
+    if (rs485_dir != NULL) {
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("rs485 not supported"));
+    }
+    // nRF UARTE only supports 8 data bits.
+    if (bits != 8) {
+        mp_raise_ValueError(MP_ERROR_TEXT("Unsupported data bits"));
+    }
+
+    const struct device *dev = NULL;
+    int ret = dynamic_bus_uart_allocate(tx, rx, rts, cts, &dev);
+    if (ret < 0) {
+        if (ret == -ENODEV) {
+            mp_raise_ValueError_varg(MP_ERROR_TEXT("No available %q peripheral"), MP_QSTR_UART);
+        }
+        mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_UART);
+    }
+
+    bool allocated_buffer = false;
+    if (receiver_buffer == NULL) {
+        receiver_buffer = m_malloc(receiver_buffer_size);
+        allocated_buffer = true;
+    }
+
+    common_hal_busio_uart_construct_from_device(self, dev, receiver_buffer_size, receiver_buffer);
+    self->dynamic = true;
+    self->receiver_buffer = allocated_buffer ? receiver_buffer : NULL;
+    self->tx = tx;
+    self->rx = rx;
+    self->rts = rts;
+    self->cts = cts;
+    claim_pin(tx);
+    claim_pin(rx);
+    claim_pin(rts);
+    claim_pin(cts);
+
+    // Apply line configuration.
+    struct uart_config config = {
+        .baudrate = baudrate,
+        .data_bits = UART_CFG_DATA_BITS_8,
+        .parity = (parity == BUSIO_UART_PARITY_NONE) ? UART_CFG_PARITY_NONE :
+            ((parity == BUSIO_UART_PARITY_EVEN) ? UART_CFG_PARITY_EVEN : UART_CFG_PARITY_ODD),
+        .stop_bits = (stop == 1) ? UART_CFG_STOP_BITS_1 : UART_CFG_STOP_BITS_2,
+        .flow_ctrl = (rts != NULL && cts != NULL) ? UART_CFG_FLOW_CTRL_RTS_CTS : UART_CFG_FLOW_CTRL_NONE,
+    };
+    int config_ret = uart_configure(self->uart_device, &config);
+    if (config_ret < 0) {
+        uart_irq_rx_disable(self->uart_device);
+        uart_irq_callback_user_data_set(self->uart_device, NULL, NULL);
+        if (dynamic_bus_release(self->uart_device)) {
+            reset_pin(self->tx);
+            reset_pin(self->rx);
+            reset_pin(self->rts);
+            reset_pin(self->cts);
+        }
+        self->uart_device = NULL;
+        if (self->receiver_buffer != NULL) {
+            m_free(self->receiver_buffer);
+            self->receiver_buffer = NULL;
+        }
+        mp_raise_ValueError(MP_ERROR_TEXT("Unsupported UART configuration"));
+    }
+
+    self->timeout = K_USEC((uint64_t)(timeout * 1000000));
 }
 
 bool common_hal_busio_uart_deinited(busio_uart_obj_t *self) {
-    return !device_is_ready(self->uart_device);
+    return self->uart_device == NULL;
 }
 
 void common_hal_busio_uart_deinit(busio_uart_obj_t *self) {
-    // Leave it active (managed by Zephyr)
+    if (common_hal_busio_uart_deinited(self)) {
+        return;
+    }
+    if (self->dynamic) {
+        uart_irq_rx_disable(self->uart_device);
+        uart_irq_callback_user_data_set(self->uart_device, NULL, NULL);
+        bool routed = dynamic_bus_release(self->uart_device);
+        if (routed) {
+            reset_pin(self->tx);
+            reset_pin(self->rx);
+            reset_pin(self->rts);
+            reset_pin(self->cts);
+        }
+        self->tx = NULL;
+        self->rx = NULL;
+        self->rts = NULL;
+        self->cts = NULL;
+        if (self->receiver_buffer != NULL) {
+            m_free(self->receiver_buffer);
+            self->receiver_buffer = NULL;
+        }
+        self->uart_device = NULL;
+    }
 }
 
 // Read characters.

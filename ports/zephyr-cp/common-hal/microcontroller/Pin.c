@@ -7,43 +7,125 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/digitalio/DigitalInOut.h"
 
+#if CIRCUITPY_BUSIO
+#include "common-hal/busio/dynamic_bus.h"
+#endif
+
 #include "py/mphal.h"
 
-// Bit mask of claimed pins on each of up to two ports. nrf52832 has one port; nrf52840 has two.
-// static uint32_t claimed_pins[GPIO_COUNT];
-// static uint32_t never_reset_pins[GPIO_COUNT];
+#include <zephyr/drivers/gpio.h>
+
+// Pin claim tracking. Pins are keyed by their mcu_pin_obj_t pointer, which is
+// unique per pin. never_reset pins survive soft reloads.
+#define MAX_TRACKED_PINS 128
+
+typedef struct {
+    const mcu_pin_obj_t *pin;
+    bool never_reset;
+} tracked_pin_t;
+
+static tracked_pin_t tracked_pins[MAX_TRACKED_PINS];
+
+static tracked_pin_t *find_tracked_pin(const mcu_pin_obj_t *pin) {
+    if (pin == NULL) {
+        return NULL;
+    }
+    for (size_t i = 0; i < MAX_TRACKED_PINS; i++) {
+        if (tracked_pins[i].pin == pin) {
+            return &tracked_pins[i];
+        }
+    }
+    return NULL;
+}
+
+static tracked_pin_t *find_free_slot(void) {
+    for (size_t i = 0; i < MAX_TRACKED_PINS; i++) {
+        if (tracked_pins[i].pin == NULL) {
+            return &tracked_pins[i];
+        }
+    }
+    return NULL;
+}
+
+// Configure a pin back to a quiescent state: disconnected from any peripheral
+// routing, input buffer and driver off, no pulls.
+static void deconfigure_pin(const mcu_pin_obj_t *pin) {
+    int ret = gpio_pin_configure(pin->port, pin->number, GPIO_DISCONNECTED);
+    if (ret == -ENOTSUP) {
+        // SoCs without GPIO_DISCONNECTED support settle for a plain input.
+        gpio_pin_configure(pin->port, pin->number, GPIO_INPUT);
+    }
+}
 
 void reset_all_pins(void) {
-    // for (size_t i = 0; i < GPIO_COUNT; i++) {
-    //     claimed_pins[i] = never_reset_pins[i];
-    // }
+    // Release dynamically allocated bus peripherals first so that drivers
+    // give up their pins before the pads are reconfigured below.
+    #if CIRCUITPY_BUSIO
+    dynamic_bus_reset_all();
+    #endif
 
-    // for (uint32_t pin = 0; pin < NUMBER_OF_PINS; ++pin) {
-    //     if ((never_reset_pins[nrf_pin_port(pin)] & (1 << nrf_relative_pin_number(pin))) != 0) {
-    //         continue;
-    //     }
-    //     nrf_gpio_cfg_default(pin);
-    // }
-
-    // // After configuring SWD because it may be shared.
-    // reset_speaker_enable_pin();
+    for (size_t i = 0; i < MAX_TRACKED_PINS; i++) {
+        tracked_pin_t *tracked = &tracked_pins[i];
+        if (tracked->pin == NULL || tracked->never_reset) {
+            continue;
+        }
+        deconfigure_pin(tracked->pin);
+        tracked->pin = NULL;
+        tracked->never_reset = false;
+    }
 }
 
 // Mark pin as free and return it to a quiescent state.
 void reset_pin(const mcu_pin_obj_t *pin) {
+    if (pin == NULL) {
+        return;
+    }
 
-    // Clear claimed bit.
-    // claimed_pins[nrf_pin_port(pin_number)] &= ~(1 << nrf_relative_pin_number(pin_number));
-    // never_reset_pins[nrf_pin_port(pin_number)] &= ~(1 << nrf_relative_pin_number(pin_number));
+    tracked_pin_t *tracked = find_tracked_pin(pin);
+    if (tracked != NULL) {
+        tracked->pin = NULL;
+        tracked->never_reset = false;
+    }
+
+    deconfigure_pin(pin);
 }
 
+void claim_pin(const mcu_pin_obj_t *pin) {
+    if (pin == NULL) {
+        return;
+    }
+    tracked_pin_t *tracked = find_tracked_pin(pin);
+    if (tracked == NULL) {
+        tracked = find_free_slot();
+        if (tracked == NULL) {
+            // The table is full; the pin cannot be tracked. Future claim
+            // checks will still report it as free, which is safe for boards
+            // with more GPIOs than we track.
+            return;
+        }
+        tracked->pin = pin;
+        tracked->never_reset = false;
+    }
+}
 
 void never_reset_pin_number(uint8_t pin_number) {
-    // never_reset_pins[nrf_pin_port(pin_number)] |= 1 << nrf_relative_pin_number(pin_number);
+    // Deprecated single-byte pin number API; not used by this port.
+    (void)pin_number;
 }
 
 void common_hal_never_reset_pin(const mcu_pin_obj_t *pin) {
-    never_reset_pin_number(pin->number);
+    if (pin == NULL) {
+        return;
+    }
+    tracked_pin_t *tracked = find_tracked_pin(pin);
+    if (tracked == NULL) {
+        tracked = find_free_slot();
+        if (tracked == NULL) {
+            return;
+        }
+        tracked->pin = pin;
+    }
+    tracked->never_reset = true;
 }
 
 void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
@@ -53,21 +135,28 @@ void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
     reset_pin(pin);
 }
 
-void claim_pin(const mcu_pin_obj_t *pin) {
-    // Set bit in claimed_pins bitmask.
-    // claimed_pins[nrf_pin_port(pin->number)] |= 1 << nrf_relative_pin_number(pin->number);
-}
-
-
 bool pin_number_is_free(uint8_t pin_number) {
-    return false; // !(claimed_pins[nrf_pin_port(pin_number)] & (1 << nrf_relative_pin_number(pin_number)));
+    // Deprecated single-byte pin number API; not used by this port.
+    (void)pin_number;
+    return true;
 }
 
 bool common_hal_mcu_pin_is_free(const mcu_pin_obj_t *pin) {
-    return true;
-
+    return find_tracked_pin(pin) == NULL;
 }
 
 void common_hal_mcu_pin_claim(const mcu_pin_obj_t *pin) {
     claim_pin(pin);
+}
+
+uint8_t common_hal_mcu_pin_number(const mcu_pin_obj_t *pin) {
+    return pin->number;
+}
+
+void common_hal_mcu_pin_claim_number(uint8_t pin_no) {
+    (void)pin_no;
+}
+
+void common_hal_mcu_pin_reset_number(uint8_t pin_no) {
+    (void)pin_no;
 }

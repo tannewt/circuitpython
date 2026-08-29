@@ -487,6 +487,37 @@ def find_ram_regions(device_tree):
 INPUT_KEY_NAMES = {}
 
 
+# Mask selecting the nRF pin number field (absolute pin, port*32+pin) of
+# a pinctrl psel entry. The pin control entry uses all-ones in this field to
+# mark a disconnected signal (NRF_PIN_DISCONNECTED).
+NRF_PIN_FIELD_MASK = 0x1FF
+
+
+def _pinctrl_default_psels(node):
+    """Return the raw nRF psel entries of a node's "default" pinctrl state.
+
+    The state node (referenced by pinctrl-0) groups its configuration in
+    child nodes (typically named group1, group2, ...) that each carry a
+    psels property.
+
+    Returns None when the node does not use pinctrl.
+    """
+    prop = node.props.get("pinctrl-0")
+    if prop is None:
+        return None
+    psels = []
+    try:
+        for state in prop.to_nodes():
+            for group in state.nodes.values():
+                if "psels" not in group.props:
+                    continue
+                for value in group.props["psels"].to_nums():
+                    psels.append(value)
+    except (dtlib.DTError, KeyError):
+        return None
+    return psels
+
+
 def _populate_input_key_names():
     header = (
         pathlib.Path(__file__).parent.parent
@@ -820,6 +851,19 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
     board_pin_mapping = "\n    ".join(board_pin_mapping)
     mcu_pin_mapping = "\n    ".join(mcu_pin_mapping)
 
+    # Bus instances the board enabled with all-disconnected pins are routed to
+    # arbitrary pins at runtime by busio objects instead of being exposed as
+    # fixed board.X() singletons.
+    dynamic_bus_labels = set()
+    for driver in BUSIO_CLASSES:
+        for labels in active_zephyr_devices.get(driver, []):
+            node = device_tree.label2node[labels[0]]
+            psels = _pinctrl_default_psels(node)
+            if psels is not None and all(
+                (value & NRF_PIN_FIELD_MASK) == NRF_PIN_FIELD_MASK for value in psels
+            ):
+                dynamic_bus_labels.add(labels[0])
+
     zephyr_binding_headers = []
     zephyr_binding_objects = []
     zephyr_binding_labels = []
@@ -857,6 +901,10 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                     if found_main:
                         break
         for labels in instances:
+            if labels[0] in dynamic_bus_labels:
+                # Dynamically routable instances are not exposed as board
+                # singletons; construct a busio object with pins instead.
+                continue
             instance_name = f"{driver.replace('/', '_')}_{labels[0]}"
             c_function_name = f"_{instance_name}"
             singleton_ptr = f"{c_function_name}_singleton"
@@ -896,6 +944,111 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
     zephyr_binding_headers = "\n".join(zephyr_binding_headers)
     zephyr_binding_objects = "\n".join(zephyr_binding_objects)
     zephyr_binding_labels = "\n".join(zephyr_binding_labels)
+
+    # Generate tables of allocatable bus instances for dynamic pin routing
+    # (nRF SoCs). Instances enabled with all-disconnected pinctrl can be
+    # routed to arbitrary pins at runtime; instances with fixed devicetree
+    # pins are only usable when the requested pins match their state.
+    pinctrl_nrf = False
+    if config_present:
+        for line in config.read_text().splitlines():
+            if line.startswith("CONFIG_PINCTRL_NRF="):
+                pinctrl_nrf = line.strip().endswith("=y")
+                break
+
+    dynamic_bus_includes = ""
+    dynamic_bus_tables = ""
+    if pinctrl_nrf:
+        dynamic_bus_includes = """
+#if defined(CONFIG_PINCTRL_NRF)
+#include <zephyr/drivers/pinctrl.h>
+#include "common-hal/busio/dynamic_bus.h"
+#endif
+"""
+
+        pool_kinds = (("i2c", "i2c"), ("spi", "spi"), ("serial", "uart"))
+        table_parts = []
+        for driver, pool in pool_kinds:
+            dynamic_entries = []
+            fixed_entries = []
+            for labels in active_zephyr_devices.get(driver, []):
+                node = device_tree.label2node[labels[0]]
+                if node in path2chosen:
+                    # Console and other system devices are not allocatable.
+                    continue
+                psels = _pinctrl_default_psels(node)
+                if psels is None or len(psels) > 4:
+                    continue
+                if all((value & NRF_PIN_FIELD_MASK) == NRF_PIN_FIELD_MASK for value in psels):
+                    dynamic_entries.append((labels[0], None, 0))
+                else:
+                    fixed_entries.append((labels[0], psels, len(psels)))
+
+            entries = dynamic_entries + fixed_entries
+            if not entries:
+                continue
+
+            entry_lines = []
+            psel_arrays = []
+            declares = []
+            for label, psels, count in entries:
+                declares.append(f"PINCTRL_DT_DEV_CONFIG_DECLARE(DT_NODELABEL({label}));")
+                entry = (
+                    f"    {{ .dev = DEVICE_DT_GET(DT_NODELABEL({label})), "
+                    f".pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL({label}))"
+                )
+                if psels is not None:
+                    values = ", ".join(hex(value) for value in psels)
+                    psel_arrays.append(
+                        f"static const pinctrl_soc_pin_t cp_{label}_dt_psels[] = {{ {values} }};"
+                    )
+                    entry += f", .dt_psels = cp_{label}_dt_psels, .dt_psel_count = {count}"
+                entry += " },"
+                entry_lines.append(entry)
+
+            table_parts.append(
+                "\n".join(declares)
+                + "\n\n"
+                + "\n".join(psel_arrays)
+                + f"\nconst dynamic_bus_instance_t cp_dynamic_{pool}_buses[] = {{\n"
+                + "\n".join(entry_lines)
+                + "\n};\n"
+                + f"dynamic_bus_state_t cp_dynamic_{pool}_bus_states[ARRAY_SIZE(cp_dynamic_{pool}_buses)];\n"
+                + f"const size_t cp_dynamic_{pool}_bus_count = ARRAY_SIZE(cp_dynamic_{pool}_buses);"
+            )
+
+        # Map GPIO controller devices to their hardware port index so that
+        # nRF pin control entries can be computed at runtime. On nRF SoCs the
+        # index comes from the label digits (gpio0 -> port 0, gpio6 -> port 6).
+        port_devices = []
+        port_indexes = []
+        for label in sorted(ioports.keys()):
+            match = re.match(r"^gpio(\d+)$", label)
+            index = int(match.group(1)) if match else len(port_indexes)
+            port_devices.append(f"DEVICE_DT_GET(DT_NODELABEL({label}))")
+            port_indexes.append(str(index))
+        devices = ", ".join(port_devices)
+        indexes = ", ".join(port_indexes)
+        table_parts.append(
+            f"""
+static const struct device * const cp_gpio_port_devices[] = {{ {devices} }};
+static const uint8_t cp_gpio_port_indexes[] = {{ {indexes} }};
+
+int cp_gpio_port_index(const struct device *port) {{
+    for (size_t i = 0; i < ARRAY_SIZE(cp_gpio_port_devices); i++) {{
+        if (cp_gpio_port_devices[i] == port) {{
+            return cp_gpio_port_indexes[i];
+        }}
+    }}
+    return -1;
+}}"""
+        )
+
+        dynamic_bus_tables = (
+            "#if defined(CONFIG_PINCTRL_NRF)\n"
+            + "\n\n".join(table_parts)
+            + "\n#endif // CONFIG_PINCTRL_NRF"
+        )
 
     # Generate i2sout_reset() that stops all board I2SOut instances
     if i2sout_instance_names:
@@ -1024,6 +1177,7 @@ void board_init(void) {
 #include "py/mphal.h"
 
 {zephyr_binding_headers}
+{dynamic_bus_includes}
 {zephyr_display_header}
 
 const struct device* const flashes[] = {{ {", ".join(flashes)} }};
@@ -1038,6 +1192,7 @@ const size_t circuitpy_max_ram_size = {max_size};
 {pin_defs}
 
 {zephyr_binding_objects}
+{dynamic_bus_tables}
 {zephyr_display_object}
 {i2sout_reset_func}
 

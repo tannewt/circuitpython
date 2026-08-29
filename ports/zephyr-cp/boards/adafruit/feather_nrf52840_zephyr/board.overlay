@@ -42,6 +42,81 @@
 	};
 };
 
+// Extra bus instances enabled with all pins disconnected so CircuitPython can
+// route them to arbitrary pins at runtime when a busio object is constructed:
+// SPI2, SPI3 and UART1. (The board's fixed I2C0 and SPI1 instances stay as
+// they are; UART0 is the console.)
+
+&pinctrl {
+	spi2_dyn_default: spi2_dyn_default {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
+	spi2_dyn_sleep: spi2_dyn_sleep {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
+	spi3_dyn_default: spi3_dyn_default {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
+	spi3_dyn_sleep: spi3_dyn_sleep {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
+	uart1_dyn_default: uart1_dyn_default {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(UART_TX)>,
+				<NRF_PSEL_DISCONNECTED(UART_RX)>;
+		};
+	};
+
+	uart1_dyn_sleep: uart1_dyn_sleep {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(UART_TX)>,
+				<NRF_PSEL_DISCONNECTED(UART_RX)>;
+		};
+	};
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_dyn_default>;
+	pinctrl-1 = <&spi2_dyn_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+};
+
+&spi3 {
+	pinctrl-0 = <&spi3_dyn_default>;
+	pinctrl-1 = <&spi3_dyn_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+};
+
+&uart1 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart1_dyn_default>;
+	pinctrl-1 = <&uart1_dyn_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+};
+
 &uart0 {
     status = "okay";
 };

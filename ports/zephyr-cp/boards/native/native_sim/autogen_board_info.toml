@@ -79,6 +79,7 @@ nvm = true # Zephyr board has nvm
 onewireio = false
 os = true
 paralleldisplaybus = false
+picogame = false
 ps2io = false
 pulseio = false
 pwmio = false

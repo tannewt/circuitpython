@@ -5,12 +5,17 @@
 // SPDX-License-Identifier: MIT
 
 #include "shared-bindings/busio/SPI.h"
+#include "shared-bindings/microcontroller/Pin.h"
+
+#include "common-hal/busio/dynamic_bus.h"
+
 #include "py/mperrno.h"
 #include "py/runtime.h"
 #include "py/gc.h"
 #include "shared/runtime/interrupt_char.h"
 #include "supervisor/port.h"
 
+#include <errno.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
@@ -22,6 +27,10 @@ mp_obj_t common_hal_busio_spi_construct_from_device(busio_spi_obj_t *self, const
     k_mutex_init(&self->mutex);
     self->has_lock = false;
     self->active_config = 0;
+    self->dynamic = false;
+    self->clock = NULL;
+    self->mosi = NULL;
+    self->miso = NULL;
 
     k_poll_signal_init(&self->signal);
 
@@ -34,27 +43,64 @@ mp_obj_t common_hal_busio_spi_construct_from_device(busio_spi_obj_t *self, const
     return MP_OBJ_FROM_PTR(self);
 }
 
-// Standard busio construct - not used in Zephyr port (devices come from device tree)
+// Standard busio construct: pick a free peripheral instance and route it to
+// the requested pins at runtime (supported on nRF SoCs).
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *clock, const mcu_pin_obj_t *mosi,
     const mcu_pin_obj_t *miso, bool half_duplex) {
-    mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_SPI);
+    if (half_duplex) {
+        mp_raise_ValueError(MP_ERROR_TEXT("half duplex not supported"));
+    }
+
+    const struct device *dev = NULL;
+    int ret = dynamic_bus_spi_allocate(clock, mosi, miso, &dev);
+    if (ret < 0) {
+        if (ret == -ENODEV) {
+            mp_raise_ValueError_varg(MP_ERROR_TEXT("No available %q peripheral"), MP_QSTR_SPI);
+        }
+        mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_SPI);
+    }
+
+    common_hal_busio_spi_construct_from_device(self, dev);
+    self->dynamic = true;
+    self->clock = clock;
+    self->mosi = mosi;
+    self->miso = miso;
+    claim_pin(clock);
+    if (mosi != NULL) {
+        claim_pin(mosi);
+    }
+    if (miso != NULL) {
+        claim_pin(miso);
+    }
 }
 
 bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
-    // Always leave it active
-    return false;
+    return self->spi_device == NULL;
 }
 
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
     }
-    // Always leave it active
+    if (self->dynamic) {
+        bool routed = dynamic_bus_release(self->spi_device);
+        if (routed) {
+            reset_pin(self->clock);
+            reset_pin(self->mosi);
+            reset_pin(self->miso);
+        }
+        self->clock = NULL;
+        self->mosi = NULL;
+        self->miso = NULL;
+        self->spi_device = NULL;
+    }
 }
 
 void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
-    // Not needed for Zephyr port
+    if (self->dynamic) {
+        self->spi_device = NULL;
+    }
 }
 
 bool common_hal_busio_spi_try_lock(busio_spi_obj_t *self) {
@@ -277,5 +323,10 @@ uint8_t common_hal_busio_spi_get_polarity(busio_spi_obj_t *self) {
 }
 
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    // Not needed for Zephyr port (devices are managed by Zephyr)
+    if (self->dynamic) {
+        dynamic_bus_never_reset(self->spi_device);
+        common_hal_never_reset_pin(self->clock);
+        common_hal_never_reset_pin(self->mosi);
+        common_hal_never_reset_pin(self->miso);
+    }
 }

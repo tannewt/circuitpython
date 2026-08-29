@@ -9,6 +9,8 @@
 #include "mpconfigboard.h"
 #include "supervisor/shared/tick.h"
 
+#include "common-hal/microcontroller/Pin.h"
+
 #if CIRCUITPY_AUDIOBUSIO_I2SOUT
 #include "common-hal/audiobusio/I2SOut.h"
 #endif
@@ -227,6 +229,10 @@ void reset_cpu(void) {
 }
 
 void reset_port(void) {
+    // Give up pins claimed by Python objects (including dynamically routed
+    // bus peripherals) so a soft reload starts from a clean state.
+    reset_all_pins();
+
     #if CIRCUITPY_AUDIOBUSIO_I2SOUT
     i2sout_reset();
     #endif
