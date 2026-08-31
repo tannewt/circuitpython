@@ -22,8 +22,10 @@
 
 #if defined(CONFIG_ARCH_POSIX)
 #include <limits.h>
+#include <fcntl.h>
 
 #include "cmdline.h"
+#include "nsi_host_trampolines.h"
 #include "posix_board_if.h"
 #include "posix_native_task.h"
 #endif
@@ -65,7 +67,13 @@ static struct k_timer tick_timer;
 static int32_t native_sim_vm_runs = INT32_MAX;
 static uint32_t native_sim_reset_port_count = 0;
 
-static struct args_struct_t native_sim_reset_port_args[] = {
+// Path to a file used to preserve retained memory across the execv reboot, or
+// NULL if disabled. Set with --retained-memory=<path> (see
+// cp_saved_word_save/restore()). Currently persists the safe-mode saved word;
+// intended to also preserve sleep RAM in the future.
+static const char *native_sim_retained_memory;
+
+static struct args_struct_t native_sim_port_args[] = {
     {
         .option = "vm-runs",
         .name = "count",
@@ -74,11 +82,20 @@ static struct args_struct_t native_sim_reset_port_args[] = {
         .descript = "Exit native_sim after this many VM runs. "
             "Example: --vm-runs=2"
     },
+    {
+        .option = "retained-memory",
+        .name = "path",
+        .type = 's',
+        .dest = (void *)&native_sim_retained_memory,
+        .descript = "File used to preserve retained memory (e.g. the safe-mode "
+            "saved word) across the process re-exec reboot. "
+            "Example: --retained-memory=/tmp/cp_retained.bin"
+    },
     ARG_TABLE_ENDMARKER
 };
 
 static void native_sim_register_cmdline_opts(void) {
-    native_add_command_line_opts(native_sim_reset_port_args);
+    native_add_command_line_opts(native_sim_port_args);
 }
 
 NATIVE_TASK(native_sim_register_cmdline_opts, PRE_BOOT_1, 0);
@@ -135,7 +152,56 @@ static void _tick_function(struct k_timer *timer_id) {
     supervisor_tick();
 }
 
+// Save and retrieve a word from memory that is preserved over reset. Used for safe mode.
+static __noinit uint32_t cp_saved_word;
+
+void port_set_saved_word(uint32_t value) {
+    cp_saved_word = value;
+}
+
+uint32_t port_get_saved_word(void) {
+    return cp_saved_word;
+}
+
+// Save and restore retained memory across the native_sim/bsim reboot.
+// Opt in with --retained-memory=<path>.
+#if defined(CONFIG_ARCH_POSIX)
+static void cp_saved_word_save(void) {
+    const char *path = native_sim_retained_memory;
+    if (path == NULL || path[0] == '\0') {
+        return;
+    }
+    int fd = nsi_host_open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        return;
+    }
+    uint32_t value = cp_saved_word;
+    (void)nsi_host_write(fd, &value, sizeof(value));
+    (void)nsi_host_close(fd);
+}
+
+static void cp_saved_word_restore(void) {
+    const char *path = native_sim_retained_memory;
+    if (path == NULL || path[0] == '\0') {
+        return;
+    }
+    int fd = nsi_host_open(path, O_RDONLY, 0 /* unused */);
+    if (fd < 0) {
+        return; // First boot: no save file yet.
+    }
+    uint32_t value = 0;
+    (void)nsi_host_read(fd, &value, sizeof(value));
+    (void)nsi_host_close(fd);
+    cp_saved_word = value;
+}
+#endif
+
 safe_mode_t port_init(void) {
+    #if defined(CONFIG_ARCH_POSIX)
+    // Restore the saved word (if any) before wait_for_safe_mode_reset reads it.
+    cp_saved_word_restore();
+    #endif
+
     // We run CircuitPython at the lowest priority (just higher than idle.)
     // This allows networking and USB to preempt us.
     k_thread_priority_set(k_current_get(), CONFIG_NUM_PREEMPT_PRIORITIES - 1);
@@ -146,6 +212,11 @@ safe_mode_t port_init(void) {
 
 // Reset the microcontroller completely.
 void reset_cpu(void) {
+    #if defined(CONFIG_ARCH_POSIX)
+    // Persist the saved word across the process re-exec reboot.
+    cp_saved_word_save();
+    #endif
+
     // Try a warm reboot first. It won't return if it works but isn't always
     // implemented.
     sys_reboot(SYS_REBOOT_WARM);
@@ -204,14 +275,6 @@ uint32_t *port_stack_get_top(void) {
     _thread_stack_info_t stack_info = k_current_get()->stack_info;
 
     return (uint32_t *)(stack_info.start + stack_info.size - stack_info.delta);
-}
-
-// Save and retrieve a word from memory that is preserved over reset. Used for safe mode.
-void port_set_saved_word(uint32_t) {
-
-}
-uint32_t port_get_saved_word(void) {
-    return 0;
 }
 
 uint64_t port_get_raw_ticks(uint8_t *subticks) {

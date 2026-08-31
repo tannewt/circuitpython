@@ -50,6 +50,15 @@ IGNORE_BOARD = {
     "tools/ci_changes_per_commit.py",
     "tools/ci_check_duplicate_usb_vid_pid.py",
     "tools/ci_set_matrix.py",
+    ".github/workflows/run-tests.yml",
+    ".github/workflows/build-board-custom.yml",
+    ".github/workflows/bundle_cron.yml",
+    ".github/workflows/create-website-pr.yml",
+    ".github/workflows/learn_cron.yml",
+    ".github/workflows/notify-on-issue-label.yml",
+    ".github/workflows/pre-commit.yml",
+    ".github/workflows/reports_cron.yml",
+    "ports/zephyr-cp/tests/",
 }
 
 PATTERN_DOCS = (

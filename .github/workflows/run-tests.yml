@@ -99,5 +99,7 @@ jobs:
         working-directory: ports/zephyr-cp/tools/bsim
       - name: Build native_nrf5340bsim
         run: make -C ports/zephyr-cp -j2 BOARD=native_nrf5340bsim
+      - name: Build native_nrf54lm20bsim
+        run: make -C ports/zephyr-cp -j2 BOARD=native_nrf54lm20bsim
       - name: Run Zephyr tests
         run: make -C ports/zephyr-cp test

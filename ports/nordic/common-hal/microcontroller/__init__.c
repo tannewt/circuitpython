@@ -24,7 +24,9 @@
 #include "supervisor/port.h"
 #include "supervisor/shared/safe_mode.h"
 #include "nrfx_glue.h"
+#ifdef BLUETOOTH_SD
 #include "nrf_nvic.h"
+#endif
 #include "nrf_power.h"
 
 // This routine should work even when interrupts are disabled. Used by OneWire
@@ -45,7 +47,14 @@ void common_hal_mcu_disable_interrupts(void) {
         // This only disables interrupts of priority 2 through 7; levels 0, 1,
         // and 4, are exclusive to softdevice and should never be used, so
         // this limitation is not important.
+        #ifdef BLUETOOTH_SD
         sd_nvic_critical_region_enter(&is_nested_critical_region);
+        #else
+        // With no SoftDevice to leave room for, mask everything. Record whether
+        // interrupts were already masked so the matching exit leaves them so.
+        is_nested_critical_region = __get_PRIMASK() ? 1 : 0;
+        __disable_irq();
+        #endif
     }
     __DMB();
     nesting_count++;
@@ -61,7 +70,13 @@ void common_hal_mcu_enable_interrupts(void) {
         return;
     }
     __DMB();
+    #ifdef BLUETOOTH_SD
     sd_nvic_critical_region_exit(is_nested_critical_region);
+    #else
+    if (!is_nested_critical_region) {
+        __enable_irq();
+    }
+    #endif
 }
 
 void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
@@ -70,11 +85,16 @@ void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
     if (runmode == RUNMODE_BOOTLOADER || runmode == RUNMODE_UF2) {
         new_value = DFU_MAGIC_UF2_RESET;
     }
+    #ifdef BLUETOOTH_SD
     int err_code = sd_power_gpregret_set(0, DFU_MAGIC_UF2_RESET);
     if (err_code != NRF_SUCCESS) {
         // Set it without the soft device if the SD failed. (It may be off.)
         nrf_power_gpregret_set(NRF_POWER, new_value);
     }
+    #else
+    // No SoftDevice, so write GPREGRET directly.
+    nrf_power_gpregret_set(NRF_POWER, new_value);
+    #endif
     if (runmode == RUNMODE_SAFE_MODE) {
         safe_mode_on_next_reset(SAFE_MODE_PROGRAMMATIC);
     }

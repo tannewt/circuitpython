@@ -244,6 +244,10 @@ static bool adapter_on_ble_evt(ble_evt_t *ble_evt, void *self_in) {
             connection->connection_obj = mp_const_none;
             connection->pair_status = PAIR_NOT_PAIRED;
             connection->mtu = 0;
+            // Only user code connects in the central role, and a peripheral
+            // connection belongs to whoever started the advertising it answered.
+            connection->user_owned = connected->role == BLE_GAP_ROLE_CENTRAL ||
+                self->advertising_started_by_user;
             // Clear leftover bond state; connection slots are recycled. The
             // SoftDevice fills in only the keys the new peer distributes, so a
             // stale keyset could mix the previous peer's keys into this peer's
@@ -356,6 +360,9 @@ void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enable
             ble_drv_remove_event_handler(connection_on_ble_evt, connection);
             connection->conn_handle = BLE_CONN_HANDLE_INVALID;
         }
+        // The SoftDevice's GATT table is empty after an enable.
+        bleio_gatts_min_handle = 0xFFFF;
+        bleio_gatts_max_handle = 0;
         self->background_callback.fun = bluetooth_adapter_background;
         self->background_callback.data = self;
         bleio_adapter_reset_name(self);
@@ -716,6 +723,9 @@ uint32_t _common_hal_bleio_adapter_start_advertising(bleio_adapter_obj_t *self,
     if (self->current_advertising_data != NULL && self->current_advertising_data == self->advertising_data) {
         return NRF_ERROR_BUSY;
     }
+    // The supervisor calls this internal function directly; user code arrives via
+    // common_hal_bleio_adapter_start_advertising(), which overrides this to true.
+    self->advertising_started_by_user = false;
 
     // If the current advertising data isn't owned by the adapter then it must be an internal
     // advertisement that we should stop.
@@ -896,6 +906,7 @@ void common_hal_bleio_adapter_start_advertising(bleio_adapter_obj_t *self, bool 
         tx_power,
         directed_to));
     self->user_advertising = true;
+    self->advertising_started_by_user = true;
 }
 
 void common_hal_bleio_adapter_stop_advertising(bleio_adapter_obj_t *self) {

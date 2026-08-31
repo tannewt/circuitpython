@@ -39,6 +39,11 @@ typedef struct {
     ble_drv_evt_handler_entry_t advertising_handler_entry;
     background_callback_t background_callback;
     bool user_advertising;
+    // Whether the current (or most recent) advertising was started by user code
+    // rather than the supervisor. Unlike user_advertising, this is not cleared when
+    // advertising stops, so the connected-event handler can still read it: the
+    // advertising event handler runs first and has already stopped the advertising.
+    bool advertising_started_by_user;
     // Cached local address returned by common_hal_bleio_adapter_get_address().
     // Stored inline so it never needs to allocate, even when read before the
     // heap is available (e.g. from bleio_adapter_reset_name).

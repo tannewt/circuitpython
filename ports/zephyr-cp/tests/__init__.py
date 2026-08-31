@@ -138,6 +138,43 @@ class NativeSimProcess:
         self.debug_serial = SerialSaver(
             StdSerial(self._proc.stdin, self._proc.stdout), name="debug"
         )
+        # Offset into debug_serial output for finding the next UART PTY path.
+        self._pty_search_offset = 0
+
+    def reconnect_serial(self, timeout=30.0):
+        """Wait for the simulator to reboot (execv) and reopen the UART.
+
+        native_sim/bsim reboot by re-executing the process; the UART PTY master
+        fd is O_CLOEXEC so it closes on execv and a new PTY is opened. The new
+        "connected to pseudotty: <path>" line is printed to the process stdout
+        (which survives execv), so it shows up in debug_serial. This method waits
+        for that line and reopens ``self.serial`` on the new PTY.
+        """
+        import time
+
+        marker = "connected to pseudotty:"
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._proc.poll() is not None:
+                return False
+            out = self.debug_serial.all_output
+            idx = out.find(marker, self._pty_search_offset)
+            newline = out.find("\n", idx) if idx >= 0 else -1
+            if idx >= 0 and newline >= 0:
+                line = out[idx:newline]
+                pty_path = line.strip().rsplit(":", maxsplit=1)[1].strip()
+                self._pty_search_offset = newline + 1
+                try:
+                    self.serial.close()
+                except Exception:
+                    pass
+                self.serial = SerialSaver(
+                    serial.Serial(pty_path, baudrate=115200, timeout=0.05, write_timeout=0),
+                    name="uart0",
+                )
+                return True
+            time.sleep(0.05)
+        return False
 
     def shutdown(self):
         if self._proc.poll() is None:

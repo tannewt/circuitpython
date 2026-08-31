@@ -657,6 +657,12 @@ async def build_circuitpython():  # noqa: C901
                 str(top / "extmod" / "ulab" / "code"),
             )
         )
+    # radio.ping() builds on Zephyr's ICMP API. On by default; boards that cannot
+    # spare the flash set CIRCUITPY_WIFI_PING = false in their circuitpython.toml
+    # and radio.ping() then reports no reply, as it does for an unreachable host.
+    circuitpython_flags.append(
+        f"-DCIRCUITPY_WIFI_PING={1 if mpconfigboard.get('CIRCUITPY_WIFI_PING', True) else 0}"
+    )
 
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
     if ulab_enabled:

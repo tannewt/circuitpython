@@ -1053,7 +1053,7 @@ msgstr "%q 실패: %d"
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
 #: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/floppyio/__init__.c
-#: shared-module/sdcardio/SDCard.c
+#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr ""
@@ -1497,6 +1497,7 @@ msgid "Requested resource not found"
 msgstr ""
 
 #: ports/espressif/common-hal/espidf/__init__.c
+#: ports/raspberrypi/common-hal/picogame/Display.c
 msgid "Operation or feature not supported"
 msgstr "작업 또는 기능이 지원되지 않습니다"
 
@@ -1844,9 +1845,9 @@ msgstr "오디오 변환이 구현되지 않음"
 
 #: ports/raspberrypi/bindings/cyw43/__init__.c py/argcheck.c py/objexcept.c
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
-#: shared-bindings/digitalio/Pull.c shared-bindings/supervisor/__init__.c
-#: shared-module/audiofilters/Filter.c shared-module/displayio/__init__.c
-#: shared-module/synthio/Synthesizer.c
+#: shared-bindings/digitalio/Pull.c shared-bindings/picogame/Sprite.c
+#: shared-bindings/supervisor/__init__.c shared-module/audiofilters/Filter.c
+#: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q는 %q가 아닌 %q 또는 %q 유형이어야 합니다"
 
@@ -2002,6 +2003,13 @@ msgstr ""
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
 msgid "All timers for this pin are in use"
 msgstr "핀의 모든 타이머가 사용 중입니다"
+
+#: ports/raspberrypi/common-hal/picogame/Display.c py/argcheck.c py/runtime.c
+#: shared-bindings/bitmapfilter/__init__.c
+#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
+#: shared-module/synthio/__init__.c
+msgid "%q must be of type %q, not %q"
+msgstr "%q는 %q가 아니라 %q 유형이어야 합니다"
 
 #: ports/raspberrypi/common-hal/rotaryio/IncrementalEncoder.c
 msgid "Pins must be sequential GPIO pins"
@@ -2353,7 +2361,7 @@ msgid "extra keyword arguments given"
 msgstr ""
 
 #: py/argcheck.c shared-bindings/_stage/__init__.c
-#: shared-bindings/digitalio/DigitalInOut.c
+#: shared-bindings/digitalio/DigitalInOut.c shared-bindings/picogame/__init__.c
 msgid "argument num/types mismatch"
 msgstr ""
 
@@ -2375,12 +2383,6 @@ msgstr "%q 는 >= %d 여야 합니다"
 #, fuzzy
 msgid "%q must be <= %d"
 msgstr "%q 는 <= %d 여야 합니다"
-
-#: py/argcheck.c py/runtime.c shared-bindings/bitmapfilter/__init__.c
-#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
-#: shared-module/synthio/__init__.c
-msgid "%q must be of type %q, not %q"
-msgstr "%q는 %q가 아니라 %q 유형이어야 합니다"
 
 #: py/argcheck.c
 msgid "%q length must be %d-%d"
@@ -2937,7 +2939,9 @@ msgstr ""
 msgid "schedule queue full"
 msgstr ""
 
-#: py/modstruct.c shared-module/struct/__init__.c
+#: py/modstruct.c shared-bindings/picogame/Bitmap.c
+#: shared-bindings/picogame/Canvas.c shared-bindings/picogame/Framebuffer.c
+#: shared-module/picogame/__init__.c shared-module/struct/__init__.c
 msgid "buffer too small"
 msgstr ""
 
@@ -4155,6 +4159,11 @@ msgstr "임의의 하드웨어를 사용할 수 없습니다"
 msgid "Specify exactly one of data0 or data_pins"
 msgstr ""
 
+#: shared-bindings/picogame/Bitmap.c shared-module/msgpack/__init__.c
+#: supervisor/shared/settings.c
+msgid "Invalid format"
+msgstr "잘못된 형식"
+
 #: shared-bindings/ps2io/Ps2.c
 msgid "Failed sending command."
 msgstr "명령을 보내는 것에 실패했습니다."
@@ -4482,10 +4491,6 @@ msgstr ""
 #: shared-module/msgpack/__init__.c
 msgid "no default packer"
 msgstr ""
-
-#: shared-module/msgpack/__init__.c supervisor/shared/settings.c
-msgid "Invalid format"
-msgstr "잘못된 형식"
 
 #: shared-module/paralleldisplaybus/ParallelBus.c
 msgid ""

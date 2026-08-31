@@ -309,7 +309,7 @@ static int _mtu_reply(uint16_t conn_handle,
     return 0;
 }
 
-static void _new_connection(uint16_t conn_handle) {
+static void _new_connection(uint16_t conn_handle, bool user_owned) {
     // Set the tx_power for the connection higher than the advertisement.
     esp_ble_tx_power_set(conn_handle, ESP_PWR_LVL_N0);
 
@@ -332,6 +332,7 @@ static void _new_connection(uint16_t conn_handle) {
     connection->connection_obj = mp_const_none;
     connection->pair_status = PAIR_NOT_PAIRED;
     connection->mtu = 0;
+    connection->user_owned = user_owned;
 
     ble_gattc_exchange_mtu(conn_handle, _mtu_reply, connection);
 
@@ -349,7 +350,8 @@ static int _connect_event(struct ble_gap_event *event, void *self_in) {
         case BLE_GAP_EVENT_CONNECT:
             if (event->connect.status == 0) {
                 // This triggers an MTU exchange. Its reply will exit the loop waiting for a connection.
-                _new_connection(event->connect.conn_handle);
+                // Only user code connects in the central role.
+                _new_connection(event->connect.conn_handle, true);
                 // Set connections objs back to NULL since we have a new
                 // connection and need a new tuple.
                 self->connection_objs = NULL;
@@ -468,7 +470,8 @@ static int _advertising_event(struct ble_gap_event *event, void *self_in) {
 
             #if !MYNEWT_VAL(BLE_EXT_ADV)
             if (event->connect.status == NIMBLE_OK) {
-                _new_connection(event->connect.conn_handle);
+                // The connection belongs to whoever started the advertising it answered.
+                _new_connection(event->connect.conn_handle, self->user_advertising);
                 // Set connections objs back to NULL since we have a new
                 // connection and need a new tuple.
                 self->connection_objs = NULL;
@@ -481,7 +484,8 @@ static int _advertising_event(struct ble_gap_event *event, void *self_in) {
         case BLE_GAP_EVENT_ADV_COMPLETE:
             #if MYNEWT_VAL(BLE_EXT_ADV)
             if (event->adv_complete.reason == NIMBLE_OK) {
-                _new_connection(event->adv_complete.conn_handle);
+                // The connection belongs to whoever started the advertising it answered.
+                _new_connection(event->adv_complete.conn_handle, self->user_advertising);
                 // Set connections objs back to NULL since we have a new
                 // connection and need a new tuple.
                 self->connection_objs = NULL;

@@ -7,10 +7,13 @@
 
 #pragma once
 
+#ifdef BLUETOOTH_SD
 #include "ble_drv.h"
 
 #include "nrf_mbr.h"  // for MBR_SIZE
 #include "nrf_sdm.h"  // for SD_FLASH_SIZE
+#endif
+
 #include "peripherals/nrf/nvm.h" // for FLASH_PAGE_SIZE
 
 #define MICROPY_PY_SYS_STDIO_BUFFER              (1)
@@ -43,6 +46,17 @@
 #include "py/circuitpy_mpconfig.h"
 
 // Definitions that might be overridden by mpconfigboard.h
+
+#ifndef BLUETOOTH_SD
+
+#ifndef MBR_SIZE
+#define MBR_SIZE      (0x1000)
+#endif
+
+#ifndef SD_FLASH_SIZE
+#define SD_FLASH_SIZE (0)
+#endif
+#endif
 
 #ifndef CIRCUITPY_INTERNAL_NVM_SIZE
 #define CIRCUITPY_INTERNAL_NVM_SIZE (8 * 1024)
@@ -159,7 +173,12 @@
 // high enough to work and then check the mutation of the value done by sd_ble_enable().
 // See common.template.ld.
 #ifndef SOFTDEVICE_RAM_SIZE
+#ifdef BLUETOOTH_SD
 #define SOFTDEVICE_RAM_SIZE         (56 * 1024)
+#else
+
+#define SOFTDEVICE_RAM_SIZE         (0)
+#endif
 #endif
 
 

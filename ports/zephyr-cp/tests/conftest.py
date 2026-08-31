@@ -351,6 +351,10 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
                 )
             )
 
+        # Always preserve retained memory (e.g. the safe-mode saved word) in
+        # in case of reboot.
+        cmd.append(f"--retained-memory={tmp_path / f'retained-{i}.bin'}")
+
         if flash_erase_block_size is not None:
             cmd.append(f"--flash_erase_block_size={flash_erase_block_size}")
         if flash_write_block_size is not None:

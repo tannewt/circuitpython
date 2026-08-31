@@ -15,10 +15,33 @@ endif
 
 WEST_CMAKE_ARGS := -DZEPHYR_BOARD_ALIASES=$(CURDIR)/boards/board_aliases.cmake -Dzephyr-cp_TRANSLATION=$(TRANSLATION)
 
+# Board files live in the board's own folder as board.overlay / board.conf. Zephyr only auto-applies
+# boards/<name>.overlay and boards/<name>.conf named after the RESOLVED Zephyr board, so it finds
+# neither those (wrong directory) nor files named after a board declared through cp_board_alias()
+# (wrong name) - the build silently produces a different firmware instead of warning. Pass them
+# explicitly when they exist.
+CP_BOARD_DIR := $(CURDIR)/boards/$(firstword $(subst _, ,$(BOARD)))/$(patsubst $(firstword $(subst _, ,$(BOARD)))_%,%,$(BOARD))
+# DTC_OVERLAY_FILE, not EXTRA_: a board overlay REPLACES app.overlay (Zephyr only falls back to
+# app.overlay when no board overlay is found), which is why the board overlays here include it
+# themselves - and why one board that has no USB deliberately does not. Adding the overlay instead
+# would force app.overlay on every board. socs/ ships .conf only, so nothing else is displaced.
+CP_BOARD_OVERLAY := $(wildcard $(CP_BOARD_DIR)/board.overlay)
+ifneq ($(CP_BOARD_OVERLAY),)
+WEST_CMAKE_ARGS += -Dzephyr-cp_DTC_OVERLAY_FILE=$(CP_BOARD_OVERLAY)
+endif
+CP_BOARD_CONF := $(wildcard $(CP_BOARD_DIR)/board.conf)
+
 # When DEBUG=1, apply additional Kconfig fragments for debug-friendly settings.
 DEBUG_CONF_FILE ?= $(CURDIR)/debug.conf
 ifeq ($(DEBUG),1)
-WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(DEBUG_CONF_FILE)
+ifneq ($(CP_BOARD_CONF),)
+CP_BOARD_CONF := $(CP_BOARD_CONF);$(DEBUG_CONF_FILE)
+else
+CP_BOARD_CONF := $(DEBUG_CONF_FILE)
+endif
+endif
+ifneq ($(CP_BOARD_CONF),)
+WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(CP_BOARD_CONF)
 endif
 
 .PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules

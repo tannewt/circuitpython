@@ -121,12 +121,6 @@ uint8_t value_out = 0;
 #include "supervisor/shared/settings.h"
 #endif
 
-static void reset_devices(void) {
-    #if CIRCUITPY_BLEIO_HCI
-    bleio_reset();
-    #endif
-}
-
 static uint8_t *_heap;
 static uint8_t *_pystack;
 static volatile bool _vm_is_running = false;
@@ -374,9 +368,6 @@ static void cleanup_after_vm(mp_obj_t exception) {
         }
     }
 
-    // Reset port-independent devices, like CIRCUITPY_BLEIO_HCI.
-    reset_devices();
-
     #if CIRCUITPY_ATEXIT
     atexit_reset();
     #endif
@@ -390,7 +381,7 @@ static void cleanup_after_vm(mp_obj_t exception) {
     memorymonitor_reset();
     #endif
 
-    // Disable user related BLE state that uses the micropython heap.
+    // Disable user related BLE state that uses the VM heap. Leave BLE workflow running if it's in use.
     #if CIRCUITPY_BLEIO
     bleio_user_reset();
     #endif
@@ -775,8 +766,10 @@ static bool __attribute__((noinline)) run_code_py(safe_mode_t safe_mode, bool *s
 
     // Done waiting, start the board back up.
 
-    // We delay resetting BLE until after the wait in case we're transferring
-    // more files over.
+    // Resetting BLE is delayed until here, after the wait, in case files were being
+    // transferred over the BLE workflow during the wait. The reset restarts the BLE
+    // stack, dropping the workflow connection, only if user code created GATT
+    // services; otherwise it is a no-op and the connection continues.
     #if CIRCUITPY_BLEIO
     bleio_reset();
     #endif
@@ -992,8 +985,9 @@ static int run_repl(safe_mode_t safe_mode) {
     #endif
     cleanup_after_vm(MP_OBJ_SENTINEL);
 
-    // Also reset bleio. The above call omits it in case workflows should continue. In this case,
-    // we're switching straight to another VM so we want to reset.
+    // Also reset bleio, which cleanup_after_vm() above omits so workflows can
+    // continue between VMs. As in run_code_py(), this restarts the BLE stack only if
+    // user code created GATT services.
     #if CIRCUITPY_BLEIO
     bleio_reset();
     #endif
@@ -1085,8 +1079,6 @@ int __attribute__((used)) main(void) {
 
     // Reset everything and prep MicroPython to run boot.py.
     reset_port();
-    // Port-independent devices, like CIRCUITPY_BLEIO_HCI.
-    reset_devices();
     reset_board();
 
     // displays init after filesystem, since they could share the flash SPI

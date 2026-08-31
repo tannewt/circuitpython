@@ -1056,7 +1056,7 @@ msgstr "%q сбой: %d"
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
 #: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/floppyio/__init__.c
-#: shared-module/sdcardio/SDCard.c
+#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr "Буфер должен быть кратен %d байт"
@@ -1496,6 +1496,7 @@ msgid "Requested resource not found"
 msgstr "Запрошенный ресурс не найден"
 
 #: ports/espressif/common-hal/espidf/__init__.c
+#: ports/raspberrypi/common-hal/picogame/Display.c
 msgid "Operation or feature not supported"
 msgstr "Операция или функция, не поддерживаемые"
 
@@ -1842,9 +1843,9 @@ msgstr "Преобразование звука не реализовано"
 
 #: ports/raspberrypi/bindings/cyw43/__init__.c py/argcheck.c py/objexcept.c
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
-#: shared-bindings/digitalio/Pull.c shared-bindings/supervisor/__init__.c
-#: shared-module/audiofilters/Filter.c shared-module/displayio/__init__.c
-#: shared-module/synthio/Synthesizer.c
+#: shared-bindings/digitalio/Pull.c shared-bindings/picogame/Sprite.c
+#: shared-bindings/supervisor/__init__.c shared-module/audiofilters/Filter.c
+#: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q должно быть типа%q или%q, а не%q"
 
@@ -1997,6 +1998,13 @@ msgstr "Невозможно записать в постоянную памят
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
 msgid "All timers for this pin are in use"
 msgstr "Все таймеры для этого пина уже используются"
+
+#: ports/raspberrypi/common-hal/picogame/Display.c py/argcheck.c py/runtime.c
+#: shared-bindings/bitmapfilter/__init__.c
+#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
+#: shared-module/synthio/__init__.c
+msgid "%q must be of type %q, not %q"
+msgstr "%q должно быть типа %q, а не %q"
 
 #: ports/raspberrypi/common-hal/rotaryio/IncrementalEncoder.c
 msgid "Pins must be sequential GPIO pins"
@@ -2342,7 +2350,7 @@ msgid "extra keyword arguments given"
 msgstr "Приведены дополнительные аргументы ключевых слов"
 
 #: py/argcheck.c shared-bindings/_stage/__init__.c
-#: shared-bindings/digitalio/DigitalInOut.c
+#: shared-bindings/digitalio/DigitalInOut.c shared-bindings/picogame/__init__.c
 msgid "argument num/types mismatch"
 msgstr "Аргумент Несоответствие числа/типов"
 
@@ -2364,12 +2372,6 @@ msgstr "%q должно быть >= %d"
 #: shared-module/gifio/OnDiskGif.c
 msgid "%q must be <= %d"
 msgstr "%q должно быть <= %d"
-
-#: py/argcheck.c py/runtime.c shared-bindings/bitmapfilter/__init__.c
-#: shared-module/audiodelays/MultiTapDelay.c shared-module/synthio/Note.c
-#: shared-module/synthio/__init__.c
-msgid "%q must be of type %q, not %q"
-msgstr "%q должно быть типа %q, а не %q"
 
 #: py/argcheck.c
 msgid "%q length must be %d-%d"
@@ -2927,7 +2929,9 @@ msgstr "отрицательный факториал"
 msgid "schedule queue full"
 msgstr "Расписание Очередь заполнена"
 
-#: py/modstruct.c shared-module/struct/__init__.c
+#: py/modstruct.c shared-bindings/picogame/Bitmap.c
+#: shared-bindings/picogame/Canvas.c shared-bindings/picogame/Framebuffer.c
+#: shared-module/picogame/__init__.c shared-module/struct/__init__.c
 msgid "buffer too small"
 msgstr "буфер слишком мал"
 
@@ -4167,6 +4171,11 @@ msgstr "Отсутствует аппаратный генератор случ�
 msgid "Specify exactly one of data0 or data_pins"
 msgstr "Укажите точно один из data0 или data_pins"
 
+#: shared-bindings/picogame/Bitmap.c shared-module/msgpack/__init__.c
+#: supervisor/shared/settings.c
+msgid "Invalid format"
+msgstr "Недопустимый формат"
+
 #: shared-bindings/ps2io/Ps2.c
 msgid "Failed sending command."
 msgstr "Не удалось отправить команду."
@@ -4498,10 +4507,6 @@ msgstr "короткое чтение"
 #: shared-module/msgpack/__init__.c
 msgid "no default packer"
 msgstr "Нет упаковщика по умолчанию"
-
-#: shared-module/msgpack/__init__.c supervisor/shared/settings.c
-msgid "Invalid format"
-msgstr "Недопустимый формат"
 
 #: shared-module/paralleldisplaybus/ParallelBus.c
 msgid ""
