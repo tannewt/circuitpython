@@ -49,3 +49,5 @@ SRC_C += boards/$(BOARD)/power_off.c
 # ACL write-protection for the MBR and the bootloader, which this board's
 # bootloader does not set up for itself.
 SRC_C += boards/$(BOARD)/flash_protect.c
+
+CIRCUITPY_REQUIRE_I2C_PULLUPS = 0
