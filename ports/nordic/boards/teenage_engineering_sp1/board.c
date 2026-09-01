@@ -18,6 +18,9 @@
 
 #include "supervisor/board.h"
 
+#include "shared-bindings/board/__init__.h"
+#include "shared-bindings/busio/I2C.h"
+
 #include "background.h"
 #include "board.h"
 #include "common-hal/microcontroller/Pin.h"
@@ -313,110 +316,15 @@ void board_background_task(void) {
 //
 // Bit-banged rather than driven through TWIM.
 
-#define I2C_HALF_PERIOD_ITERATIONS  (100)   // ~8 us at 64 MHz; slow is fine
-#define I2C_STRETCH_TIMEOUT_ITERATIONS (20000)
+#define I2C_FREQUENCY (100000)
+#define I2C_TIMEOUT_MS (255)
 
-static void i2c_delay(void) {
-    for (volatile uint32_t i = 0; i < I2C_HALF_PERIOD_ITERATIONS; i++) {
-    }
-}
-
-// Open drain, input buffer connected so ACK and clock stretching are readable.
-// The internal pull-up is additional safety next to the board's own; it is
-// removed again by i2c_release() so nothing pulls current in SYSTEM_OFF.
-static void i2c_cfg_pin(uint32_t pin) {
-    nrf_gpio_cfg(pin, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_CONNECT,
-        NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
-}
-
-static void i2c_claim(void) {
-    // Whatever owned these pins through TWIM keeps driving them while the
-    // peripheral is enabled, PIN_CNF notwithstanding. TWIM0/TWIM1 share their
-    // base addresses with SPIM0/SPIM1, so both are disabled here.
-    //
-    // On the power-off path nothing after this returns to user code, so that
-    // is free. On the soft-reset path, reset_board(), the VM
-    // *does* come back -- and it is still free, because a busio object cannot
-    // survive that reset.  i2c_release() below puts the
-    // pins back to their reset configuration, internal pull-ups and all.
-    NRF_TWIM0->ENABLE = 0;
-    NRF_TWIM1->ENABLE = 0;
-    __DSB();
-    nrf_gpio_pin_set(PIN_I2C_SDA);
-    nrf_gpio_pin_set(PIN_I2C_SCL);
-    i2c_cfg_pin(PIN_I2C_SDA);
-    i2c_cfg_pin(PIN_I2C_SCL);
-    i2c_delay();
-}
-
-static void i2c_release(void) {
-    nrf_gpio_cfg_default(PIN_I2C_SDA);
-    nrf_gpio_cfg_default(PIN_I2C_SCL);
-}
-
-// Raise SCL and wait for it to actually read high, so a codec stretching the
-// clock is honoured. A device holding SCL down forever must not be
-// able to hold the whole power-off sequence, so we give up and carry on. The
-// transfer is then garbage, which the caller finds out about at the next ACK.
-static void i2c_scl_high(void) {
-    nrf_gpio_pin_set(PIN_I2C_SCL);
-    for (uint32_t i = 0; i < I2C_STRETCH_TIMEOUT_ITERATIONS &&
-         nrf_gpio_pin_read(PIN_I2C_SCL) == 0; i++) {
-        __NOP();
-    }
-    i2c_delay();
-}
-
-static void i2c_scl_low(void) {
-    nrf_gpio_pin_clear(PIN_I2C_SCL);
-    i2c_delay();
-}
-
-static void i2c_start(void) {
-    nrf_gpio_pin_set(PIN_I2C_SDA);
-    i2c_scl_high();
-    nrf_gpio_pin_clear(PIN_I2C_SDA);
-    i2c_delay();
-    i2c_scl_low();
-}
-
-static void i2c_stop(void) {
-    nrf_gpio_pin_clear(PIN_I2C_SDA);
-    i2c_delay();
-    i2c_scl_high();
-    nrf_gpio_pin_set(PIN_I2C_SDA);
-    i2c_delay();
-}
-
-// Returns true if the slave ACKed.
-static bool i2c_write_byte(uint8_t value) {
-    for (uint8_t bit = 0; bit < 8; bit++) {
-        if (value & 0x80) {
-            nrf_gpio_pin_set(PIN_I2C_SDA);
-        } else {
-            nrf_gpio_pin_clear(PIN_I2C_SDA);
-        }
-        value <<= 1;
-        i2c_delay();
-        i2c_scl_high();
-        i2c_scl_low();
-    }
-    nrf_gpio_pin_set(PIN_I2C_SDA);      // release for the ACK bit
-    i2c_delay();
-    i2c_scl_high();
-    bool acked = nrf_gpio_pin_read(PIN_I2C_SDA) == 0;
-    i2c_scl_low();
-    return acked;
-}
+static busio_i2c_obj_t codec_i2c;
 
 // two-byte write
 static bool i2c_write2(uint8_t address, uint8_t first, uint8_t second) {
-    i2c_start();
-    bool ok = i2c_write_byte(address << 1) &&
-        i2c_write_byte(first) &&
-        i2c_write_byte(second);
-    i2c_stop();
-    return ok;
+    const uint8_t data[2] = { first, second };
+    return common_hal_busio_i2c_write(&codec_i2c, address, data, sizeof(data)) == 0;
 }
 
 // Register addresses
@@ -437,24 +345,43 @@ static bool i2c_write2(uint8_t address, uint8_t first, uint8_t second) {
 // soft-reset it.
 static void quiesce_codecs(void) {
     bootloader_wdt_feed();
-    i2c_claim();
+
+    #if CIRCUITPY_BOARD_I2C
+
+    busio_i2c_obj_t *shared = common_hal_board_get_i2c(0);
+    if (shared != NULL) {
+        common_hal_busio_i2c_unlock(shared);
+        common_hal_busio_i2c_deinit(shared);
+    }
+    #endif
+
+    if (!pin_number_is_free(PIN_I2C_SCL) || !pin_number_is_free(PIN_I2C_SDA)) {
+        return;
+    }
+
+    codec_i2c.base.type = &busio_i2c_type;
+    common_hal_busio_i2c_construct(&codec_i2c, DEFAULT_I2C_BUS_SCL,
+        DEFAULT_I2C_BUS_SDA, I2C_FREQUENCY, I2C_TIMEOUT_MS);
 
     if (i2c_write2(CS42L42_ADDRESS, PAGE_SELECT_REG, CS_HP_CTL_PAGE)) {
         i2c_write2(CS42L42_ADDRESS, CS_HP_CTL_REG, CS_HP_MUTE);
     }
+    bootloader_wdt_feed();
 
     if (i2c_write2(TAS2505_ADDRESS, PAGE_SELECT_REG, 0x00)) {
         i2c_write2(TAS2505_ADDRESS, TAS_DAC_MUTE, TAS_MUTED);
+        bootloader_wdt_feed();
         if (i2c_write2(TAS2505_ADDRESS, PAGE_SELECT_REG, 0x01)) {
             i2c_write2(TAS2505_ADDRESS, TAS_SPK_POWER, 0x00);
         }
+        bootloader_wdt_feed();
         // Back to page 0 for the software reset
         if (i2c_write2(TAS2505_ADDRESS, PAGE_SELECT_REG, 0x00)) {
             i2c_write2(TAS2505_ADDRESS, TAS_SW_RESET, 0x01);
         }
     }
 
-    i2c_release();
+    common_hal_busio_i2c_deinit(&codec_i2c);
     bootloader_wdt_feed();
 }
 

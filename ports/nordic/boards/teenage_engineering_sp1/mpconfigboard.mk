@@ -58,3 +58,5 @@ CIRCUITPY_EMMC_USB = 1
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_Register
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_CS42L42
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_TAS2505
+
+CIRCUITPY_REQUIRE_I2C_PULLUPS = 0
