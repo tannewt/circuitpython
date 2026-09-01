@@ -4,11 +4,15 @@ on:
   workflow_call:
     inputs:
       cp-version:
-        required: true
+        required: false
+        default: '0.0.0+auto'
         type: string
+  push:
+  workflow_dispatch:
 
 jobs:
   run:
+    if: github.event_name == 'workflow_call'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -94,12 +98,14 @@ jobs:
         uses: ./.github/actions/deps/external
       - name: Build native sim target
         run: make -C ports/zephyr-cp -j2 BOARD=native_native_sim
-      - name: Build bsim
-        run: make -j 2 everything
-        working-directory: ports/zephyr-cp/tools/bsim
-      - name: Build native_nrf5340bsim
-        run: make -C ports/zephyr-cp -j2 BOARD=native_nrf5340bsim
-      - name: Build native_nrf54lm20bsim
-        run: make -C ports/zephyr-cp -j2 BOARD=native_nrf54lm20bsim
+        env:
+          CP_VERSION: 10.3.0-11-g051bccdbaf
+      - name: Run safe mode Zephyr test standalone first
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
       - name: Run Zephyr tests
         run: make -C ports/zephyr-cp test
+      - name: Fail intentionally so no subsequent jobs run
+        run: |
+          echo "Failing intentionally: zephyr job is disabled pending CI fixes."
+          exit 1
