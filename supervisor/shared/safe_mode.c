@@ -40,11 +40,20 @@ void set_safe_mode(safe_mode_t safe_mode) {
 }
 
 safe_mode_t wait_for_safe_mode_reset(void) {
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: wait_for_safe_mode_reset enter\n");
+    #endif
     uint32_t reset_state = port_get_saved_word();
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: saved word = 0x%08lx\n", (unsigned long)reset_state);
+    #endif
     safe_mode_t safe_mode = SAFE_MODE_NONE;
     if ((reset_state & SAFE_MODE_DATA_GUARD_MASK) == SAFE_MODE_DATA_GUARD) {
         safe_mode = (reset_state & ~SAFE_MODE_DATA_GUARD_MASK) >> 8;
     }
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: safe_mode = %d\n", (int)safe_mode);
+    #endif
     if (safe_mode != SAFE_MODE_NONE) {
         port_set_saved_word(SAFE_MODE_DATA_GUARD);
         _safe_mode = safe_mode;
@@ -118,7 +127,13 @@ safe_mode_t wait_for_safe_mode_reset(void) {
 }
 
 void PLACE_IN_ITCM(safe_mode_on_next_reset)(safe_mode_t reason) {
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: safe_mode_on_next_reset reason=%d\n", (int)reason);
+    #endif
     port_set_saved_word(SAFE_MODE_DATA_GUARD | (reason << 8));
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: safe_mode_on_next_reset done\n");
+    #endif
 }
 
 // Don't inline this so it's easy to break on it from GDB.
@@ -139,8 +154,17 @@ void __attribute__((noinline, )) PLACE_IN_ITCM(reset_into_safe_mode)(safe_mode_t
         #endif
     }
 
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: reset_into_safe_mode reason=%d\n", (int)reason);
+    #endif
     safe_mode_on_next_reset(reason);
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: reset_into_safe_mode calling reset_cpu\n");
+    #endif
     reset_cpu();
+    #ifdef __ZEPHYR__
+    printk("DBGSAFE: reset_into_safe_mode reset_cpu returned?!\n");
+    #endif
 }
 
 

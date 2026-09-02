@@ -103,6 +103,8 @@ jobs:
       - name: Run safe mode Zephyr test standalone first
         run: pytest tests/test_saved_word.py -v
         working-directory: ports/zephyr-cp
+      - name: Print 32-bit glibc version
+        run: /lib/ld-linux.so.2 --version
       - name: Run Zephyr tests
         run: make -C ports/zephyr-cp test
       - name: Fail intentionally so no subsequent jobs run

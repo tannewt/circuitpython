@@ -65,6 +65,7 @@ void common_hal_mcu_enable_interrupts() {
 }
 
 void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
+    printk("DBGSAFE: common_hal_mcu_on_next_reset runmode=%d\n", (int)runmode);
     enum { DFU_MAGIC_UF2_RESET = 0x57 };
     uint8_t new_value = 0;
     if (runmode == RUNMODE_BOOTLOADER || runmode == RUNMODE_UF2) {
@@ -76,13 +77,18 @@ void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
     //     nrf_power_gpregret_set(NRF_POWER, new_value);
     // }
     if (runmode == RUNMODE_SAFE_MODE) {
+        printk("DBGSAFE: common_hal_mcu_on_next_reset -> safe_mode_on_next_reset\n");
         safe_mode_on_next_reset(SAFE_MODE_PROGRAMMATIC);
+        printk("DBGSAFE: common_hal_mcu_on_next_reset -> safe_mode_on_next_reset done\n");
     }
 }
 
 void common_hal_mcu_reset(void) {
+    printk("DBGSAFE: common_hal_mcu_reset enter\n");
     filesystem_flush();
+    printk("DBGSAFE: common_hal_mcu_reset filesystem_flush done, calling reset_cpu\n");
     reset_cpu();
+    printk("DBGSAFE: common_hal_mcu_reset reset_cpu returned?!\n");
 }
 
 // The singleton microcontroller.Processor object, bound to microcontroller.cpu
