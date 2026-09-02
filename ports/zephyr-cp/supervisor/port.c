@@ -22,6 +22,7 @@
 
 #if defined(CONFIG_ARCH_POSIX)
 #include <limits.h>
+#include <stdio.h>
 #include <fcntl.h>
 
 #include "cmdline.h"
@@ -156,12 +157,12 @@ static void _tick_function(struct k_timer *timer_id) {
 static __noinit uint32_t cp_saved_word;
 
 void port_set_saved_word(uint32_t value) {
-    printk("DBGSAFE: port_set_saved_word(0x%08lx)\n", (unsigned long)value);
+    fprintf(stderr, "DBGSAFE: port_set_saved_word(0x%08lx)\n", (unsigned long)value);
     cp_saved_word = value;
 }
 
 uint32_t port_get_saved_word(void) {
-    printk("DBGSAFE: port_get_saved_word() = 0x%08lx\n", (unsigned long)cp_saved_word);
+    fprintf(stderr, "DBGSAFE: port_get_saved_word() = 0x%08lx\n", (unsigned long)cp_saved_word);
     return cp_saved_word;
 }
 
@@ -169,49 +170,49 @@ uint32_t port_get_saved_word(void) {
 // Opt in with --retained-memory=<path>.
 #if defined(CONFIG_ARCH_POSIX)
 static void cp_saved_word_save(void) {
-    printk("DBGSAFE: cp_saved_word_save enter\n");
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save enter\n");
     const char *path = native_sim_retained_memory;
     if (path == NULL || path[0] == '\0') {
-        printk("DBGSAFE: cp_saved_word_save: no path\n");
+        fprintf(stderr, "DBGSAFE: cp_saved_word_save: no path\n");
         return;
     }
     int fd = nsi_host_open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
-        printk("DBGSAFE: cp_saved_word_save: open failed\n");
+        fprintf(stderr, "DBGSAFE: cp_saved_word_save: open failed\n");
         return;
     }
     uint32_t value = cp_saved_word;
     (void)nsi_host_write(fd, &value, sizeof(value));
     (void)nsi_host_close(fd);
-    printk("DBGSAFE: cp_saved_word_save done (0x%08lx)\n", (unsigned long)value);
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save done (0x%08lx)\n", (unsigned long)value);
 }
 
 static void cp_saved_word_restore(void) {
-    printk("DBGSAFE: cp_saved_word_restore enter\n");
+    fprintf(stderr, "DBGSAFE: cp_saved_word_restore enter\n");
     const char *path = native_sim_retained_memory;
     if (path == NULL || path[0] == '\0') {
-        printk("DBGSAFE: cp_saved_word_restore: no path\n");
+        fprintf(stderr, "DBGSAFE: cp_saved_word_restore: no path\n");
         return;
     }
     int fd = nsi_host_open(path, O_RDONLY, 0 /* unused */);
     if (fd < 0) {
-        printk("DBGSAFE: cp_saved_word_restore: no save file (first boot)\n");
+        fprintf(stderr, "DBGSAFE: cp_saved_word_restore: no save file (first boot)\n");
         return; // First boot: no save file yet.
     }
     uint32_t value = 0;
     (void)nsi_host_read(fd, &value, sizeof(value));
     (void)nsi_host_close(fd);
     cp_saved_word = value;
-    printk("DBGSAFE: cp_saved_word_restore done (0x%08lx)\n", (unsigned long)value);
+    fprintf(stderr, "DBGSAFE: cp_saved_word_restore done (0x%08lx)\n", (unsigned long)value);
 }
 #endif
 
 safe_mode_t port_init(void) {
     #if defined(CONFIG_ARCH_POSIX)
-    printk("DBGSAFE: port_init enter\n");
+    fprintf(stderr, "DBGSAFE: port_init enter\n");
     // Restore the saved word (if any) before wait_for_safe_mode_reset reads it.
     cp_saved_word_restore();
-    printk("DBGSAFE: port_init restored saved word\n");
+    fprintf(stderr, "DBGSAFE: port_init restored saved word\n");
     #endif
 
     // We run CircuitPython at the lowest priority (just higher than idle.)
@@ -225,18 +226,18 @@ safe_mode_t port_init(void) {
 // Reset the microcontroller completely.
 void reset_cpu(void) {
     #if defined(CONFIG_ARCH_POSIX)
-    printk("DBGSAFE: reset_cpu enter\n");
+    fprintf(stderr, "DBGSAFE: reset_cpu enter\n");
     // Persist the saved word across the process re-exec reboot.
     cp_saved_word_save();
-    printk("DBGSAFE: reset_cpu saved word persisted, rebooting\n");
+    fprintf(stderr, "DBGSAFE: reset_cpu saved word persisted, rebooting\n");
     #endif
 
     // Try a warm reboot first. It won't return if it works but isn't always
     // implemented.
     sys_reboot(SYS_REBOOT_WARM);
-    printk("DBGSAFE: reset_cpu warm reboot returned\n");
+    fprintf(stderr, "DBGSAFE: reset_cpu warm reboot returned\n");
     sys_reboot(SYS_REBOOT_COLD);
-    printk("DBGSAFE: reset_cpu cold reboot returned\n");
+    fprintf(stderr, "DBGSAFE: reset_cpu cold reboot returned\n");
     printk("Failed to reboot. Looping.\n");
     while (true) {
     }
