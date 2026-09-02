@@ -177,13 +177,17 @@ static void cp_saved_word_save(void) {
         return;
     }
     int fd = nsi_host_open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save: open fd=%d\n", fd);
     if (fd < 0) {
         fprintf(stderr, "DBGSAFE: cp_saved_word_save: open failed\n");
         return;
     }
     uint32_t value = cp_saved_word;
-    (void)nsi_host_write(fd, &value, sizeof(value));
-    (void)nsi_host_close(fd);
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save: writing %zu bytes\n", sizeof(value));
+    ssize_t wrote = nsi_host_write(fd, &value, sizeof(value));
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save: write returned %zd\n", wrote);
+    int closed = nsi_host_close(fd);
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save: close returned %d\n", closed);
     fprintf(stderr, "DBGSAFE: cp_saved_word_save done (0x%08lx)\n", (unsigned long)value);
 }
 
@@ -234,8 +238,12 @@ void reset_cpu(void) {
 
     // Try a warm reboot first. It won't return if it works but isn't always
     // implemented.
+    fprintf(stderr, "DBGSAFE: reset_cpu calling sys_reboot(WARM)\n");
+    fflush(stderr);
     sys_reboot(SYS_REBOOT_WARM);
     fprintf(stderr, "DBGSAFE: reset_cpu warm reboot returned\n");
+    fprintf(stderr, "DBGSAFE: reset_cpu calling sys_reboot(COLD)\n");
+    fflush(stderr);
     sys_reboot(SYS_REBOOT_COLD);
     fprintf(stderr, "DBGSAFE: reset_cpu cold reboot returned\n");
     printk("Failed to reboot. Looping.\n");
