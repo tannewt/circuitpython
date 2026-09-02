@@ -220,8 +220,6 @@ jobs:
         [ -z "$TWINE_USERNAME" ] || twine upload circuitpython-stubs/dist/*
 
   ports:
-    # zephyr-tests is deliberately absent: nothing built here depends on it, and
-    # waiting on it delayed every port's boards on every pull request.
     needs: [scheduler, mpy-cross, tests]
     if: needs.scheduler.outputs.ports != '{}'
     uses: ./.github/workflows/build-boards.yml
