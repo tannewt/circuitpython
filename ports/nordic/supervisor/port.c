@@ -11,6 +11,8 @@
 #include "supervisor/background_callback.h"
 #include "supervisor/board.h"
 
+#include "board.h"
+
 #include "nrfx/hal/nrf_clock.h"
 #include "nrfx/hal/nrf_power.h"
 #include "nrfx/drivers/include/nrfx_gpiote.h"
@@ -56,6 +58,10 @@
 #if defined(MICROPY_QSPI_CS)
 extern void qspi_disable(void);
 #endif
+
+// Do-nothing, not every board needs to provide this function.
+MP_WEAK void board_early_init(void) {
+}
 
 static void power_warning_handler(void) {
     reset_into_safe_mode(SAFE_MODE_BROWNOUT);
@@ -136,6 +142,9 @@ void tick_set_prescaler(uint32_t prescaler_val) {
 }
 
 safe_mode_t port_init(void) {
+    // Before any peripheral is touched
+    board_early_init();
+
     nrf_peripherals_clocks_init();
 
     // If GPIO voltage is set wrong in UICR, this will fix it, and
@@ -180,10 +189,10 @@ safe_mode_t port_init(void) {
     // next time we reboot.
     if (reset_reason_saved & POWER_RESETREAS_DOG_Msk) {
         NRF_POWER->RESETREAS = POWER_RESETREAS_DOG_Msk;
-        uint32_t usb_reg = NRF_POWER->USBREGSTATUS;
 
         // If USB is connected, then the user might be editing `code.py`,
         // in which case we should reboot into Safe Mode.
+        uint32_t usb_reg = NRF_POWER->USBREGSTATUS;
         if (usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
             return SAFE_MODE_WATCHDOG;
         }
@@ -227,9 +236,12 @@ void reset_port(void) {
 }
 
 void reset_to_bootloader(void) {
-    enum { DFU_MAGIC_SERIAL = 0x4e };
-
-    NRF_POWER->GPREGRET = DFU_MAGIC_SERIAL;
+    NRF_POWER->GPREGRET = BOOTLOADER_DFU_MAGIC;
+    #ifdef BOOTLOADER_DFU_MAGIC2
+    // This bootloader's magic is 16 bits wide, split across both retention
+    // registers.
+    NRF_POWER->GPREGRET2 = BOOTLOADER_DFU_MAGIC2;
+    #endif
     reset_cpu();
 }
 
