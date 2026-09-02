@@ -6,8 +6,14 @@
 		code_partition: partition@0 {
 			compatible = "zephyr,mapped-partition";
 			label = "code-partition";
-			reg = <0x0 0x180000>;
+			reg = <0x0 0x17f000>;
 			read-only;
+		};
+
+		storage_partition: partition@17f000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x17f000 0x1000>;
 		};
 
 		nvm_partition: partition@180000 {
@@ -16,16 +22,10 @@
 			reg = <0x180000 0x1000>;
 		};
 
-		storage_partition: partition@181000 {
-			compatible = "zephyr,mapped-partition";
-			label = "storage";
-			reg = <0x181000 0x1000>;
-		};
-
-		circuitpy_partition: partition@182000 {
+		circuitpy_partition: partition@181000 {
 			compatible = "zephyr,mapped-partition";
 			label = "circuitpy";
-			reg = <0x182000 (DT_SIZE_M(4) - 0x182000)>;
+			reg = <0x181000 (DT_SIZE_M(4) - 0x181000)>;
 		};
 	};
 };
