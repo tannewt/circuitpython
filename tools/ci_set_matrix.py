@@ -51,6 +51,7 @@ IGNORE_BOARD = {
     "tools/ci_check_duplicate_usb_vid_pid.py",
     "tools/ci_set_matrix.py",
     ".github/workflows/run-tests.yml",
+    ".github/workflows/run-zephyr-tests.yml",
     ".github/workflows/build-board-custom.yml",
     ".github/workflows/bundle_cron.yml",
     ".github/workflows/create-website-pr.yml",
