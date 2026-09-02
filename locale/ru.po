@@ -1005,7 +1005,7 @@ msgstr "data-пин #%d уже используется"
 #: ports/atmel-samd/common-hal/microcontroller/Pin.c
 #: ports/espressif/common-hal/dotclockframebuffer/DotClockFramebuffer.c
 #: ports/mimxrt10xx/common-hal/microcontroller/Pin.c
-#: shared-bindings/microcontroller/Pin.c
+#: shared-bindings/emmcio/EMMC.c shared-bindings/microcontroller/Pin.c
 msgid "Invalid %q pin"
 msgstr "Недопустимый пин %q"
 
@@ -1047,7 +1047,8 @@ msgid "Another send is already active"
 msgstr "Другая передача уже активна"
 
 #: ports/atmel-samd/common-hal/sdioio/SDCard.c
-#: ports/espressif/common-hal/qspibus/QSPIBus.c
+#: ports/espressif/common-hal/qspibus/QSPIBus.c shared-bindings/emmcio/EMMC.c
+#: shared-bindings/socketpool/SocketPool.c
 msgid "%q failure: %d"
 msgstr "%q сбой: %d"
 
@@ -1055,8 +1056,9 @@ msgstr "%q сбой: %d"
 #: ports/cxd56/common-hal/sdioio/SDCard.c
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
-#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/floppyio/__init__.c
-#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
+#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/emmcio/EMMC.c
+#: shared-bindings/floppyio/__init__.c shared-bindings/picogame/Canvas.c
+#: shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr "Буфер должен быть кратен %d байт"
@@ -1168,6 +1170,7 @@ msgstr "Не удалось подключиться: внутренняя ош�
 
 #: ports/espressif/common-hal/_bleio/Adapter.c
 #: ports/nordic/common-hal/_bleio/Adapter.c
+#: ports/zephyr-cp/common-hal/_bleio/Adapter.c
 msgid "Data too large for advertisement packet"
 msgstr "Данные слишком велики для пакета объявления"
 
@@ -1343,7 +1346,7 @@ msgid "%q must be 8, 16, 24, or 32"
 msgstr ""
 
 #: ports/espressif/common-hal/audiobusio/__init__.c
-#: ports/espressif/common-hal/audioi2sin/I2SIn.c
+#: ports/espressif/common-hal/audioi2sin/I2SIn.c shared-bindings/emmcio/EMMC.c
 msgid "Peripheral in use"
 msgstr "Периферийные устройства в использовании"
 
@@ -1497,6 +1500,7 @@ msgstr "Запрошенный ресурс не найден"
 
 #: ports/espressif/common-hal/espidf/__init__.c
 #: ports/raspberrypi/common-hal/picogame/Display.c
+#: shared-bindings/picogame/__init__.c
 msgid "Operation or feature not supported"
 msgstr "Операция или функция, не поддерживаемые"
 
@@ -1539,7 +1543,7 @@ msgstr "Слишком длинная программа"
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2350.c
 #: ports/raspberrypi/common-hal/rp2pio/StateMachine.c
 #: ports/raspberrypi/common-hal/usb_host/Port.c
-#: shared-bindings/digitalio/DigitalInOut.c
+#: shared-bindings/digitalio/DigitalInOut.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/i2cioexpander/IOPin.c shared-bindings/microcontroller/Pin.c
 #: shared-module/max3421e/Max3421E.c
 msgid "%q in use"
@@ -1700,6 +1704,7 @@ msgstr "Не удалось выделить память Wifi"
 
 #: ports/espressif/common-hal/wifi/__init__.c
 #: ports/raspberrypi/common-hal/wifi/__init__.c
+#: ports/zephyr-cp/common-hal/wifi/Radio.c
 msgid "Only IPv4 addresses supported"
 msgstr "Поддерживаются только адреса IPv4"
 
@@ -1712,6 +1717,7 @@ msgstr "Пин MISO или MOSI должен быть предоставлен"
 #: ports/mimxrt10xx/common-hal/busio/UART.c ports/stm/common-hal/busio/I2C.c
 #: ports/stm/common-hal/busio/SPI.c ports/stm/common-hal/busio/UART.c
 #: ports/stm/common-hal/canio/CAN.c ports/stm/common-hal/sdioio/SDCard.c
+#: shared-bindings/emmcio/EMMC.c
 msgid "Hardware in use, try alternative pins"
 msgstr "Оборудование используется, попробуйте использовать другие пины"
 
@@ -1844,7 +1850,7 @@ msgstr "Преобразование звука не реализовано"
 #: ports/raspberrypi/bindings/cyw43/__init__.c py/argcheck.c py/objexcept.c
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
 #: shared-bindings/digitalio/Pull.c shared-bindings/picogame/Sprite.c
-#: shared-bindings/supervisor/__init__.c shared-module/audiofilters/Filter.c
+#: shared-bindings/supervisor/__init__.c shared-module/audiofilters/__init__.c
 #: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q должно быть типа%q или%q, а не%q"
@@ -1929,7 +1935,7 @@ msgstr "Таймер стимуляции DMA не найден"
 msgid "I2C peripheral in use"
 msgstr "Периферийное устройство I2C уже используется"
 
-#: ports/raspberrypi/common-hal/busio/SPI.c
+#: ports/raspberrypi/common-hal/busio/SPI.c shared-bindings/emmcio/EMMC.c
 msgid "SPI peripheral in use"
 msgstr "Используемое периферийное устройство SPI"
 
@@ -2389,7 +2395,7 @@ msgstr "Длинна %q должна быть <= %d"
 msgid "%q length must be %d"
 msgstr "Длинна %q должна быть %d"
 
-#: py/argcheck.c shared-module/audiofilters/Filter.c
+#: py/argcheck.c shared-module/audiofilters/__init__.c
 msgid "%q in %q must be of type %q, not %q"
 msgstr "%q в %q должно быть типа %q, а не %q"
 
@@ -3672,7 +3678,7 @@ msgstr "Значение UUID не является строковым, целы
 msgid "not a 128-bit UUID"
 msgstr "не 128-битный UUID"
 
-#: shared-bindings/_bleio/__init__.c
+#: shared-bindings/_bleio/__init__.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c shared-module/bitmaptools/__init__.c
 #: shared-module/displayio/Bitmap.c shared-module/displayio/Group.c
@@ -3836,7 +3842,7 @@ msgstr ""
 msgid "invalid destination buffer, must be an array of type: %c"
 msgstr ""
 
-#: shared-bindings/audioio/AudioOut.c
+#: shared-bindings/audioio/AudioOut.c shared-bindings/emmcio/EMMC.c
 msgid "%q and %q must be different"
 msgstr "%q и %q должны быть разными"
 
@@ -4071,6 +4077,10 @@ msgstr "Выход индекса плитки за пределы"
 msgid "offset must be >= 0"
 msgstr "Смещение должно быть >= 0"
 
+#: shared-bindings/emmcio/EMMC.c shared-bindings/i2cioexpander/IOExpander.c
+msgid "address out of range"
+msgstr ""
+
 #: shared-bindings/epaperdisplay/EPaperDisplay.c
 msgid "Refresh too soon"
 msgstr "Слишком раннее обновление"
@@ -4086,10 +4096,6 @@ msgstr "Системная запись должна быть gnss. Спутни
 #: shared-bindings/hashlib/__init__.c
 msgid "Unsupported hash algorithm"
 msgstr "Неподдерживаемый алгоритм хеширования"
-
-#: shared-bindings/i2cioexpander/IOExpander.c
-msgid "address out of range"
-msgstr ""
 
 #: shared-bindings/i2cioexpander/IOExpander.c
 msgid "num_pins must be 8 or 16"

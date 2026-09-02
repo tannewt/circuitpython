@@ -40,6 +40,10 @@ static mp_obj_t characteristic_list_items[3];
 #error "BLEIO_PACKET_BUFFER_MAX_PACKET_SIZE must be a multiple of 4"
 #endif
 static uint32_t _outgoing1[BLEIO_PACKET_BUFFER_MAX_PACKET_SIZE / 4];
+// TODO: _outgoing2 is unused on espressif, whose NimBLE send calls copy the data
+// rather than retaining the buffer as the nordic SoftDevice does. Letting a port
+// declare how many outgoing buffers it needs would drop this static allocation
+// there; nordic requires both.
 static uint32_t _outgoing2[BLEIO_PACKET_BUFFER_MAX_PACKET_SIZE / 4];
 static ble_event_handler_t rx_static_handler_entry;
 static ble_event_handler_t tx_static_handler_entry;

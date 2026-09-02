@@ -2,6 +2,7 @@
 	/delete-node/ partitions;
 
 	partitions {
+		ranges;
 		#address-cells = <1>;
 		#size-cells = <1>;
 

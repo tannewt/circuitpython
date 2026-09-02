@@ -28,6 +28,10 @@
 #include "nrf_nvic.h"
 #endif
 
+#if CIRCUITPY_EMMCIO
+#include "shared-bindings/emmcio/__init__.h"
+#endif
+
 #include "common-hal/microcontroller/Pin.h"
 #include "common-hal/alarm/time/TimeAlarm.h"
 #include "common-hal/analogio/AnalogIn.h"
@@ -212,6 +216,10 @@ void reset_port(void) {
 
     #if CIRCUITPY_RTC
     rtc_reset();
+    #endif
+
+    #if CIRCUITPY_EMMCIO
+    emmcio_reset();
     #endif
 
     timers_reset();

@@ -100,6 +100,12 @@ jobs:
     with:
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
 
+  zephyr-tests:
+    needs: scheduler
+    uses: ./.github/workflows/run-zephyr-tests.yml
+    with:
+      cp-version: ${{ needs.scheduler.outputs.cp-version }}
+
   mpy-cross:
     needs: scheduler
     if: needs.scheduler.outputs.ports != '{}'

@@ -238,7 +238,7 @@ static bool synth_note_into_buffer(synthio_synth_t *synth, int chan, int32_t *ou
     for (uint16_t i = 0; i < dur; i++) {
         accum += dds_rate;
         // because dds_rate is low enough, the subtraction is guaranteed to go back into range, no expensive modulo needed
-        if (accum > lim) {
+        if (accum >= lim) {
             accum = accum - lim + offset;
         }
         int16_t idx = accum >> SYNTHIO_FREQUENCY_SHIFT;
@@ -266,7 +266,7 @@ static bool synth_note_into_buffer(synthio_synth_t *synth, int chan, int32_t *ou
         for (uint16_t i = 0; i < dur; i++) {
             accum += ring_dds_rate;
             // because dds_rate is low enough, the subtraction is guaranteed to go back into range, no expensive modulo needed
-            if (accum > lim) {
+            if (accum >= lim) {
                 accum = accum - lim + offset;
             }
             int16_t idx = accum >> SYNTHIO_FREQUENCY_SHIFT;
