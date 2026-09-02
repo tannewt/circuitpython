@@ -172,7 +172,13 @@ def native_sim_binary(request, board):
 
 @pytest.fixture
 def native_sim_env() -> dict[str, str]:
-    return {}
+    env = {}
+    # The SDL display init fails on hosts where the X server rejects us
+    # (e.g. no X authority) even with -display_headless. Offscreen keeps
+    # framebuffer rendering (display capture) working without a real window.
+    if not os.environ.get("SDL_VIDEODRIVER"):
+        env["SDL_VIDEODRIVER"] = "offscreen"
+    return env
 
 
 PIXEL_FORMAT_BITMASK = {
