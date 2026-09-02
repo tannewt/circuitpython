@@ -153,9 +153,17 @@ class NativeSimProcess:
         import time
 
         marker = "connected to pseudotty:"
-        deadline = time.monotonic() + timeout
+        start = time.monotonic()
+        deadline = start + timeout
+        last_progress = start
         while time.monotonic() < deadline:
-            if self._proc.poll() is not None:
+            rc = self._proc.poll()
+            if rc is not None:
+                print(
+                    f"reconnect_serial: simulator exited with code {rc} "
+                    f"after {time.monotonic() - start:.1f}s"
+                )
+                self._print_debug_tail()
                 return False
             out = self.debug_serial.all_output
             idx = out.find(marker, self._pty_search_offset)
@@ -172,9 +180,34 @@ class NativeSimProcess:
                     serial.Serial(pty_path, baudrate=115200, timeout=0.05, write_timeout=0),
                     name="uart0",
                 )
+                print(
+                    f"reconnect_serial: rebooted after {time.monotonic() - start:.1f}s, "
+                    f"new PTY: {pty_path}"
+                )
                 return True
+            now = time.monotonic()
+            if now - last_progress >= 2:
+                last_progress = now
+                print(
+                    f"reconnect_serial: waiting {now - start:.1f}s/{timeout}s, "
+                    f"uart output {len(self.serial.all_output)} chars, "
+                    f"debug output {len(out)} chars, "
+                    f"pty_search_offset {self._pty_search_offset}"
+                )
             time.sleep(0.05)
+        print(
+            f"reconnect_serial: timed out after {timeout}s without seeing {marker!r} "
+            f"(process still alive, returncode={self._proc.poll()})"
+        )
+        self._print_debug_tail()
         return False
+
+    def _print_debug_tail(self, tail_len=1000):
+        """Print the tail of the debug and UART output to aid debugging."""
+        debug = self.debug_serial.all_output
+        uart = self.serial.all_output if self.serial else ""
+        print(f"reconnect_serial: debug output tail ({len(debug)} chars):\n{debug[-tail_len:]!r}")
+        print(f"reconnect_serial: uart output tail ({len(uart)} chars):\n{uart[-tail_len:]!r}")
 
     def shutdown(self):
         if self._proc.poll() is None:
