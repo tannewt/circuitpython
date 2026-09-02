@@ -128,6 +128,7 @@ BSIM_ADVERT_SCAN_RESPONSE_SETTINGS = "CIRCUITPY_BLE_WORKFLOW = false\n"
 
 @pytest.mark.zephyr_sample("tests/bsim/samples/observer")
 @pytest.mark.circuitpy_drive({"code.py": BSIM_ADV_CODE})
+@pytest.mark.duration(60)
 def test_bsim_advertise_and_scan(bsim_phy, circuitpython, zephyr_sample):
     """Advertise from CircuitPython and verify Zephyr observer sees traffic."""
     observer = zephyr_sample

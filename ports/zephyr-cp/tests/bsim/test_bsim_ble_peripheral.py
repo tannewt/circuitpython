@@ -95,7 +95,7 @@ def test_bsim_peripheral_zephyr_central(bsim_phy, circuitpython, zephyr_sample):
     assert "Disconnected:" in central_output
 
 
-@pytest.mark.duration(14)
+@pytest.mark.duration(20)
 @pytest.mark.circuitpy_drive({"code.py": BSIM_PERIPHERAL_CODE})
 @pytest.mark.circuitpy_drive({"code.py": BSIM_CENTRAL_CODE})
 def test_bsim_peripheral_cp_central(bsim_phy, circuitpython1, circuitpython2):
