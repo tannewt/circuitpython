@@ -170,7 +170,7 @@ uint32_t port_get_saved_word(void) {
 // Opt in with --retained-memory=<path>.
 #if defined(CONFIG_ARCH_POSIX)
 static void cp_saved_word_save(void) {
-    fprintf(stderr, "DBGSAFE: cp_saved_word_save enter\n");
+    fprintf(stderr, "DBGSAFE: cp_saved_word_save entered\n");
     const char *path = native_sim_retained_memory;
     if (path == NULL || path[0] == '\0') {
         fprintf(stderr, "DBGSAFE: cp_saved_word_save: no path\n");

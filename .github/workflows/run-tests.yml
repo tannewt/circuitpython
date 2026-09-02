@@ -100,13 +100,68 @@ jobs:
         run: make -C ports/zephyr-cp -j2 BOARD=native_native_sim
         env:
           CP_VERSION: 10.3.0-11-g051bccdbaf
-      - name: Run safe mode Zephyr test standalone first
-        run: pytest tests/test_saved_word.py -v
-        working-directory: ports/zephyr-cp
       - name: Print 32-bit glibc version
         run: /lib/ld-linux.so.2 --version
-      - name: Run Zephyr tests
-        run: make -C ports/zephyr-cp test
+      - name: Run safe mode Zephyr test standalone 1
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 2
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 3
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 4
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 5
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 6
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 7
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 8
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 9
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 10
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 11
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 12
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 13
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 14
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 15
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 16
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 17
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 18
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 19
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
+      - name: Run safe mode Zephyr test standalone 20
+        run: pytest tests/test_saved_word.py -v
+        working-directory: ports/zephyr-cp
       - name: Fail intentionally so no subsequent jobs run
         run: |
           echo "Failing intentionally: zephyr job is disabled pending CI fixes."
