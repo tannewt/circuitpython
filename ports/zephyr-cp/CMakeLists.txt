@@ -8,6 +8,11 @@ target_sources(app PRIVATE zephyr_main.c)
 # Add I2C emulator control for native_sim testing
 if(CONFIG_BOARD_NATIVE_SIM)
     target_sources(app PRIVATE native_sim_i2c_emul_control.c)
+    # Keep host libraries loaded so SDL's dlclose() of libEGL cannot race the
+    # Zephyr threads that are still terminating during shutdown/reboot.
+    # This has to go in the runner (host) side of the build: the embedded image
+    # never calls dlclose(), so --gc-sections would drop the override there.
+    target_sources(native_simulator INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/native_sim_dlclose.c)
 endif()
 
 if(CONFIG_TRACING_PERFETTO)
