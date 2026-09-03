@@ -59,6 +59,13 @@
 // No SD card LUN. There is no card slot on this device.
 #define CIRCUITPY_SDCARD_USB        (0)
 
+// The 4 GB eMMC
+#define DEFAULT_EMMC_CLOCK          (&pin_P0_06)
+#define DEFAULT_EMMC_COMMAND        (&pin_P0_08)
+#define DEFAULT_EMMC_DATA           (&pin_P0_07)
+#define DEFAULT_EMMC_RESET          (&pin_P1_08)
+#define DEFAULT_EMMC_VCCQ           (&pin_P0_14)
+
 // TWIM to the CS42L42 (0x48) and TAS2505 (0x18).
 #define DEFAULT_I2C_BUS_SCL         (&pin_P1_11)
 #define DEFAULT_I2C_BUS_SDA         (&pin_P1_07)
