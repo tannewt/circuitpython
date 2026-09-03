@@ -170,17 +170,6 @@ def native_sim_binary(request, board):
     return binary
 
 
-@pytest.fixture
-def native_sim_env() -> dict[str, str]:
-    env = {}
-    # The SDL display init fails on hosts where the X server rejects us
-    # (e.g. no X authority) even with -display_headless. Offscreen keeps
-    # framebuffer rendering (display capture) working without a real window.
-    if not os.environ.get("SDL_VIDEODRIVER"):
-        env["SDL_VIDEODRIVER"] = "offscreen"
-    return env
-
-
 PIXEL_FORMAT_BITMASK = {
     "RGB_888": 1 << 0,
     "MONO01": 1 << 1,
@@ -207,7 +196,7 @@ def sim_id(request) -> str:
 
 
 @pytest.fixture
-def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp_path):
+def circuitpython(request, board, sim_id, native_sim_binary, tmp_path):
     """Run CircuitPython with given code string and return PTY output."""
 
     instance_count = 1
@@ -383,7 +372,6 @@ def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp
             cmd.append(f"--display_mono_vtiled={'true' if mono_vtiled else 'false'}")
 
         env = os.environ.copy()
-        env.update(native_sim_env)
 
         capture_png_pattern = None
         if capture_times_ns is not None:

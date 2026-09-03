@@ -102,6 +102,12 @@ jobs:
           CP_VERSION: 10.3.0-11-g051bccdbaf
       - name: Print 32-bit glibc version
         run: /lib/ld-linux.so.2 --version
+      - name: Print SDL video environment
+        run: |
+          for var in SDL_VIDEODRIVER DISPLAY WAYLAND_DISPLAY XDG_SESSION_TYPE; do
+            echo "$var=${!var:-<unset>}"
+          done
+          env | grep -i sdl || echo "no SDL_* variables set"
       - name: Run reset Zephyr test
         run: pytest tests/test_reset.py -v
         working-directory: ports/zephyr-cp
