@@ -102,6 +102,9 @@ jobs:
           CP_VERSION: 10.3.0-11-g051bccdbaf
       - name: Print 32-bit glibc version
         run: /lib/ld-linux.so.2 --version
+      - name: Run reset Zephyr test
+        run: pytest tests/test_reset.py -v
+        working-directory: ports/zephyr-cp
       - name: Run safe mode Zephyr test standalone 1
         run: pytest tests/test_saved_word.py -v
         working-directory: ports/zephyr-cp
