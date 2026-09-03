@@ -112,7 +112,7 @@ jobs:
         run: pytest tests/test_reset.py -v
         working-directory: ports/zephyr-cp
       - name: Run one Zephyr display test
-        run: pytest tests/zephyr_display/test_zephyr_display.py::test_board_display_available -v
+        run: pytest tests/zephyr_display/test_zephyr_display.py::test_board_display_available -v -rP
         working-directory: ports/zephyr-cp
       - name: Run safe mode Zephyr test standalone 1
         run: pytest tests/test_saved_word.py -v
