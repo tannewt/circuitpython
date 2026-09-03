@@ -170,6 +170,32 @@ def native_sim_binary(request, board):
     return binary
 
 
+@pytest.fixture
+def native_sim_env() -> dict[str, str]:
+    env = {}
+    # Always pick the video driver explicitly. SDL_Init() fails outright
+    # ("No available video device") on hosts where no display server is
+    # reachable, and which driver it falls back to otherwise differs between
+    # machines - GitHub Actions runners end up on offscreen, a dev box with X or
+    # Wayland does not.
+    #
+    # dummy, not offscreen: offscreen is an EGL/OpenGL driver, so it pulls in
+    # Mesa (llvmpipe: ~20 extra mappings and ~65 extra threads) and, more
+    # importantly, SDL_DestroyWindow() dlclose()s the GL driver during shutdown.
+    # That runs libEGL's destructor (__glDispatchFini) while the Zephyr threads
+    # released by posix_arch_clean_up() are still inside pthread_exit() running
+    # libGLdispatch's TSD destructors, which crashes/hangs/corrupts the heap
+    # ~1-6% of the time on a reboot (and kills the process before the execv, so
+    # any test that reboots fails). dummy has no GL at all, so none of that
+    # exists; SDL still gives us the software renderer, so display capture and
+    # the golden image tests work unchanged. It is also ~50ms/run faster to
+    # start, at the cost of ~2x slower per-frame blits (only matters past ~200
+    # full-screen refreshes in one run).
+    if not os.environ.get("SDL_VIDEODRIVER"):
+        env["SDL_VIDEODRIVER"] = "dummy"
+    return env
+
+
 PIXEL_FORMAT_BITMASK = {
     "RGB_888": 1 << 0,
     "MONO01": 1 << 1,
@@ -196,7 +222,7 @@ def sim_id(request) -> str:
 
 
 @pytest.fixture
-def circuitpython(request, board, sim_id, native_sim_binary, tmp_path):
+def circuitpython(request, board, sim_id, native_sim_binary, native_sim_env, tmp_path):
     """Run CircuitPython with given code string and return PTY output."""
 
     instance_count = 1
@@ -372,6 +398,7 @@ def circuitpython(request, board, sim_id, native_sim_binary, tmp_path):
             cmd.append(f"--display_mono_vtiled={'true' if mono_vtiled else 'false'}")
 
         env = os.environ.copy()
+        env.update(native_sim_env)
 
         capture_png_pattern = None
         if capture_times_ns is not None:
