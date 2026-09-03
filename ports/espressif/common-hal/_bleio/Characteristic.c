@@ -443,7 +443,7 @@ void common_hal_bleio_characteristic_add_descriptor(bleio_characteristic_obj_t *
     bleio_descriptor_obj_t *descriptor) {
     size_t i = self->descriptor_list->len;
     if (i >= MAX_DESCRIPTORS) {
-        mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Too many descriptors"));
+        mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Too many %q"), MP_QSTR_descriptors);
     }
 
     mp_obj_list_append(MP_OBJ_FROM_PTR(self->descriptor_list),

@@ -8,6 +8,7 @@
 #include "py/gc.h"
 #include "py/runtime.h"
 #include "common-hal/_bleio/__init__.h"
+#include "shared-bindings/_bleio/__init__.h"
 #include "shared-bindings/_bleio/Characteristic.h"
 #include "shared-bindings/_bleio/Descriptor.h"
 #include "shared-bindings/_bleio/Service.h"
@@ -150,13 +151,18 @@ void common_hal_bleio_service_add_characteristic(bleio_service_obj_t *self,
     bleio_characteristic_obj_t *characteristic,
     mp_buffer_info_t *initial_value_bufinfo,
     const char *user_description) {
+    // Don't overflow chr_defs table.
+    size_t i = self->characteristic_list->len;
+    if (i >= MAX_CHARACTERISTIC_COUNT) {
+        mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Too many %q"), MP_QSTR_characteristics);
+    }
+
     mp_obj_list_append(self->characteristic_list, MP_OBJ_FROM_PTR(characteristic));
 
     if (user_description != NULL) {
         mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_user_description);
     }
 
-    size_t i = self->characteristic_list->len - 1;
     self->chr_defs[i].uuid = &characteristic->uuid->nimble_ble_uuid.u;
     self->chr_defs[i].access_cb = bleio_characteristic_access_cb;
     self->chr_defs[i].arg = characteristic;
