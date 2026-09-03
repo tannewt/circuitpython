@@ -331,6 +331,7 @@ static void _new_connection(uint16_t conn_handle, bool user_owned) {
     connection->conn_handle = conn_handle;
     connection->connection_obj = mp_const_none;
     connection->pair_status = PAIR_NOT_PAIRED;
+    connection->indicate_outstanding = false;
     connection->mtu = 0;
     connection->user_owned = user_owned;
 

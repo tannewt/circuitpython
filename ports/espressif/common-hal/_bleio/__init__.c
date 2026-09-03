@@ -61,6 +61,9 @@ void bleio_user_reset(void) {
 
     // Also clean up event handlers that are on the heap.
     ble_event_remove_heap_handlers();
+    // And stop retaining heap services, whose characteristics' handler entries
+    // the call above just removed.
+    bleio_service_forget_retained();
 
     // Maybe start advertising the BLE workflow.
     supervisor_bluetooth_background();
@@ -128,6 +131,7 @@ void common_hal_bleio_init(void) {
 
 void common_hal_bleio_gc_collect(void) {
     bleio_adapter_gc_collect(&common_hal_bleio_adapter_obj);
+    bleio_service_gc_collect();
 }
 
 void check_nimble_error(int rc, const char *file, size_t line) {
