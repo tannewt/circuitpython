@@ -6,20 +6,20 @@
 		code_partition: partition@0 {
 			compatible = "zephyr,mapped-partition";
 			label = "code-partition";
-			reg = <0x0 0x180000>;
+			reg = <0x0 0x17f000>;
 			read-only;
+		};
+
+		storage_partition: partition@17f000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x17f000 0x1000>;
 		};
 
 		nvm_partition: partition@180000 {
 			compatible = "zephyr,mapped-partition";
 			label = "nvm";
-			reg = <0x180000 0x800>;
-		};
-
-		storage_partition: partition@180800 {
-			compatible = "zephyr,mapped-partition";
-			label = "storage";
-			reg = <0x180800 0x800>;
+			reg = <0x180000 0x1000>;
 		};
 
 		circuitpy_partition: partition@181000 {

@@ -424,3 +424,9 @@
 [submodule "frozen/Adafruit_CircuitPython_BLE_File_Transfer"]
 	path = frozen/Adafruit_CircuitPython_BLE_File_Transfer
 	url = https://github.com/adafruit/Adafruit_CircuitPython_BLE_File_Transfer.git
+[submodule "frozen/Adafruit_CircuitPython_CS42L42"]
+	path = frozen/Adafruit_CircuitPython_CS42L42
+	url = https://github.com/adafruit/Adafruit_CircuitPython_CS42L42.git
+[submodule "frozen/Adafruit_CircuitPython_TAS2505"]
+	path = frozen/Adafruit_CircuitPython_TAS2505
+	url = https://github.com/adafruit/Adafruit_CircuitPython_TAS2505.git
