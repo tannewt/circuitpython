@@ -510,14 +510,6 @@ bool common_hal_emmcio_emmc_read_ext_csd(uint8_t *buf) {
 
 #define EMMC_BUSY_LEADIN_CLOCKS 16
 
-// run_bg says whether a long stall may run background tasks.
-//   true  -- the wait is between transfers, so it is safe to let the rest of
-//            the system have a turn.
-//   false -- the wait is inside a write, with the card mid-program. Nothing
-//            runs, so no background task can re-enter this driver or change
-//            the board's state out from under a programming card. The stall
-//            is bounded (<=500 ms) and background tasks resume between
-//            blocks and between calls.
 static bool dat0_busy_wait(uint32_t timeout_us, bool run_bg) {
     DAT0_IN();                                   // never drive against a busy card
     for (int i = 0; i < EMMC_BUSY_LEADIN_CLOCKS; i++) {

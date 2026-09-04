@@ -25,16 +25,19 @@
 #include "board.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "flash_protect.h"
+#include "peripherals/nrf/pins.h"
 #include "power_off.h"
 #include "py/misc.h"
 #include "supervisor/shared/safe_mode.h"
+#include "shared-module/emmcio/__init__.h"
 #include "wdt.h"
 #include "nrfx/drivers/include/nrfx_rtc.h"
 #include "nrfx/hal/nrf_gpio.h"
 
+#define PIN_EMMC_RESET      (DEFAULT_EMMC_RESET->number)   // active low
+#define PIN_EMMC_VCCQ_EN    (DEFAULT_EMMC_VCCQ->number)    // eMMC I/O rail
+
 // Pins this file drives directly.
-#define PIN_EMMC_RESET      NRF_GPIO_PIN_MAP(1, 8)   // eMMC, active low
-#define PIN_EMMC_VCCQ_EN    NRF_GPIO_PIN_MAP(0, 14)  // eMMC I/O rail
 #define PIN_OSC_EN          NRF_GPIO_PIN_MAP(0, 13)  // 3.072 MHz oscillator
 #define PIN_TAS_RESET       NRF_GPIO_PIN_MAP(0, 9)   // TAS2505, active low
 #define PIN_CS42_RESET      NRF_GPIO_PIN_MAP(0, 15)  // CS42L42, active low
@@ -211,11 +214,6 @@ static const uint8_t default_low_pins[] = {
     PIN_CS42_RESET,
     PIN_BT_RESET,
 
-    // eMMC held in reset with its VCCQ rail off. The contents of the chip are
-    // unaffected; this only keeps the rail from floating.
-    PIN_EMMC_RESET,
-    PIN_EMMC_VCCQ_EN,
-
     // Rail feeding the faders and both button ladders. Off unless something is
     // actually reading them.
     PIN_CONTROL_RAIL,
@@ -246,6 +244,18 @@ static bool apply_pin_default(uint8_t pin_number) {
         }
     }
 
+    // eMMC held in reset with its VCCQ rail off. The contents of the chip are
+    // unaffected; this only keeps the rail from floating. The exception is a
+    // card the supervisor has automounted: it is a live filesystem between
+    // runs, so leave its reset and rail exactly as the driver left them.
+    if (pin_number == PIN_EMMC_RESET || pin_number == PIN_EMMC_VCCQ_EN) {
+        if (!emmcio_is_automounted()) {
+            nrf_gpio_cfg_output(pin_number);
+            nrf_gpio_pin_clear(pin_number);
+        }
+        return true;
+    }
+
     for (size_t i = 0; i < MP_ARRAY_SIZE(default_low_pins); i++) {
         if (default_low_pins[i] == pin_number) {
             nrf_gpio_cfg_output(pin_number);
@@ -260,6 +270,8 @@ static bool apply_pin_default(uint8_t pin_number) {
 // Put every pin this board has an opinion about into its resting state at once.
 static void apply_all_pin_defaults(void) {
     apply_pin_default(PIN_FUNCTION_BUTTON);
+    apply_pin_default(PIN_EMMC_RESET);
+    apply_pin_default(PIN_EMMC_VCCQ_EN);
     for (size_t i = 0; i < MP_ARRAY_SIZE(led_pins); i++) {
         apply_pin_default(led_pins[i]);
     }

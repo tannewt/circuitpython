@@ -50,4 +50,13 @@ SRC_C += boards/$(BOARD)/power_off.c
 # bootloader does not set up for itself.
 SRC_C += boards/$(BOARD)/flash_protect.c
 
+# The soldered-down eMMC, and the supervisor mount that puts it on /sd and on
+# USB as a second drive.
+CIRCUITPY_EMMCIO = 1
+CIRCUITPY_EMMC_USB = 1
+
+FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_Register
+FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_CS42L42
+FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_TAS2505
+
 CIRCUITPY_REQUIRE_I2C_PULLUPS = 0
