@@ -603,13 +603,15 @@ void common_hal_bleio_packet_buffer_deinit(bleio_packet_buffer_obj_t *self) {
     if (common_hal_bleio_packet_buffer_deinited(self)) {
         return;
     }
+    // Take the packet buffer off the event list before changing anything
+    // inside the object.
+    ble_event_remove_handler(packet_buffer_on_ble_client_evt, self);
     bleio_characteristic_clear_observer(self->characteristic);
     self->characteristic = NULL;
-    // A still-queued retry_send_callback sees the NULL characteristic
-    // (deinited) and does nothing.
+    // A still-queued retry_send_callback checks deinited(), so it sees the
+    // NULL characteristic and does nothing.
     self->pending_size = 0;
     self->packet_queued = false;
-    ble_event_remove_handler(packet_buffer_on_ble_client_evt, self);
     ringbuf_deinit(&self->ringbuf);
 }
 

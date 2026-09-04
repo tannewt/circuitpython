@@ -17,9 +17,13 @@
 
 #include "supervisor/background_callback.h"
 
+#include "sdkconfig.h"
+
 #ifndef BLEIO_TOTAL_CONNECTION_COUNT
-#define BLEIO_TOTAL_CONNECTION_COUNT 5
+#define BLEIO_TOTAL_CONNECTION_COUNT CONFIG_BT_NIMBLE_MAX_CONNECTIONS
 #endif
+// Do not allow more connections than NimBLE was configured for.
+MP_STATIC_ASSERT(BLEIO_TOTAL_CONNECTION_COUNT <= CONFIG_BT_NIMBLE_MAX_CONNECTIONS);
 
 #define BLEIO_HANDLE_INVALID     0xffff
 
