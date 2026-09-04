@@ -497,8 +497,15 @@ static int find_channel_with_note(synthio_synth_t *synth, mp_obj_t note) {
 bool synthio_span_change_note(synthio_synth_t *synth, mp_obj_t old_note, mp_obj_t new_note) {
     int channel;
     if (new_note != SYNTHIO_SILENCE && (channel = find_channel_with_note(synth, new_note)) != -1) {
-        // note already playing, re-enter attack phase
-        synth->envelope_state[channel].state = SYNTHIO_ENVELOPE_STATE_ATTACK;
+        if (synth->envelope_state[channel].level == 0) {
+            // released and already decayed to silence, but not yet reaped:
+            // treat this like a fresh press, not a swell from 0
+            synthio_envelope_state_init(&synth->envelope_state[channel], synthio_synth_get_note_envelope(synth, new_note));
+            synth->accum[channel] = 0;
+        } else {
+            // note already playing, re-enter attack phase
+            synth->envelope_state[channel].state = SYNTHIO_ENVELOPE_STATE_ATTACK;
+        }
         return true;
     }
     channel = find_channel_with_note(synth, old_note);

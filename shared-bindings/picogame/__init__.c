@@ -55,8 +55,10 @@ static busdisplay_busdisplay_obj_t *pg_get_display(mp_obj_t obj) {
     }
     #endif
     mp_obj_t native = mp_obj_cast_to_native_base(obj, &busdisplay_busdisplay_type);
-    if (!mp_obj_is_type(native, &busdisplay_busdisplay_type)) {
-        mp_arg_validate_type(native, &busdisplay_busdisplay_type, MP_QSTR_display);
+    // The cast yields MP_OBJ_NULL for a non-BusDisplay: validate the ORIGINAL object so the
+    // error names its real type (reading the type of NULL is a hard fault on RP2350).
+    if (native == MP_OBJ_NULL || !mp_obj_is_type(native, &busdisplay_busdisplay_type)) {
+        mp_arg_validate_type(obj, &busdisplay_busdisplay_type, MP_QSTR_display);
     }
     return MP_OBJ_TO_PTR(native);
 }
