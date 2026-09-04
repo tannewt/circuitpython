@@ -64,8 +64,9 @@ static mp_obj_t scene_resolve_target(mp_obj_t disp, bool *fast, bool *fb_target)
     // Plain busdisplay: accept a subclass by casting to its native base; the portable
     // renderer treats self->display as a busdisplay_busdisplay_obj_t directly.
     mp_obj_t native = mp_obj_cast_to_native_base(disp, &busdisplay_busdisplay_type);
-    if (!mp_obj_is_type(native, &busdisplay_busdisplay_type)) {
-        mp_arg_validate_type(native, &busdisplay_busdisplay_type, MP_QSTR_display);
+    // MP_OBJ_NULL for a non-BusDisplay: validate the ORIGINAL object (NULL's type is unreadable).
+    if (native == MP_OBJ_NULL || !mp_obj_is_type(native, &busdisplay_busdisplay_type)) {
+        mp_arg_validate_type(disp, &busdisplay_busdisplay_type, MP_QSTR_display);
     }
     return native;
 }
