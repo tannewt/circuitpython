@@ -31,8 +31,8 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_gap.h"
+#include "host/ble_gatt.h"
 #include "host/util/util.h"
-#include "services/ans/ble_svc_ans.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
@@ -66,6 +66,61 @@ static void _on_sync(void) {
 // All examples have this. It'd make sense in a header.
 void ble_store_config_init(void);
 
+// NimBLE sizes its client characteristic configuration (CCCD) pool once, in
+// ble_gatts_start(), from the services counted by ble_gatts_count_cfg().
+// But every CircuitPython service is registered afterwards, using
+// ble_gatts_add_dynamic_svcs(), which does not do its own counting,
+// and does not resize the CCCD pool.
+//
+// So services added at runtime get no CCCDs of their own added to the pool.
+// The CCCDs themselves can allocate on the NimBLE heap if needed,
+// but ble_gatts_conn_can_alloc() still tests the CCCD pool size, and NimBLE refuses
+// connectable advertising once the pool is empty. This is an oversight in the API.
+// NimBLE returns BLE_HS_ENOMEM, which is reported as a MemoryError from
+// start_advertising() as soon as the BLE workflow, a user service, and a
+// connection together need more CCCDs than the built-in services reserved.
+//
+// To get around this, we'll make the CCCD pool larger, by calling ble_gatts_count_cfg()
+// on a bulky dummy service that is never registered, just to force the pool to a
+// good size. Two of the reserved CCCDs cover the BLE workflow's own notifying
+// characteristics; the rest are for user services.
+#define RESERVED_CCCD_COUNT (18)
+
+// Never called: the definition below is counted, not registered. NimBLE only
+// requires that the callback not be NULL.
+static int _reserved_cccd_access_cb(uint16_t conn_handle, uint16_t attr_handle,
+    struct ble_gatt_access_ctxt *ctxt, void *arg) {
+    return BLE_ATT_ERR_UNLIKELY;
+}
+
+// Likewise unused, but must not be NULL.
+static const ble_uuid16_t _reserved_cccd_uuid = BLE_UUID16_INIT(0xffff);
+
+// Reserve CCCDs for the services registered at runtime. NimBLE needs one CCCD
+// per subscribable characteristic per connection, plus one for its cache;
+// ble_gatts_count_cfg() applies that multiplier itself.
+//
+// Call this before nimble_port_freertos_init(): ble_gatts_start() sizes the pool
+// on the nimble_host task, and counting afterwards is too late.
+static void _reserve_cccds(void) {
+    // ble_gatts_count_cfg() only reads these definitions and keeps no pointers
+    // into them, so they can live on the stack and then be discarded.
+    struct ble_gatt_chr_def chr_defs[RESERVED_CCCD_COUNT + 1] = { 0 };
+    for (size_t i = 0; i < RESERVED_CCCD_COUNT; i++) {
+        chr_defs[i].uuid = &_reserved_cccd_uuid.u;
+        chr_defs[i].access_cb = _reserved_cccd_access_cb;
+        // Only NOTIFY or INDICATE characteristics get a CCCD.
+        chr_defs[i].flags = BLE_GATT_CHR_F_NOTIFY;
+    }
+
+    struct ble_gatt_svc_def svc_defs[2] = { 0 };
+    svc_defs[0].type = BLE_GATT_SVC_TYPE_PRIMARY;
+    svc_defs[0].uuid = &_reserved_cccd_uuid.u;
+    svc_defs[0].characteristics = chr_defs;
+
+    CHECK_NIMBLE_ERROR(ble_gatts_count_cfg(svc_defs));
+}
+
 void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enabled) {
     const bool is_enabled = common_hal_bleio_adapter_get_enabled(self);
 
@@ -97,7 +152,8 @@ void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enable
 
         ble_svc_gap_init();
         ble_svc_gatt_init();
-        ble_svc_ans_init();
+        // Grow the CCCD pool so it's not too small.
+        _reserve_cccds();
 
         // Clear all of the internal connection objects.
         for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
