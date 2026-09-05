@@ -110,15 +110,24 @@ config BT_KEYS_OVERWRITE_OLDEST
 # CONFIG_BOOTLOADER_MCUBOOT. OTA is enabled when the app boots from slot0 under
 # MCUboot and has Bluetooth; the app boots with the image upload in slot1.
 #
+# A slot1_partition must also exist in the final app devicetree: the mcuboot
+# fork's partition layout overlays are applied there, so boards.toml-driven
+# layouts count. Boards with a single-app layout (e.g. stm32wba65i_dk1,
+# siwx917_dk2605a) have no slot1 to stage an upload in, and zephyr_img_mgmt
+# fails to build without one, so MCUmgr defaults off for them automatically
+# instead of needing a CONFIG_MCUMGR=n override in board.conf.
+#
 # Gating on BOOTLOADER_MCUBOOT (not just on a slot1_partition existing) keeps
 # boards that link the app over the whole flash (e.g. nrf54lm20dk) from letting
 # an upload erase the running image that happens to overlap slot1.
 
+DT_HAS_SLOT1 := $(dt_nodelabel_enabled,slot1_partition)
+
 config ZCBOR
-	default y if BT && BOOTLOADER_MCUBOOT
+	default y if BT && BOOTLOADER_MCUBOOT && $(DT_HAS_SLOT1)
 
 config MCUMGR
-	default y if BT && BOOTLOADER_MCUBOOT
+	default y if BT && BOOTLOADER_MCUBOOT && $(DT_HAS_SLOT1)
 
 config MCUMGR_TRANSPORT_BT
 	default y if BT && BOOTLOADER_MCUBOOT

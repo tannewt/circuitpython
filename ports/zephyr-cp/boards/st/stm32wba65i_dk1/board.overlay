@@ -9,31 +9,11 @@
     status = "okay";
 };
 
-/*
- * USB on STM32WBA requires VOS Range 1. Zephyr selects VOS from HCLK, and
- * 16 MHz keeps it in Range 2, which trips an assertion in udc_stm32.
- * Run SYSCLK from full 32 MHz HSE so VOS is set to Range 1.
+/* The USB device controller (zephyr_udc0, including the OTG HS PHY and the
+ * HSE/VOS clocking it needs) and the joystick-selector boot button are
+ * defined in the mcuboot fork's dts/st/stm32wba65i_dk1.dtsi, which sysbuild
+ * prepends to this image's overlays so both images share the definitions.
  */
-&clk_hse {
-	/delete-property/ hse-div2;
-};
-
-&rcc {
-	clock-frequency = <DT_FREQ_M(32)>;
-	ahb5-prescaler = <1>;
-};
-
-zephyr_udc0: &usbotg_hs {
-	status = "okay";
-};
-
-&otghs_phy {
-	/* OTG HS clock source is 32 MHz HSE */
-	clocks = <&rcc STM32_CLOCK(AHB2, 15)>,
-		 <&rcc STM32_SRC_HSE OTGHS_SEL(0)>;
-	clock-reference = "SYSCFG_OTG_HS_PHY_CLK_32MHz";
-	status = "okay";
-};
 
 &bt_hci_wba {
 	/* Use HASH IRQ to allocate Radio SW Low Process (Warning HASH is not used) */

@@ -1,13 +1,6 @@
 // nRF54LM20 DK has USB. Include the main app overlay for USB CDC ACM console and data.
 #include "../../../app.overlay"
 
-// Link application starting at 0x0 instead of slot0_partition (no mcuboot yet).
-/ {
-	chosen {
-		zephyr,code-partition = &cpuapp_rram;
-	};
-};
-
 // I2C bus on P1.13 (SDA) and P1.23 (SCL).
 &pinctrl {
 	i2c21_default: i2c21_default {

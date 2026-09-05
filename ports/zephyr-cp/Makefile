@@ -93,8 +93,19 @@ $(BUILD)/firmware.hex: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 $(BUILD)/firmware.exe: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $(BUILD)/zephyr-cp/zephyr/zephyr.exe $@
 
+# Boards the Adaboot fork owns the memory map for (BOARD id minus its vendor
+# prefix is the fork's boards.toml key): pull in its generated make fragment,
+# which carries MCUBOOT_UF2_APP_BASE -- the app slot's offset within its
+# flash device, i.e. the base address .uf2 files must use (Adaboot's UF2
+# writer routes blocks by flash-area offset, see boot/zephyr/uf2_disk.c).
+ADABOOT_KEY := $(subst $(word 1,$(subst _, ,$(BOARD)))_,,$(BOARD))
+-include bootloader/mcuboot/conf/$(ADABOOT_KEY)-autogen.mk
+
 $(BUILD)/firmware.uf2: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
-	python zephyr/scripts/build/uf2conv.py -c -b $(shell grep CONFIG_FLASH_LOAD_OFFSET $(BUILD)/zephyr-cp/zephyr/.config | cut -d= -f2) -o $@ $(BUILD)/zephyr-cp/zephyr/zephyr.signed.bin
+	# Base for uf2conv: MCUBOOT_UF2_APP_BASE from the fork's autogen .mk for
+	# Adaboot boards; CONFIG_FLASH_LOAD_OFFSET for the rest (native-UF2
+	# boards whose flash base is 0).
+	python zephyr/scripts/build/uf2conv.py -c -b $(if $(MCUBOOT_UF2_APP_BASE),$(MCUBOOT_UF2_APP_BASE),$(shell grep "^CONFIG_FLASH_LOAD_OFFSET=" $(BUILD)/zephyr-cp/zephyr/.config | cut -d= -f2)) -o $@ $(BUILD)/zephyr-cp/zephyr/zephyr.signed.bin
 
 $(BUILD)/firmware.rps: $(BUILD)/zephyr-cp/zephyr/zephyr.elf
 	cp $(BUILD)/zephyr-cp/zephyr/zephyr.rps $@

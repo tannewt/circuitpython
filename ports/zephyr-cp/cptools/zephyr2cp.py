@@ -328,6 +328,12 @@ def find_flash_devices(device_tree):
         value = device_tree.root.nodes["chosen"].props[k]
         path2chosen[value.to_path()] = k
 
+    # Paths of zephyr,sim-flash controllers (the flash simulator used by
+    # native_sim). The simulator driver defines its device on the controller
+    # node, not on its soc-nv-flash child, so the controller must be used and
+    # the child skipped.
+    sim_flash_controller_paths = set()
+
     flashes = []
     logger.debug("Flash devices:")
 
@@ -365,6 +371,22 @@ def find_flash_devices(device_tree):
         logger.debug(f"  {node.labels[0] if node.labels else node.name} drivers: {drivers}")
 
         if "flash" not in drivers:
+            continue
+
+        if compatible[0] == "zephyr,sim-flash":
+            # Always use the controller for the flash simulator, even when it
+            # is chosen as zephyr,flash-controller.
+            sim_flash_controller_paths.add(node.path)
+            if node.labels:
+                flashes.append(node.labels[0])
+            continue
+
+        # The soc-nv-flash child of a flash simulator has no device defined on
+        # it; the controller (handled above) is the flash device.
+        if node.parent is not None and node.parent.path in sim_flash_controller_paths:
+            logger.debug(
+                f"  skipping flash {node.labels[0] if node.labels else node.name} (sim-flash child)"
+            )
             continue
 
         # Skip chosen nodes because they are used by Zephyr

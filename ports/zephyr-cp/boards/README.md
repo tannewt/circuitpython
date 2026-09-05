@@ -265,7 +265,7 @@ is flashed via J-Link.
   serial recovery.
 - Boards that don't use mcuboot but share the fork's standard partitioning
   (UF2-native RP2 boards, XIP/direct-boot boards like SiWG917 and
-  STM32H750B-DK, and nRF54LM20 DK which isn't on mcuboot yet) have their layout
+  STM32H750B-DK) have their layout
   in `bootloader/mcuboot/dts/<vendor>/<board>.dtsi` too, applied to the app image
   only — no `#include` in the board overlay. Both the layout paths and which
   boards boot via mcuboot are declared in
