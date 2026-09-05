@@ -199,7 +199,12 @@ extern void common_hal_mcu_enable_interrupts(void);
 
 #define BYTES_PER_WORD (4)
 
+// Bit 0 of a code pointer selects the Thumb instruction set.
+#if defined(__thumb__)
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
+#else
+#define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)(p))
+#endif
 
 // Track stack usage. Expose results via ustack module.
 #define MICROPY_MAX_STACK_USAGE       (0)
