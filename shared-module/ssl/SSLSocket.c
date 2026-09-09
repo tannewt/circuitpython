@@ -325,7 +325,16 @@ ssl_sslsocket_obj_t *common_hal_ssl_sslcontext_wrap_socket(ssl_sslcontext_obj_t 
         goto cleanup;
     }
 
-    if (self->crt_bundle_attach != NULL) {
+    if (server_side && !(self->cacert_buf && self->cacert_bytes)) {
+        // On a server the CA store is about authenticating *clients*. A
+        // context that only had load_cert_chain() called on it -- the normal
+        // HTTPS-server setup -- must not demand a client certificate, which is
+        // what the default root bundle turned into: every handshake failed
+        // with MBEDTLS_ERR_SSL_NO_CLIENT_CERTIFICATE. Match CPython, where a
+        // server-side context defaults to CERT_NONE; a program that loads its
+        // own CA with load_verify_locations() still gets client verification.
+        mbedtls_ssl_conf_authmode(&o->conf, MBEDTLS_SSL_VERIFY_NONE);
+    } else if (self->crt_bundle_attach != NULL) {
         mbedtls_ssl_conf_authmode(&o->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
         self->crt_bundle_attach(&o->conf);
     } else if (self->cacert_buf && self->cacert_bytes) {
