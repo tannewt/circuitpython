@@ -6,9 +6,9 @@
 
 // The only port-specific step: turn a hardware key slot (here, an eFuse key
 // block index) into a PSA key id. Everything after that -- hmac_sha256(),
-// verify_hmac_sha256() -- lives in shared-module/securekey/HardwareKey.c.
+// verify_hmac_sha256() -- lives in shared-module/hardwarekey/HardwareKey.c.
 
-#include "shared-module/securekey/HardwareKey.h"
+#include "shared-module/hardwarekey/HardwareKey.h"
 
 #include "py/runtime.h"
 
@@ -25,7 +25,7 @@
 #include "psa_crypto_driver_esp_hmac_opaque.h"
 
 #if !defined(ESP_HMAC_OPAQUE_DRIVER_ENABLED)
-#error "securekey requires the ESP-IDF PSA opaque HMAC driver (SOC_HMAC_SUPPORTED targets only)"
+#error "hardwarekey requires the ESP-IDF PSA opaque HMAC driver (SOC_HMAC_SUPPORTED targets only)"
 #endif
 
 // ESP32-S3 has BLOCK_KEY0..BLOCK_KEY5; other HMAC-capable chips match. Python
@@ -43,7 +43,7 @@
 // raspberrypi port's reset path for the contrasting case).
 static psa_key_id_t imported_key[EFUSE_KEY_BLOCK_COUNT];
 
-void common_hal_securekey_hardwarekey_construct(securekey_hardwarekey_obj_t *self, mp_int_t key_slot) {
+void common_hal_hardwarekey_hardwarekey_construct(hardwarekey_hardwarekey_obj_t *self, mp_int_t key_slot) {
     if (key_slot < 0 || key_slot >= EFUSE_KEY_BLOCK_COUNT) {
         mp_raise_ValueError_varg(MP_ERROR_TEXT("%q must be %d-%d"),
             MP_QSTR_key_slot, 0, EFUSE_KEY_BLOCK_COUNT - 1);
@@ -56,7 +56,7 @@ void common_hal_securekey_hardwarekey_construct(securekey_hardwarekey_obj_t *sel
 
     if (imported_key[key_slot] == 0) {
         // PSA is already initialized by ssl / hashlib, but psa_crypto_init() is
-        // idempotent and this keeps securekey usable on its own.
+        // idempotent and this keeps hardwarekey usable on its own.
         if (psa_crypto_init() != PSA_SUCCESS) {
             mp_raise_RuntimeError(MP_ERROR_TEXT("crypto init failed"));
         }

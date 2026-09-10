@@ -4,5 +4,5 @@
 //
 // SPDX-License-Identifier: MIT
 
-// No securekey module-level functions. The port-specific code is the
+// No hardwarekey module-level functions. The port-specific code is the
 // HardwareKey constructor in HardwareKey.c.

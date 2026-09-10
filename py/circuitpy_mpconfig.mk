@@ -561,10 +561,10 @@ CFLAGS += -DCIRCUITPY_SDCARDIO=$(CIRCUITPY_SDCARDIO)
 CIRCUITPY_SDIOIO ?= 0
 CFLAGS += -DCIRCUITPY_SDIOIO=$(CIRCUITPY_SDIOIO)
 
-# securekey: cryptographic operations with hardware-held, non-readable keys.
-# Off unless a port provides a common-hal/securekey backend.
-CIRCUITPY_SECUREKEY ?= 0
-CFLAGS += -DCIRCUITPY_SECUREKEY=$(CIRCUITPY_SECUREKEY)
+# hardwarekey: cryptographic operations with hardware-held, non-readable keys.
+# Off unless a port provides a common-hal/hardwarekey backend.
+CIRCUITPY_HARDWAREKEY ?= 0
+CFLAGS += -DCIRCUITPY_HARDWAREKEY=$(CIRCUITPY_HARDWAREKEY)
 
 CIRCUITPY_BLE_SERIAL_SERVICE ?= 0
 CFLAGS += -DCIRCUITPY_BLE_SERIAL_SERVICE=$(CIRCUITPY_BLE_SERIAL_SERVICE)

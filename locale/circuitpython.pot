@@ -1459,15 +1459,15 @@ msgstr ""
 msgid "invalid setting"
 msgstr ""
 
-#: ports/espressif/common-hal/securekey/HardwareKey.c
+#: ports/espressif/common-hal/hardwarekey/HardwareKey.c
 msgid "key_slot is not configured for HMAC use"
 msgstr ""
 
-#: ports/espressif/common-hal/securekey/HardwareKey.c
+#: ports/espressif/common-hal/hardwarekey/HardwareKey.c
 msgid "crypto init failed"
 msgstr ""
 
-#: shared-module/securekey/HardwareKey.c
+#: shared-module/hardwarekey/HardwareKey.c
 msgid "HMAC calculation failed"
 msgstr ""
 

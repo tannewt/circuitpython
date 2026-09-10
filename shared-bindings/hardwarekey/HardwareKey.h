@@ -9,8 +9,8 @@
 #include "py/obj.h"
 
 // Object struct and the common_hal_* contract (construct is per-port; the
-// operations are implemented once in shared-module/securekey/HardwareKey.c).
-#include "shared-module/securekey/HardwareKey.h"
+// operations are implemented once in shared-module/hardwarekey/HardwareKey.c).
+#include "shared-module/hardwarekey/HardwareKey.h"
 
 // Type object used in Python. Shared between ports.
-extern const mp_obj_type_t securekey_hardwarekey_type;
+extern const mp_obj_type_t hardwarekey_hardwarekey_type;
