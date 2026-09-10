@@ -4,15 +4,21 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The only port-specific step: turn a hardware key slot (here, an eFuse key
-// block index) into a PSA key id. Everything after that -- hmac_sha256(),
-// verify_hmac_sha256() -- lives in shared-module/hardwarekey/HardwareKey.c.
+// The one port-specific step: turn an eFuse key block into a PSA key id.
+// Everything after that -- hmac_sha256(), verify_hmac_sha256() -- lives in
+// shared-module/hardwarekey/HardwareKey.c.
+
+#include "common-hal/hardwarekey/__init__.h"
+#include "common-hal/hardwarekey/board.h"
 
 #include "shared-module/hardwarekey/HardwareKey.h"
 
-#include "py/runtime.h"
-
 #include "esp_efuse.h"
+
+// board.h hardcodes the slot count (enum values can't be used in #if); make sure
+// it still matches this chip's eFuse layout.
+_Static_assert(HARDWAREKEY_EFUSE_SLOT_COUNT == EFUSE_BLK_KEY_MAX - EFUSE_BLK_KEY0,
+    "eFuse key block count changed; update common-hal/hardwarekey/board.h");
 
 // Pulls in MBEDTLS_CONFIG_FILE (esp_config.h), which is what defines
 // ESP_HMAC_OPAQUE_DRIVER_ENABLED on HMAC-capable chips. Including only
@@ -28,60 +34,55 @@
 #error "hardwarekey requires the ESP-IDF PSA opaque HMAC driver (SOC_HMAC_SUPPORTED targets only)"
 #endif
 
-// ESP32-S3 has BLOCK_KEY0..BLOCK_KEY5; other HMAC-capable chips match. Python
-// key_slot 0-5 maps to EFUSE_BLK_KEY0 + key_slot.
-#define EFUSE_KEY_BLOCK_COUNT 6
-
 // The ESP HMAC peripheral consumes a 256-bit eFuse key.
 #define HMAC_KEY_BITS 256
 
-// One PSA key is imported per eFuse block on first use and reused thereafter, so
-// repeated HardwareKey() construction does not accumulate PSA key slots. The
-// keys are volatile references (no key material); at most EFUSE_KEY_BLOCK_COUNT
-// are ever imported. On espressif this cache is safe across a CircuitPython soft
-// reset because ESP-IDF initializes PSA once at boot and never frees it (see the
-// raspberrypi port's reset path for the contrasting case).
-static psa_key_id_t imported_key[EFUSE_KEY_BLOCK_COUNT];
+// One PSA key is imported per eFuse block. The imports are volatile references
+// (no key material) and survive a CircuitPython soft reset -- ESP-IDF initializes
+// PSA once at boot and never frees it -- so this only runs once per block.
+static psa_key_id_t import_efuse_hmac_key(mp_int_t slot) {
+    psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+    psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
+    psa_set_key_bits(&attr, HMAC_KEY_BITS);
+    psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
+    psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE | PSA_KEY_USAGE_VERIFY_MESSAGE);
+    psa_set_key_lifetime(&attr, PSA_KEY_LIFETIME_ESP_HMAC_VOLATILE);
 
-void common_hal_hardwarekey_hardwarekey_construct(hardwarekey_hardwarekey_obj_t *self, mp_int_t key_slot) {
-    if (key_slot < 0 || key_slot >= EFUSE_KEY_BLOCK_COUNT) {
-        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q must be %d-%d"),
-            MP_QSTR_key_slot, 0, EFUSE_KEY_BLOCK_COUNT - 1);
+    // Import data is a *reference* to the eFuse block, not key material. The
+    // driver independently re-checks the HMAC_UP purpose and refuses anything else.
+    esp_hmac_opaque_key_t keyref = { .efuse_key_id = (uint8_t)slot };
+
+    psa_key_id_t key_id = 0;
+    if (psa_import_key(&attr, (const uint8_t *)&keyref, sizeof(keyref), &key_id) != PSA_SUCCESS) {
+        return 0;
     }
+    return key_id;
+}
 
-    esp_efuse_block_t block = (esp_efuse_block_t)(EFUSE_BLK_KEY0 + key_slot);
+bool hardwarekey_efuse_slot_load(mp_int_t slot, hardwarekey_hardwarekey_obj_t *key) {
+    key->key_slot = slot;
+    key->key_id = 0;
+    key->purpose = HARDWAREKEY_PURPOSE_UNUSED;
+    key->exportable = false;
+
+    esp_efuse_block_t block = (esp_efuse_block_t)(EFUSE_BLK_KEY0 + slot);
     if (esp_efuse_get_key_purpose(block) != ESP_EFUSE_KEY_PURPOSE_HMAC_UP) {
-        mp_raise_ValueError(MP_ERROR_TEXT("key_slot is not configured for HMAC use"));
+        return false;
     }
 
-    if (imported_key[key_slot] == 0) {
-        // PSA is already initialized by ssl / hashlib, but psa_crypto_init() is
-        // idempotent and this keeps hardwarekey usable on its own.
-        if (psa_crypto_init() != PSA_SUCCESS) {
-            mp_raise_RuntimeError(MP_ERROR_TEXT("crypto init failed"));
-        }
-
-        psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
-        psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
-        psa_set_key_bits(&attr, HMAC_KEY_BITS);
-        psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
-        psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE | PSA_KEY_USAGE_VERIFY_MESSAGE);
-        psa_set_key_lifetime(&attr, PSA_KEY_LIFETIME_ESP_HMAC_VOLATILE);
-
-        // Import data is a *reference* to the eFuse block, not key material. The
-        // driver independently re-checks the HMAC_UP purpose and refuses
-        // anything else.
-        esp_hmac_opaque_key_t keyref = { .efuse_key_id = (uint8_t)key_slot };
-
-        psa_key_id_t key_id = 0;
-        psa_status_t status = psa_import_key(&attr, (const uint8_t *)&keyref, sizeof(keyref), &key_id);
-        if (status != PSA_SUCCESS) {
-            mp_raise_ValueError(MP_ERROR_TEXT("key_slot is not configured for HMAC use"));
-        }
-        imported_key[key_slot] = key_id;
+    // PSA is already initialized by ssl / hashlib, but psa_crypto_init() is
+    // idempotent and keeps hardwarekey working on a build with neither.
+    if (psa_crypto_init() != PSA_SUCCESS) {
+        return false;
     }
 
-    self->key_id = imported_key[key_slot];
-    self->key_slot = key_slot;
-    self->exportable = !esp_efuse_get_key_dis_read(block);
+    psa_key_id_t key_id = import_efuse_hmac_key(slot);
+    if (key_id == 0) {
+        return false;
+    }
+
+    key->key_id = key_id;
+    key->purpose = HARDWAREKEY_PURPOSE_HMAC;
+    key->exportable = !esp_efuse_get_key_dis_read(block);
+    return true;
 }

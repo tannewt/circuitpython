@@ -1459,18 +1459,6 @@ msgstr ""
 msgid "invalid setting"
 msgstr ""
 
-#: ports/espressif/common-hal/hardwarekey/HardwareKey.c
-msgid "key_slot is not configured for HMAC use"
-msgstr ""
-
-#: ports/espressif/common-hal/hardwarekey/HardwareKey.c
-msgid "crypto init failed"
-msgstr ""
-
-#: shared-module/hardwarekey/HardwareKey.c
-msgid "HMAC calculation failed"
-msgstr ""
-
 #: ports/espressif/common-hal/espidf/__init__.c
 msgid "Generic Failure"
 msgstr ""
@@ -2371,6 +2359,7 @@ msgid "%q length must be <= %d"
 msgstr ""
 
 #: py/argcheck.c shared-bindings/usb_hid/Device.c
+#: shared-module/hardwarekey/HardwareKey.c
 msgid "%q length must be %d"
 msgstr ""
 
@@ -4376,6 +4365,10 @@ msgstr ""
 
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
+msgstr ""
+
+#: shared-module/hardwarekey/HardwareKey.c
+msgid "HMAC calculation failed"
 msgstr ""
 
 #: shared-module/hmac/HMAC.c

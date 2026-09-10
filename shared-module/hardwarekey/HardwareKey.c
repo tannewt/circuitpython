@@ -50,6 +50,10 @@ mp_int_t common_hal_hardwarekey_hardwarekey_get_key_slot(hardwarekey_hardwarekey
     return self->key_slot;
 }
 
+hardwarekey_purpose_t common_hal_hardwarekey_hardwarekey_get_purpose(hardwarekey_hardwarekey_obj_t *self) {
+    return self->purpose;
+}
+
 bool common_hal_hardwarekey_hardwarekey_get_exportable(hardwarekey_hardwarekey_obj_t *self) {
     return self->exportable;
 }

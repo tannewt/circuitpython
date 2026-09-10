@@ -28,6 +28,9 @@
 #include "common-hal/busio/SPI.h"
 #include "common-hal/busio/UART.h"
 #include "common-hal/dualbank/__init__.h"
+#if CIRCUITPY_HARDWAREKEY
+#include "common-hal/hardwarekey/__init__.h"
+#endif
 #include "common-hal/ps2io/Ps2.h"
 #include "common-hal/watchdog/WatchDogTimer.h"
 #include "common-hal/socketpool/Socket.h"
@@ -286,6 +289,12 @@ safe_mode_t port_init(void) {
     #endif
 
     _never_reset_spi_ram_flash();
+
+    #if CIRCUITPY_HARDWAREKEY
+    // Populate board.EFUSE_KEY* from the eFuse key blocks. eFuse reads and the
+    // PSA key import need no filesystem or VM, so this is safe here.
+    espressif_hardwarekey_init();
+    #endif
 
     esp_reset_reason_t reason = esp_reset_reason();
     switch (reason) {

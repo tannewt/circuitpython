@@ -8,6 +8,7 @@
 #include "py/objstr.h"
 #include "py/runtime.h"
 
+#include "shared-bindings/hardwarekey/__init__.h"
 #include "shared-bindings/hardwarekey/HardwareKey.h"
 
 #define HMAC_SHA256_DIGEST_SIZE HARDWAREKEY_HMAC_SHA256_DIGEST_SIZE
@@ -15,35 +16,23 @@
 //| class HardwareKey:
 //|     """A key held in a hardware key store, usable but not readable.
 //|
-//|     The constructor argument that selects the key is **port-defined**:
+//|     This class cannot be instantiated. Every hardware key slot the board has
+//|     is exposed as a fixed `HardwareKey` in :mod:`board` -- for example
+//|     ``board.EFUSE_KEY0`` -- just like pins. A slot with no key burned into it
+//|     still has a `HardwareKey` object; its `purpose` is `hardwarekey.UNUSED`.
 //|
-//|     * **espressif**: ``key_slot`` is the eFuse key block index (``0`` -
-//|       ``5``, i.e. ``BLOCK_KEY0`` - ``BLOCK_KEY5``). The block must already
-//|       be burned with purpose ``HMAC_UP``; construction fails otherwise, so
-//|       a `HardwareKey` can never be pointed at a block reserved for flash
-//|       encryption, secure boot, or the Digital Signature peripheral.
-//|     """
+//|     On espressif the slots are the eFuse key blocks (``BLOCK_KEY0`` -
+//|     ``BLOCK_KEY5``); a slot is usable only if its block was burned with
+//|     purpose ``HMAC_UP``."""
 //|
-//|     def __init__(self, key_slot: int) -> None:
-//|         """Bind to the hardware key identified by ``key_slot``.
-//|
-//|         :param int key_slot: port-defined identifier for the hardware key
-//|         :raises ValueError: if ``key_slot`` does not name a usable key
-//|         """
-//|         ...
-static mp_obj_t hardwarekey_hardwarekey_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    enum { ARG_key_slot };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_key_slot, MP_ARG_REQUIRED | MP_ARG_INT },
-    };
-    mp_arg_check_num(n_args, n_kw, 1, 1, true);
-    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    hardwarekey_hardwarekey_obj_t *self = mp_obj_malloc(hardwarekey_hardwarekey_obj_t, &hardwarekey_hardwarekey_type);
-    common_hal_hardwarekey_hardwarekey_construct(self, args[ARG_key_slot].u_int);
-
-    return MP_OBJ_FROM_PTR(self);
+static void hardwarekey_hardwarekey_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    hardwarekey_hardwarekey_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->name != MP_QSTRnull) {
+        mp_printf(print, "<HardwareKey %q>", self->name);
+    } else {
+        mp_printf(print, "<HardwareKey slot %d>", (int)self->key_slot);
+    }
 }
 
 //|     def hmac_sha256(self, data: ReadableBuffer) -> bytes:
@@ -91,13 +80,25 @@ static mp_obj_t hardwarekey_hardwarekey_verify_hmac_sha256(mp_obj_t self_in, mp_
 static MP_DEFINE_CONST_FUN_OBJ_3(hardwarekey_hardwarekey_verify_hmac_sha256_obj, hardwarekey_hardwarekey_verify_hmac_sha256);
 
 //|     key_slot: int
-//|     """The port-defined key identifier this handle is bound to. (read-only)"""
+//|     """The port-defined key identifier this handle is bound to. On espressif,
+//|     the eFuse key block index. (read-only)"""
 static mp_obj_t hardwarekey_hardwarekey_get_key_slot(mp_obj_t self_in) {
     hardwarekey_hardwarekey_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return MP_OBJ_NEW_SMALL_INT(common_hal_hardwarekey_hardwarekey_get_key_slot(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(hardwarekey_hardwarekey_get_key_slot_obj, hardwarekey_hardwarekey_get_key_slot);
 MP_PROPERTY_GETTER(hardwarekey_hardwarekey_key_slot_obj, (mp_obj_t)&hardwarekey_hardwarekey_get_key_slot_obj);
+
+//|     purpose: Purpose
+//|     """What this key slot is provisioned for -- `hardwarekey.HMAC_UP` or
+//|     `hardwarekey.UNUSED`. (read-only)"""
+//|
+static mp_obj_t hardwarekey_hardwarekey_get_purpose(mp_obj_t self_in) {
+    hardwarekey_hardwarekey_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    return hardwarekey_purpose_to_obj(common_hal_hardwarekey_hardwarekey_get_purpose(self));
+}
+MP_DEFINE_CONST_FUN_OBJ_1(hardwarekey_hardwarekey_get_purpose_obj, hardwarekey_hardwarekey_get_purpose);
+MP_PROPERTY_GETTER(hardwarekey_hardwarekey_purpose_obj, (mp_obj_t)&hardwarekey_hardwarekey_get_purpose_obj);
 
 //|     exportable: bool
 //|     """Whether the raw key bytes can ever leave the hardware. Always
@@ -118,6 +119,7 @@ static const mp_rom_map_elem_t hardwarekey_hardwarekey_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_hmac_sha256), MP_ROM_PTR(&hardwarekey_hardwarekey_hmac_sha256_obj) },
     { MP_ROM_QSTR(MP_QSTR_verify_hmac_sha256), MP_ROM_PTR(&hardwarekey_hardwarekey_verify_hmac_sha256_obj) },
     { MP_ROM_QSTR(MP_QSTR_key_slot), MP_ROM_PTR(&hardwarekey_hardwarekey_key_slot_obj) },
+    { MP_ROM_QSTR(MP_QSTR_purpose), MP_ROM_PTR(&hardwarekey_hardwarekey_purpose_obj) },
     { MP_ROM_QSTR(MP_QSTR_exportable), MP_ROM_PTR(&hardwarekey_hardwarekey_exportable_obj) },
 };
 static MP_DEFINE_CONST_DICT(hardwarekey_hardwarekey_locals_dict, hardwarekey_hardwarekey_locals_dict_table);
@@ -126,6 +128,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     hardwarekey_hardwarekey_type,
     MP_QSTR_HardwareKey,
     MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
-    make_new, hardwarekey_hardwarekey_make_new,
+    print, hardwarekey_hardwarekey_print,
     locals_dict, &hardwarekey_hardwarekey_locals_dict
     );

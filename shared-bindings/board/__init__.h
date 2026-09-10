@@ -11,6 +11,17 @@
 
 #include "shared-bindings/microcontroller/Pin.h"  // for the pin definitions
 
+// A port can inject extra fixed entries into every board's globals table by
+// defining CIRCUITPY_BOARD_EXTRA_DICT_ITEMS (a comma-terminated list of
+// { MP_ROM_QSTR(...), MP_ROM_PTR(...) } pairs). hardwarekey uses this for
+// board.EFUSE_KEY* on espressif.
+#if CIRCUITPY_HARDWAREKEY
+#include "common-hal/hardwarekey/board.h"
+#endif
+#ifndef CIRCUITPY_BOARD_EXTRA_DICT_ITEMS
+#define CIRCUITPY_BOARD_EXTRA_DICT_ITEMS
+#endif
+
 #if CIRCUITPY_MUTABLE_BOARD
 extern mp_obj_dict_t board_module_globals;
 #else
@@ -41,8 +52,10 @@ MP_DECLARE_CONST_FUN_OBJ_0(board_uart_obj);
 
 #define CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS \
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_board) }, \
-    { MP_ROM_QSTR(MP_QSTR_board_id), MP_ROM_PTR(&board_module_id_obj) },
+    { MP_ROM_QSTR(MP_QSTR_board_id), MP_ROM_PTR(&board_module_id_obj) }, \
+    CIRCUITPY_BOARD_EXTRA_DICT_ITEMS
 
 #define CIRCUITPYTHON_MUTABLE_BOARD_DICT_STANDARD_ITEMS \
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_board) }, \
-    { MP_ROM_QSTR(MP_QSTR_board_id), MP_OBJ_FROM_PTR(&board_module_id_obj) },
+    { MP_ROM_QSTR(MP_QSTR_board_id), MP_OBJ_FROM_PTR(&board_module_id_obj) }, \
+    CIRCUITPY_BOARD_EXTRA_DICT_ITEMS
