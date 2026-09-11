@@ -35,6 +35,20 @@ static void hardwarekey_hardwarekey_print(const mp_print_t *print, mp_obj_t self
     }
 }
 
+//|     def __bool__(self) -> bool:
+//|         """``False`` if `purpose` is `hardwarekey.UNUSED`, ``True`` otherwise.
+//|         This lets you write ``if key:`` to check whether a slot is usable."""
+//|         ...
+static mp_obj_t hardwarekey_hardwarekey_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
+    hardwarekey_hardwarekey_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    switch (op) {
+        case MP_UNARY_OP_BOOL:
+            return mp_obj_new_bool(common_hal_hardwarekey_hardwarekey_get_purpose(self) != HARDWAREKEY_PURPOSE_UNUSED);
+        default:
+            return MP_OBJ_NULL; // op not supported
+    }
+}
+
 //|     key_slot: int
 //|     """The port-defined key identifier this handle is bound to. On espressif,
 //|     the eFuse key block index. (read-only)"""
@@ -83,5 +97,6 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_HardwareKey,
     MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
     print, hardwarekey_hardwarekey_print,
+    unary_op, hardwarekey_hardwarekey_unary_op,
     locals_dict, &hardwarekey_hardwarekey_locals_dict
     );
