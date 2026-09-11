@@ -12,8 +12,6 @@
 
 #include "psa/crypto.h"
 
-#define HARDWAREKEY_HMAC_SHA256_DIGEST_SIZE 32
-
 // What a hardware key slot is provisioned for. UNUSED means no key has been
 // burned into the slot (or it is burned for something this module does not
 // expose); the slot is present in `board` but not usable.
@@ -39,12 +37,10 @@ typedef struct {
 // HardwareKey objects are created by the port at startup, one per hardware key
 // slot, and placed in `board`; application code never constructs them. The
 // per-port startup code fills in key_id, key_slot, purpose, exportable and name.
+// The key is used by passing the object to hmac.new().
 
-// Implemented once in shared-module/hardwarekey/HardwareKey.c on top of PSA.
-void common_hal_hardwarekey_hardwarekey_hmac_sha256(hardwarekey_hardwarekey_obj_t *self,
-    const uint8_t *data, size_t data_len, uint8_t *mac_out, size_t mac_out_len);
-bool common_hal_hardwarekey_hardwarekey_verify_hmac_sha256(hardwarekey_hardwarekey_obj_t *self,
-    const uint8_t *data, size_t data_len, const uint8_t *mac, size_t mac_len);
 mp_int_t common_hal_hardwarekey_hardwarekey_get_key_slot(hardwarekey_hardwarekey_obj_t *self);
 hardwarekey_purpose_t common_hal_hardwarekey_hardwarekey_get_purpose(hardwarekey_hardwarekey_obj_t *self);
 bool common_hal_hardwarekey_hardwarekey_get_exportable(hardwarekey_hardwarekey_obj_t *self);
+// The PSA key id, for hmac.new(). 0 if the slot is unused.
+psa_key_id_t common_hal_hardwarekey_hardwarekey_get_key_id(hardwarekey_hardwarekey_obj_t *self);

@@ -67,6 +67,12 @@ void common_hal_hmac_digest(hmac_hmac_obj_t *self, uint8_t *out, size_t out_len)
     if (imported) {
         psa_destroy_key(key_id);
     }
+
+    if (status == PSA_ERROR_NOT_PERMITTED) {
+        // A hardware key can be locked to one digest (the ESP32 HMAC peripheral
+        // only does SHA-256).
+        mp_raise_ValueError(MP_ERROR_TEXT("key does not support this digest"));
+    }
     check_psa(status);
 }
 

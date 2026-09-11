@@ -2359,7 +2359,6 @@ msgid "%q length must be <= %d"
 msgstr ""
 
 #: py/argcheck.c shared-bindings/usb_hid/Device.c
-#: shared-module/hardwarekey/HardwareKey.c
 msgid "%q length must be %d"
 msgstr ""
 
@@ -4028,6 +4027,10 @@ msgstr ""
 msgid "Unsupported hash algorithm"
 msgstr ""
 
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
+msgstr ""
+
 #: shared-bindings/i2cioexpander/IOExpander.c
 msgid "num_pins must be 8 or 16"
 msgstr ""
@@ -4367,12 +4370,12 @@ msgstr ""
 msgid "unsupported colorspace for GifWriter"
 msgstr ""
 
-#: shared-module/hardwarekey/HardwareKey.c
-msgid "HMAC calculation failed"
+#: shared-module/hmac/HMAC.c
+msgid "HMAC operation failed"
 msgstr ""
 
 #: shared-module/hmac/HMAC.c
-msgid "HMAC operation failed"
+msgid "key does not support this digest"
 msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c

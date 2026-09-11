@@ -12,9 +12,17 @@
 #include "shared-bindings/hmac/HMAC.h"
 #include "shared-module/hmac/__init__.h"
 
+#if CIRCUITPY_HARDWAREKEY
+#include "shared-bindings/hardwarekey/HardwareKey.h"
+#endif
+
 //| """Keyed hashing for message authentication
 //|
 //| |see_cpython_module| :mod:`cpython:hmac`.
+//|
+//| The key may be a ``bytes``-like object or, where the port provides them, a
+//| ``hardwarekey.HardwareKey`` -- so the same code works with a key in flash
+//| during development and a key held in hardware in production.
 //|
 //| Only ``"sha256"`` and ``"sha1"`` are supported for ``digestmod``.
 //| """
@@ -30,18 +38,34 @@ static psa_algorithm_t hash_alg_from_digestmod(mp_obj_t digestmod) {
 }
 
 static hmac_hmac_obj_t *hmac_new_internal(mp_obj_t key_in, psa_algorithm_t hash_alg) {
+    hmac_hmac_obj_t *self = mp_obj_malloc(hmac_hmac_obj_t, &hmac_hmac_type);
+
+    #if CIRCUITPY_HARDWAREKEY
+    if (mp_obj_is_type(key_in, &hardwarekey_hardwarekey_type)) {
+        psa_key_id_t key_id = common_hal_hardwarekey_hardwarekey_get_key_id(MP_OBJ_TO_PTR(key_in));
+        if (key_id == 0) {
+            mp_raise_ValueError(MP_ERROR_TEXT("hardware key slot is unused"));
+        }
+        common_hal_hmac_new(self, NULL, 0, key_id, hash_alg);
+        return self;
+    }
+    #endif
+
     mp_buffer_info_t keyinfo;
     mp_get_buffer_raise(key_in, &keyinfo, MP_BUFFER_READ);
-
-    hmac_hmac_obj_t *self = mp_obj_malloc(hmac_hmac_obj_t, &hmac_hmac_type);
     common_hal_hmac_new(self, keyinfo.buf, keyinfo.len, 0, hash_alg);
     return self;
 }
 
-//| def new(key: ReadableBuffer, msg: ReadableBuffer = b"", digestmod: str = ...) -> HMAC:
+//| def new(
+//|     key: ReadableBuffer | hardwarekey.HardwareKey,
+//|     msg: ReadableBuffer = b"",
+//|     digestmod: str = ...,
+//| ) -> HMAC:
 //|     """Create a new HMAC object.
 //|
-//|     :param ReadableBuffer key: the secret key
+//|     :param key: the secret key -- a ``bytes``-like object, or a
+//|       ``hardwarekey.HardwareKey`` on ports that provide it
 //|     :param ReadableBuffer msg: initial data to authenticate; add more with `HMAC.update()`
 //|     :param str digestmod: the digest name, ``"sha256"`` or ``"sha1"``. Required.
 //|     """
@@ -67,7 +91,9 @@ static mp_obj_t hmac_new(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_a
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(hmac_new_obj, 1, hmac_new);
 
-//| def digest(key: ReadableBuffer, msg: ReadableBuffer, digest: str) -> bytes:
+//| def digest(
+//|     key: ReadableBuffer | hardwarekey.HardwareKey, msg: ReadableBuffer, digest: str
+//| ) -> bytes:
 //|     """Return the HMAC of ``msg`` under ``key`` for the named ``digest``, in one call.
 //|
 //|     Equivalent to ``new(key, msg, digestmod=digest).digest()`` but does not build an

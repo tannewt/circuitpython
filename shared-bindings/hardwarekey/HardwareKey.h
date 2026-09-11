@@ -8,8 +8,7 @@
 
 #include "py/obj.h"
 
-// Object struct and the common_hal_* contract (construct is per-port; the
-// operations are implemented once in shared-module/hardwarekey/HardwareKey.c).
+// Object struct and the common_hal_* accessors.
 #include "shared-module/hardwarekey/HardwareKey.h"
 
 // Type object used in Python. Shared between ports.
