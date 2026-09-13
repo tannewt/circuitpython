@@ -134,26 +134,34 @@ static void packet_buffer_send_work_handler(struct k_work *work) {
     bleio_packet_buffer_obj_t *self = CONTAINER_OF(
         k_work_delayable_from_work(work), bleio_packet_buffer_obj_t, send_work);
 
-    // A notification is awaiting its completion callback; it will resubmit us.
-    if (self->packet_queued) {
-        return;
-    }
-    if (self->pending_size == 0) {
-        return;  // nothing staged
-    }
-
     // Server-side notify path only; clients write directly. characteristic is
-    // NULL after deinit, so bail before touching it (a completion callback can
-    // resubmit us after teardown).
+    // NULL after deinit, so bail before touching it (notify_complete_cb() can
+    // reschedule send_work after teardown).
     bleio_characteristic_obj_t *c = self->characteristic;
     if (c == NULL || self->client) {
         return;
     }
     if (!conn_is_valid(self)) {
-        // Stale connection: drop everything staged.
+        // The peer is gone: drop everything staged, and clear packet_queued even
+        // if a notification was handed to bt_gatt_notify_cb() already and its
+        // notify_complete_cb() has not run. It never will: Zephyr does not call
+        // the ATT callback for a PDU destroyed by a disconnect (att.c
+        // att_on_sent_cb(): "Bearer not connected, dropping ATT cb"). If
+        // packet_queued stayed set, the early return below would skip every
+        // later send on this buffer, even after the peer reconnects.
         self->pending_size = 0;
         self->packet_queued = false;
         return;
+    }
+
+    // A notification has been handed to bt_gatt_notify_cb() and its
+    // notify_complete_cb() has not run yet. That callback reschedules send_work,
+    // so this handler will run again once the controller has sent the PDU.
+    if (self->packet_queued) {
+        return;
+    }
+    if (self->pending_size == 0) {
+        return;  // nothing staged
     }
 
     // Staging keeps pending_size <= the negotiated ATT MTU payload, so the
@@ -176,27 +184,34 @@ static void packet_buffer_send_work_handler(struct k_work *work) {
         self->pending_index ^= 1;  // VM fills the other buffer next
         return;
     }
-    if (err == -ENOTCONN) {
-        // Peer disconnected — discard everything pending and cancel any
-        // pending delayed retry. (We're here only when packet_queued is clear,
-        // so no in-flight completion is owed.)
-        self->conn = NULL;
-        self->pending_size = 0;
-        self->packet_queued = false;
-        k_work_cancel_delayable(&self->send_work);
+    if (err == -ENOMEM || err == -EAGAIN) {
+        // No ATT TX buffer right now. The ATT TX pool is shared across all ATT
+        // traffic on all connections, so it can be full from other
+        // notifies/indications/responses even when we have nothing in flight.
+        // Running on the workqueue makes the allocator use K_NO_WAIT: it returns
+        // NULL and the stack returns -ENOMEM *before* copying or queueing a PDU —
+        // nothing sent, nothing dropped; the bytes are still in
+        // outgoing[pending_index]. Leave the data staged and reschedule ourselves
+        // after a short delay so we retry even when the VM is idle (no write/flush
+        // to drive us). The delay — not an immediate resubmit — keeps the workqueue
+        // from busy-looping against a full pool.
+        k_work_reschedule(&self->send_work, K_MSEC(2));
         return;
     }
-    // -ENOMEM / -EAGAIN: no ATT TX buffer right now. The ATT TX pool is shared
-    // across all ATT traffic on all connections, so it can be full from other
-    // notifies/indications/responses even when we have nothing in flight.
-    // Running on the workqueue makes the allocator use K_NO_WAIT: it returns
-    // NULL and the stack returns -ENOMEM *before* copying or queueing a PDU —
-    // nothing sent, nothing dropped; the bytes are still in
-    // outgoing[pending_index]. Leave the data staged and reschedule ourselves
-    // after a short delay so we retry even when the VM is idle (no write/flush
-    // to drive us). The delay — not an immediate resubmit — keeps the workqueue
-    // from busy-looping against a full pool.
-    k_work_reschedule(&self->send_work, K_MSEC(2));
+    if (err == -ENOTCONN) {
+        // Peer disconnected — forget the connection too. (We're here only when
+        // packet_queued is clear, so no in-flight completion is owed.)
+        self->conn = NULL;
+    }
+    // Any other error is not transient: -ENOTCONN (peer gone), -EPERM (link not
+    // encrypted and the characteristic requires it), -EINVAL (peer not
+    // subscribed; CONFIG_BT_GATT_ENFORCE_SUBSCRIPTION), -ENOENT (attribute not
+    // registered). Retrying would spin forever and wedge this buffer. Drop the
+    // staged packet, as nordic and espressif do on non-resource errors, and
+    // cancel any pending delayed retry.
+    self->pending_size = 0;
+    self->packet_queued = false;
+    k_work_cancel_delayable(&self->send_work);
 }
 
 // Shared core for both the Python-facing (allocating) and workflow
