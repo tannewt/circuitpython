@@ -6,13 +6,13 @@ during CI, typically the latest "3.x". However, incompatibilities with any
 supported CPython version are unintended.
 
 For documentation about the format of compressed translated strings, see
-supervisor/shared/translate/translate.h
+supervisor/shared/translate/compressed_string.h
 """
 
 from __future__ import print_function
 
 import bisect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 import sys
 
@@ -72,6 +72,46 @@ C_ESCAPES = {
     "'": "\\'",
     '"': '\\"',
 }
+
+# Reserved symbol values. 2 and 3 are unused for now but must not appear in
+# translated text either.
+QSTR_ESC = "\1"
+RESERVED_CHARS = {"\1", "\2", "\3"}
+
+# The first non-ASCII symbol value in the dense alphabet.
+ALPHABET_BASE = 0x80
+
+# Huffman codes are chosen per "class" of the previously decoded character.
+# These base classes are fixed in the C decoder (translate.c, base_class());
+# the generator collapses them with class_map[] into TRANSLATION_CLASSES tables.
+NUM_BASE_CLASSES = 7
+# Presets to try, as class_map. Each maps a base class to a table index.
+CLASS_PRESETS = (
+    (0, 0, 0, 0, 0, 0, 0),  # a single table: the tables cost more than they save
+    (0, 1, 1, 2, 2, 2, 1),  # space, letter, other
+    (0, 1, 2, 3, 4, 5, 1),  # non-ASCII shares the lowercase table
+    (0, 1, 2, 3, 4, 5, 6),  # non-ASCII has its own table
+)
+
+
+def base_class(c):
+    """Class of the character preceding the next symbol; None means start of string.
+    Computed on the (possibly remapped) character: remapped characters are >= 0x80
+    exactly when the original is, which is all the classification looks at."""
+    if c is None or c == " ":
+        return 0
+    o = ord(c)
+    if 0x61 <= o <= 0x7A:
+        return 1
+    if 0x41 <= o <= 0x5A:
+        return 2
+    if 0x30 <= o <= 0x39:
+        return 3
+    if o == 0x25:  # '%'
+        return 5
+    if o >= 0x80:
+        return 6
+    return 4
 
 
 # this must match the equivalent function in qstr.c
@@ -140,90 +180,188 @@ def iter_substrings(s, minlen, maxlen):
             yield s[begin : begin + n]
 
 
-translation_requires_uint16 = {"cs", "ja", "ko", "pl", "tr", "zh_Latn_pinyin"}
-
-
-def compute_unicode_offset(texts):
-    all_ch = set(" ".join(texts))
-    ch_160 = sorted(c for c in all_ch if 160 <= ord(c) < 255)
-    ch_256 = sorted(c for c in all_ch if 255 < ord(c))
-    if not ch_256:
-        return 0, 0
-    min_256 = ord(min(ch_256))
-    span = ord(max(ch_256)) - ord(min(ch_256)) + 1
-
-    if ch_160:
-        max_160 = ord(max(ch_160)) + 1
-    else:
-        max_160 = max(160, 255 - span)
-
-    if max_160 + span > 256:
-        return 0, 0
-
-    offstart = max_160
-    offset = min_256 - max_160
-    return offstart, offset
+# Languages whose non-ASCII alphabet does not fit the dense 8-bit alphabet and
+# therefore use 16-bit table entries.
+translation_requires_uint16 = {"ja", "ko"}
 
 
 @dataclass
 class EncodingTable:
-    values: object
-    lengths: object
-    words: object
-    canonical: object
-    extractor: object
-    apply_offset: object
-    remove_offset: object
+    # One entry per class table: list of symbols in canonical order.
+    values: list
+    # One entry per class table: list of code-length counts, padded to lengths_row.
+    lengths: list
+    lengths_row: int
+    class_map: tuple
+    # Per class table: symbol -> canonical code (string of '0'/'1').
+    canonical: list
+    # Dictionary words, in remapped characters, sorted by length.
+    words: list
+    word_start: int
+    # Dense alphabet: index -> original character. Empty in uint16 mode.
+    alphabet: list
+    # Original character -> remapped character (identity for ASCII).
+    remap: dict
     translation_qstr_bits: int
-    qstrs: object
-    qstrs_inv: object
+    qstrs: dict
+    qstrs_inv: dict
+    values_type: str
+    # Remapped text -> token list used to encode it. A token is a str (character
+    # or word) or a ("q", qstr) tuple.
+    tokens: dict = field(default_factory=dict)
+
+
+def remap_text(text, remap):
+    return "".join(remap.get(c, c) for c in text)
+
+
+def is_qstr(token):
+    return isinstance(token, tuple)
+
+
+def token_len(token):
+    return len(token[1]) if is_qstr(token) else len(token)
+
+
+def token_symbol(token):
+    """The Huffman symbol a token is coded as (qstrs share one escape symbol)."""
+    return QSTR_ESC if is_qstr(token) else token
+
+
+def code_lengths(counter):
+    """Huffman code lengths for a symbol counter. A lone symbol gets a 1-bit code."""
+    if len(counter) == 1:
+        return {next(iter(counter)): 1}
+    cb = huffman.codebook(counter.items())
+    return {k: len(v) for k, v in cb.items()}
+
+
+def canonical_codes(lengths):
+    """Canonical Huffman codes from a symbol -> length dict.
+    Returns (values in canonical order, per-length counts, symbol -> code)."""
+    if not lengths:
+        return [], [], {}
+    values = []
+    length_count = collections.Counter()
+    canonical = {}
+    renumbered = 0
+    last_length = None
+    for atom, length in sorted(lengths.items(), key=lambda x: (x[1], x[0])):
+        values.append(atom)
+        length_count[length] += 1
+        if last_length:
+            renumbered <<= length - last_length
+        canonical[atom] = "{0:0{width}b}".format(renumbered, width=length)
+        renumbered += 1
+        last_length = length
+    counts = [length_count.get(i, 0) for i in range(1, max(length_count) + 2)]
+    return values, counts, canonical
+
+
+def parse_optimal(
+    text, lens, class_map, words_by_first, qstrs_by_first, qstr_bits, unknown_len=32
+):
+    """Tokenize text with the fewest bits given per-class code lengths.
+    Symbols missing from a class table are allowed at a penalty so a parse always exists."""
+    n = len(text)
+    best = [math.inf] * (n + 1)
+    back = [None] * (n + 1)
+    best[0] = 0
+    for i in range(n):
+        if best[i] == math.inf:
+            continue
+        table = lens[class_map[base_class(text[i - 1] if i else None)]]
+        c = text[i]
+        cands = [c]
+        for w in words_by_first.get(c, ()):
+            if text.startswith(w, i):
+                cands.append(w)
+        for q in qstrs_by_first.get(c, ()):
+            if text.startswith(q, i):
+                cands.append(("q", q))
+        for tok in cands:
+            cost = table.get(token_symbol(tok), unknown_len)
+            if is_qstr(tok):
+                cost += qstr_bits
+            j = i + token_len(tok)
+            if best[i] + cost < best[j]:
+                best[j] = best[i] + cost
+                back[j] = tok
+    out = []
+    i = n
+    while i > 0:
+        tok = back[i]
+        out.append(tok)
+        i -= token_len(tok)
+    out.reverse()
+    return out
+
+
+def tally(texts, tokens, class_map):
+    """Symbol counts per class table for the given tokenizations."""
+    counts = collections.defaultdict(collections.Counter)
+    for text in texts:
+        pos = 0
+        for tok in tokens[text]:
+            cls = class_map[base_class(text[pos - 1] if pos else None)]
+            counts[cls][token_symbol(tok)] += 1
+            pos += token_len(tok)
+    return counts
+
+
+def encoded_bits(text, tokens, lens, class_map, qstr_bits):
+    bits = 0
+    pos = 0
+    for tok in tokens:
+        cls = class_map[base_class(text[pos - 1] if pos else None)]
+        bits += lens[cls][token_symbol(tok)]
+        if is_qstr(tok):
+            bits += qstr_bits
+        pos += token_len(tok)
+    return bits
 
 
 def compute_huffman_coding(qstrs, translation_name, translations, f, compression_level):
     # possible future improvement: some languages are better when consider len(k) > 2. try both?
     qstrs = dict((k, v) for k, v in qstrs.items() if len(k) > 3)
     qstr_strs = list(qstrs.keys())
-    texts = [t[1] for t in translations]
+    original_texts = [t[1] for t in translations]
     words = []
 
-    start_unused = 0x80
-    end_unused = 0xFF
-    max_ord = 0
-    offstart, offset = compute_unicode_offset(texts)
+    for text in original_texts:
+        bad = RESERVED_CHARS.intersection(text)
+        if bad:
+            raise ValueError(f"Translation contains reserved character {bad!r}: {text!r}")
 
-    def apply_offset(c):
-        oc = ord(c)
-        if oc >= offstart:
-            oc += offset
-        return chr(oc)
+    translation_name = translation_name.split("/")[-1].split(".")[0]
 
-    def remove_offset(c):
-        oc = ord(c)
-        if oc >= offstart:
-            oc = oc - offset
-        try:
-            return chr(oc)
-        except Exception as e:
-            raise ValueError(f"remove_offset {offstart=} {oc=}") from e
-
-    for text in texts:
-        for c in text:
-            c = remove_offset(c)
-            ord_c = ord(c)
-            max_ord = max(ord_c, max_ord)
-            if 0x80 <= ord_c < 0xFF:
-                end_unused = min(ord_c, end_unused)
-    max_words = end_unused - 0x80
+    # Dense alphabet: non-ASCII characters are renumbered from 0x80 by decreasing
+    # frequency so that all symbols fit in 8 bits. If there are too many of them,
+    # fall back to raw 16-bit code points.
+    hi_count = collections.Counter(c for t in original_texts for c in t if ord(c) >= 0x80)
+    if len(hi_count) <= 0x7F:
+        alphabet = [c for c, _ in hi_count.most_common()]
+        remap = {c: chr(ALPHABET_BASE + i) for i, c in enumerate(alphabet)}
+        word_start = ALPHABET_BASE + len(alphabet)
+        max_words = 0x100 - word_start
+        values_type = "uint8_t"
+    else:
+        if translation_name not in translation_requires_uint16:
+            raise ValueError(
+                f"Translation {translation_name} expected to fit in 8 bits but required 16 bits"
+            )
+        alphabet = []
+        remap = {}
+        # Words take the unused code points from 0x80 up to the lowest one in use.
+        end_unused = min([0xFF] + [o for o in map(ord, hi_count) if o < 0xFF])
+        word_start = ALPHABET_BASE
+        max_words = end_unused - word_start
+        values_type = "uint16_t"
     if compression_level < 5:
         max_words = 0
+    bits_per_codepoint = 16 if values_type == "uint16_t" else 8
 
-    bits_per_codepoint = 16 if max_ord > 255 else 8
-    values_type = "uint16_t" if max_ord > 255 else "uint8_t"
-    translation_name = translation_name.split("/")[-1].split(".")[0]
-    if max_ord > 255 and translation_name not in translation_requires_uint16:
-        raise ValueError(
-            f"Translation {translation_name} expected to fit in 8 bits but required 16 bits"
-        )
+    texts = [remap_text(t, remap) for t in original_texts]
 
     # Prune the qstrs to only those that appear in the texts
     qstr_counters = collections.Counter()
@@ -248,7 +386,7 @@ def compute_huffman_coding(qstrs, translation_name, translations, f, compression
         for t in texts:
             for atom in extractor.iter(t):
                 if atom in qstrs:
-                    atom = "\1"
+                    atom = QSTR_ESC
                 counter[atom] += 1
         cb = huffman.codebook(counter.items())
         lengths = sorted(dict((v, len(cb[k])) for k, v in counter.items()).items())
@@ -320,89 +458,142 @@ def compute_huffman_coding(qstrs, translation_name, translations, f, compression
         word = scores[0][0]
         words.append(word)
 
-    splitters = words[:]
-    if compression_level > 3:
-        splitters.extend(qstr_strs)
+    # Now that the dictionary is fixed, find the tokenization of each string that
+    # takes the fewest bits, with Huffman codes chosen per class of the previous
+    # character. Code lengths and tokenization depend on each other, so iterate
+    # a few rounds from the greedy tokenization; the final tokenization and the
+    # codes built from it are what get emitted, so they are always consistent.
+    use_qstrs = compression_level > 3
+    dp_qstrs = qstr_strs if use_qstrs else []
+    # Upper bound on the qstr index width while parsing; the real width is computed below.
+    est_qstr_bits = max([0] + [qstrs[q] for q in dp_qstrs]).bit_length()
+    words_by_first = collections.defaultdict(list)
+    for w in words:
+        words_by_first[w[0]].append(w)
+    qstrs_by_first = collections.defaultdict(list)
+    for q in dp_qstrs:
+        qstrs_by_first[q[0]].append(q)
 
-    words.sort(key=len)
-    extractor = TextSplitter(splitters)
-    counter = collections.Counter()
-    used_qstr = 0
+    greedy = TextSplitter(words + dp_qstrs)
+    greedy_tokens = {}
     for t in texts:
-        for atom in extractor.iter(t):
-            if atom in qstrs:
-                used_qstr = max(used_qstr, qstrs[atom])
-                atom = "\1"
-            counter[atom] += 1
-    cb = huffman.codebook(counter.items())
+        greedy_tokens[t] = [("q", a) if a in qstrs else a for a in greedy.iter(t)]
 
-    word_start = start_unused
+    max_translation_encoded_length = max(len(t.encode("utf-8")) for t in original_texts)
+    encoded_length_bits = max_translation_encoded_length.bit_length()
+
+    def table_bytes(counts, used_words):
+        nclasses = max(class_map) + 1
+        row = max(max(code_lengths(cn).values()) for cn in counts.values()) + 1
+        mchar = bits_per_codepoint // 8
+        n = sum(len(cn) for cn in counts.values()) * mchar  # values
+        n += nclasses * row  # lengths
+        n += 2 * (nclasses + 1)  # values_offset
+        n += NUM_BASE_CLASSES  # class_map
+        n += sum(len(w) for w in used_words) * mchar  # words
+        if used_words:
+            n += len(used_words[-1]) - len(used_words[0]) + 1  # wlencount
+        n += 2 * len(alphabet)
+        return n
+
+    best = None
+    for class_map in CLASS_PRESETS:
+        tokens = greedy_tokens
+        counts = tally(texts, tokens, class_map)
+        lens = {cls: code_lengths(cn) for cls, cn in counts.items()}
+        for _ in range(3):
+            tokens = {
+                t: parse_optimal(t, lens, class_map, words_by_first, qstrs_by_first, est_qstr_bits)
+                for t in texts
+            }
+            counts = tally(texts, tokens, class_map)
+            lens = {cls: code_lengths(cn) for cls, cn in counts.items()}
+        used_symbols = set().union(*counts.values())
+        used_words = sorted((w for w in words if w in used_symbols), key=len)
+        size = table_bytes(counts, used_words) + sum(
+            (encoded_length_bits + encoded_bits(t, tokens[t], lens, class_map, est_qstr_bits) + 7)
+            // 8
+            for t in texts
+        )
+        if best is None or size < best[0]:
+            best = (size, class_map, tokens, counts, lens, used_words)
+    size, class_map, tokens, counts, lens, words = best
+
+    used_qstr = 0
+    for toks in tokens.values():
+        for tok in toks:
+            if is_qstr(tok):
+                used_qstr = max(used_qstr, qstrs[tok[1]])
+    translation_qstr_bits = used_qstr.bit_length()
+
     word_end = word_start + len(words) - 1
-    f.write(f"// # words {len(words)}\n")
-    f.write(f"// words {words}\n")
+    word_code = {w: chr(word_start + i) for i, w in enumerate(words)}
 
+    def symbol_value(sym):
+        return ord(word_code.get(sym, sym))
+
+    nclasses = max(class_map) + 1
     values = []
-    length_count = {}
-    renumbered = 0
-    last_length = None
-    canonical = {}
-    for atom, code in sorted(cb.items(), key=lambda x: (len(x[1]), x[0])):
-        if atom in qstr_strs:
-            atom = "\1"
-        values.append(atom)
-        length = len(code)
-        if length not in length_count:
-            length_count[length] = 0
-        length_count[length] += 1
-        if last_length:
-            renumbered <<= length - last_length
-        # print(f"atom={repr(atom)} code={code}", file=sys.stderr)
-        canonical[atom] = "{0:0{width}b}".format(renumbered, width=length)
-        if len(atom) > 1:
-            o = words.index(atom) + 0x80
-            s = "".join(C_ESCAPES.get(ch1, ch1) for ch1 in atom)
-            f.write(f"// {o} {s} {counter[atom]} {canonical[atom]} {renumbered}\n")
-        else:
-            s = C_ESCAPES.get(atom, atom)
-            canonical[atom] = "{0:0{width}b}".format(renumbered, width=length)
-            o = ord(atom)
-            f.write(f"// {o} {s} {counter[atom]} {canonical[atom]} {renumbered}\n")
-        renumbered += 1
-        last_length = length
-    lengths = bytearray()
-    f.write(f"// length count {length_count}\n")
+    lengths_rows = []
+    canonical = []
+    for cls in range(nclasses):
+        # Symbols are ordered by (length, value) so that the C decoder's canonical
+        # walk lands on the same index.
+        table = lens.get(cls, {})
+        by_value = {chr(symbol_value(s)): l for s, l in table.items()}
+        v, counts_row, canon = canonical_codes(by_value)
+        values.append([ord(x) for x in v])
+        lengths_rows.append(counts_row)
+        canonical.append({s: canon[chr(symbol_value(s))] for s in table})
+    lengths_row = max(1, max(len(r) for r in lengths_rows))
+    lengths_rows = [r + [0] * (lengths_row - len(r)) for r in lengths_rows]
+    assert all(len(code) >= 1 for canon in canonical for code in canon.values())
 
-    for i in range(1, max(length_count) + 2):
-        lengths.append(length_count.get(i, 0))
-    f.write(f"// values {values} lengths {len(lengths)} {lengths}\n")
-
-    f.write(f"// {values} {lengths}\n")
-    values = [(atom if len(atom) == 1 else chr(0x80 + words.index(atom))) for atom in values]
-    max_translation_encoded_length = max(
-        len(translation.encode("utf-8")) for (original, translation) in translations
+    f.write(f"// # words {len(words)}\n")
+    f.write(
+        "// words {}\n".format([remap_text(w, {v: k for k, v in remap.items()}) for w in words])
     )
+    f.write(f"// # alphabet {len(alphabet)}\n")
+    f.write(f"// class_map {class_map} tables {nclasses}\n")
+    for cls in range(nclasses):
+        f.write(f"// class {cls}: {len(values[cls])} symbols, lengths {lengths_rows[cls]}\n")
 
     maxlen = len(words[-1]) if words else 0
     minlen = len(words[0]) if words else 0
     wlencount = [len([None for w in words if len(w) == l]) for l in range(minlen, maxlen + 1)]
 
-    translation_qstr_bits = used_qstr.bit_length()
-
     f.write("typedef {} mchar_t;\n".format(values_type))
-    f.write("const uint8_t lengths[] = {{ {} }};\n".format(", ".join(map(str, lengths))))
+    f.write("#define compress_max_length_bits ({})\n".format(encoded_length_bits))
+    f.write("#define TRANSLATION_CLASSES {}\n".format(nclasses))
+    f.write("#define LENGTHS_ROW {}\n".format(lengths_row))
     f.write(
-        "const mchar_t values[] = {{ {} }};\n".format(
-            ", ".join(str(ord(remove_offset(u))) for u in values)
+        "const uint8_t class_map[{}] = {{ {} }};\n".format(
+            NUM_BASE_CLASSES, ", ".join(map(str, class_map))
         )
     )
     f.write(
-        "#define compress_max_length_bits ({})\n".format(
-            max_translation_encoded_length.bit_length()
+        "const uint8_t lengths[] = {{ {} }};\n".format(
+            ", ".join(str(x) for row in lengths_rows for x in row)
         )
+    )
+    offsets = [0]
+    for v in values:
+        offsets.append(offsets[-1] + len(v))
+    f.write(
+        "const uint16_t values_offset[{}] = {{ {} }};\n".format(
+            nclasses + 1, ", ".join(map(str, offsets))
+        )
+    )
+    f.write(
+        "const mchar_t values[] = {{ {} }};\n".format(", ".join(str(x) for v in values for x in v))
+    )
+    f.write("#define alphabet_size {}\n".format(len(alphabet)))
+    f.write(
+        "const uint16_t alphabet[] = {{ {} }};\n".format(", ".join(str(ord(c)) for c in alphabet))
     )
     f.write(
         "const mchar_t words[] = {{ {} }};\n".format(
-            ", ".join(str(ord(remove_offset(c))) for w in words for c in w)
+            ", ".join(str(ord(c)) for w in words for c in w)
         )
     )
     f.write("const uint8_t wlencount[] = {{ {} }};\n".format(", ".join(str(p) for p in wlencount)))
@@ -410,30 +601,32 @@ def compute_huffman_coding(qstrs, translation_name, translations, f, compression
     f.write("#define word_end {}\n".format(word_end))
     f.write("#define minlen {}\n".format(minlen))
     f.write("#define maxlen {}\n".format(maxlen))
-    f.write("#define translation_offstart {}\n".format(offstart))
-    f.write("#define translation_offset {}\n".format(offset))
     f.write("#define translation_qstr_bits {}\n".format(translation_qstr_bits))
 
     qstrs_inv = dict((v, k) for k, v in qstrs.items())
     return EncodingTable(
         values,
-        lengths,
-        words,
+        lengths_rows,
+        lengths_row,
+        class_map,
         canonical,
-        extractor,
-        apply_offset,
-        remove_offset,
+        words,
+        word_start,
+        alphabet,
+        remap,
         translation_qstr_bits,
         qstrs,
         qstrs_inv,
+        values_type,
+        tokens,
     )
 
 
 def decompress(encoding_table, encoded, encoded_length_bits):
-    qstrs_inv = encoding_table.qstrs_inv
-    values = encoding_table.values
-    lengths = encoding_table.lengths
-    words = encoding_table.words
+    """Decode as the C decoder does (translate.c). Returns the original text."""
+    et = encoding_table
+    alphabet_size = len(et.alphabet)
+    word_end = et.word_start + len(et.words) - 1
 
     def bititer():
         for byte in encoded:
@@ -449,10 +642,23 @@ def decompress(encoding_table, encoded, encoded_length_bits):
         return bits
 
     dec = []
+    last = None
     length = getnbits(encoded_length_bits)
+    decoded = 0
 
-    i = 0
-    while i < length:
+    def emit(u):
+        nonlocal last, decoded
+        if ALPHABET_BASE <= u < ALPHABET_BASE + alphabet_size:
+            c = et.alphabet[u - ALPHABET_BASE]
+        else:
+            c = chr(u)
+        dec.append(c)
+        decoded += len(c.encode("utf-8"))
+        last = c
+
+    while decoded < length:
+        cls = et.class_map[base_class(last)]
+        lengths = et.lengths[cls]
         bits = 0
         bit_length = 0
         max_code = lengths[0]
@@ -461,28 +667,31 @@ def decompress(encoding_table, encoded, encoded_length_bits):
             bits = (bits << 1) | nextbit()
             bit_length += 1
             if max_code > 0 and bits < max_code:
-                # print('{0:0{width}b}'.format(bits, width=bit_length))
                 break
             max_code = (max_code << 1) + lengths[bit_length]
             searched_length += lengths[bit_length]
-
-        v = values[searched_length + bits - max_code]
-        if v == chr(1):
-            qstr_idx = getnbits(encoding_table.translation_qstr_bits)
-            v = qstrs_inv[qstr_idx]
-        elif v >= chr(0x80) and v < chr(0x80 + len(words)):
-            v = words[ord(v) - 0x80]
-        i += len(v.encode("utf-8"))
-        dec.append(v)
+        v = et.values[cls][searched_length + bits - max_code]
+        if v == 1:
+            qstr_idx = getnbits(et.translation_qstr_bits)
+            s = et.qstrs_inv[qstr_idx]
+            dec.append(s)
+            decoded += len(s.encode("utf-8"))
+            last = s[-1]
+        elif et.word_start <= v <= word_end:
+            for c in et.words[v - et.word_start]:
+                emit(ord(c))
+        else:
+            emit(v)
     return "".join(dec)
 
 
 def compress(encoding_table, decompressed, encoded_length_bits, len_translation_encoded):
+    """Encode a translation using the tokenization chosen in compute_huffman_coding()."""
     if not isinstance(decompressed, str):
         raise TypeError()
-    qstrs = encoding_table.qstrs
-    canonical = encoding_table.canonical
-    extractor = encoding_table.extractor
+    et = encoding_table
+    text = remap_text(decompressed, et.remap)
+    tokens = et.tokens[text]
 
     enc = 1
 
@@ -494,17 +703,20 @@ def compress(encoding_table, decompressed, encoded_length_bits, len_translation_
             enc = put_bit(enc, b & (1 << i))
         return enc
 
+    def put_code(enc, cls, sym):
+        for b in et.canonical[cls][sym]:
+            enc = put_bit(enc, b == "1")
+        return enc
+
     enc = put_bits(enc, len_translation_encoded, encoded_length_bits)
 
-    for atom in extractor.iter(decompressed):
-        if atom in qstrs:
-            can = canonical["\1"]
-        else:
-            can = canonical[atom]
-        for b in can:
-            enc = put_bit(enc, b == "1")
-        if atom in qstrs:
-            enc = put_bits(enc, qstrs[atom], encoding_table.translation_qstr_bits)
+    pos = 0
+    for tok in tokens:
+        cls = et.class_map[base_class(text[pos - 1] if pos else None)]
+        enc = put_code(enc, cls, token_symbol(tok))
+        if is_qstr(tok):
+            enc = put_bits(enc, et.qstrs[tok[1]], et.translation_qstr_bits)
+        pos += token_len(tok)
 
     while enc.bit_length() % 8 != 1:
         enc = put_bit(enc, 0)
