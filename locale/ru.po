@@ -2441,6 +2441,10 @@ msgstr "функция отсутствует аргумент только по
 msgid "bad typecode"
 msgstr "Неверный шрифт"
 
+#: py/binary.c
+msgid "integer out of range"
+msgstr ""
+
 #: py/builtinevex.c
 msgid "bad compile mode"
 msgstr "Неверный режим компиляции"
@@ -2565,6 +2569,10 @@ msgstr "super() не может найти себя"
 #: py/compile.c
 msgid "* arg after **"
 msgstr "* аргумент после **"
+
+#: py/compile.c
+msgid "* arg after kwarg"
+msgstr ""
 
 #: py/compile.c
 msgid "too many args"
@@ -2692,6 +2700,22 @@ msgstr ""
 
 #: py/emitinlinerv32.c
 msgid "opcode '%q' argument %d: must not be zero"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': registers must be different"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': malformed register list"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': invalid stack adjustment"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q' argument %d: wrong register(s)"
 msgstr ""
 
 #: py/emitinlinerv32.c
@@ -2856,6 +2880,10 @@ msgid "return expected '%q' but got '%q'"
 msgstr "Возврат ожидался '%q', но получил '%q'"
 
 #: py/emitnative.c
+msgid "native raise"
+msgstr ""
+
+#: py/emitnative.c
 msgid "must raise an object"
 msgstr "должен поднять объект"
 
@@ -2867,9 +2895,9 @@ msgstr "родной урожай"
 msgid "unicode name escapes"
 msgstr "Экранирование имен в Юникоде"
 
-#: py/modbuiltins.c
-msgid "chr() arg not in range(0x110000)"
-msgstr "chr() аргумент вне диапазона (0x110000)"
+#: py/modbuiltins.c py/objstr.c
+msgid "char not in range(0x110000)"
+msgstr ""
 
 #: py/modbuiltins.c
 msgid "chr() arg not in range(256)"
@@ -3176,11 +3204,6 @@ msgstr "Невозможно преобразовать %s в int"
 msgid "float too big"
 msgstr "Поплавок слишком большой"
 
-#: py/objint.c
-#, c-format
-msgid "value must fit in %d byte(s)"
-msgstr "Значение должно совпадать с байтами %d"
-
 #: py/objint.c shared-bindings/time/__init__.c
 msgid "No long integer support"
 msgstr "Нет поддержки длинных целых чисел (long integer)"
@@ -3193,6 +3216,15 @@ msgstr "Маленькое переполнение int"
 #: shared-bindings/storage/__init__.c
 msgid "%q=%q"
 msgstr "%q=%q"
+
+#: py/objint_impl.h
+#, c-format
+msgid "value would overflow a %d byte buffer"
+msgstr ""
+
+#: py/objint_impl.h
+msgid "can't convert negative int to unsigned"
+msgstr ""
 
 #: py/objint_longlong.c py/parsenum.c
 msgid "result overflows long long storage"
@@ -3233,6 +3265,10 @@ msgstr "Шаг %q не может быть нулём"
 #: py/objslice.c
 msgid "Cannot subclass slice"
 msgstr "Невозможно создать подкласс среза"
+
+#: py/objstr.c
+msgid "unknown encoding: %q"
+msgstr ""
 
 #: py/objstr.c
 msgid "bytes value out of range"
@@ -4785,6 +4821,13 @@ msgstr "выключить"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Нет IP"
+
+#~ msgid "chr() arg not in range(0x110000)"
+#~ msgstr "chr() аргумент вне диапазона (0x110000)"
+
+#, c-format
+#~ msgid "value must fit in %d byte(s)"
+#~ msgstr "Значение должно совпадать с байтами %d"
 
 #~ msgid "Too many descriptors"
 #~ msgstr "Слишком много дескрипторов"
