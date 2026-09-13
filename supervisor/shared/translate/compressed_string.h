@@ -29,16 +29,18 @@
 //   The per-table code-length counts are rows of LENGTHS_ROW bytes in
 //   lengths[], and the symbols of table n are values[values_offset[n]..].
 //
-// - Symbol values 0..0x7F are ASCII (with 1 reserved for QSTR escapes,
-//   below, and 2 and 3 reserved for future escapes).  Values from 0x80 up to
-//   0x80 + alphabet_size - 1 are the non-ASCII characters used by the
-//   translation, renumbered by decreasing frequency; alphabet[] maps them
-//   back to Unicode code points.  When a translation uses more than 127
-//   distinct non-ASCII characters this is not possible, alphabet_size is 0
-//   and the symbols are raw 16-bit code points instead (mchar_t is then
-//   uint16_t rather than uint8_t; it's very beneficial for mchar_t to be 8
-//   bits!).  At present, no translation requires code points outside the
-//   BMP, so this is adequate.
+// - Symbol values 0..0x7F are ASCII (with 1, 2 and 3 reserved for the
+//   escapes below).  Values from 0x80 up to 0x80 + alphabet_size - 1 are the
+//   most frequent non-ASCII characters used by the translation, renumbered
+//   by decreasing frequency; alphabet[] maps them back to Unicode code
+//   points.  Most translations fit their whole non-ASCII repertoire in the
+//   alphabet.  Those that don't (ja, ko) keep the 32 to 80 most frequent
+//   characters there and escape the rest: value 2 is followed by a
+//   rare_index_bits-bit index into rare_chars[] (characters used more than
+//   once), value 3 by a raw 16-bit code point (characters used once, which
+//   are cheaper without a table entry).  All symbols are therefore 8 bits.
+//   At present, no translation requires code points outside the BMP, so
+//   this is adequate.
 //
 // - Symbol values from word_start to word_end stand for dictionary entries
 //   in a dictionary of up to 256 - word_start entries.  The dictionary
@@ -93,7 +95,9 @@ typedef enum {
 // Symbol values with a special meaning; every other value is a character or a
 // dictionary word. Must match py/maketranslationdata.py.
 typedef enum {
-    SYMBOL_QSTR = 1,  // followed by translation_qstr_bits bits of qstr index
+    SYMBOL_QSTR = 1,        // followed by translation_qstr_bits bits of qstr index
+    SYMBOL_RARE_INDEX = 2,  // followed by rare_index_bits bits of rare_chars[] index
+    SYMBOL_RARE_RAW = 3,    // followed by a 16-bit code point
 } translation_symbol_t;
 
 // Return the compressed, translated version of a source string

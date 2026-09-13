@@ -23,7 +23,7 @@ void serial_write_compressed(mp_rom_error_text_t compressed) {
     mp_printf(MP_PYTHON_PRINTER, "%S", compressed);
 }
 
-static void get_word(int n, const mchar_t **pos, const mchar_t **end) {
+static void get_word(int n, const uint8_t **pos, const uint8_t **end) {
     int len = minlen;
     int i = 0;
     *pos = words;
@@ -39,7 +39,7 @@ static void get_word(int n, const mchar_t **pos, const mchar_t **end) {
 
 static void put_utf8(vstr_t *vstr, unsigned u) {
     if (word_start <= u && u <= word_end) {
-        const mchar_t *pos, *end;
+        const uint8_t *pos, *end;
         get_word(u - word_start, &pos, &end);
         // note that at present, entries in the words table are
         // guaranteed not to represent words themselves, so this adds
@@ -147,6 +147,12 @@ static void decompress_vstr(mp_rom_error_text_t compressed, vstr_t *decompressed
         if (v == SYMBOL_QSTR) {
             qstr q = get_nbits(&b, translation_qstr_bits);
             vstr_add_str(decompressed, qstr_str(q));
+        } else if (rare_index_count > 0 && v == SYMBOL_RARE_INDEX) {
+            // A non-ASCII character outside the dense alphabet, by table index.
+            vstr_add_char(decompressed, rare_chars[get_nbits(&b, rare_index_bits)]);
+        } else if (rare_raw_count > 0 && v == SYMBOL_RARE_RAW) {
+            // A non-ASCII character used only once, as a raw code point.
+            vstr_add_char(decompressed, get_nbits(&b, 16));
         } else {
             put_utf8(decompressed, v);
         }
