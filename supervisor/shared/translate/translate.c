@@ -60,26 +60,26 @@ static void put_utf8(vstr_t *vstr, unsigned u) {
 // byte written. Classifying the last byte is the same as classifying the last
 // code point: every byte of a multi-byte UTF-8 sequence is >= 0x80.
 // This must match base_class() in py/maketranslationdata.py.
-static uint8_t base_class(uint8_t last) {
+static translation_class_t base_class(uint8_t last) {
     if (last == ' ') {
-        return 0;
+        return CLASS_START_OR_SPACE;
     }
     if (last >= 'a' && last <= 'z') {
-        return 1;
+        return CLASS_LOWER;
     }
     if (last >= 'A' && last <= 'Z') {
-        return 2;
+        return CLASS_UPPER;
     }
     if (last >= '0' && last <= '9') {
-        return 3;
+        return CLASS_DIGIT;
     }
     if (last == '%') {
-        return 5;
+        return CLASS_PERCENT;
     }
     if (last >= 0x80) {
-        return 6;
+        return CLASS_NON_ASCII;
     }
-    return 4;
+    return CLASS_OTHER;
 }
 
 uint16_t decompress_length(mp_rom_error_text_t compressed) {
@@ -144,7 +144,7 @@ static void decompress_vstr(mp_rom_error_text_t compressed, vstr_t *decompressed
             searched_length += len_row[bit_length];
         }
         unsigned v = values[values_offset[cls] + searched_length + bits - max_code];
-        if (v == 1) {
+        if (v == SYMBOL_QSTR) {
             qstr q = get_nbits(&b, translation_qstr_bits);
             vstr_add_str(decompressed, qstr_str(q));
         } else {

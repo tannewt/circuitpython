@@ -78,6 +78,24 @@ typedef struct compressed_string {
     const uint8_t tail[];
 } const *mp_rom_error_text_t;
 
+// Class of the previously decoded byte, which selects the Huffman table for
+// the next symbol. Must match base_class() in py/maketranslationdata.py.
+typedef enum {
+    CLASS_START_OR_SPACE = 0,
+    CLASS_LOWER = 1,
+    CLASS_UPPER = 2,
+    CLASS_DIGIT = 3,
+    CLASS_OTHER = 4,
+    CLASS_PERCENT = 5,
+    CLASS_NON_ASCII = 6,
+} translation_class_t;
+
+// Symbol values with a special meaning; every other value is a character or a
+// dictionary word. Must match py/maketranslationdata.py.
+typedef enum {
+    SYMBOL_QSTR = 1,  // followed by translation_qstr_bits bits of qstr index
+} translation_symbol_t;
+
 // Return the compressed, translated version of a source string
 // Usually, due to LTO, this is optimized into a load of a constant
 // pointer.

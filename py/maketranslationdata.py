@@ -73,19 +73,29 @@ C_ESCAPES = {
     '"': '\\"',
 }
 
-# Reserved symbol values. 2 and 3 are unused for now but must not appear in
-# translated text either.
-QSTR_ESC = "\1"
+# Symbol values with a special meaning, as characters. Must match
+# translation_symbol_t in supervisor/shared/translate/compressed_string.h.
+# 2 and 3 are unused for now but must not appear in translated text either.
+SYMBOL_QSTR = "\1"
 RESERVED_CHARS = {"\1", "\2", "\3"}
 
 # The first non-ASCII symbol value in the dense alphabet.
 ALPHABET_BASE = 0x80
 
 # Huffman codes are chosen per "class" of the previously decoded character.
-# These base classes are fixed in the C decoder (translate.c, base_class());
+# These base classes are fixed in the C decoder (translate.c, base_class()) and
+# must match translation_class_t in supervisor/shared/translate/compressed_string.h;
 # the generator collapses them with class_map[] into TRANSLATION_CLASSES tables.
+CLASS_START_OR_SPACE = 0
+CLASS_LOWER = 1
+CLASS_UPPER = 2
+CLASS_DIGIT = 3
+CLASS_OTHER = 4
+CLASS_PERCENT = 5
+CLASS_NON_ASCII = 6
 NUM_BASE_CLASSES = 7
-# Presets to try, as class_map. Each maps a base class to a table index.
+# Presets to try, as class_map. Each maps a base class (in the order above) to
+# a table index.
 CLASS_PRESETS = (
     (0, 0, 0, 0, 0, 0, 0),  # a single table: the tables cost more than they save
     (0, 1, 1, 2, 2, 2, 1),  # space, letter, other
@@ -99,19 +109,19 @@ def base_class(c):
     Computed on the (possibly remapped) character: remapped characters are >= 0x80
     exactly when the original is, which is all the classification looks at."""
     if c is None or c == " ":
-        return 0
+        return CLASS_START_OR_SPACE
     o = ord(c)
     if 0x61 <= o <= 0x7A:
-        return 1
+        return CLASS_LOWER
     if 0x41 <= o <= 0x5A:
-        return 2
+        return CLASS_UPPER
     if 0x30 <= o <= 0x39:
-        return 3
+        return CLASS_DIGIT
     if o == 0x25:  # '%'
-        return 5
+        return CLASS_PERCENT
     if o >= 0x80:
-        return 6
-    return 4
+        return CLASS_NON_ASCII
+    return CLASS_OTHER
 
 
 # this must match the equivalent function in qstr.c
@@ -225,7 +235,7 @@ def token_len(token):
 
 def token_symbol(token):
     """The Huffman symbol a token is coded as (qstrs share one escape symbol)."""
-    return QSTR_ESC if is_qstr(token) else token
+    return SYMBOL_QSTR if is_qstr(token) else token
 
 
 def code_lengths(counter):
@@ -386,7 +396,7 @@ def compute_huffman_coding(qstrs, translation_name, translations, f, compression
         for t in texts:
             for atom in extractor.iter(t):
                 if atom in qstrs:
-                    atom = QSTR_ESC
+                    atom = SYMBOL_QSTR
                 counter[atom] += 1
         cb = huffman.codebook(counter.items())
         lengths = sorted(dict((v, len(cb[k])) for k, v in counter.items()).items())
