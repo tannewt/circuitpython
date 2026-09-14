@@ -6,9 +6,8 @@ d62ad25bb128e96ab6ef43464aaf2bb91b5b85f013381e9ba6be747e8d0911b2
 5d5d139563c95b5967b9bd9a8c9b233a9dedb45072794cd232dc1b74832607d0
 True
 True
-True
-True
-True
+RuntimeError
+NotImplementedError
 True
 True
 32 64 hmac-sha256

@@ -19,7 +19,6 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
     psa_key_id_t borrowed_key_id, psa_algorithm_t hash_alg);
 void common_hal_hmac_update(hmac_hmac_obj_t *self, const uint8_t *data, size_t data_len);
 void common_hal_hmac_digest(hmac_hmac_obj_t *self, uint8_t *out, size_t out_len);
-void common_hal_hmac_copy(hmac_hmac_obj_t *self, hmac_hmac_obj_t *dest);
 size_t common_hal_hmac_get_digest_size(hmac_hmac_obj_t *self);
 size_t common_hal_hmac_get_block_size(hmac_hmac_obj_t *self);
 // Returns "hmac-sha256" / "hmac-sha1" for the .name property (CPython format).

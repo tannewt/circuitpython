@@ -10,7 +10,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "py/misc.h"
 #include "py/obj.h"
 
 #include "psa/crypto.h"
@@ -19,16 +18,22 @@ typedef struct {
     mp_obj_base_t base;
     // The digest algorithm the HMAC is built on, e.g. PSA_ALG_SHA_256.
     psa_algorithm_t hash_alg;
-    // Key material for a bytes key: an owned copy on the GC heap. NULL when the
-    // key lives in hardware (see borrowed_key_id).
-    const uint8_t *key;
-    size_t key_len;
-    // A PSA key id borrowed from a hardwarekey.HardwareKey; the key is owned by
-    // that object, not this one. 0 (PSA_KEY_ID_NULL) for a bytes key.
-    psa_key_id_t borrowed_key_id;
-    // Every byte passed to update(), buffered so digest() can be a one-shot
-    // psa_mac_compute() and copy()/repeated digest() stay CPython-compatible.
-    vstr_t msg;
+    // The PSA multipart MAC operation. update() streams straight into this;
+    // PSA has no psa_mac_clone(), so unlike shared-module/hashlib's Hash this
+    // can't be rewound -- digest() finishes it exactly once and caches the
+    // result below.
+    psa_mac_operation_t mac_op;
+    // The PSA key used by mac_op. For a bytes key, imported at construction
+    // time and destroyed once mac_op is finished (owns_key true). For a key
+    // borrowed from a hardwarekey.HardwareKey, that object owns the key and
+    // owns_key is false.
+    psa_key_id_t key_id;
+    bool owns_key;
+    // Set once digest()/hexdigest() has finished mac_op. update() raises
+    // after this; further digest() calls just return the cached bytes.
+    bool finished;
+    uint8_t digest[PSA_HASH_MAX_SIZE];
+    size_t digest_len;
 } hmac_hmac_obj_t;
 
 // Maps a CPython digest name ("sha1", "sha256") to a PSA hash algorithm.
