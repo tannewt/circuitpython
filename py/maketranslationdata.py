@@ -94,14 +94,59 @@ CLASS_OTHER = 4
 CLASS_PERCENT = 5
 CLASS_NON_ASCII = 6
 NUM_BASE_CLASSES = 7
-# Presets to try, as class_map. Each maps a base class (in the order above) to
-# a table index.
+# Presets to try. Each is the list of Huffman tables to build, each table
+# naming the base classes that share it. class_map_for() turns one into the
+# class_map[] the decoder uses.
 CLASS_PRESETS = (
-    (0, 0, 0, 0, 0, 0, 0),  # a single table: the tables cost more than they save
-    (0, 1, 1, 2, 2, 2, 1),  # space, letter, other
-    (0, 1, 2, 3, 4, 5, 1),  # non-ASCII shares the lowercase table
-    (0, 1, 2, 3, 4, 5, 6),  # non-ASCII has its own table
+    # one table: the tables cost more than they save
+    [
+        [
+            CLASS_START_OR_SPACE,
+            CLASS_LOWER,
+            CLASS_UPPER,
+            CLASS_DIGIT,
+            CLASS_OTHER,
+            CLASS_PERCENT,
+            CLASS_NON_ASCII,
+        ]
+    ],
+    # space, letter, other
+    [
+        [CLASS_START_OR_SPACE],
+        [CLASS_LOWER, CLASS_UPPER, CLASS_NON_ASCII],
+        [CLASS_DIGIT, CLASS_OTHER, CLASS_PERCENT],
+    ],
+    # non-ASCII shares the lowercase table
+    [
+        [CLASS_START_OR_SPACE],
+        [CLASS_LOWER, CLASS_NON_ASCII],
+        [CLASS_UPPER],
+        [CLASS_DIGIT],
+        [CLASS_OTHER],
+        [CLASS_PERCENT],
+    ],
+    # non-ASCII has its own table
+    [
+        [CLASS_START_OR_SPACE],
+        [CLASS_LOWER],
+        [CLASS_UPPER],
+        [CLASS_DIGIT],
+        [CLASS_OTHER],
+        [CLASS_PERCENT],
+        [CLASS_NON_ASCII],
+    ],
 )
+
+
+def class_map_for(preset):
+    """class_map[] for a preset: base class -> index of the table it uses."""
+    class_map = [None] * NUM_BASE_CLASSES
+    for table, classes in enumerate(preset):
+        for cls in classes:
+            assert class_map[cls] is None, f"class {cls} in two tables"
+            class_map[cls] = table
+    assert None not in class_map, "every base class needs a table"
+    return tuple(class_map)
 
 
 def base_class(c):
@@ -507,7 +552,8 @@ def compute_huffman_coding(qstrs, translation_name, translations, f, compression
         return n
 
     best = None
-    for class_map in CLASS_PRESETS:
+    for preset in CLASS_PRESETS:
+        class_map = class_map_for(preset)
         tokens = greedy_tokens
         counts = tally(texts, tokens, class_map)
         lens = {cls: code_lengths(cn) for cls, cn in counts.items()}
