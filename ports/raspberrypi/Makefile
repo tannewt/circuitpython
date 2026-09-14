@@ -571,6 +571,7 @@ $(patsubst %.c,$(BUILD)/%.o,$(SRC_SDK) $(SRC_CYW43)): CFLAGS += -Wno-missing-pro
 SRC_C += \
 	boards/$(BOARD)/board.c \
 	boards/$(BOARD)/pins.c \
+	common-hal/rtc/pico_time.c \
 	bindings/rp2pio/StateMachine.c \
 	bindings/rp2pio/__init__.c \
 	common-hal/rp2pio/StateMachine.c \
