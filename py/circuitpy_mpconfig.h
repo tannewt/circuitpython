@@ -105,6 +105,7 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_OPT_MPZ_BITWISE          (0)
 #define MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE (CIRCUITPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE)
 #define MICROPY_PERSISTENT_CODE_LOAD     (1)
+#define MICROPY_PERSISTENT_CODE_LOAD_NATIVE (CIRCUITPY_LOAD_NATIVE || CIRCUITPY_ENABLE_MPY_NATIVE)
 
 #define MICROPY_PY_ARRAY                 (CIRCUITPY_ARRAY)
 #define MICROPY_PY_ARRAY_SLICE_ASSIGN    (1)
@@ -191,6 +192,9 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define FILESYSTEM_BLOCK_SIZE       (512)
 
 #define MICROPY_VFS                 (1)
+// CIRCUITPY-CHANGE: CircuitPython's flash/SD block devices are native
+// (supervisor/shared/flash.c sets MP_BLOCKDEV_FLAG_NATIVE).
+#define MICROPY_VFS_BLOCKDEV_NATIVE (1)
 #define MICROPY_VFS_FAT             (MICROPY_VFS)
 #define MICROPY_READER_VFS          (MICROPY_VFS)
 
@@ -198,7 +202,12 @@ extern void common_hal_mcu_enable_interrupts(void);
 
 #define BYTES_PER_WORD (4)
 
+// Bit 0 of a code pointer selects the Thumb instruction set.
+#if defined(__thumb__)
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
+#else
+#define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)(p))
+#endif
 
 // Track stack usage. Expose results via ustack module.
 #define MICROPY_MAX_STACK_USAGE       (0)

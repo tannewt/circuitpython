@@ -1049,9 +1049,9 @@ msgstr "%q: selhání %d"
 #: ports/cxd56/common-hal/sdioio/SDCard.c
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
-#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/emmcio/EMMC.c
-#: shared-bindings/floppyio/__init__.c shared-bindings/picogame/Canvas.c
-#: shared-module/sdcardio/SDCard.c
+#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/audiocore/WaveFile.c
+#: shared-bindings/emmcio/EMMC.c shared-bindings/floppyio/__init__.c
+#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr ""
@@ -1810,16 +1810,16 @@ msgid "Cannot get temperature"
 msgstr "Nelze získat teplotu (°C)"
 
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
-msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
-msgstr "WatchDogTimer nelze deaktivovat v režimu RESET"
-
-#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "timeout duration exceeded the maximum supported value"
 msgstr "timeout překročil maximální podporovanou hodnotu"
 
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "%q cannot be changed once mode is set to %q"
 msgstr ""
+
+#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
+msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
+msgstr "WatchDogTimer nelze deaktivovat v režimu RESET"
 
 #: ports/nordic/sd_mutex.c
 #, c-format
@@ -2321,7 +2321,7 @@ msgstr "funkci chybí %d povinné poziční argumenty"
 msgid "function expected at most %d arguments, got %d"
 msgstr ""
 
-#: py/argcheck.c
+#: py/argcheck.c shared-bindings/wifi/Radio.c
 msgid "'%q' argument required"
 msgstr "Je vyžadován argument '%q'"
 
@@ -2419,6 +2419,10 @@ msgstr "funkci chybí argument pouze pro klíčové slovo"
 
 #: py/binary.c py/objarray.c
 msgid "bad typecode"
+msgstr ""
+
+#: py/binary.c
+msgid "integer out of range"
 msgstr ""
 
 #: py/builtinevex.c
@@ -2543,6 +2547,10 @@ msgstr ""
 #: py/compile.c
 msgid "* arg after **"
 msgstr "* arg po **"
+
+#: py/compile.c
+msgid "* arg after kwarg"
+msgstr ""
 
 #: py/compile.c
 msgid "too many args"
@@ -2670,6 +2678,22 @@ msgstr ""
 
 #: py/emitinlinerv32.c
 msgid "opcode '%q' argument %d: must not be zero"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': registers must be different"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': malformed register list"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': invalid stack adjustment"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q' argument %d: wrong register(s)"
 msgstr ""
 
 #: py/emitinlinerv32.c
@@ -2834,6 +2858,10 @@ msgid "return expected '%q' but got '%q'"
 msgstr ""
 
 #: py/emitnative.c
+msgid "native raise"
+msgstr ""
+
+#: py/emitnative.c
 msgid "must raise an object"
 msgstr ""
 
@@ -2845,8 +2873,8 @@ msgstr ""
 msgid "unicode name escapes"
 msgstr ""
 
-#: py/modbuiltins.c
-msgid "chr() arg not in range(0x110000)"
+#: py/modbuiltins.c py/objstr.c
+msgid "char not in range(0x110000)"
 msgstr ""
 
 #: py/modbuiltins.c
@@ -2927,6 +2955,10 @@ msgstr ""
 
 #: py/modthread.c
 msgid "expecting a dict for keyword args"
+msgstr ""
+
+#: py/modweakref.c
+msgid "not a heap object"
 msgstr ""
 
 #: py/nativeglue.c
@@ -3145,11 +3177,6 @@ msgstr ""
 msgid "float too big"
 msgstr ""
 
-#: py/objint.c
-#, c-format
-msgid "value must fit in %d byte(s)"
-msgstr ""
-
 #: py/objint.c shared-bindings/time/__init__.c
 msgid "No long integer support"
 msgstr "Není podpora long integer"
@@ -3162,6 +3189,15 @@ msgstr ""
 #: shared-bindings/storage/__init__.c
 msgid "%q=%q"
 msgstr "%q=%q"
+
+#: py/objint_impl.h
+#, c-format
+msgid "value would overflow a %d byte buffer"
+msgstr ""
+
+#: py/objint_impl.h
+msgid "can't convert negative int to unsigned"
+msgstr ""
 
 #: py/objint_longlong.c py/parsenum.c
 msgid "result overflows long long storage"
@@ -3202,6 +3238,10 @@ msgstr "%q krok nemůže být nula"
 #: py/objslice.c
 msgid "Cannot subclass slice"
 msgstr "Nelze použít řez podtřídy"
+
+#: py/objstr.c
+msgid "unknown encoding: %q"
+msgstr ""
 
 #: py/objstr.c
 msgid "bytes value out of range"
@@ -3334,6 +3374,10 @@ msgstr ""
 msgid "string index out of range"
 msgstr ""
 
+#: py/objtemplate.c
+msgid "expected str or Interpolation"
+msgstr ""
+
 #: py/objtype.c
 msgid "Call super().__init__() before accessing native object."
 msgstr "Volání super().__init__() před přístupem k nativnímu objektu."
@@ -3455,6 +3499,10 @@ msgstr ""
 #: py/persistentcode.c
 msgid "incompatible .mpy arch"
 msgstr "nekopmatibilní architektura .mpy"
+
+#: py/persistentcode.c
+msgid "function must be bytecode"
+msgstr ""
 
 #: py/proto.c shared-bindings/digitalio/DigitalInOutProtocol.c
 msgid "'%q' object does not support '%q'"
@@ -4278,6 +4326,10 @@ msgstr "Chybná MAC adresa"
 #: shared-bindings/wifi/Radio.c
 msgid "AuthMode.OPEN is not used with password"
 msgstr "AuthMode.OPEN nepoužívá heslo"
+
+#: shared-bindings/wifi/Radio.c
+msgid "Supply either %q or %q, not both"
+msgstr ""
 
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid BSSID"
