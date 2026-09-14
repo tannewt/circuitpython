@@ -4307,10 +4307,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr ""
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q je mimo hranice"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "Špatné heslo v hex"
@@ -4757,6 +4753,9 @@ msgstr "vypnuto"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Není IP"
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q je mimo hranice"
 
 #~ msgid "asm overflow"
 #~ msgstr "přetečení v asm"

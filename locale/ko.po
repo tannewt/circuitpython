@@ -4349,11 +4349,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q는 %q의 하위 클래스여야 합니다"
 
-#: shared-bindings/wifi/Monitor.c
-#, fuzzy
-msgid "%q out of bounds"
-msgstr "%q가 경계를 벗어남"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "잘못된 16진수 패스워드"
@@ -4804,6 +4799,10 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "IP가 없습니다"
+
+#, fuzzy
+#~ msgid "%q out of bounds"
+#~ msgstr "%q가 경계를 벗어남"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q가 %q로 이름이 변경되었습니다"
