@@ -61,6 +61,7 @@ void common_hal_audiodelays_pitch_shift_construct(audiodelays_pitch_shift_obj_t 
     self->freeze = false;
 
     // Allocate the window buffer
+    mp_arg_validate_int_min(window, sizeof(uint16_t) * channel_count, MP_QSTR_window);
     self->window_len = window; // bytes
     self->window_buffer = m_malloc_without_collect(self->window_len);
     if (self->window_buffer == NULL) {
@@ -233,7 +234,9 @@ audioio_get_buffer_result_t audiodelays_pitch_shift_get_buffer(audiodelays_pitch
             } else {
                 // For unsigned samples set to the middle which is "quiet"
                 if (MP_LIKELY(self->base.bits_per_sample == 16)) {
-                    memset(word_buffer, 32768, length * (self->base.bits_per_sample / 8));
+                    for (uint32_t si = 0; si < length; si++) {
+                        word_buffer[si] = (int16_t)0x8000;
+                    }
                 } else {
                     memset(hword_buffer, 128, length * (self->base.bits_per_sample / 8));
                 }
