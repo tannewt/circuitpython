@@ -232,13 +232,13 @@ void supervisor_bluetooth_init(void) {
     #if CIRCUITPY_STATUS_LED
     status_led_init();
     #endif
-    uint64_t start_ticks = supervisor_ticks_ms64();
-    uint64_t diff = 0;
     if (ble_mode != 0) {
         boot_in_discovery_mode = true;
         reset_state = 0x0;
     }
     bool bonded = common_hal_bleio_adapter_is_bonded_to_central(&common_hal_bleio_adapter_obj);
+    uint64_t start_ticks = supervisor_ticks_ms64();
+    uint64_t diff = 0;
 
     // Don't go into discovery mode when waking from deep sleep. But if we're already bonded,
     // BLE workflow can continue after deep sleep.
