@@ -229,7 +229,8 @@ jobs:
     uses: ./.github/workflows/build-boards.yml
     secrets: inherit
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
+      max-parallel: 55
       matrix:
         port: ${{ fromJSON(needs.scheduler.outputs.ports).ports }}
     with:

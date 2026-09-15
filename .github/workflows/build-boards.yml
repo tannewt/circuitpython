@@ -24,7 +24,7 @@ jobs:
     env:
       CP_VERSION: ${{ inputs.cp-version }}
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         board: ${{ fromJSON(inputs.boards) }}
     steps:

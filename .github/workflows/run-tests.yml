@@ -11,7 +11,7 @@ jobs:
   run:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         test: [all, mpy, native, native_mpy]
     env:

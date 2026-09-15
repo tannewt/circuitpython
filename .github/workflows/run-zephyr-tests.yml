@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: ${{ matrix.shard }}
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       # One job per board family, so the bsim suites, which take the longest, run
       # side by side instead of after each other.
       matrix:
