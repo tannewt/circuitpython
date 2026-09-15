@@ -4366,10 +4366,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q должен быть подклассом %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q за пределом"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "Неверный шестнадцатеричный пароль"
@@ -4821,6 +4817,9 @@ msgstr "выключить"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Нет IP"
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q за пределом"
 
 #~ msgid "chr() arg not in range(0x110000)"
 #~ msgstr "chr() аргумент вне диапазона (0x110000)"
