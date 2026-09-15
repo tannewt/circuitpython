@@ -1056,9 +1056,9 @@ msgstr "%q сбой: %d"
 #: ports/cxd56/common-hal/sdioio/SDCard.c
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
-#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/emmcio/EMMC.c
-#: shared-bindings/floppyio/__init__.c shared-bindings/picogame/Canvas.c
-#: shared-module/sdcardio/SDCard.c
+#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/audiocore/WaveFile.c
+#: shared-bindings/emmcio/EMMC.c shared-bindings/floppyio/__init__.c
+#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr "Буфер должен быть кратен %d байт"
@@ -1196,11 +1196,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr "Таймаут слишком длинный: максимальная длина таймаута %d секунд"
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr "Защита от MITM не поддерживается"
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1227,6 +1222,20 @@ msgstr "Для этой характеристики нет CCCD"
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "Невозможно установить CCCD для локальной характеристики"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr "Не подключено"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1260,15 +1269,6 @@ msgstr "Изображение памяти"
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
 msgstr "Недопустимый параметр BLE"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
-msgstr "Не подключено"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: shared-module/audiofilewriter/AudioFileWriter.c
@@ -1750,6 +1750,11 @@ msgstr "Ненулевое время ожидания должно быть > 0
 msgid "Failed to connect: timeout"
 msgstr "Не удалось подключиться: таймаут"
 
+#: ports/nordic/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+msgid "Numeric comparison pairing"
+msgstr ""
+
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
 msgstr "Неожиданный тип nrfx uuid"
@@ -1820,12 +1825,6 @@ msgid "Cannot get temperature"
 msgstr "Невозможно получить температуру"
 
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
-msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
-msgstr ""
-"Сторожевой таймер не может быть деинициализирован, если установлен режим "
-"RESET"
-
-#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "timeout duration exceeded the maximum supported value"
 msgstr ""
 "Продолжительность таймаута превысила максимальное поддерживаемое значение"
@@ -1833,6 +1832,12 @@ msgstr ""
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "%q cannot be changed once mode is set to %q"
 msgstr "%q не может быть изменен после установки режима на %q"
+
+#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
+msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
+msgstr ""
+"Сторожевой таймер не может быть деинициализирован, если установлен режим "
+"RESET"
 
 #: ports/nordic/sd_mutex.c
 #, c-format
@@ -2339,7 +2344,7 @@ msgstr "Функция отсутствует %d обязательные поз
 msgid "function expected at most %d arguments, got %d"
 msgstr "функция, ожидаемая в большинстве %d аргументов, получила %d"
 
-#: py/argcheck.c
+#: py/argcheck.c shared-bindings/wifi/Radio.c
 msgid "'%q' argument required"
 msgstr "Требуется аргумент '%q'"
 
@@ -2440,6 +2445,10 @@ msgstr "функция отсутствует аргумент только по
 #: py/binary.c py/objarray.c
 msgid "bad typecode"
 msgstr "Неверный шрифт"
+
+#: py/binary.c
+msgid "integer out of range"
+msgstr ""
 
 #: py/builtinevex.c
 msgid "bad compile mode"
@@ -2567,6 +2576,10 @@ msgid "* arg after **"
 msgstr "* аргумент после **"
 
 #: py/compile.c
+msgid "* arg after kwarg"
+msgstr ""
+
+#: py/compile.c
 msgid "too many args"
 msgstr "слишком много аргументов"
 
@@ -2692,6 +2705,22 @@ msgstr ""
 
 #: py/emitinlinerv32.c
 msgid "opcode '%q' argument %d: must not be zero"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': registers must be different"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': malformed register list"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': invalid stack adjustment"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q' argument %d: wrong register(s)"
 msgstr ""
 
 #: py/emitinlinerv32.c
@@ -2856,6 +2885,10 @@ msgid "return expected '%q' but got '%q'"
 msgstr "Возврат ожидался '%q', но получил '%q'"
 
 #: py/emitnative.c
+msgid "native raise"
+msgstr ""
+
+#: py/emitnative.c
 msgid "must raise an object"
 msgstr "должен поднять объект"
 
@@ -2867,9 +2900,9 @@ msgstr "родной урожай"
 msgid "unicode name escapes"
 msgstr "Экранирование имен в Юникоде"
 
-#: py/modbuiltins.c
-msgid "chr() arg not in range(0x110000)"
-msgstr "chr() аргумент вне диапазона (0x110000)"
+#: py/modbuiltins.c py/objstr.c
+msgid "char not in range(0x110000)"
+msgstr ""
 
 #: py/modbuiltins.c
 msgid "chr() arg not in range(256)"
@@ -2950,6 +2983,10 @@ msgstr "Упаковка ожидаемых %d товаров для упако�
 #: py/modthread.c
 msgid "expecting a dict for keyword args"
 msgstr "ожидание определения аргументов ключевых слов"
+
+#: py/modweakref.c
+msgid "not a heap object"
+msgstr ""
 
 #: py/nativeglue.c
 msgid "set unsupported"
@@ -3172,11 +3209,6 @@ msgstr "Невозможно преобразовать %s в int"
 msgid "float too big"
 msgstr "Поплавок слишком большой"
 
-#: py/objint.c
-#, c-format
-msgid "value must fit in %d byte(s)"
-msgstr "Значение должно совпадать с байтами %d"
-
 #: py/objint.c shared-bindings/time/__init__.c
 msgid "No long integer support"
 msgstr "Нет поддержки длинных целых чисел (long integer)"
@@ -3189,6 +3221,15 @@ msgstr "Маленькое переполнение int"
 #: shared-bindings/storage/__init__.c
 msgid "%q=%q"
 msgstr "%q=%q"
+
+#: py/objint_impl.h
+#, c-format
+msgid "value would overflow a %d byte buffer"
+msgstr ""
+
+#: py/objint_impl.h
+msgid "can't convert negative int to unsigned"
+msgstr ""
 
 #: py/objint_longlong.c py/parsenum.c
 msgid "result overflows long long storage"
@@ -3229,6 +3270,10 @@ msgstr "Шаг %q не может быть нулём"
 #: py/objslice.c
 msgid "Cannot subclass slice"
 msgstr "Невозможно создать подкласс среза"
+
+#: py/objstr.c
+msgid "unknown encoding: %q"
+msgstr ""
 
 #: py/objstr.c
 msgid "bytes value out of range"
@@ -3365,6 +3410,10 @@ msgstr "Индексы строк должны быть целыми числа�
 msgid "string index out of range"
 msgstr "индекс строки выходит за пределы диапазона"
 
+#: py/objtemplate.c
+msgid "expected str or Interpolation"
+msgstr ""
+
 #: py/objtype.c
 msgid "Call super().__init__() before accessing native object."
 msgstr "Вызовите super().__init__() перед доступом к собственному объекту."
@@ -3487,6 +3536,10 @@ msgstr "Нативный код в .mpy не поддерживается"
 #: py/persistentcode.c
 msgid "incompatible .mpy arch"
 msgstr "несовместимые .mpy арка"
+
+#: py/persistentcode.c
+msgid "function must be bytecode"
+msgstr ""
 
 #: py/proto.c shared-bindings/digitalio/DigitalInOutProtocol.c
 msgid "'%q' object does not support '%q'"
@@ -4318,10 +4371,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q должен быть подклассом %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q за пределом"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "Неверный шестнадцатеричный пароль"
@@ -4337,6 +4386,10 @@ msgstr "Неверный MAC-адрес"
 #: shared-bindings/wifi/Radio.c
 msgid "AuthMode.OPEN is not used with password"
 msgstr "Режим авторизации.OPEN не используется с паролем"
+
+#: shared-bindings/wifi/Radio.c
+msgid "Supply either %q or %q, not both"
+msgstr ""
 
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid BSSID"
@@ -4769,6 +4822,19 @@ msgstr "выключить"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Нет IP"
+
+#~ msgid "MITM security not supported"
+#~ msgstr "Защита от MITM не поддерживается"
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q за пределом"
+
+#~ msgid "chr() arg not in range(0x110000)"
+#~ msgstr "chr() аргумент вне диапазона (0x110000)"
+
+#, c-format
+#~ msgid "value must fit in %d byte(s)"
+#~ msgstr "Значение должно совпадать с байтами %d"
 
 #~ msgid "Too many descriptors"
 #~ msgstr "Слишком много дескрипторов"

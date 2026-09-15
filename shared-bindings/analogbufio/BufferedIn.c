@@ -126,7 +126,7 @@ static mp_obj_t analogbufio_bufferedin_obj_readinto(size_t n_args, const mp_obj_
     mp_obj_t buffer = args[ARG_buffer].u_obj;
     // Buffer defined and allocated by user
     mp_buffer_info_t bufinfo;
-    mp_get_buffer_raise(buffer, &bufinfo, MP_BUFFER_READ);
+    mp_get_buffer_raise(buffer, &bufinfo, MP_BUFFER_WRITE);
     uint8_t bytes_per_sample = 1;
     if (bufinfo.typecode == 'H') {
         bytes_per_sample = 2;

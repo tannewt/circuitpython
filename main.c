@@ -249,6 +249,7 @@ static void stop_mp(void) {
     qstr_reset();
 
     gc_deinit();
+    port_gc_deinit();
     port_free(_heap);
     _heap = NULL;
 

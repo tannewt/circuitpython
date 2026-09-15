@@ -134,6 +134,8 @@ static mp_obj_t digitalio_digitalinout_switch_to_output(size_t n_args, const mp_
     digitalio_drive_mode_t drive_mode = DRIVE_MODE_PUSH_PULL;
     if (args[ARG_drive_mode].u_rom_obj == MP_ROM_PTR(&digitalio_drive_mode_open_drain_obj)) {
         drive_mode = DRIVE_MODE_OPEN_DRAIN;
+    } else if (args[ARG_drive_mode].u_rom_obj != MP_ROM_PTR(&digitalio_drive_mode_push_pull_obj)) {
+        mp_arg_error_invalid(MP_QSTR_drive_mode);
     }
     // do the transfer
     check_result(common_hal_digitalio_digitalinout_switch_to_output(self, args[ARG_value].u_bool, drive_mode));
@@ -271,6 +273,8 @@ static mp_obj_t digitalio_digitalinout_obj_set_drive_mode(mp_obj_t self_in, mp_o
     digitalio_drive_mode_t c_drive_mode = DRIVE_MODE_PUSH_PULL;
     if (drive_mode == MP_ROM_PTR(&digitalio_drive_mode_open_drain_obj)) {
         c_drive_mode = DRIVE_MODE_OPEN_DRAIN;
+    } else if (drive_mode != MP_ROM_PTR(&digitalio_drive_mode_push_pull_obj)) {
+        mp_arg_error_invalid(MP_QSTR_drive_mode);
     }
     check_result(common_hal_digitalio_digitalinout_set_drive_mode(self, c_drive_mode));
     return mp_const_none;
