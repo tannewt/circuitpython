@@ -191,7 +191,7 @@ static mp_obj_t keypad_demux_demuxkeymatrix_key_number_to_row_column(mp_obj_t se
 
     const mp_uint_t key_number = (mp_uint_t)mp_arg_validate_int_range(
         mp_obj_get_int(key_number_in),
-        0, (mp_int_t)common_hal_keypad_generic_get_key_count(self),
+        0, (mp_int_t)common_hal_keypad_generic_get_key_count(self) - 1,
         MP_QSTR_key_number);
 
     mp_uint_t row;
@@ -217,10 +217,10 @@ static mp_obj_t keypad_demux_demuxkeymatrix_row_column_to_key_number(mp_obj_t se
     check_for_deinit(self);
 
     const mp_uint_t row = (mp_uint_t)mp_arg_validate_int_range(
-        mp_obj_get_int(row_in), 0, (mp_int_t)common_hal_keypad_demux_demuxkeymatrix_get_row_count(self), MP_QSTR_row);
+        mp_obj_get_int(row_in), 0, (mp_int_t)common_hal_keypad_demux_demuxkeymatrix_get_row_count(self) - 1, MP_QSTR_row);
 
     const mp_int_t column = (mp_uint_t)mp_arg_validate_int_range(
-        mp_obj_get_int(column_in), 0, (mp_int_t)common_hal_keypad_demux_demuxkeymatrix_get_column_count(self), MP_QSTR_column);
+        mp_obj_get_int(column_in), 0, (mp_int_t)common_hal_keypad_demux_demuxkeymatrix_get_column_count(self) - 1, MP_QSTR_column);
 
     return MP_OBJ_NEW_SMALL_INT(
         (mp_int_t)common_hal_keypad_demux_demuxkeymatrix_row_column_to_key_number(self, row, column));
