@@ -19,7 +19,7 @@ jobs:
         include:
           - shard: native_sim
             boards: native_native_sim native_native_sim_asan
-            pytest_args: tests/ --ignore=tests/bsim
+            pytest_args: tests/ --ignore=tests/bsim -n 2 --dist loadfile
           - shard: nrf5340bsim
             boards: native_nrf5340bsim
             pytest_args: tests/bsim -k native_nrf5340bsim -n 2 --dist loadfile
@@ -51,7 +51,6 @@ jobs:
       - name: Set up external
         uses: ./.github/actions/deps/external
       - name: Install pytest-xdist
-        if: contains(matrix.shard, 'bsim')
         run: pip install pytest-xdist
       - name: Build bsim
         if: contains(matrix.shard, 'bsim')
