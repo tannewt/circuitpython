@@ -623,6 +623,16 @@ async def build_circuitpython():  # noqa: C901
                 for library_source in LIBRARY_SOURCE[module.name]:
                     library_sources.extend(top.glob(library_source))
 
+    autogen_modules.add(tomlkit.comment("extmod modules shared with MicroPython"))
+    for extmod_module in EXTMOD_MODULES:
+        enabled = extmod_module in enabled_modules
+        v = tomlkit.item(enabled)
+        if extmod_module in module_reasons:
+            v.comment(module_reasons[extmod_module])
+        autogen_modules.add(extmod_module, v)
+        flag_name = MODULE_FLAG_NAMES.get(extmod_module, extmod_module.upper())
+        circuitpython_flags.append(f"-DCIRCUITPY_{flag_name}={1 if enabled else 0}")
+
     if os.environ.get("CI", "false") == "true":
         # Warn if it isn't up to date.
         if (
@@ -643,15 +653,6 @@ async def build_circuitpython():  # noqa: C901
                     f"out of date, run `make BOARD={board}` and commit it",
                     flush=True,
                 )
-    autogen_modules.add(tomlkit.comment("extmod modules shared with MicroPython"))
-    for extmod_module in EXTMOD_MODULES:
-        enabled = extmod_module in enabled_modules
-        v = tomlkit.item(enabled)
-        if extmod_module in module_reasons:
-            v.comment(module_reasons[extmod_module])
-        autogen_modules.add(extmod_module, v)
-        flag_name = MODULE_FLAG_NAMES.get(extmod_module, extmod_module.upper())
-        circuitpython_flags.append(f"-DCIRCUITPY_{flag_name}={1 if enabled else 0}")
 
     if autogen_board_info_fn.parent.exists():
         autogen_board_info_fn.write_text(tomlkit.dumps(autogen_board_info))
