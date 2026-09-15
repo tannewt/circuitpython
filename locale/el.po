@@ -4307,10 +4307,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q πρέπει να είναι υποκλάση του %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q εκτός ορίων"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr ""
@@ -4756,6 +4752,9 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr ""
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q εκτός ορίων"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q μεταονομάστηκε σε %q"
