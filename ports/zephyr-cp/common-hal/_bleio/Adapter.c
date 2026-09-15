@@ -56,7 +56,10 @@ static bool ble_advertising = false;
 // than user code. Lets the workflow restart its own adverts without disturbing
 // user-initiated advertising.
 static bool ble_advertising_internal = false;
-static bool ble_adapter_enabled = true;
+// Set to true when common_hal_bleio_adapter_set_enabled(true) brings the stack up.
+// set_enabled(false) clears this flag and stops advertising and scanning, but
+// the controller keeps running.
+static bool ble_adapter_enabled = false;
 
 #define BLEIO_ADV_MAX_FIELDS 16
 #define BLEIO_ADV_MAX_DATA_LEN 31
@@ -149,6 +152,7 @@ static void bleio_connection_clear(bleio_connection_internal_t *self) {
     self->connection_obj = mp_const_none;
     self->pair_status = PAIR_NOT_PAIRED;
     self->sec_err = 0;
+    self->user_owned = false;
 }
 
 static void bleio_connection_release(bleio_connection_internal_t *connection, uint8_t reason) {
@@ -204,6 +208,11 @@ static void bleio_connected_cb(struct bt_conn *conn, uint8_t err) {
     mtu_exchange_params[idx].func = on_mtu_exchanged;
     int mtu_err = bt_gatt_exchange_mtu(conn, &mtu_exchange_params[idx]);
     (void)mtu_err;
+
+    // A peripheral connection belongs to whoever started the advertising it
+    // answered: the BLE workflow (internal) or user code. Central connections
+    // are marked in common_hal_bleio_adapter_connect().
+    connection->user_owned = !ble_advertising_internal;
 
     // When connectable advertising results in a connection, the controller
     // auto-stops advertising.  Clear our flag to match (we cannot call
@@ -330,6 +339,32 @@ static uint16_t bleio_validate_and_convert_timeout(mp_float_t timeout) {
     return (uint16_t)timeout_units;
 }
 
+// Start the Zephyr Bluetooth host and load its settings (identity, bond keys,
+// CCC state) if that hasn't happened yet. Returns 0 or a negative Zephyr errno.
+//
+// This is separate from set_enabled() because the BLE workflow asks about
+// bonds (is_bonded_to_central(), erase_bonding()) in supervisor_bluetooth_init(),
+// before it enables the adapter in supervisor_start_bluetooth(). Bond keys live
+// in the settings subsystem and are only in RAM after settings_load(), so those
+// calls must be able to bring the stack up on their own. Nothing here powers the
+// controller down later: set_enabled(false) leaves it running.
+static int bleio_adapter_ensure_stack_ready(void) {
+    if (bt_is_ready()) {
+        return 0;
+    }
+    int err = bt_enable(NULL);
+    if (err != 0 && err != -EALREADY) {
+        return err;
+    }
+
+    // bt_init() returns early without setting BT_DEV_READY when
+    // CONFIG_BT_SETTINGS=y and no identity is loaded yet.
+    // Load settings so the BT settings handler fires and calls
+    // bt_finalize_init() which sets BT_DEV_READY.
+    settings_load();
+    return 0;
+}
+
 void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enabled) {
     if (enabled == ble_adapter_enabled) {
         return;
@@ -338,17 +373,9 @@ void common_hal_bleio_adapter_set_enabled(bleio_adapter_obj_t *self, bool enable
         for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
             bleio_connection_clear(&bleio_connections[i]);
         }
-        if (!bt_is_ready()) {
-            int err = bt_enable(NULL);
-            if (err != 0 && err != -EALREADY) {
-                raise_zephyr_error(err);
-            }
-
-            // bt_init() returns early without setting BT_DEV_READY when
-            // CONFIG_BT_SETTINGS=y and no identity is loaded yet.
-            // Load settings so the BT settings handler fires and calls
-            // bt_finalize_init() which sets BT_DEV_READY.
-            settings_load();
+        int err = bleio_adapter_ensure_stack_ready();
+        if (err != 0) {
+            raise_zephyr_error(err);
         }
         // Ensure a local identity exists so advertising/connections work and the
         // name is stable across reboots. bt_id_create persists the identity when
@@ -815,6 +842,9 @@ mp_obj_t common_hal_bleio_adapter_connect(bleio_adapter_obj_t *self, bleio_addre
     // ref via bleio_connection_track(). Drop the create ref now.
     bt_conn_unref(conn);
 
+    // Only user code connects in the central role.
+    connection->user_owned = true;
+
     self->connection_objs = NULL;
     return bleio_connection_new_from_internal(connection);
 }
@@ -840,6 +870,16 @@ static void bond_iterator_check(const struct bt_bond_info *info, void *user_data
 }
 
 void common_hal_bleio_adapter_erase_bonding(bleio_adapter_obj_t *self) {
+    // Can be called from Python as _bleio.adapter.erase_bonding(), and from
+    // supervisor_bluetooth_init() on a discovery-mode boot, before the adapter is
+    // enabled. Bond keys are only visible once the stack is up and settings are
+    // loaded; without this the loop below finds nothing and the bond reappears
+    // when the workflow starts. The workflow call runs before the VM, so a failure
+    // to start the stack is ignored here rather than raised.
+    if (bleio_adapter_ensure_stack_ready() != 0) {
+        return;
+    }
+
     // Unpair all bonded devices for all local identities.
     for (uint8_t id = 0; id < CONFIG_BT_ID_MAX; id++) {
         // bt_unpair takes an addr; use bt_foreach_bond to iterate and unpair.
@@ -866,7 +906,14 @@ void common_hal_bleio_adapter_erase_bonding(bleio_adapter_obj_t *self) {
 }
 
 bool common_hal_bleio_adapter_is_bonded_to_central(bleio_adapter_obj_t *self) {
-    // Check if any bond exists for identity 0
+    // Called only by the BLE workflow, from supervisor_bluetooth_init() before
+    // the adapter is enabled and from supervisor_bluetooth_background(); see
+    // erase_bonding() above. Runs before the VM, so don't raise.
+    if (bleio_adapter_ensure_stack_ready() != 0) {
+        return false;
+    }
+
+    // Check if any bond exists for any local identity.
     for (uint8_t id = 0; id < CONFIG_BT_ID_MAX; id++) {
         bool has_bonds = false;
         bt_foreach_bond(id, bond_iterator_check, &has_bonds);
@@ -880,36 +927,6 @@ bool common_hal_bleio_adapter_is_bonded_to_central(bleio_adapter_obj_t *self) {
 void bleio_adapter_gc_collect(bleio_adapter_obj_t *adapter) {
     gc_collect_root((void **)adapter, sizeof(bleio_adapter_obj_t) / sizeof(size_t));
     gc_collect_root((void **)bleio_connections, sizeof(bleio_connections) / sizeof(size_t));
-}
-
-void bleio_adapter_reset(bleio_adapter_obj_t *adapter) {
-    if (adapter == NULL) {
-        return;
-    }
-
-    common_hal_bleio_adapter_stop_scan(adapter);
-    common_hal_bleio_adapter_stop_advertising(adapter);
-
-    for (size_t i = 0; i < BLEIO_TOTAL_CONNECTION_COUNT; i++) {
-        bleio_connection_internal_t *connection = &bleio_connections[i];
-        if (connection->conn != NULL) {
-            bt_conn_disconnect(connection->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        }
-        if (connection->connection_obj != MP_OBJ_NULL &&
-            connection->connection_obj != mp_const_none) {
-            bleio_connection_obj_t *connection_obj = MP_OBJ_TO_PTR(connection->connection_obj);
-            connection_obj->connection = NULL;
-            connection_obj->disconnect_reason = BT_HCI_ERR_REMOTE_USER_TERM_CONN;
-        }
-        bleio_connection_clear(connection);
-    }
-
-    adapter->scan_results = NULL;
-    adapter->connection_objs = NULL;
-    active_scan_results = NULL;
-    ble_advertising = false;
-    ble_advertising_internal = false;
-    ble_adapter_enabled = bt_is_ready();
 }
 
 bleio_adapter_obj_t *common_hal_bleio_allocate_adapter_or_raise(void) {
