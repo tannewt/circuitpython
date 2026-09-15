@@ -34,20 +34,23 @@ m.update(b"ab")
 m.update(b"cde")
 print(m.hexdigest() == hmac.new(b"key", b"abcde", digestmod="sha256").hexdigest())
 
-# digest() does not finalize: more data can still be added
-x = hmac.new(b"key", b"12", digestmod="sha256")
+# digest() finalizes: a repeated call returns the same cached bytes, but
+# update() afterward is no longer allowed
+x = hmac.new(b"key", b"1234", digestmod="sha256")
 d1 = x.hexdigest()
-x.update(b"34")
 d2 = x.hexdigest()
-print(d1 == hmac.new(b"key", b"12", digestmod="sha256").hexdigest())
-print(d2 == hmac.new(b"key", b"1234", digestmod="sha256").hexdigest())
+print(d1 == d2 == hmac.new(b"key", b"1234", digestmod="sha256").hexdigest())
+try:
+    x.update(b"more")
+except RuntimeError:
+    print("RuntimeError")
 
-# copy() is independent of the original
+# copy() is not supported: PSA's multipart MAC operation can't be cloned
 a = hmac.new(b"key", b"foo", digestmod="sha256")
-b = a.copy()
-a.update(b"bar")
-print(a.hexdigest() == hmac.new(b"key", b"foobar", digestmod="sha256").hexdigest())
-print(b.hexdigest() == hmac.new(b"key", b"foo", digestmod="sha256").hexdigest())
+try:
+    a.copy()
+except NotImplementedError:
+    print("NotImplementedError")
 
 # digest() returns bytes; hexdigest() is its hex
 h = hmac.new(b"key", b"abcde", digestmod="sha256")

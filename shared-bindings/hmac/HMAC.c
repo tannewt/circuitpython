@@ -18,7 +18,10 @@
 //|
 
 //|     def update(self, msg: ReadableBuffer) -> None:
-//|         """Feed more data into the HMAC."""
+//|         """Feed more data into the HMAC.
+//|
+//|         Raises `RuntimeError` if called after `digest()` or `hexdigest()` -- unlike
+//|         CPython's ``hmac``, this cannot be resumed once a digest has been taken."""
 //|         ...
 mp_obj_t hmac_hmac_update(mp_obj_t self_in, mp_obj_t buf_in) {
     mp_check_self(mp_obj_is_type(self_in, &hmac_hmac_type));
@@ -35,7 +38,9 @@ static MP_DEFINE_CONST_FUN_OBJ_2(hmac_hmac_update_obj, hmac_hmac_update);
 //|     def digest(self) -> bytes:
 //|         """Return the HMAC of the data fed so far, as ``digest_size`` bytes.
 //|
-//|         The object can still be updated after this call."""
+//|         The first call finishes the underlying MAC computation and caches the
+//|         result; later calls just return the cached bytes. `update()` can no
+//|         longer be called after this, unlike CPython's ``hmac``."""
 //|         ...
 static mp_obj_t hmac_hmac_digest(mp_obj_t self_in) {
     mp_check_self(mp_obj_is_type(self_in, &hmac_hmac_type));
@@ -72,15 +77,15 @@ static mp_obj_t hmac_hmac_hexdigest(mp_obj_t self_in) {
 static MP_DEFINE_CONST_FUN_OBJ_1(hmac_hmac_hexdigest_obj, hmac_hmac_hexdigest);
 
 //|     def copy(self) -> HMAC:
-//|         """Return a copy of this HMAC object, with the same key and data fed so far."""
+//|         """Not supported; always raises `NotImplementedError`.
+//|
+//|         PSA Crypto's multipart MAC API has no way to duplicate an in-progress MAC
+//|         operation (unlike a plain hash, which can be cloned), so this HMAC object
+//|         cannot be copied."""
 //|         ...
 static mp_obj_t hmac_hmac_copy(mp_obj_t self_in) {
     mp_check_self(mp_obj_is_type(self_in, &hmac_hmac_type));
-    hmac_hmac_obj_t *self = MP_OBJ_TO_PTR(self_in);
-
-    hmac_hmac_obj_t *other = mp_obj_malloc(hmac_hmac_obj_t, &hmac_hmac_type);
-    common_hal_hmac_copy(self, other);
-    return MP_OBJ_FROM_PTR(other);
+    mp_raise_NotImplementedError(NULL);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(hmac_hmac_copy_obj, hmac_hmac_copy);
 

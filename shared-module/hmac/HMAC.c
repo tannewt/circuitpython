@@ -15,70 +15,78 @@
 
 #define HMAC_ALG(self) (PSA_ALG_HMAC((self)->hash_alg))
 
-void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_len,
-    psa_key_id_t borrowed_key_id, psa_algorithm_t hash_alg) {
-    self->hash_alg = hash_alg;
-    self->borrowed_key_id = borrowed_key_id;
-    self->key = NULL;
-    self->key_len = 0;
-    if (borrowed_key_id == 0) {
-        // Keep our own copy of the caller's key bytes; digest() imports it into
-        // PSA on demand and destroys the import immediately afterward.
-        uint8_t *copy = m_malloc(key_len == 0 ? 1 : key_len);
-        memcpy(copy, key, key_len);
-        self->key = copy;
-        self->key_len = key_len;
-    }
-    vstr_init(&self->msg, 0);
-}
-
-void common_hal_hmac_update(hmac_hmac_obj_t *self, const uint8_t *data, size_t data_len) {
-    vstr_add_strn(&self->msg, (const char *)data, data_len);
-}
-
-static void check_psa(psa_status_t status) {
+// On failure, resets mac_op (per the PSA multipart contract: an operation
+// that errors out must be aborted before it can be discarded) and raises.
+static void check_psa(hmac_hmac_obj_t *self, psa_status_t status) {
     if (status != PSA_SUCCESS) {
+        psa_mac_abort(&self->mac_op);
         mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
     }
 }
 
-void common_hal_hmac_digest(hmac_hmac_obj_t *self, uint8_t *out, size_t out_len) {
-    check_psa(psa_crypto_init());
+void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_len,
+    psa_key_id_t borrowed_key_id, psa_algorithm_t hash_alg) {
+    self->hash_alg = hash_alg;
+    self->finished = false;
+    self->digest_len = 0;
+    self->mac_op = psa_mac_operation_init();
 
-    psa_key_id_t key_id = self->borrowed_key_id;
-    bool imported = false;
-    if (key_id == 0) {
+    if (psa_crypto_init() != PSA_SUCCESS) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+    }
+
+    if (borrowed_key_id != 0) {
+        self->key_id = borrowed_key_id;
+        self->owns_key = false;
+    } else {
         psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
         psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
-        psa_set_key_bits(&attr, self->key_len * 8);
+        psa_set_key_bits(&attr, key_len * 8);
         psa_set_key_algorithm(&attr, HMAC_ALG(self));
-        psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE | PSA_KEY_USAGE_VERIFY_MESSAGE);
+        psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
         psa_set_key_lifetime(&attr, PSA_KEY_LIFETIME_VOLATILE);
-        psa_status_t status = psa_import_key(&attr, self->key, self->key_len, &key_id);
-        check_psa(status);
-        imported = true;
+        if (psa_import_key(&attr, key, key_len, &self->key_id) != PSA_SUCCESS) {
+            mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+        }
+        self->owns_key = true;
     }
 
-    size_t mac_len = 0;
-    psa_status_t status = psa_mac_compute(key_id, HMAC_ALG(self),
-        (const uint8_t *)self->msg.buf, self->msg.len,
-        out, out_len, &mac_len);
-
-    if (imported) {
-        psa_destroy_key(key_id);
+    psa_status_t status = psa_mac_sign_setup(&self->mac_op, self->key_id, HMAC_ALG(self));
+    if (status != PSA_SUCCESS) {
+        if (self->owns_key) {
+            psa_destroy_key(self->key_id);
+            self->owns_key = false;
+        }
+        if (status == PSA_ERROR_NOT_PERMITTED) {
+            // A hardware key can be locked to one digest (the ESP32 HMAC peripheral
+            // only does SHA-256).
+            mp_raise_ValueError(MP_ERROR_TEXT("key does not support this digest"));
+        }
+        mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
     }
-
-    if (status == PSA_ERROR_NOT_PERMITTED) {
-        // A hardware key can be locked to one digest (the ESP32 HMAC peripheral
-        // only does SHA-256).
-        mp_raise_ValueError(MP_ERROR_TEXT("key does not support this digest"));
-    }
-    check_psa(status);
 }
 
-void common_hal_hmac_copy(hmac_hmac_obj_t *self, hmac_hmac_obj_t *dest) {
-    common_hal_hmac_new(dest, self->key, self->key_len, self->borrowed_key_id, self->hash_alg);
-    vstr_add_strn(&dest->msg, self->msg.buf, self->msg.len);
+void common_hal_hmac_update(hmac_hmac_obj_t *self, const uint8_t *data, size_t data_len) {
+    if (self->finished) {
+        mp_raise_RuntimeError(NULL);
+    }
+    check_psa(self, psa_mac_update(&self->mac_op, data, data_len));
+}
+
+void common_hal_hmac_digest(hmac_hmac_obj_t *self, uint8_t *out, size_t out_len) {
+    if (!self->finished) {
+        psa_status_t status = psa_mac_sign_finish(&self->mac_op, self->digest, sizeof(self->digest),
+            &self->digest_len);
+        // The operation is spent either way -- successful finish or not, it
+        // can't be resumed, so the owned key's job is done too.
+        if (self->owns_key) {
+            psa_destroy_key(self->key_id);
+            self->owns_key = false;
+        }
+        check_psa(self, status);
+        self->finished = true;
+    }
+    memcpy(out, self->digest, out_len);
 }
 
 size_t common_hal_hmac_get_digest_size(hmac_hmac_obj_t *self) {
