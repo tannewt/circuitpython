@@ -50,8 +50,6 @@ jobs:
           target: zephyr-cp
       - name: Set up external
         uses: ./.github/actions/deps/external
-      - name: Install pytest-xdist
-        run: pip install pytest-xdist
       - name: Build bsim
         if: contains(matrix.shard, 'bsim')
         run: make -j $(nproc) everything
