@@ -57,8 +57,10 @@ static mp_obj_t bitbangio_i2c_make_new(const mp_obj_type_t *type, size_t n_args,
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
+    mp_int_t frequency = mp_arg_validate_int_min(args[ARG_frequency].u_int, 1, MP_QSTR_frequency);
+
     bitbangio_i2c_obj_t *self = mp_obj_malloc_with_finaliser(bitbangio_i2c_obj_t, &bitbangio_i2c_type);
-    shared_module_bitbangio_i2c_construct(self, args[ARG_scl].u_obj, args[ARG_sda].u_obj, args[ARG_frequency].u_int, args[ARG_timeout].u_int);
+    shared_module_bitbangio_i2c_construct(self, args[ARG_scl].u_obj, args[ARG_sda].u_obj, frequency, args[ARG_timeout].u_int);
 
     return MP_OBJ_FROM_PTR(self);
 }
