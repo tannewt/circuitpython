@@ -85,7 +85,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(hmac_hmac_hexdigest_obj, hmac_hmac_hexdigest);
 //|         ...
 static mp_obj_t hmac_hmac_copy(mp_obj_t self_in) {
     mp_check_self(mp_obj_is_type(self_in, &hmac_hmac_type));
-    mp_raise_NotImplementedError(MP_ERROR_TEXT("HMAC.copy() is not supported"));
+    mp_raise_NotImplementedError(NULL);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(hmac_hmac_copy_obj, hmac_hmac_copy);
 

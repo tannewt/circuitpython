@@ -63,7 +63,7 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
 
 void common_hal_hmac_update(hmac_hmac_obj_t *self, const uint8_t *data, size_t data_len) {
     if (self->finished) {
-        mp_raise_RuntimeError(MP_ERROR_TEXT("Cannot update() after digest()"));
+        mp_raise_RuntimeError(NULL);
     }
     check_psa(self, psa_mac_update(&self->mac_op, data, data_len));
 }
