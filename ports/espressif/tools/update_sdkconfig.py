@@ -164,7 +164,8 @@ def update(debug, board, update_all):  # noqa: C901 too complex
     psram_size = "0"
     uf2_bootloader = None
     ble_enabled = None
-    native_enabled = False
+    load_native = True  # Matches the mpconfigport.mk default.
+    mpy_native = False
     for line in board_make.read_text().split("\n"):
         if "=" not in line or line.startswith("#"):
             continue
@@ -193,8 +194,10 @@ def update(debug, board, update_all):  # noqa: C901 too complex
             uf2_bootloader = not (value == "0")
         elif key == "CIRCUITPY_BLEIO_NATIVE":
             ble_enabled = not (value == "0")
-        elif key in ("CIRCUITPY_LOAD_NATIVE", "CIRCUITPY_ENABLE_MPY_NATIVE"):
-            native_enabled = native_enabled or value == "1"
+        elif key == "CIRCUITPY_LOAD_NATIVE":
+            load_native = not (value == "0")
+        elif key == "CIRCUITPY_ENABLE_MPY_NATIVE":
+            mpy_native = value == "1"
 
     os.environ["IDF_TARGET"] = target
     os.environ["COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE"] = (
@@ -242,7 +245,7 @@ def update(debug, board, update_all):  # noqa: C901 too complex
     if ble_enabled:
         ble_config = pathlib.Path("esp-idf-config/sdkconfig-ble.defaults")
         sdkconfigs.append(ble_config)
-    if native_enabled:
+    if load_native or mpy_native:
         native_config = pathlib.Path("esp-idf-config/sdkconfig-native.defaults")
         sdkconfigs.append(native_config)
     board_config = pathlib.Path(f"boards/{board}/sdkconfig")
