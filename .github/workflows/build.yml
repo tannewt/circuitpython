@@ -236,3 +236,19 @@ jobs:
       boards: ${{ toJSON(fromJSON(needs.scheduler.outputs.ports)[matrix.port]) }}
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
       port: ${{ fromJSON(needs.scheduler.outputs.ports).split_ports[matrix.port] || matrix.port }}
+
+  build-ci:
+    # Final gate for ruleset checks: always runs so the required check is
+    # reported, and fails if any job (or matrix leg) failed or was cancelled.
+    needs: [tests, zephyr-tests, mpy-cross, mpy-cross-mac, docs, ports]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Check build results
+      run: |
+        echo "Job results: ${{ toJSON(needs.*.result) }}"
+        if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+          echo "One or more jobs failed or were cancelled"
+          exit 1
+        fi
+        echo "All build jobs succeeded"
