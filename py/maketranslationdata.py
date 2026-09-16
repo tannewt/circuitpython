@@ -890,7 +890,8 @@ def qstr_escape(qst):
 def parse_qstrs(infile):
     r = {}
     rx = re.compile(
-        r'QDEF(?P<pool>[01])\([A-Za-z0-9_]+,\s*\d+,\s*\d+,\s*(?P<cstr>"(?:[^"\\\\]|\\.)*")\)'
+        # QDEFn(ident, hash, len, blob_offset, "str")
+        r'QDEF(?P<pool>[01])\([A-Za-z0-9_]+,\s*\d+,\s*\d+,\s*\d+,\s*(?P<cstr>"(?:[^"\\\\]|\\.)*")\)'
     )
     content = infile.read()
     matches = rx.finditer(content)
