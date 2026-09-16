@@ -344,8 +344,8 @@ bool filesystem_init(bool create_allowed, bool force_create) {
     saves->blockdev.offset = 0;
     saves->blockdev.size = CIRCUITPY_SAVES_PARTITION_SIZE;
     supervisor_flash_init_vfs(saves);
-    filesystem_set_concurrent_write_protection(saves, true);
-    filesystem_set_writable_by_usb(saves, false);
+    filesystem_set_concurrent_write_protection((supervisor_vfs_t *)saves, true);
+    filesystem_set_writable_by_usb((supervisor_vfs_t *)saves, false);
     #endif
 
     // try to mount the flash
