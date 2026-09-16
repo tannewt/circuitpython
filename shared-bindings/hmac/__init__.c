@@ -22,7 +22,10 @@
 //|
 //| The key may be a ``bytes``-like object or, where the port provides them, a
 //| ``hardwarekey.HardwareKey`` -- so the same code works with a key in flash
-//| during development and a key held in hardware in production.
+//| during development and a key held in hardware in production. The one
+//| exception: an empty message raises `ValueError` with a
+//| ``hardwarekey.HardwareKey`` (a hardware driver limitation), where it is
+//| valid with a ``bytes`` key.
 //|
 //| Only ``"sha256"`` and ``"sha1"`` are supported for ``digestmod``.
 //| """
