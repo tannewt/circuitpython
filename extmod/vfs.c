@@ -52,9 +52,13 @@
 // different type, so provide this check that accepts any filesystem's binary
 // file type.
 bool mp_obj_is_fileio(mp_obj_t file) {
-    if (mp_obj_is_type(file, &mp_type_fileio)) {
+    #if MICROPY_VFS_FAT
+    // CIRCUITPY-CHANGE: mp_type_fileio is only aliased to the FAT fileio type
+    // by CircuitPython port configs; unix tests reference the FAT type directly.
+    if (mp_obj_is_type(file, &mp_type_vfs_fat_fileio)) {
         return true;
     }
+    #endif
     #if MICROPY_VFS_LFS1
     if (mp_obj_is_type(file, &mp_type_vfs_lfs1_fileio)) {
         return true;
