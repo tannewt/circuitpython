@@ -119,6 +119,10 @@ MP_WEAK bool port_boot_button_pressed(void) {
 MP_WEAK void port_gc_collect(void) {
 }
 
+// Ports may provide an implementation of this function if it is needed
+MP_WEAK void port_gc_deinit(void) {
+}
+
 // Allocates an object in the port heap, not the VM heap, and also sets type, for mp_obj_malloc{,_var} macros.
 MP_NOINLINE void *mp_obj_port_malloc_helper(size_t num_bytes, const mp_obj_type_t *type) {
     mp_obj_base_t *base = (mp_obj_base_t *)port_malloc_zero(num_bytes, false);

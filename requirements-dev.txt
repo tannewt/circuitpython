@@ -46,4 +46,5 @@ setuptools
 tomlkit
 pytest
 pytest-rerunfailures
+pytest-xdist
 perfetto

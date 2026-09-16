@@ -623,15 +623,6 @@ async def build_circuitpython():  # noqa: C901
                 for library_source in LIBRARY_SOURCE[module.name]:
                     library_sources.extend(top.glob(library_source))
 
-    if os.environ.get("CI", "false") == "true":
-        # Warn if it isn't up to date.
-        if (
-            not autogen_board_info_fn.exists()
-            or autogen_board_info_fn.read_text() != tomlkit.dumps(autogen_board_info)
-        ):
-            logger.warning(
-                f"autogen_board_info.toml is missing or out of date. Please run `make BOARD={board}` locally and commit {autogen_board_info_fn}."
-            )
     autogen_modules.add(tomlkit.comment("extmod modules shared with MicroPython"))
     for extmod_module in EXTMOD_MODULES:
         enabled = extmod_module in enabled_modules
@@ -641,6 +632,27 @@ async def build_circuitpython():  # noqa: C901
         autogen_modules.add(extmod_module, v)
         flag_name = MODULE_FLAG_NAMES.get(extmod_module, extmod_module.upper())
         circuitpython_flags.append(f"-DCIRCUITPY_{flag_name}={1 if enabled else 0}")
+
+    if os.environ.get("CI", "false") == "true":
+        # Warn if it isn't up to date.
+        if (
+            not autogen_board_info_fn.exists()
+            or autogen_board_info_fn.read_text() != tomlkit.dumps(autogen_board_info)
+        ):
+            logger.warning(
+                f"autogen_board_info.toml is missing or out of date. Please run `make BOARD={board}` locally and commit {autogen_board_info_fn}."
+            )
+            # Also as an annotation, so it shows on the run and next to the file in the
+            # pull request rather than in one board log out of 29. The board builds once
+            # per language, so only the first build of it says anything.
+            reported = builddir / "autogen_board_info.reported"
+            if not reported.exists():
+                reported.touch()
+                print(
+                    f"::warning file={autogen_board_info_fn.relative_to(srcdir)}::"
+                    f"out of date, run `make BOARD={board}` and commit it",
+                    flush=True,
+                )
 
     if autogen_board_info_fn.parent.exists():
         autogen_board_info_fn.write_text(tomlkit.dumps(autogen_board_info))

@@ -395,6 +395,9 @@ CIRCUITPY_AUDIOIO = 0
 endif
 #### end chip-specific choices ########################################
 
+# By default, load native .mpy files. Boards without the flash space turn it off.
+CIRCUITPY_LOAD_NATIVE ?= 1
+
 # By default, enable dualbank, and it'll be disabled for small flash sizes
 CIRCUITPY_DUALBANK ?= 1
 

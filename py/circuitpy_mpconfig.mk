@@ -425,6 +425,9 @@ CFLAGS += -DCIRCUITPY_KEYPAD_SHIFTREGISTERKEYS=$(CIRCUITPY_KEYPAD_SHIFTREGISTERK
 CIRCUITPY_KEYPAD_DEMUX ?= $(CIRCUITPY_KEYPAD)
 CFLAGS += -DCIRCUITPY_KEYPAD_DEMUX=$(CIRCUITPY_KEYPAD_DEMUX)
 
+CIRCUITPY_LOAD_NATIVE ?= 0
+CFLAGS += -DCIRCUITPY_LOAD_NATIVE=$(CIRCUITPY_LOAD_NATIVE)
+
 CIRCUITPY_LOCALE ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_LOCALE=$(CIRCUITPY_LOCALE)
 
@@ -774,7 +777,9 @@ CFLAGS += -DCIRCUITPY_ZLIB=$(CIRCUITPY_ZLIB)
 CIRCUITPY_ULAB ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_ULAB=$(CIRCUITPY_ULAB)
 
-# whether to use -Os optimization on files in ulab
+# Enabling this compiles ulab with -Os and uses function-pointer dispatch for
+# ndarray binary operators. This saves about 4 kB of flash but makes
+# element-wise array arithmetic roughly 1.5x slower.
 CIRCUITPY_ULAB_OPTIMIZE_SIZE ?= 0
 
 # CIRCUITPY_VIDEOCORE is handled in the broadcom tree.

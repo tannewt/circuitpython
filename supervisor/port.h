@@ -115,6 +115,11 @@ void port_boot_info(void);
 // A default weak implementation is provided that does nothing.
 void port_gc_collect(void);
 
+// Called once the VM heap is torn down and its finalisers have run. Ports free
+// memory here that heap objects may point into.
+// A default weak implementation is provided that does nothing.
+void port_gc_deinit(void);
+
 // Most ports that implement CIRCUITPY_BOOT_BUTTON use a generic version of
 // this function to sense the button. Ports that need to can override this
 // function to provide their own implementation.

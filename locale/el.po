@@ -1052,9 +1052,9 @@ msgstr "%q αποτυχία: %d"
 #: ports/cxd56/common-hal/sdioio/SDCard.c
 #: ports/espressif/common-hal/sdioio/SDCard.c
 #: ports/raspberrypi/common-hal/sdioio/SDCard.c
-#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/emmcio/EMMC.c
-#: shared-bindings/floppyio/__init__.c shared-bindings/picogame/Canvas.c
-#: shared-module/sdcardio/SDCard.c
+#: ports/stm/common-hal/sdioio/SDCard.c shared-bindings/audiocore/WaveFile.c
+#: shared-bindings/emmcio/EMMC.c shared-bindings/floppyio/__init__.c
+#: shared-bindings/picogame/Canvas.c shared-module/sdcardio/SDCard.c
 #, c-format
 msgid "Buffer must be a multiple of %d bytes"
 msgstr ""
@@ -1192,11 +1192,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1223,6 +1218,20 @@ msgstr ""
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "Δεν μπορεί να οριστεί CCCD σε τοπικό Characteristic"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1255,15 +1264,6 @@ msgstr ""
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/__init__.c
@@ -1740,6 +1740,11 @@ msgstr ""
 msgid "Failed to connect: timeout"
 msgstr ""
 
+#: ports/nordic/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+msgid "Numeric comparison pairing"
+msgstr ""
+
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
 msgstr ""
@@ -1809,15 +1814,15 @@ msgid "Cannot get temperature"
 msgstr "Δεν μπορεί να διαβαστεί η θερμοκρασία"
 
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
-msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
-msgstr ""
-
-#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "timeout duration exceeded the maximum supported value"
 msgstr ""
 
 #: ports/nordic/common-hal/watchdog/WatchDogTimer.c
 msgid "%q cannot be changed once mode is set to %q"
+msgstr ""
+
+#: ports/nordic/common-hal/watchdog/WatchDogTimer.c
+msgid "WatchDogTimer cannot be deinitialized once mode is set to RESET"
 msgstr ""
 
 #: ports/nordic/sd_mutex.c
@@ -2319,7 +2324,7 @@ msgstr ""
 msgid "function expected at most %d arguments, got %d"
 msgstr ""
 
-#: py/argcheck.c
+#: py/argcheck.c shared-bindings/wifi/Radio.c
 msgid "'%q' argument required"
 msgstr "'%q' όρισμα απαιτείται"
 
@@ -2417,6 +2422,10 @@ msgstr ""
 
 #: py/binary.c py/objarray.c
 msgid "bad typecode"
+msgstr ""
+
+#: py/binary.c
+msgid "integer out of range"
 msgstr ""
 
 #: py/builtinevex.c
@@ -2536,6 +2545,10 @@ msgstr ""
 #: py/compile.c
 msgid "* arg after **"
 msgstr "* όρισμα μετά **"
+
+#: py/compile.c
+msgid "* arg after kwarg"
+msgstr ""
 
 #: py/compile.c
 msgid "too many args"
@@ -2663,6 +2676,22 @@ msgstr ""
 
 #: py/emitinlinerv32.c
 msgid "opcode '%q' argument %d: must not be zero"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': registers must be different"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': malformed register list"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': invalid stack adjustment"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q' argument %d: wrong register(s)"
 msgstr ""
 
 #: py/emitinlinerv32.c
@@ -2827,6 +2856,10 @@ msgid "return expected '%q' but got '%q'"
 msgstr ""
 
 #: py/emitnative.c
+msgid "native raise"
+msgstr ""
+
+#: py/emitnative.c
 msgid "must raise an object"
 msgstr ""
 
@@ -2838,8 +2871,8 @@ msgstr ""
 msgid "unicode name escapes"
 msgstr ""
 
-#: py/modbuiltins.c
-msgid "chr() arg not in range(0x110000)"
+#: py/modbuiltins.c py/objstr.c
+msgid "char not in range(0x110000)"
 msgstr ""
 
 #: py/modbuiltins.c
@@ -2920,6 +2953,10 @@ msgstr ""
 
 #: py/modthread.c
 msgid "expecting a dict for keyword args"
+msgstr ""
+
+#: py/modweakref.c
+msgid "not a heap object"
 msgstr ""
 
 #: py/nativeglue.c
@@ -3139,11 +3176,6 @@ msgstr ""
 msgid "float too big"
 msgstr ""
 
-#: py/objint.c
-#, c-format
-msgid "value must fit in %d byte(s)"
-msgstr ""
-
 #: py/objint.c shared-bindings/time/__init__.c
 msgid "No long integer support"
 msgstr ""
@@ -3156,6 +3188,15 @@ msgstr ""
 #: shared-bindings/storage/__init__.c
 msgid "%q=%q"
 msgstr "%q=%q"
+
+#: py/objint_impl.h
+#, c-format
+msgid "value would overflow a %d byte buffer"
+msgstr ""
+
+#: py/objint_impl.h
+msgid "can't convert negative int to unsigned"
+msgstr ""
 
 #: py/objint_longlong.c py/parsenum.c
 msgid "result overflows long long storage"
@@ -3196,6 +3237,10 @@ msgstr "%q βήμα δεν μπορεί να είναι μηδέν"
 #: py/objslice.c
 msgid "Cannot subclass slice"
 msgstr "Δεν γίνεται υποκατηγορία ενός slice"
+
+#: py/objstr.c
+msgid "unknown encoding: %q"
+msgstr ""
 
 #: py/objstr.c
 msgid "bytes value out of range"
@@ -3328,6 +3373,10 @@ msgstr ""
 msgid "string index out of range"
 msgstr ""
 
+#: py/objtemplate.c
+msgid "expected str or Interpolation"
+msgstr ""
+
 #: py/objtype.c
 msgid "Call super().__init__() before accessing native object."
 msgstr "Κλήση super().__init__() πρίν την πρόσβαση του τοπικού αντικειμένου."
@@ -3448,6 +3497,10 @@ msgstr ""
 
 #: py/persistentcode.c
 msgid "incompatible .mpy arch"
+msgstr ""
+
+#: py/persistentcode.c
+msgid "function must be bytecode"
 msgstr ""
 
 #: py/proto.c shared-bindings/digitalio/DigitalInOutProtocol.c
@@ -4259,10 +4312,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q πρέπει να είναι υποκλάση του %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q εκτός ορίων"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr ""
@@ -4278,6 +4327,10 @@ msgstr ""
 #: shared-bindings/wifi/Radio.c
 msgid "AuthMode.OPEN is not used with password"
 msgstr "AuthMode.OPEN δεν μπορεί να χρησιμοποιηθεί με κωδικό"
+
+#: shared-bindings/wifi/Radio.c
+msgid "Supply either %q or %q, not both"
+msgstr ""
 
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid BSSID"
@@ -4704,6 +4757,9 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr ""
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q εκτός ορίων"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q μεταονομάστηκε σε %q"
