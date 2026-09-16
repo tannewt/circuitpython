@@ -14,10 +14,13 @@ directory and runs:
 
 which writes
 
-    <out-dir>/sizes.json    every board with its per-language builds and derived free flash
-    <out-dir>/sizes.html    a sortable, filterable table of the same boards, data embedded
+    <out-dir>/adafruit-circuitpython-sizes-<version>.json
+        every board with its per-language builds and derived free flash
+    <out-dir>/adafruit-circuitpython-sizes-<version>.html
+        a sortable, filterable table of the same boards, data embedded
 
-and appends a short markdown summary of the fullest boards to $GITHUB_STEP_SUMMARY when
+named like the firmware files. The version comes from --version or $CP_VERSION; without
+one the files are plain sizes.json and sizes.html. The script also appends a short markdown summary of the fullest boards to $GITHUB_STEP_SUMMARY when
 that is set, or to --summary FILE. The run description in the report comes from the
 GITHUB_* environment variables; outside CI the report says so instead.
 """
@@ -80,10 +83,11 @@ def summarize(record):
     return board
 
 
-def run_info():
+def run_info(version):
     """Where the numbers came from, from the variables GitHub Actions sets."""
     env = os.environ
     info = {
+        "version": version,
         "repository": env.get("GITHUB_REPOSITORY"),
         "run_id": env.get("GITHUB_RUN_ID"),
         "event": env.get("GITHUB_EVENT_NAME"),
@@ -102,7 +106,9 @@ def describe_run(info):
     if not info["url"]:
         return "Built outside GitHub Actions."
     parts = [f"{info['event']} build" if info["event"] else "build"]
-    if info["ref"]:
+    if info["version"]:
+        parts.append(f"of CircuitPython {info['version']}")
+    elif info["ref"]:
         parts.append(f"of {info['ref']}")
     if info["sha"]:
         parts.append(f"at {info['sha'][:10]}")
@@ -114,13 +120,20 @@ def sort_key(board):
     return (board["pct"] is None, -(board["pct"] or 0), board["board"])
 
 
+def output_name(info, extension):
+    """The report's filename, matching the firmware files' pattern when a version is known."""
+    if info["version"]:
+        return f"adafruit-circuitpython-sizes-{info['version']}.{extension}"
+    return f"sizes.{extension}"
+
+
 def write_json(boards, info, out_dir):
     document = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "run": info,
         "boards": boards,
     }
-    with (out_dir / "sizes.json").open("w") as f:
+    with (out_dir / output_name(info, "json")).open("w") as f:
         json.dump(document, f, indent=1)
         f.write("\n")
 
@@ -292,7 +305,7 @@ def write_html(boards, info, out_dir):
     with_region = sum(1 for b in boards if b["region"])
     counts = f"{len(boards)} boards, {with_region} with a measurable flash region."
     # The table rows carry only what the page shows; the per-language detail is in
-    # sizes.json. "</" must not appear inside a script element.
+    # the JSON report. "</" must not appear inside a script element.
     table = [{k: v for k, v in b.items() if k != "languages"} for b in boards]
     data = json.dumps(table, separators=(",", ":")).replace("</", "<\\/")
     page = (
@@ -300,7 +313,7 @@ def write_html(boards, info, out_dir):
         .replace("__COUNTS__", counts)
         .replace("__DATA__", data)
     )
-    with (out_dir / "sizes.html").open("w") as f:
+    with (out_dir / output_name(info, "html")).open("w") as f:
         f.write(page)
 
 
@@ -373,7 +386,12 @@ def print_ports(boards):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("records_dir", help="directory holding the per-board size records")
-    parser.add_argument("out_dir", help="where to write sizes.json and sizes.html")
+    parser.add_argument("out_dir", help="where to write the JSON and HTML reports")
+    parser.add_argument(
+        "--version",
+        default=os.environ.get("CP_VERSION"),
+        help="CircuitPython version for the report filenames (default: $CP_VERSION)",
+    )
     parser.add_argument(
         "--summary",
         default=os.environ.get("GITHUB_STEP_SUMMARY"),
@@ -383,7 +401,7 @@ def main():
 
     records = load_records(args.records_dir)
     boards = sorted((summarize(r) for r in records.values()), key=sort_key)
-    info = run_info()
+    info = run_info(args.version)
 
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

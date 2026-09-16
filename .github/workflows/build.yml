@@ -241,9 +241,11 @@ jobs:
   build-ci:
     # Final gate for ruleset checks: always runs so the required check is
     # reported, and fails if any job (or matrix leg) failed or was cancelled.
-    needs: [tests, zephyr-tests, mpy-cross, mpy-cross-mac, docs, ports]
+    needs: [scheduler, tests, zephyr-tests, mpy-cross, mpy-cross-mac, docs, ports]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
+    env:
+      CP_VERSION: ${{ needs.scheduler.outputs.cp-version }}
     steps:
     # Firmware size report. Each board job uploads its sizes/<board>.json as zz-sizes-<board>;
     # merge them into one table and a job summary. This is reporting only, so none of it
@@ -276,6 +278,17 @@ jobs:
         name: zz-sizes
         path: sizes-report
         if-no-files-found: ignore
+
+    # The action itself only uploads on pushes to main and release branches and on
+    # published releases. The files carry the version, so the directory keeps a history.
+    - name: Upload firmware size report to S3
+      continue-on-error: true
+      uses: ./.github/actions/upload_aws
+      with:
+        source: sizes-report/
+        destination: 0-sizes/
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Check build results
       run: |
