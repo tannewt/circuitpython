@@ -4366,10 +4366,6 @@ msgstr ""
 msgid "unsupported colorspace for GifWriter"
 msgstr ""
 
-#: shared-module/hmac/HMAC.c
-msgid "HMAC operation failed"
-msgstr ""
-
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
 #: shared-module/is31fl3741/IS31FL3741.c
 #, c-format
