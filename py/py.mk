@@ -102,6 +102,7 @@ PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_CXX:.cpp=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_CXX:.cpp=.o))
+PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_ASM:.S=.o))
 endif # USER_C_MODULES
 
 # CIRCUITPY-CHANGE
