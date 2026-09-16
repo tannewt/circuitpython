@@ -224,14 +224,13 @@ static bool synth_note_into_buffer(synthio_synth_t *synth, int chan, int32_t *ou
     uint32_t lim = waveform_length << SYNTHIO_FREQUENCY_SHIFT;
     uint32_t accum = synth->accum[chan];
 
-    if (dds_rate > lim / 2) {
+    if (dds_rate > (lim - offset) / 2) {
         // beyond nyquist, can't play note
         return false;
     }
 
-    // can happen if note waveform gets set mid-note, but the expensive modulo is usually avoided
-    if (accum > lim) {
-        accum = accum % lim + offset;
+    if (accum >= lim) {
+        accum = accum < offset ? offset : offset + (accum - offset) % (lim - offset);
     }
 
     // first, fill with waveform
@@ -247,20 +246,19 @@ static bool synth_note_into_buffer(synthio_synth_t *synth, int chan, int32_t *ou
     synth->accum[chan] = accum;
 
     if (ring_dds_rate) {
-        if (ring_dds_rate > lim / 2) {
+        accum = synth->ring_accum[chan];
+        offset = ring_waveform_start << SYNTHIO_FREQUENCY_SHIFT;
+        lim = ring_waveform_length << SYNTHIO_FREQUENCY_SHIFT;
+
+        if (ring_dds_rate > (lim - offset) / 2) {
             // beyond nyquist, can't play ring (but did synth main sound so
             // return true)
             return true;
         }
 
-        // now modulate by ring and accumulate
-        accum = synth->ring_accum[chan];
-        offset = ring_waveform_start << SYNTHIO_FREQUENCY_SHIFT;
-        lim = ring_waveform_length << SYNTHIO_FREQUENCY_SHIFT;
-
         // can happen if note waveform gets set mid-note, but the expensive modulo is usually avoided
-        if (accum > lim) {
-            accum = accum % lim + offset;
+        if (accum >= lim) {
+            accum = accum < offset ? offset : offset + (accum - offset) % (lim - offset);
         }
 
         for (uint16_t i = 0; i < dur; i++) {
@@ -270,8 +268,8 @@ static bool synth_note_into_buffer(synthio_synth_t *synth, int chan, int32_t *ou
                 accum = accum - lim + offset;
             }
             int16_t idx = accum >> SYNTHIO_FREQUENCY_SHIFT;
-            int16_t wi = (ring_waveform[idx] * out_buffer32[i]) / 32768; // consider for synthio_sat16 but had a weird artificat
-            out_buffer32[i] = wi;
+            int32_t wi = (ring_waveform[idx] * out_buffer32[i]) / 32768;
+            out_buffer32[i] = wi > 32767 ? 32767 : wi;
         }
         synth->ring_accum[chan] = accum;
     }

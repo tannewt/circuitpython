@@ -1196,11 +1196,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1227,6 +1222,20 @@ msgstr "이 특성에 대한 CCCD가 없습니다"
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "로컬 특성에 CCCD를 설정할 수 없습니다"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr "연결되지 않았습니다"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1261,15 +1270,6 @@ msgstr "빠른 메모리 부족"
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
 msgstr "잘못된 BLE 파라미터"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
-msgstr "연결되지 않았습니다"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: shared-module/audiofilewriter/AudioFileWriter.c
@@ -1754,6 +1754,11 @@ msgstr ""
 #: ports/zephyr-cp/common-hal/_bleio/Adapter.c
 msgid "Failed to connect: timeout"
 msgstr "연결에 실패했습니다: 시간 초과"
+
+#: ports/nordic/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+msgid "Numeric comparison pairing"
+msgstr ""
 
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
@@ -2453,6 +2458,10 @@ msgstr ""
 msgid "bad typecode"
 msgstr ""
 
+#: py/binary.c
+msgid "integer out of range"
+msgstr ""
+
 #: py/builtinevex.c
 msgid "bad compile mode"
 msgstr ""
@@ -2572,6 +2581,10 @@ msgstr ""
 #, fuzzy
 msgid "* arg after **"
 msgstr "* 인수 뒤에 **"
+
+#: py/compile.c
+msgid "* arg after kwarg"
+msgstr ""
 
 #: py/compile.c
 msgid "too many args"
@@ -2701,6 +2714,22 @@ msgstr ""
 
 #: py/emitinlinerv32.c
 msgid "opcode '%q' argument %d: must not be zero"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': registers must be different"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': malformed register list"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q': invalid stack adjustment"
+msgstr ""
+
+#: py/emitinlinerv32.c
+msgid "opcode '%q' argument %d: wrong register(s)"
 msgstr ""
 
 #: py/emitinlinerv32.c
@@ -2865,6 +2894,10 @@ msgid "return expected '%q' but got '%q'"
 msgstr ""
 
 #: py/emitnative.c
+msgid "native raise"
+msgstr ""
+
+#: py/emitnative.c
 msgid "must raise an object"
 msgstr ""
 
@@ -2876,8 +2909,8 @@ msgstr ""
 msgid "unicode name escapes"
 msgstr ""
 
-#: py/modbuiltins.c
-msgid "chr() arg not in range(0x110000)"
+#: py/modbuiltins.c py/objstr.c
+msgid "char not in range(0x110000)"
 msgstr ""
 
 #: py/modbuiltins.c
@@ -3181,11 +3214,6 @@ msgstr ""
 msgid "float too big"
 msgstr "float이 너무 큽니다"
 
-#: py/objint.c
-#, c-format
-msgid "value must fit in %d byte(s)"
-msgstr ""
-
 #: py/objint.c shared-bindings/time/__init__.c
 msgid "No long integer support"
 msgstr "긴 정수 지원이 없습니다"
@@ -3198,6 +3226,15 @@ msgstr ""
 #: shared-bindings/storage/__init__.c
 msgid "%q=%q"
 msgstr "%q=%q"
+
+#: py/objint_impl.h
+#, c-format
+msgid "value would overflow a %d byte buffer"
+msgstr ""
+
+#: py/objint_impl.h
+msgid "can't convert negative int to unsigned"
+msgstr ""
 
 #: py/objint_longlong.c py/parsenum.c
 msgid "result overflows long long storage"
@@ -3238,6 +3275,10 @@ msgstr "%q 단계는 0일 수 없습니다"
 
 #: py/objslice.c
 msgid "Cannot subclass slice"
+msgstr ""
+
+#: py/objstr.c
+msgid "unknown encoding: %q"
 msgstr ""
 
 #: py/objstr.c
@@ -4313,11 +4354,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q는 %q의 하위 클래스여야 합니다"
 
-#: shared-bindings/wifi/Monitor.c
-#, fuzzy
-msgid "%q out of bounds"
-msgstr "%q가 경계를 벗어남"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "잘못된 16진수 패스워드"
@@ -4768,6 +4804,10 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "IP가 없습니다"
+
+#, fuzzy
+#~ msgid "%q out of bounds"
+#~ msgstr "%q가 경계를 벗어남"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q가 %q로 이름이 변경되었습니다"

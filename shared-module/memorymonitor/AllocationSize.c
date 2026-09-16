@@ -60,6 +60,9 @@ void memorymonitor_allocationsizes_track_allocation(size_t block_count) {
         power_of_two++;
         block_count >>= 1;
     }
+    if (power_of_two >= ALLOCATION_SIZE_BUCKETS) {
+        power_of_two = ALLOCATION_SIZE_BUCKETS - 1;
+    }
     while (as != NULL) {
         as->buckets[power_of_two]++;
         as = as->next;

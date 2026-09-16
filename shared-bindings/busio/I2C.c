@@ -369,7 +369,7 @@ static mp_obj_t busio_i2c_writeto_then_readfrom(size_t n_args, const mp_obj_t *p
     int32_t in_start = args[ARG_in_start].u_int;
     const int32_t in_end = args[ARG_in_end].u_int;
     normalize_buffer_bounds(&in_start, in_end, &in_length);
-    mp_arg_validate_length_min(in_length, 1, MP_QSTR_out_buffer);
+    mp_arg_validate_length_min(in_length, 1, MP_QSTR_in_buffer);
 
     // Treat start and length in terms of bytes from now on.
     out_start *= out_stride_in_bytes;
