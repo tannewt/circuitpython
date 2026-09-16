@@ -245,6 +245,38 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     steps:
+    # Firmware size report. Each board job uploads its sizes/<board>.json as zz-sizes-<board>;
+    # merge them into one table and a job summary. This is reporting only, so none of it
+    # may fail the gate: every step continues on error.
+    - name: Set up repository
+      continue-on-error: true
+      uses: actions/checkout@v6
+      with:
+        submodules: false
+        show-progress: false
+        fetch-depth: 1
+        persist-credentials: false
+
+    - name: Download firmware sizes
+      continue-on-error: true
+      uses: actions/download-artifact@v8
+      with:
+        pattern: zz-sizes-*
+        path: sizes
+        merge-multiple: true
+
+    - name: Summarize firmware sizes
+      continue-on-error: true
+      run: python3 tools/ci_firmware_sizes.py sizes sizes-report
+
+    - name: Upload firmware size report
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: zz-sizes
+        path: sizes-report
+        if-no-files-found: ignore
+
     - name: Check build results
       run: |
         echo "Job results: ${{ toJSON(needs.*.result) }}"
