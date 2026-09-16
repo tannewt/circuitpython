@@ -114,7 +114,9 @@ SRC_QSTR += $(ULAB_SRC_PATHFIX)
 CFLAGS_MOD += -DCIRCUITPY_ULAB=1 -DMODULE_ULAB_ENABLED=1 -DULAB_HAS_USER_MODULE=0 -iquote $(TOP)/extmod/ulab/code
 $(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Wno-missing-declarations -Wno-missing-prototypes -Wno-unused-parameter -Wno-float-equal -Wno-sign-compare -Wno-cast-align -Wno-shadow -DCIRCUITPY
 ifeq ($(CIRCUITPY_ULAB_OPTIMIZE_SIZE),1)
-$(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Os
+# Function-pointer dispatch for ndarray binary operators saves about 4 kB of
+# flash at the cost of roughly 1.5x slower element-wise arithmetic.
+$(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Os -DNDARRAY_BINARY_USES_FUN_POINTER=1
 endif # CIRCUITPY_ULAB_OPTIMIZE_SIZE
 endif # CIRCUITPY_ULAB
 
