@@ -20,7 +20,7 @@
 static void check_psa(hmac_hmac_obj_t *self, psa_status_t status) {
     if (status != PSA_SUCCESS) {
         psa_mac_abort(&self->mac_op);
-        mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+        mp_raise_RuntimeError(NULL);
     }
 }
 
@@ -36,7 +36,7 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
     }
 
     if (psa_crypto_init() != PSA_SUCCESS) {
-        mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+        mp_raise_RuntimeError(NULL);
     }
 
     if (borrowed_key_id != 0) {
@@ -50,7 +50,7 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
         psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
         psa_set_key_lifetime(&attr, PSA_KEY_LIFETIME_VOLATILE);
         if (psa_import_key(&attr, key, key_len, &self->key_id) != PSA_SUCCESS) {
-            mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+            mp_raise_RuntimeError(NULL);
         }
         self->owns_key = true;
     }
@@ -66,7 +66,7 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
             // a common restriction for this kind of peripheral.
             mp_raise_ValueError(MP_ERROR_TEXT("key does not support this digest"));
         }
-        mp_raise_RuntimeError(MP_ERROR_TEXT("HMAC operation failed"));
+        mp_raise_RuntimeError(NULL);
     }
 }
 

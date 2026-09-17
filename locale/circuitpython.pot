@@ -4419,10 +4419,6 @@ msgid "unsupported colorspace for GifWriter"
 msgstr ""
 
 #: shared-module/hmac/HMAC.c
-msgid "HMAC operation failed"
-msgstr ""
-
-#: shared-module/hmac/HMAC.c
 msgid "key does not support this digest"
 msgstr ""
 
