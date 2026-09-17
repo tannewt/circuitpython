@@ -4135,7 +4135,7 @@ msgstr "버퍼는 바이트 배열이 아닙니다."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr ""
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
 msgstr ""
 
