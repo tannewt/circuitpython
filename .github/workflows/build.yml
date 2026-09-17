@@ -259,13 +259,16 @@ jobs:
         fetch-depth: 1
         persist-credentials: false
 
+    # actions/download-artifact matches a pattern against a listing of the run's
+    # artifacts that stops at 1000, and a full build has more. The script fetches each
+    # board's record by exact name instead, from the board list the scheduler produced.
     - name: Download firmware sizes
       continue-on-error: true
-      uses: actions/download-artifact@v8
-      with:
-        pattern: zz-sizes-*
-        path: sizes
-        merge-multiple: true
+      env:
+        BOARDS: ${{ needs.scheduler.outputs.ports }}
+      run: |
+        npm install --no-save --no-package-lock --no-audit --no-fund @actions/artifact@6
+        node tools/ci_download_sizes.mjs sizes
 
     - name: Summarize firmware sizes
       continue-on-error: true
