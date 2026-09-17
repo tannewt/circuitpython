@@ -8,7 +8,8 @@
 
 Supported format codes: ``b``, ``B``, ``h``, ``H``, ``i``, ``I``, ``l``,
 ``L``, ``q``, ``Q``, ``f``, ``d`` (the latter 2 depending on the
-floating-point support).
+floating-point support). ``d`` is not available on non-full builds, such as
+most SAMD21 boards.
 
 Classes
 -------

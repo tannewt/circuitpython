@@ -4147,7 +4147,7 @@ msgstr "Буфер не является байтовым массивом."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr "Системная запись должна быть gnss. Спутниковая система"
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
 msgstr "Неподдерживаемый алгоритм хеширования"
 

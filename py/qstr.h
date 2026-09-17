@@ -38,8 +38,9 @@
 // first entry in enum will be MP_QSTRnull=0, which indicates invalid/no qstr
 enum {
     #ifndef NO_QSTR
-#define QDEF0(id, hash, len, str) id,
-#define QDEF1(id, hash, len, str)
+// CIRCUITPY-CHANGE: QDEF carries the string's offset within its pool's blob
+#define QDEF0(id, hash, len, offset, str) id,
+#define QDEF1(id, hash, len, offset, str)
 // CIRCUITPY-CHANGE
 #define TRANSLATION(english_id, number)
     #include "genhdr/qstrdefs.generated.h"
@@ -50,8 +51,9 @@ enum {
     MP_QSTRstart_of_main = MP_QSTRnumber_of_static - 1, // unused but shifts the enum counter back one
 
     #ifndef NO_QSTR
-#define QDEF0(id, hash, len, str)
-#define QDEF1(id, hash, len, str) id,
+// CIRCUITPY-CHANGE: QDEF carries the string's offset within its pool's blob
+#define QDEF0(id, hash, len, offset, str)
+#define QDEF1(id, hash, len, offset, str) id,
 #define TRANSLATION(english_id, number)
     #include "genhdr/qstrdefs.generated.h"
 #undef QDEF0
@@ -82,6 +84,9 @@ typedef uint16_t qstr_len_t;
 #error unimplemented qstr length decoding
 #endif
 
+// CIRCUITPY-CHANGE: offset of a string within a ROM pool's blob
+typedef uint16_t qstr_offset_t;
+
 typedef struct _qstr_pool_t {
     const struct _qstr_pool_t *prev;
     size_t total_prev_len : (8 * sizeof(size_t) - 1);
@@ -92,6 +97,12 @@ typedef struct _qstr_pool_t {
     qstr_hash_t *hashes;
     #endif
     qstr_len_t *lengths;
+    // CIRCUITPY-CHANGE: ROM pools store their strings in one NUL-separated blob.
+    // When blob is non-NULL, string i is at blob + offsets[i], its length is
+    // offsets[i + 1] - offsets[i] - 1 (offsets has len + 1 entries), and lengths
+    // and qstrs[] are unused. Runtime pools have blob == NULL and use lengths and qstrs[].
+    const char *blob;
+    const qstr_offset_t *offsets;
     const char *qstrs[];
 } qstr_pool_t;
 

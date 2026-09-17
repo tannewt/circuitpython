@@ -24,7 +24,10 @@
 //| Supported size/byte order prefixes: *@*, *<*, *>*, *!*.
 //|
 //| Supported format codes: *b*, *B*, *x*, *h*, *H*, *i*, *I*, *l*, *L*, *q*, *Q*,
-//| *s*, *P*, *f*, *d* (the latter 2 depending on the floating-point support)."""
+//| *s*, *P*, *f*, *d* (the latter 2 depending on the floating-point support).
+//|
+//| **Limitations**: *d* is not available on non-full builds, such as most SAMD21 boards.
+//| Using it raises ``ValueError``."""
 //|
 //|
 
