@@ -55,6 +55,7 @@ IGNORE_BOARD = {
     ".github/workflows/run-tests.yml",
     ".github/workflows/run-zephyr-tests.yml",
     ".github/workflows/build-board-custom.yml",
+    ".github/workflows/zephyr-autogen-pr.yml",
     ".github/workflows/bundle_cron.yml",
     ".github/workflows/create-website-pr.yml",
     ".github/workflows/learn_cron.yml",
@@ -74,8 +75,11 @@ GITHUB_MATRIX_LIMIT = 256
 
 # The Zephyr tests build native_sim and the two bsim boards out of the shared sources, so a
 # change confined to these cannot reach them: another port, a translation, a frozen library
-# (this port has none), documentation or the unix test suite.
-PATTERN_ZEPHYR_TESTS_IGNORE = re.compile(r"^(?:docs|frozen|locale|tests)/|^ports/(?!zephyr-cp/)")
+# (this port has none), documentation, the unix test suite or the autogen PR workflow.
+PATTERN_ZEPHYR_TESTS_IGNORE = re.compile(
+    r"^(?:docs|frozen|locale|tests)/|^ports/(?!zephyr-cp/)"
+    r"|^\.github/workflows/zephyr-autogen-pr\.yml$"
+)
 
 # Zephyr boards don't use make, so their module tables can't be computed here. Each
 # board's build writes autogen_board_info.toml next to its circuitpython.toml and that
