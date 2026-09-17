@@ -271,22 +271,41 @@ jobs:
       continue-on-error: true
       run: python3 tools/ci_firmware_sizes.py sizes sizes-report
 
-    - name: Upload firmware size report
+    # Uploaded unzipped, one file per artifact, so each opens directly; with
+    # `archive: false` the file name is the artifact name.
+    - name: Upload firmware size report (HTML)
       continue-on-error: true
       uses: actions/upload-artifact@v7
       with:
-        name: zz-sizes
-        path: sizes-report
+        path: sizes-report/0-sizes.html
+        archive: false
+        if-no-files-found: ignore
+
+    - name: Upload firmware size report (JSON)
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        path: sizes-report/0-sizes.json
+        archive: false
         if-no-files-found: ignore
 
     # The action itself only uploads on pushes to main and release branches and on
-    # published releases. The files carry the version, so the directory keeps a history.
-    - name: Upload firmware size report to S3
+    # published releases. The S3 names carry the version, so the directory keeps a history.
+    - name: Upload firmware size report to S3 (HTML)
       continue-on-error: true
       uses: ./.github/actions/upload_aws
       with:
-        source: sizes-report/
-        destination: 0-sizes/
+        source: sizes-report/0-sizes.html
+        destination: 0-sizes/adafruit-circuitpython-sizes-${{ env.CP_VERSION }}.html
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Upload firmware size report to S3 (JSON)
+      continue-on-error: true
+      uses: ./.github/actions/upload_aws
+      with:
+        source: sizes-report/0-sizes.json
+        destination: 0-sizes/adafruit-circuitpython-sizes-${{ env.CP_VERSION }}.json
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 

@@ -14,15 +14,14 @@ directory and runs:
 
 which writes
 
-    <out-dir>/adafruit-circuitpython-sizes-<version>.json
-        every board with its per-language builds and derived free flash
-    <out-dir>/adafruit-circuitpython-sizes-<version>.html
-        a sortable, filterable table of the same boards, data embedded
+    <out-dir>/0-sizes.json    every board with its per-language builds and derived free flash
+    <out-dir>/0-sizes.html    a sortable, filterable table of the same boards, data embedded
 
-named like the firmware files. The version comes from --version or $CP_VERSION; without
-one the files are plain sizes.json and sizes.html. The script also appends a short markdown summary of the fullest boards to $GITHUB_STEP_SUMMARY when
-that is set, or to --summary FILE. The run description in the report comes from the
-GITHUB_* environment variables; outside CI the report says so instead.
+The names match the artifacts build-ci uploads them as, one file each, unzipped. The
+CircuitPython version, from --version or $CP_VERSION, goes into the reports. The script
+also appends a line to $GITHUB_STEP_SUMMARY when that is set, or to --summary FILE,
+saying how many boards were built and where the reports are. The run description in the
+reports comes from the GITHUB_* environment variables; outside CI the report says so.
 """
 
 import argparse
@@ -34,9 +33,8 @@ import os
 import pathlib
 import sys
 
-# Boards at or above this percent full are listed in the job summary.
-SUMMARY_THRESHOLD = 97.0
-SUMMARY_MAX_ROWS = 40
+# Both reports share this name; build-ci uploads each as an artifact of the same name.
+REPORT_NAME = "0-sizes"
 
 
 def load_records(records_dir):
@@ -120,20 +118,13 @@ def sort_key(board):
     return (board["pct"] is None, -(board["pct"] or 0), board["board"])
 
 
-def output_name(info, extension):
-    """The report's filename, matching the firmware files' pattern when a version is known."""
-    if info["version"]:
-        return f"adafruit-circuitpython-sizes-{info['version']}.{extension}"
-    return f"sizes.{extension}"
-
-
 def write_json(boards, info, out_dir):
     document = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "run": info,
         "boards": boards,
     }
-    with (out_dir / output_name(info, "json")).open("w") as f:
+    with (out_dir / f"{REPORT_NAME}.json").open("w") as f:
         json.dump(document, f, indent=1)
         f.write("\n")
 
@@ -313,52 +304,20 @@ def write_html(boards, info, out_dir):
         .replace("__COUNTS__", counts)
         .replace("__DATA__", data)
     )
-    with (out_dir / output_name(info, "html")).open("w") as f:
+    with (out_dir / f"{REPORT_NAME}.html").open("w") as f:
         f.write(page)
 
 
-def markdown_summary(boards, info):
-    """The fullest and the failed boards, for the job's step summary."""
-    lines = ["### Firmware sizes", ""]
+def markdown_summary(boards):
+    """One line for the job's step summary; the detail is in the reports."""
     if not boards:
-        lines.append("No boards were built in this run.")
-        return "\n".join(lines) + "\n"
-    with_region = [b for b in boards if b["pct"] is not None]
-    lines.append(
-        f"{len(boards)} boards built, {len(with_region)} with a measurable flash region. "
-        f"The full table is in the `zz-sizes` artifact."
+        return "No boards were built in this run, so there is no firmware size report.\n"
+    with_region = sum(1 for b in boards if b["pct"] is not None)
+    return (
+        f"{len(boards)} boards built, {with_region} with a measurable flash region. "
+        f"The complete firmware size reports are in the `{REPORT_NAME}.html` and "
+        f"`{REPORT_NAME}.json` artifacts below.\n"
     )
-    lines.append("")
-
-    failed = [b for b in boards if b["failed"]]
-    if failed:
-        lines.append("Builds that failed:")
-        lines.append("")
-        for b in failed:
-            lines.append(f"- `{b['board']}`: {' '.join(b['failed'])}")
-        lines.append("")
-
-    full = [b for b in with_region if b["pct"] >= SUMMARY_THRESHOLD]
-    if not full:
-        lines.append(f"No board is {SUMMARY_THRESHOLD:g}% full or more.")
-        return "\n".join(lines) + "\n"
-
-    lines.append(f"Boards at least {SUMMARY_THRESHOLD:g}% full (largest language build):")
-    lines.append("")
-    lines.append("| Board | Region | Largest | Used | Free | % full |")
-    lines.append("|---|---:|---|---:|---:|---:|")
-    for b in full[:SUMMARY_MAX_ROWS]:
-        largest = b["largest_language"]
-        if b["largest_source"] == "predicted":
-            largest += " (predicted)"
-        lines.append(
-            f"| `{b['board']}` | {b['region']} | {largest} | {b['largest_used']} "
-            f"| {b['min_free']} | {b['pct']:.2f} |"
-        )
-    if len(full) > SUMMARY_MAX_ROWS:
-        lines.append("")
-        lines.append(f"... and {len(full) - SUMMARY_MAX_ROWS} more.")
-    return "\n".join(lines) + "\n"
 
 
 FREE_STEPS = [(256, "<256 B"), (1024, "<1 KiB"), (4096, "<4 KiB"), (16384, "<16 KiB")]
@@ -390,7 +349,7 @@ def main():
     parser.add_argument(
         "--version",
         default=os.environ.get("CP_VERSION"),
-        help="CircuitPython version for the report filenames (default: $CP_VERSION)",
+        help="CircuitPython version named in the reports (default: $CP_VERSION)",
     )
     parser.add_argument(
         "--summary",
@@ -408,7 +367,7 @@ def main():
     write_json(boards, info, out_dir)
     write_html(boards, info, out_dir)
 
-    summary = markdown_summary(boards, info)
+    summary = markdown_summary(boards)
     if args.summary:
         with open(args.summary, "a") as f:
             f.write(summary)
