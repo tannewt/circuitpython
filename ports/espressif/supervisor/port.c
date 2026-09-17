@@ -325,6 +325,9 @@ void reset_port_early(void) {
 }
 
 void reset_port(void) {
+    // Undo deep sleep holds and re-mark never-reset pins as in use, as the
+    // old reset_all_pins() did.
+    reset_pin_state();
 
     #if CIRCUITPY_SSL
     ssl_reset();

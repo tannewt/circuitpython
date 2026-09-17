@@ -18,6 +18,7 @@ extern void common_hal_reset_pin(const mcu_pin_obj_t *pin);
 extern void reset_pin_number(gpio_num_t pin_number);
 // reset all pins in `bitmask`
 extern void reset_pin_mask(uint64_t bitmask);
+extern void reset_pin_state(void);
 extern void claim_pin(const mcu_pin_obj_t *pin);
 extern void claim_pin_number(gpio_num_t pin_number);
 extern bool pin_number_is_free(gpio_num_t pin_number);
