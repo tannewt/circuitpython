@@ -4098,7 +4098,7 @@ msgstr "Buffer bir bytearray değil."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr ""
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
 msgstr ""
 
