@@ -262,13 +262,26 @@ jobs:
     # actions/download-artifact matches a pattern against a listing of the run's
     # artifacts that stops at 1000, and a full build has more. The script fetches each
     # board's record by exact name instead, from the board list the scheduler produced.
+    # It runs from github-script because only action steps get the artifact API token.
+    - name: Install the artifact client
+      continue-on-error: true
+      run: npm install --no-save --no-package-lock --no-audit --no-fund @actions/artifact@6
+
     - name: Download firmware sizes
       continue-on-error: true
+      uses: actions/github-script@v9
       env:
         BOARDS: ${{ needs.scheduler.outputs.ports }}
-      run: |
-        npm install --no-save --no-package-lock --no-audit --no-fund @actions/artifact@6
-        node tools/ci_download_sizes.mjs sizes
+      with:
+        script: |
+          const { pathToFileURL } = require("node:url");
+          const sizes = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/tools/ci_download_sizes.mjs`));
+          await sizes.downloadSizes({
+            boards: sizes.boardsFromSchedule(JSON.parse(process.env.BOARDS || "{}")),
+            outDir: "sizes",
+            info: core.info,
+            warning: core.warning,
+          });
 
     - name: Summarize firmware sizes
       continue-on-error: true
