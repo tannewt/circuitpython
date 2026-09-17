@@ -191,10 +191,10 @@ Click a column header to sort.</p>
 </div>
 <div class="steps" id="free">Free flash:
   <label class="free256"><input type="radio" name="free" value="256"> under 256 B</label>
-  <label class="free1k"><input type="radio" name="free" value="1024" checked> under 1 KiB</label>
+  <label class="free1k"><input type="radio" name="free" value="1024"> under 1 KiB</label>
   <label class="free4k"><input type="radio" name="free" value="4096"> under 4 KiB</label>
   <label class="free16k"><input type="radio" name="free" value="16384"> under 16 KiB</label>
-  <label><input type="radio" name="free" value=""> all</label>
+  <label><input type="radio" name="free" value="" checked> all</label>
 </div>
 <div class="summary" id="summary"></div>
 <div class="wrap"><table id="t">
