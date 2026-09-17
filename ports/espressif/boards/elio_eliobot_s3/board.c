@@ -20,20 +20,18 @@ void board_init(void) {
         FATFS *fatfs = &fs_mount->fatfs;
         FIL fs;
         UINT char_written = 0;
-        const byte buffer[] = "import board\nimport storage\n\n# Write options : True = Mass Storage, False = REPL\nstorage.remount(\"/\", False)\n";
-        // Create or modify existing boot.py file
+        // Default boot.py: CIRCUITPY is read-only over USB so children can't
+        // break the robot's files from the drive, while code sent over the
+        // serial REPL or BLE (Eliobot's web editor) can still write them.
+        const byte buffer[] =
+            "import storage\n"
+            "\n"
+            "# Eliobot default: the USB drive is read-only, and code sent by\n"
+            "# the Elioblocs editor can write files. To edit files from the drive\n"
+            "# instead, comment out the next line.\n"
+            "storage.remount(\"/\", False)\n";
         f_open(fatfs, &fs, "/boot.py", FA_WRITE | FA_CREATE_ALWAYS);
         f_write(&fs, buffer, sizeof(buffer) - 1, &char_written);
-        f_close(&fs);
-        // Delete code.py, use main.py
-        mp_import_stat_t stat_c = mp_import_stat("code.py");
-        if (stat_c == MP_IMPORT_STAT_FILE) {
-            f_unlink(fatfs, "/code.py");
-        }
-        // Create main.py file
-        const byte buffer2[] = "print(\"Hello World!\")\n";
-        f_open(fatfs, &fs, "/main.py", FA_WRITE | FA_CREATE_ALWAYS);
-        f_write(&fs, buffer2, sizeof(buffer2) - 1, &char_written);
         f_close(&fs);
     }
 }

@@ -12,6 +12,7 @@
 #define MICROPY_HW_MCU_NAME         "ESP32S3"
 #define CIRCUITPY_DRIVE_LABEL       "ELIOBOT"
 
+// Current boards have one status NeoPixel; the next revision chains eight.
 #define MICROPY_HW_NEOPIXEL (&pin_GPIO1)
 #define MICROPY_HW_NEOPIXEL_COUNT (8)
 

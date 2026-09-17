@@ -60,10 +60,8 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_IO14), MP_ROM_PTR(&pin_GPIO14) },
     { MP_ROM_QSTR(MP_QSTR_LINE_5), MP_ROM_PTR(&pin_GPIO14) },
 
-    // GPIO15 : XTAL_32K_P
+    // GPIO15-16 : free (no 32 kHz crystal fitted)
     { MP_ROM_QSTR(MP_QSTR_IO15), MP_ROM_PTR(&pin_GPIO15) },
-
-    // GPIO16 : XTAL_32K_N
     { MP_ROM_QSTR(MP_QSTR_IO16), MP_ROM_PTR(&pin_GPIO16) },
 
     // GPIO17 : Buzzer
