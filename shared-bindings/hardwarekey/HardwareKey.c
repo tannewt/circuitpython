@@ -16,7 +16,7 @@
 //|     This class cannot be instantiated. Every hardware key slot the board has
 //|     is exposed as a fixed `HardwareKey` in :mod:`board` -- for example
 //|     ``board.EFUSE_KEY0`` -- just like pins. A slot with no key burned into it
-//|     still has a `HardwareKey` object; its `purpose` is `hardwarekey.UNUSED`.
+//|     still has a `HardwareKey` object; its `purpose` is `hardwarekey.Purpose.UNUSED`.
 //|
 //|     Compute a MAC with a key by passing it to `hmac.new()` in place of a
 //|     ``bytes`` key.
@@ -36,7 +36,7 @@ static void hardwarekey_hardwarekey_print(const mp_print_t *print, mp_obj_t self
 }
 
 //|     def __bool__(self) -> bool:
-//|         """``False`` if `purpose` is `hardwarekey.UNUSED`, ``True`` otherwise.
+//|         """``False`` if `purpose` is `hardwarekey.Purpose.UNUSED`, ``True`` otherwise.
 //|         This lets you write ``if key:`` to check whether a slot is usable."""
 //|         ...
 static mp_obj_t hardwarekey_hardwarekey_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
@@ -60,11 +60,11 @@ MP_DEFINE_CONST_FUN_OBJ_1(hardwarekey_hardwarekey_get_key_slot_obj, hardwarekey_
 MP_PROPERTY_GETTER(hardwarekey_hardwarekey_key_slot_obj, (mp_obj_t)&hardwarekey_hardwarekey_get_key_slot_obj);
 
 //|     purpose: Purpose
-//|     """What this key slot is provisioned for -- `hardwarekey.HMAC_UP` or
-//|     `hardwarekey.UNUSED`. (read-only)"""
+//|     """What this key slot is provisioned for -- `hardwarekey.Purpose.HMAC_UP` or
+//|     `hardwarekey.Purpose.UNUSED`. (read-only)"""
 static mp_obj_t hardwarekey_hardwarekey_get_purpose(mp_obj_t self_in) {
     hardwarekey_hardwarekey_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    return hardwarekey_purpose_to_obj(common_hal_hardwarekey_hardwarekey_get_purpose(self));
+    return cp_enum_find(&hardwarekey_purpose_type, common_hal_hardwarekey_hardwarekey_get_purpose(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(hardwarekey_hardwarekey_get_purpose_obj, hardwarekey_hardwarekey_get_purpose);
 MP_PROPERTY_GETTER(hardwarekey_hardwarekey_purpose_obj, (mp_obj_t)&hardwarekey_hardwarekey_get_purpose_obj);

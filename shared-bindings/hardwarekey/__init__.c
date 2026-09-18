@@ -26,51 +26,34 @@
 //| by passing it to `hmac.new()`.
 //| """
 
+MAKE_ENUM_VALUE(hardwarekey_purpose_type, hardwarekey_purpose, HMAC_UP, HARDWAREKEY_PURPOSE_HMAC);
+MAKE_ENUM_VALUE(hardwarekey_purpose_type, hardwarekey_purpose, UNUSED, HARDWAREKEY_PURPOSE_UNUSED);
+
 //| class Purpose:
 //|     """What a hardware key slot is provisioned for. Instances are singletons;
 //|     compare with ``is``."""
 //|
-static void hardwarekey_purpose_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
-    cp_enum_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    mp_printf(print, "%q.%q", MP_QSTR_hardwarekey, self->name);
-}
-
-MP_DEFINE_CONST_OBJ_TYPE(
-    hardwarekey_purpose_type,
-    MP_QSTR_Purpose,
-    MP_TYPE_FLAG_NONE,
-    print, hardwarekey_purpose_print
-    );
-
-//| HMAC_UP: Purpose
-//| """The slot holds an HMAC key. It can be used with `hmac.new()`."""
-const cp_enum_obj_t hardwarekey_purpose_hmac_obj = {
-    { &hardwarekey_purpose_type }, HARDWAREKEY_PURPOSE_HMAC, MP_QSTR_HMAC_UP
-};
-
-//| UNUSED: Purpose
-//| """No key is burned into the slot (or it is burned for something this module
-//| does not expose). The slot's `HardwareKey` still exists but cannot be used."""
+//|     HMAC_UP: object
+//|     """The slot holds an HMAC key. It can be used with `hmac.new()`."""
 //|
-const cp_enum_obj_t hardwarekey_purpose_unused_obj = {
-    { &hardwarekey_purpose_type }, HARDWAREKEY_PURPOSE_UNUSED, MP_QSTR_UNUSED
+//|     UNUSED: object
+//|     """No key is burned into the slot (or it is burned for something this module
+//|     does not expose). The slot's `HardwareKey` still exists but cannot be used."""
+//|
+MAKE_ENUM_MAP(hardwarekey_purpose) {
+    MAKE_ENUM_MAP_ENTRY(hardwarekey_purpose, HMAC_UP),
+    MAKE_ENUM_MAP_ENTRY(hardwarekey_purpose, UNUSED),
 };
+static MP_DEFINE_CONST_DICT(hardwarekey_purpose_locals_dict, hardwarekey_purpose_locals_table);
 
-mp_obj_t hardwarekey_purpose_to_obj(hardwarekey_purpose_t purpose) {
-    switch (purpose) {
-        case HARDWAREKEY_PURPOSE_HMAC:
-            return MP_OBJ_FROM_PTR(&hardwarekey_purpose_hmac_obj);
-        default:
-            return MP_OBJ_FROM_PTR(&hardwarekey_purpose_unused_obj);
-    }
-}
+MAKE_PRINTER(hardwarekey, hardwarekey_purpose);
+
+MAKE_ENUM_TYPE(hardwarekey, Purpose, hardwarekey_purpose);
 
 static const mp_rom_map_elem_t hardwarekey_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hardwarekey) },
     { MP_ROM_QSTR(MP_QSTR_HardwareKey), MP_ROM_PTR(&hardwarekey_hardwarekey_type) },
     { MP_ROM_QSTR(MP_QSTR_Purpose), MP_ROM_PTR(&hardwarekey_purpose_type) },
-    { MP_ROM_QSTR(MP_QSTR_HMAC_UP), MP_ROM_PTR(&hardwarekey_purpose_hmac_obj) },
-    { MP_ROM_QSTR(MP_QSTR_UNUSED), MP_ROM_PTR(&hardwarekey_purpose_unused_obj) },
 };
 static MP_DEFINE_CONST_DICT(hardwarekey_module_globals, hardwarekey_module_globals_table);
 
