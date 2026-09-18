@@ -94,6 +94,17 @@ jobs:
         name: ${{ matrix.board }}
         path: bin/${{ matrix.board }}
 
+    - name: Upload firmware sizes
+      # "zz-" sorts the size records after every board in the run's artifact list.
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: zz-sizes-${{ matrix.board }}
+        path: sizes/${{ matrix.board }}.json
+        if-no-files-found: ignore
+        # build-ci merges these into the 0-sizes reports; delete them after one day.
+        retention-days: 1
+
     - name: Upload to S3
       uses: ./.github/actions/upload_aws
       with:
