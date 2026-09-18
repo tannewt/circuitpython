@@ -11,6 +11,16 @@
 
 #include "shared-bindings/microcontroller/Pin.h"  // for the pin definitions
 
+// A port can inject board.EFUSE_KEY* (or other hardware key) entries into
+// every board's globals table by defining CIRCUITPY_BOARD_HARDWARE_KEYS (a
+// comma-terminated list of { MP_ROM_QSTR(...), MP_ROM_PTR(...) } pairs).
+#if CIRCUITPY_HARDWAREKEY
+#include "common-hal/hardwarekey/board.h"
+#endif
+#ifndef CIRCUITPY_BOARD_HARDWARE_KEYS
+#define CIRCUITPY_BOARD_HARDWARE_KEYS
+#endif
+
 #if CIRCUITPY_MUTABLE_BOARD
 extern mp_obj_dict_t board_module_globals;
 #else
@@ -41,8 +51,10 @@ MP_DECLARE_CONST_FUN_OBJ_0(board_uart_obj);
 
 #define CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS \
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_board) }, \
-    { MP_ROM_QSTR(MP_QSTR_board_id), MP_ROM_PTR(&board_module_id_obj) },
+    { MP_ROM_QSTR(MP_QSTR_board_id), MP_ROM_PTR(&board_module_id_obj) }, \
+    CIRCUITPY_BOARD_HARDWARE_KEYS
 
 #define CIRCUITPYTHON_MUTABLE_BOARD_DICT_STANDARD_ITEMS \
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_board) }, \
-    { MP_ROM_QSTR(MP_QSTR_board_id), MP_OBJ_FROM_PTR(&board_module_id_obj) },
+    { MP_ROM_QSTR(MP_QSTR_board_id), MP_OBJ_FROM_PTR(&board_module_id_obj) }, \
+    CIRCUITPY_BOARD_HARDWARE_KEYS
