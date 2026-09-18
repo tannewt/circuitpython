@@ -1080,6 +1080,51 @@ void common_hal_bitmaptools_draw_circle(displayio_bitmap_t *destination,
     draw_circle(destination, x, y, radius, value);
 }
 
+// Copy whole rows with memmove when no per-pixel decisions are needed.
+static bool blit_rows_fast(displayio_bitmap_t *destination, displayio_bitmap_t *source,
+    int16_t x, int16_t y, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+    uint8_t bits_per_value = source->bits_per_value;
+    if (bits_per_value != destination->bits_per_value || bits_per_value < 8) {
+        return false;
+    }
+    if (x1 < 0 || y1 < 0 || x2 > source->width || y2 > source->height) {
+        return false;
+    }
+    int sx = x1, sy = y1, dx = x, dy = y;
+    int w = x2 - x1, h = y2 - y1;
+    if (dx < 0) {
+        sx -= dx;
+        w += dx;
+        dx = 0;
+    }
+    if (dy < 0) {
+        sy -= dy;
+        h += dy;
+        dy = 0;
+    }
+    if (dx + w > destination->width) {
+        w = destination->width - dx;
+    }
+    if (dy + h > destination->height) {
+        h = destination->height - dy;
+    }
+    if (w <= 0 || h <= 0) {
+        return true;    // nothing lands in the destination
+    }
+    size_t bytes_per_value = bits_per_value / 8;
+    size_t row_bytes = (size_t)w * bytes_per_value;
+    // When a bitmap is blitted onto itself and the destination rows sit below the
+    // source rows, copy bottom-up so no source row is overwritten before it is read.
+    bool bottom_up = destination == source && dy > sy;
+    for (int j = 0; j < h; j++) {
+        int row = bottom_up ? h - 1 - j : j;
+        const uint8_t *src_row = (const uint8_t *)(source->data + (size_t)(sy + row) * source->stride) + (size_t)sx * bytes_per_value;
+        uint8_t *dst_row = (uint8_t *)(destination->data + (size_t)(dy + row) * destination->stride) + (size_t)dx * bytes_per_value;
+        memmove(dst_row, src_row, row_bytes);
+    }
+    return true;
+}
+
 void common_hal_bitmaptools_blit(displayio_bitmap_t *destination, displayio_bitmap_t *source, int16_t x, int16_t y,
     int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint32_t skip_source_index, bool skip_source_index_none, uint32_t skip_dest_index,
     bool skip_dest_index_none) {
@@ -1114,6 +1159,11 @@ void common_hal_bitmaptools_blit(displayio_bitmap_t *destination, displayio_bitm
     }
     if (y > y1) {
         y_reverse = true;
+    }
+
+    if (skip_source_index_none && skip_dest_index_none &&
+        blit_rows_fast(destination, source, x, y, x1, y1, x2, y2)) {
+        return;
     }
 
     // simplest version - use internal functions for get/set pixels
