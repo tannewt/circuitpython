@@ -168,20 +168,25 @@ async def preprocess_and_split_defs(compiler, source_file, build_path, flags):
             )
 
 
+def _concatenate_if_changed(inputs, output_file):
+    """Write the concatenation of inputs to output_file, but only if it differs from what is
+    already there, so an unchanged output keeps its modification time."""
+    content = "".join(path.read_text() for path in inputs)
+    if not output_file.exists() or output_file.read_text() != content:
+        output_file.write_text(content)
+
+
 async def collect_defs(mode, build_path):
     output_file = build_path / f"{mode}defs.collected"
     splitdir = build_path / "genhdr" / mode
-    to_collect = list(splitdir.glob(f"**/*.{mode}"))
-    batch_size = 50
-    await cpbuild.run_command(
-        ["cat", "-s", *to_collect[:batch_size], ">", output_file],
-        splitdir,
+    # Sorted so the output does not depend on directory order.
+    to_collect = sorted(splitdir.glob(f"**/*.{mode}"))
+    await cpbuild.run_function(
+        _concatenate_if_changed,
+        (to_collect, output_file),
+        {},
+        description=f"Collect {mode} definitions -> {output_file.relative_to(build_path)}",
     )
-    for i in range(0, len(to_collect), batch_size):
-        await cpbuild.run_command(
-            ["cat", "-s", *to_collect[i : i + batch_size], ">>", output_file],
-            splitdir,
-        )
     return output_file
 
 
@@ -189,9 +194,13 @@ async def generate_qstr_headers(build_path, compiler, flags, translation):
     collected = await collect_defs("qstr", build_path)
     generated = build_path / "genhdr" / "qstrdefs.generated.h"
 
+    # check_hash: the collected file is rewritten on every build, so this reruns every
+    # build too. Keep the old modification time when the header comes out unchanged, or
+    # every file that includes it would be recompiled.
     await cpbuild.run_command(
         ["python", srcdir / "py" / "makeqstrdata.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
     compression_level = 9
@@ -230,29 +239,21 @@ async def generate_qstr_headers(build_path, compiler, flags, translation):
 
 async def generate_module_header(build_path):
     collected = await collect_defs("module", build_path)
+    generated = build_path / "genhdr" / "moduledefs.h"
     await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "makemoduledefs.py",
-            collected,
-            ">",
-            build_path / "genhdr" / "moduledefs.h",
-        ],
+        ["python", srcdir / "py" / "makemoduledefs.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
 
 async def generate_root_pointer_header(build_path):
     collected = await collect_defs("root_pointer", build_path)
+    generated = build_path / "genhdr" / "root_pointers.h"
     await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "make_root_pointers.py",
-            collected,
-            ">",
-            build_path / "genhdr" / "root_pointers.h",
-        ],
+        ["python", srcdir / "py" / "make_root_pointers.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
 
