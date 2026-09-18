@@ -7,7 +7,7 @@
 #pragma once
 
 // board.EFUSE_KEY0 .. board.EFUSE_KEY5: one fixed entry per eFuse key block,
-// injected into every board's globals table through CIRCUITPY_BOARD_EXTRA_DICT_ITEMS
+// injected into every board's globals table through CIRCUITPY_BOARD_HARDWARE_KEYS
 // (see shared-bindings/board/__init__.h). Each points at a static HardwareKey the
 // startup probe (espressif_hardwarekey_init) fills in -- so, like board pins, the
 // names exist at compile time and the objects are ready before user code runs.
@@ -21,7 +21,7 @@
 
 extern hardwarekey_hardwarekey_obj_t hardwarekey_efuse_keys[HARDWAREKEY_EFUSE_SLOT_COUNT];
 
-#define CIRCUITPY_BOARD_EXTRA_DICT_ITEMS \
+#define CIRCUITPY_BOARD_HARDWARE_KEYS \
     { MP_ROM_QSTR(MP_QSTR_EFUSE_KEY0), MP_ROM_PTR(&hardwarekey_efuse_keys[0]) }, \
     { MP_ROM_QSTR(MP_QSTR_EFUSE_KEY1), MP_ROM_PTR(&hardwarekey_efuse_keys[1]) }, \
     { MP_ROM_QSTR(MP_QSTR_EFUSE_KEY2), MP_ROM_PTR(&hardwarekey_efuse_keys[2]) }, \
