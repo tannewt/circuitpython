@@ -1750,11 +1750,6 @@ msgstr "Ненулевое время ожидания должно быть > 0
 msgid "Failed to connect: timeout"
 msgstr "Не удалось подключиться: таймаут"
 
-#: ports/nordic/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-msgid "Numeric comparison pairing"
-msgstr ""
-
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
 msgstr "Неожиданный тип nrfx uuid"
@@ -4151,6 +4146,10 @@ msgstr "Системная запись должна быть gnss. Спутни
 msgid "Unsupported hash algorithm"
 msgstr "Неподдерживаемый алгоритм хеширования"
 
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
+msgstr ""
+
 #: shared-bindings/i2cioexpander/IOExpander.c
 msgid "num_pins must be 8 or 16"
 msgstr ""
@@ -4441,7 +4440,7 @@ msgstr "Не удалось выделить место для декодера"
 msgid "Failed to parse MP3 file"
 msgstr "Не удалось распарсить файл MP3"
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr "%q слишком долго"
 
@@ -4500,6 +4499,14 @@ msgstr "Неподдерживаемый тип шины дисплея"
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
 msgstr "неподдерживаемое цветовое пространство для GifWriter"
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
+msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
 #: shared-module/is31fl3741/IS31FL3741.c

@@ -1746,11 +1746,6 @@ msgstr ""
 msgid "Failed to connect: timeout"
 msgstr "Bağlantı kurulamadı: timeout"
 
-#: ports/nordic/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-msgid "Numeric comparison pairing"
-msgstr ""
-
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
 msgstr ""
@@ -4102,6 +4097,10 @@ msgstr ""
 msgid "Unsupported hash algorithm"
 msgstr ""
 
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
+msgstr ""
+
 #: shared-bindings/i2cioexpander/IOExpander.c
 msgid "num_pins must be 8 or 16"
 msgstr ""
@@ -4385,7 +4384,7 @@ msgstr "Deşifre edici tahsis edilemedi"
 msgid "Failed to parse MP3 file"
 msgstr "MP3 dosyası ayrıştırılamadı"
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr "%q çok uzun"
 
@@ -4442,6 +4441,14 @@ msgstr ""
 
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
 msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
