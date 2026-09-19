@@ -8,21 +8,7 @@
 
 #include "shared-bindings/microcontroller/Pin.h"
 
-void reset_all_pins(void) {
-}
-
-void never_reset_pin_number(uint8_t pin_number) {
-}
-
 void reset_pin_number(uint8_t pin_number) {
-}
-
-void common_hal_never_reset_pin(const mcu_pin_obj_t *pin) {
-    never_reset_pin_number(pin->number);
-}
-
-void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
-    reset_pin_number(pin->number);
 }
 
 void claim_pin(const mcu_pin_obj_t *pin) {
@@ -38,10 +24,6 @@ bool common_hal_mcu_pin_is_free(const mcu_pin_obj_t *pin) {
 
 uint8_t common_hal_mcu_pin_number(const mcu_pin_obj_t *pin) {
     return pin->number;
-}
-
-void common_hal_mcu_pin_claim(const mcu_pin_obj_t *pin) {
-    return claim_pin(pin);
 }
 
 void common_hal_mcu_pin_reset_number(uint8_t pin_no) {

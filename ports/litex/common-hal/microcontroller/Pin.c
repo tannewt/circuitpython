@@ -11,10 +11,6 @@
 
 static uint8_t claimed_pins[1];
 
-void reset_all_pins(void) {
-    // TODO
-}
-
 // Mark pin as free and return it to a quiescent state.
 void reset_pin_number(uint8_t pin_port, uint8_t pin_number) {
     if (pin_port == 0x0F) {
@@ -25,20 +21,9 @@ void reset_pin_number(uint8_t pin_port, uint8_t pin_number) {
     claimed_pins[pin_port] &= ~(1 << pin_number);
 }
 
-void common_hal_reset_pin(const mcu_pin_obj_t *pin) {
-    if (pin == NULL) {
-        return;
-    }
-    reset_pin_number(0, pin->number);
-}
-
 void claim_pin(const mcu_pin_obj_t *pin) {
     // Set bit in claimed_pins bitmask.
     claimed_pins[0] |= 1 << pin->number;
-}
-
-void common_hal_mcu_pin_claim(const mcu_pin_obj_t *pin) {
-    claim_pin(pin);
 }
 
 bool pin_number_is_free(uint8_t pin_port, uint8_t pin_number) {

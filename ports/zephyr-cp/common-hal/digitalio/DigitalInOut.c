@@ -9,10 +9,6 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 
-void common_hal_digitalio_digitalinout_never_reset(
-    digitalio_digitalinout_obj_t *self) {
-}
-
 digitalinout_result_t common_hal_digitalio_digitalinout_construct(
     digitalio_digitalinout_obj_t *self, const mcu_pin_obj_t *pin) {
     claim_pin(pin);
@@ -40,7 +36,6 @@ void common_hal_digitalio_digitalinout_deinit(digitalio_digitalinout_obj_t *self
         return;
     }
 
-    reset_pin(self->pin);
     self->pin = NULL;
 }
 

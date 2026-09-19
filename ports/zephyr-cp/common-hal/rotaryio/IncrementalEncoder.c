@@ -117,9 +117,6 @@ void common_hal_rotaryio_incrementalencoder_deinit(rotaryio_incrementalencoder_o
     gpio_remove_callback(self->pin_a->port, &self->callback_a.callback);
     gpio_remove_callback(self->pin_b->port, &self->callback_b.callback);
 
-    reset_pin(self->pin_a);
-    reset_pin(self->pin_b);
-
     common_hal_rotaryio_incrementalencoder_mark_deinit(self);
 }
 
