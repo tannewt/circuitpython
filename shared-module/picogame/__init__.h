@@ -184,7 +184,8 @@ void picogame_blit_bitmap_affine(
 //
 // Strip-path contract a backend provides:
 //   picogame_strip_begin      - open a window for [x0,y0,x1,y1); return strip geometry
-//   picogame_out_strip_send   - push one composited strip (region_w*sh px, wire RGB565)
+//   picogame_out_strip_send   - push one composited strip (region_w*sh px, wire RGB565; packed to
+//                               RGB444 first when that panel is in 12-bit mode)
 //   picogame_out_strip_end    - close the transaction
 //   picogame_set_invert       - panel hardware colour inversion (a free full-screen flash)
 //   picogame_set_pixel_format - panel COLMOD (RGB565/RGB444), when CIRCUITPY_PICOGAME_RGB444

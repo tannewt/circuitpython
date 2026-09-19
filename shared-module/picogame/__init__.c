@@ -976,6 +976,12 @@ bool picogame_strip_begin(
     return true;
 }
 
+#if CIRCUITPY_PICOGAME_RGB444
+// The display currently switched to RGB444, or NULL. The strip path packs for it and
+// picogame_reset() restores it to RGB565 at the end of the program.
+static picogame_output_t *rgb444_display = NULL;
+#endif
+
 // --- output transport seam (busdisplay backend): the ONLY per-strip display ops the generic
 // picogame_render_region orchestrator below touches, so a non-CircuitPython port (MicroPython
 // framebuf/SPI) swaps just strip_begin + these two + set_invert/set_pixel_format. See __init__.h.
@@ -993,6 +999,14 @@ void picogame_render_region(
     int16_t x0, int16_t y0, int16_t x1, int16_t y1,
     uint16_t background, int ox, int oy) {
 
+    #if CIRCUITPY_PICOGAME_RGB444
+    // RGB444 packs 2 px into 3 bytes, so widen the region to even x bounds.
+    bool rgb444 = (display == rgb444_display);
+    if (rgb444) {
+        x0 &= ~1;
+        x1 = (x1 + 1) & ~1;
+    }
+    #endif
     int region_w, strip_h;
     int cx0 = x0, cy0 = y0, cx1 = x1, cy1 = y1;   // strip_begin clamps these to the panel in place
     if (!picogame_strip_begin(display, &cx0, &cy0, &cx1, &cy1, buffer_pixels, &region_w, &strip_h)) {
@@ -1001,7 +1015,13 @@ void picogame_render_region(
     for (int sy = cy0; sy < cy1; sy += strip_h) {
         int sh = picogame_imin(strip_h, cy1 - sy);
         mp_obj_t exc = picogame_blit_strip_layers(buffer, region_w, sy, sh, cx0, items, kinds, n, background, ox, oy);
-        picogame_out_strip_send(display, (uint8_t *)buffer, region_w * sh * 2);
+        size_t nbytes = (size_t)region_w * sh * 2;
+        #if CIRCUITPY_PICOGAME_RGB444
+        if (rgb444) {
+            nbytes = picogame_pack_rgb444(buffer, (size_t)region_w * sh);   // in place, 3/4 the bytes
+        }
+        #endif
+        picogame_out_strip_send(display, (uint8_t *)buffer, nbytes);
         if (exc != MP_OBJ_NULL) {                 // a StripDraw callback raised a BaseException: close the
             picogame_out_strip_end(display);      // bus, then re-raise (Ctrl-C / reload)
             nlr_raise(MP_OBJ_TO_PTR(exc));
@@ -1029,9 +1049,6 @@ void picogame_set_invert(picogame_output_t *display, bool on) {
 // Set the panel pixel format (COLMOD 0x3A): rgb444 -> 12-bit RGB444 (0x53), else 16-bit RGB565
 // (0x55). Asserting it on every Display construct also recovers from a previous program that left
 // the panel in the other format (survives soft reset).
-// The display currently switched to RGB444, or NULL; picogame_reset() restores it to RGB565 at
-// the end of the program.
-static picogame_output_t *rgb444_display = NULL;
 
 void picogame_set_pixel_format(picogame_output_t *display, bool rgb444) {
     uint8_t cmd = 0x3A;
