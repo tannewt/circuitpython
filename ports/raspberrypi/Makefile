@@ -726,8 +726,10 @@ CFLAGS += -I$(MBEDTLS_GEN)
 $(patsubst %.c,$(BUILD)/%.o,$(SRC_MBEDTLS)) $(OBJ_MBEDTLS): $(MBEDTLS_WRAPPERS_H)
 # Vendored third-party code, so don't hold it to CircuitPython's warning settings. The
 # unused-but-set variables are real but harmless: they are in key-exchange paths that
-# are compiled out.
+# are compiled out. gcc 15.3 reports false array-bounds errors in the inlined
+# mbedtls_xor_no_simd() in gcm.c and aes.c on RP2350.
 $(patsubst %.c,$(BUILD)/%.o,$(SRC_MBEDTLS)) $(OBJ_MBEDTLS): CFLAGS += \
+	-Wno-array-bounds \
 	-Wno-suggest-attribute=format \
 	-Wno-unused-but-set-variable
 else
