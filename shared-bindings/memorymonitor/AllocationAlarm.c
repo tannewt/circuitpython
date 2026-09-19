@@ -46,8 +46,13 @@ static mp_obj_t memorymonitor_allocationalarm_make_new(const mp_obj_type_t *type
         mp_arg_validate_int_min(args[ARG_minimum_block_count].u_int, 1, MP_QSTR_minimum_block_count);
 
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    memorymonitor_allocationalarm_obj_t *self =
+        mp_obj_malloc_with_finaliser(memorymonitor_allocationalarm_obj_t, &memorymonitor_allocationalarm_type);
+    #else
     memorymonitor_allocationalarm_obj_t *self =
         mp_obj_malloc(memorymonitor_allocationalarm_obj_t, &memorymonitor_allocationalarm_type);
+    #endif
     common_hal_memorymonitor_allocationalarm_construct(self, minimum_block_count);
 
     return MP_OBJ_FROM_PTR(self);

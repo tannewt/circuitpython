@@ -42,7 +42,11 @@ static mp_obj_t bleio_uuid_make_new(const mp_obj_type_t *type, size_t n_args, si
             mp_arg_validate_int_range(mp_obj_get_int(value), 0, 0xffff, MP_QSTR_value);
 
         // NULL means no 128-bit value.
+        #if CIRCUITPY_FINALIZE_EVERYTHING
+        bleio_uuid_obj_t *self = mp_obj_malloc_with_finaliser(bleio_uuid_obj_t, &bleio_uuid_type);
+        #else
         bleio_uuid_obj_t *self = mp_obj_malloc(bleio_uuid_obj_t, &bleio_uuid_type);
+        #endif
         common_hal_bleio_uuid_construct(self, uuid16, NULL);
 
         return MP_OBJ_FROM_PTR(self);
@@ -90,7 +94,11 @@ static mp_obj_t bleio_uuid_make_new(const mp_obj_type_t *type, size_t n_args, si
         uuid128[12] = 0;
         uuid128[13] = 0;
 
+        #if CIRCUITPY_FINALIZE_EVERYTHING
+        bleio_uuid_obj_t *self = mp_obj_malloc_with_finaliser(bleio_uuid_obj_t, &bleio_uuid_type);
+        #else
         bleio_uuid_obj_t *self = mp_obj_malloc(bleio_uuid_obj_t, &bleio_uuid_type);
+        #endif
         common_hal_bleio_uuid_construct(self, uuid16, uuid128);
 
         return MP_OBJ_FROM_PTR(self);

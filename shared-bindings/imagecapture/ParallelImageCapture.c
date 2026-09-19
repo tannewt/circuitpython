@@ -56,8 +56,13 @@ static mp_obj_t imagecapture_parallelimagecapture_make_new(const mp_obj_type_t *
     const mcu_pin_obj_t *vsync = validate_obj_is_free_pin_or_none(args[ARG_vsync].u_obj, MP_QSTR_vsync);
     const mcu_pin_obj_t *href = validate_obj_is_free_pin_or_none(args[ARG_href].u_obj, MP_QSTR_href);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    imagecapture_parallelimagecapture_obj_t *self =
+        mp_obj_malloc_with_finaliser(imagecapture_parallelimagecapture_obj_t, &imagecapture_parallelimagecapture_type);
+    #else
     imagecapture_parallelimagecapture_obj_t *self =
         mp_obj_malloc(imagecapture_parallelimagecapture_obj_t, &imagecapture_parallelimagecapture_type);
+    #endif
     common_hal_imagecapture_parallelimagecapture_construct(self, pins, pin_count, clock, vsync, href);
 
     return self;
@@ -158,6 +163,9 @@ static MP_DEFINE_CONST_FUN_OBJ_1(imagecapture_parallelimagecapture_deinit_obj, i
 
 static const mp_rom_map_elem_t imagecapture_parallelimagecapture_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&imagecapture_parallelimagecapture_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&imagecapture_parallelimagecapture_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&default___exit___obj) },
 

@@ -54,7 +54,11 @@ static mp_obj_t gifio_gifwriter_make_new(const mp_obj_type_t *type, size_t n_arg
         own_file = true;
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    gifio_gifwriter_t *self = mp_obj_malloc_with_finaliser(gifio_gifwriter_t, &gifio_gifwriter_type);
+    #else
     gifio_gifwriter_t *self = mp_obj_malloc(gifio_gifwriter_t, &gifio_gifwriter_type);
+    #endif
     shared_module_gifio_gifwriter_construct(
         self,
         file,
@@ -138,6 +142,9 @@ static const mp_rom_map_elem_t gifio_gifwriter_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&default___exit___obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&gifio_gifwriter_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&gifio_gifwriter_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_add_frame), MP_ROM_PTR(&gifio_gifwriter_add_frame_obj) },
 };
 

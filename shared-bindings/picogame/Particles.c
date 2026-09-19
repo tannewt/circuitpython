@@ -57,7 +57,11 @@ static mp_obj_t picogame_particles_make_new(const mp_obj_type_t *type, size_t n_
         gravity = -128.0f;
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_particles_obj_t *self = mp_obj_malloc_with_finaliser(picogame_particles_obj_t, type);
+    #else
     picogame_particles_obj_t *self = mp_obj_malloc(picogame_particles_obj_t, type);
+    #endif
     self->cap = cap;
     self->count = 0;
     self->size = size;

@@ -43,7 +43,11 @@ static mp_obj_t picogame_tilemap_make_new(const mp_obj_type_t *type, size_t n_ar
     mp_buffer_info_t mi;
     mp_get_buffer_raise(map_obj, &mi, MP_BUFFER_RW);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_tilemap_obj_t *self = mp_obj_malloc_with_finaliser(picogame_tilemap_obj_t, type);
+    #else
     picogame_tilemap_obj_t *self = mp_obj_malloc(picogame_tilemap_obj_t, type);
+    #endif
     self->tileset = MP_OBJ_TO_PTR(tileset_obj);
     self->tileset_obj = tileset_obj;
     self->map = mi.buf;

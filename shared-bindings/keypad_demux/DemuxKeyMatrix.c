@@ -122,7 +122,11 @@ static mp_obj_t keypad_demux_demuxkeymatrix_make_new(const mp_obj_type_t *type, 
         column_pins_array[column] = pin;
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    keypad_demux_demuxkeymatrix_obj_t *self = mp_obj_malloc_with_finaliser(keypad_demux_demuxkeymatrix_obj_t, &keypad_demux_demuxkeymatrix_type);
+    #else
     keypad_demux_demuxkeymatrix_obj_t *self = mp_obj_malloc(keypad_demux_demuxkeymatrix_obj_t, &keypad_demux_demuxkeymatrix_type);
+    #endif
     // Last arg is use_gc_allocator, true during VM use.
     common_hal_keypad_demux_demuxkeymatrix_construct(self, num_row_addr_pins, row_addr_pins_array, num_column_pins, column_pins_array, args[ARG_columns_to_anodes].u_bool, args[ARG_transpose].u_bool, interval, max_events, debounce_threshold, true);
 
@@ -235,6 +239,9 @@ MP_DEFINE_CONST_FUN_OBJ_3(keypad_demux_demuxkeymatrix_row_column_to_key_number_o
 
 static const mp_rom_map_elem_t keypad_demux_demuxkeymatrix_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit),                   MP_ROM_PTR(&keypad_demux_demuxkeymatrix_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&keypad_demux_demuxkeymatrix_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR___enter__),                MP_ROM_PTR(&default___enter___obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__),                 MP_ROM_PTR(&default___exit___obj) },
 

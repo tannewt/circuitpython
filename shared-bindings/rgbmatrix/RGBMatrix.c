@@ -31,7 +31,9 @@ static uint8_t validate_pin(mp_obj_t obj, qstr arg_name) {
 
 static void claim_and_never_reset_pin(mp_obj_t pin) {
     common_hal_mcu_pin_claim(pin);
+    #if !CIRCUITPY_FINALIZE_EVERYTHING
     common_hal_never_reset_pin(pin);
+    #endif
 }
 
 static void claim_and_never_reset_pins(mp_obj_t seq) {
@@ -353,6 +355,9 @@ MP_PROPERTY_GETTER(rgbmatrix_rgbmatrix_height_obj,
 
 static const mp_rom_map_elem_t rgbmatrix_rgbmatrix_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&rgbmatrix_rgbmatrix_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&rgbmatrix_rgbmatrix_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_brightness), MP_ROM_PTR(&rgbmatrix_rgbmatrix_brightness_obj) },
     { MP_ROM_QSTR(MP_QSTR_refresh), MP_ROM_PTR(&rgbmatrix_rgbmatrix_refresh_obj) },
     { MP_ROM_QSTR(MP_QSTR_width), MP_ROM_PTR(&rgbmatrix_rgbmatrix_width_obj) },

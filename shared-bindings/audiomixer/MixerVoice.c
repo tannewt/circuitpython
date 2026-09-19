@@ -30,7 +30,11 @@
 static mp_obj_t audiomixer_mixervoice_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    audiomixer_mixervoice_obj_t *self = mp_obj_malloc_with_finaliser(audiomixer_mixervoice_obj_t, &audiomixer_mixervoice_type);
+    #else
     audiomixer_mixervoice_obj_t *self = mp_obj_malloc(audiomixer_mixervoice_obj_t, &audiomixer_mixervoice_type);
+    #endif
     common_hal_audiomixer_mixervoice_construct(self);
 
     return MP_OBJ_FROM_PTR(self);

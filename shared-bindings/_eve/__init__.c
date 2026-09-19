@@ -1237,7 +1237,11 @@ static MP_DEFINE_CONST_DICT(_EVE_locals_dict, _EVE_locals_dict_table);
 
 static mp_obj_t _EVE_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // mp_arg_check_num(n_args, kw_args, 1, 1, false);
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    mp_obj__EVE_t *o = mp_obj_malloc_with_finaliser(mp_obj__EVE_t, &_EVE_type);
+    #else
     mp_obj__EVE_t *o = mp_obj_malloc(mp_obj__EVE_t, &_EVE_type);
+    #endif
     o->_eve.n = 0;
     o->_eve.vscale = 16;
     o->_eve.model = 0;  // default is legacy behavior

@@ -54,7 +54,11 @@ static mp_obj_t alarm_pin_pinalarm_make_new(const mp_obj_type_t *type, mp_uint_t
 
     const mcu_pin_obj_t *pin = validate_obj_is_free_pin(args[ARG_pin].u_obj, MP_QSTR_pin);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    alarm_pin_pinalarm_obj_t *self = mp_obj_malloc_with_finaliser(alarm_pin_pinalarm_obj_t, &alarm_pin_pinalarm_type);
+    #else
     alarm_pin_pinalarm_obj_t *self = mp_obj_malloc(alarm_pin_pinalarm_obj_t, &alarm_pin_pinalarm_type);
+    #endif
     common_hal_alarm_pin_pinalarm_construct(self,
         pin,
         args[ARG_value].u_bool,

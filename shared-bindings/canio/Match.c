@@ -45,7 +45,11 @@ static mp_obj_t canio_match_make_new(const mp_obj_type_t *type, size_t n_args, s
         mp_raise_ValueError_varg(MP_ERROR_TEXT("%q out of range"), MP_QSTR_mask);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    canio_match_obj_t *self = mp_obj_malloc_with_finaliser(canio_match_obj_t, &canio_match_type);
+    #else
     canio_match_obj_t *self = mp_obj_malloc(canio_match_obj_t, &canio_match_type);
+    #endif
     common_hal_canio_match_construct(self, id, mask, args[ARG_extended].u_bool);
 
     return MP_OBJ_FROM_PTR(self);

@@ -100,7 +100,11 @@ static mp_obj_t picogame_framebuffer_make_new(const mp_obj_type_t *type, size_t 
         mp_raise_ValueError(MP_ERROR_TEXT("buffer too small"));
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_framebuffer_obj_t *self = mp_obj_malloc_with_finaliser(picogame_framebuffer_obj_t, type);
+    #else
     picogame_framebuffer_obj_t *self = mp_obj_malloc(picogame_framebuffer_obj_t, type);
+    #endif
     self->buffer = args[ARG_buffer].u_obj;
     self->fb = (uint16_t *)bi.buf;
     self->width = width;

@@ -90,8 +90,13 @@ static mp_obj_t adafruit_bus_device_spidevice_make_new(const mp_obj_type_t *type
         #endif
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    adafruit_bus_device_spidevice_obj_t *self =
+        mp_obj_malloc_with_finaliser(adafruit_bus_device_spidevice_obj_t, &adafruit_bus_device_spidevice_type);
+    #else
     adafruit_bus_device_spidevice_obj_t *self =
         mp_obj_malloc(adafruit_bus_device_spidevice_obj_t, &adafruit_bus_device_spidevice_type);
+    #endif
     common_hal_adafruit_bus_device_spidevice_construct(MP_OBJ_TO_PTR(self),
         spi,
         args[ARG_chip_select].u_obj,

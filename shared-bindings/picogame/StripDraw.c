@@ -82,7 +82,11 @@ static mp_obj_t picogame_stripdraw_make_new(const mp_obj_type_t *type, size_t n_
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_stripdraw_obj_t *self = mp_obj_malloc_with_finaliser(picogame_stripdraw_obj_t, type);
+    #else
     picogame_stripdraw_obj_t *self = mp_obj_malloc(picogame_stripdraw_obj_t, type);
+    #endif
     self->callback = args[ARG_callback].u_obj;
     self->x = args[ARG_x].u_int;
     self->y = args[ARG_y].u_int;
@@ -94,7 +98,11 @@ static mp_obj_t picogame_stripdraw_make_new(const mp_obj_type_t *type, size_t n_
     picogame_dirty_union(&self->dx1, self->x, self->y, self->x + self->w, self->y + self->h);
     // A buffer-less Canvas reused as the per-strip drawing view: its `data` is
     // repointed at the live strip each blit, so no surface RAM is allocated here.
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_canvas_obj_t *view = mp_obj_malloc_with_finaliser(picogame_canvas_obj_t, &picogame_canvas_type);
+    #else
     picogame_canvas_obj_t *view = mp_obj_malloc(picogame_canvas_obj_t, &picogame_canvas_type);
+    #endif
     view->data = NULL;
     view->data_obj = MP_OBJ_NULL;
     view->w = 0;

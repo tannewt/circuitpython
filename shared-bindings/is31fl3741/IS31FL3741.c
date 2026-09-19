@@ -37,7 +37,11 @@ static mp_obj_t is31fl3741_IS31FL3741_make_new(const mp_obj_type_t *type, size_t
 
     mp_obj_t i2c = mp_arg_validate_type(args[ARG_i2c].u_obj, &busio_i2c_type, MP_QSTR_i2c_bus);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    is31fl3741_IS31FL3741_obj_t *self = mp_obj_malloc_with_finaliser(is31fl3741_IS31FL3741_obj_t, &is31fl3741_IS31FL3741_type);
+    #else
     is31fl3741_IS31FL3741_obj_t *self = mp_obj_malloc(is31fl3741_IS31FL3741_obj_t, &is31fl3741_IS31FL3741_type);
+    #endif
     common_hal_is31fl3741_IS31FL3741_construct(self,
         MP_OBJ_TO_PTR(i2c),
         args[ARG_addr].u_int
@@ -149,6 +153,9 @@ MP_DEFINE_CONST_FUN_OBJ_3(is31fl3741_IS31FL3741_write_obj, is31fl3741_IS31FL3741
 
 static const mp_rom_map_elem_t is31fl3741_IS31FL3741_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&is31fl3741_IS31FL3741_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&is31fl3741_IS31FL3741_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_write), (mp_obj_t)&is31fl3741_IS31FL3741_write_obj },
     { MP_ROM_QSTR(MP_QSTR_reset), (mp_obj_t)&is31fl3741_IS31FL3741_reset_obj },
     { MP_ROM_QSTR(MP_QSTR_enable), (mp_obj_t)&is31fl3741_IS31FL3741_enable_obj },

@@ -141,7 +141,11 @@ static mp_obj_t picogame_scene_make_new(const mp_obj_type_t *type, size_t n_args
         mp_get_buffer_raise(args[ARG_buffer_b].u_obj, &tmp, MP_BUFFER_WRITE);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_scene_obj_t *self = mp_obj_malloc_with_finaliser(picogame_scene_obj_t, type);
+    #else
     picogame_scene_obj_t *self = mp_obj_malloc(picogame_scene_obj_t, type);
+    #endif
     self->display = disp;
     self->fast = fast;
     #if CIRCUITPY_PICOGAME_FRAMEBUFFER

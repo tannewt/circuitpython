@@ -91,7 +91,11 @@ static mp_obj_t memorymap_addressrange_make_new(const mp_obj_type_t *type, size_
         mp_raise_ValueError(MP_ERROR_TEXT("Address range wraps around"));
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    memorymap_addressrange_obj_t *self = mp_obj_malloc_with_finaliser(memorymap_addressrange_obj_t, &memorymap_addressrange_type);
+    #else
     memorymap_addressrange_obj_t *self = mp_obj_malloc(memorymap_addressrange_obj_t, &memorymap_addressrange_type);
+    #endif
     common_hal_memorymap_addressrange_construct(self, (uint8_t *)start, length);
 
     return MP_OBJ_FROM_PTR(self);

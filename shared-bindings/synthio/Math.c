@@ -153,7 +153,11 @@ static mp_obj_t synthio_math_make_new(const mp_obj_type_t *type_in, size_t n_arg
 }
 
 static mp_obj_t synthio_math_make_new_common(mp_arg_val_t args[MP_ARRAY_SIZE(math_properties)]) {
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    synthio_math_obj_t *self = mp_obj_malloc_with_finaliser(synthio_math_obj_t, &synthio_math_type);
+    #else
     synthio_math_obj_t *self = mp_obj_malloc(synthio_math_obj_t, &synthio_math_type);
+    #endif
 
     self->base.last_tick = synthio_global_tick;
 

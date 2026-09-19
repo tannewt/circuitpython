@@ -26,7 +26,11 @@
 //|
 
 static mp_obj_t ssl_create_default_context(void) {
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    ssl_sslcontext_obj_t *s = mp_obj_malloc_with_finaliser(ssl_sslcontext_obj_t, &ssl_sslcontext_type);
+    #else
     ssl_sslcontext_obj_t *s = mp_obj_malloc(ssl_sslcontext_obj_t, &ssl_sslcontext_type);
+    #endif
     common_hal_ssl_create_default_context(s);
 
     return MP_OBJ_FROM_PTR(s);

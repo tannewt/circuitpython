@@ -37,7 +37,11 @@ static mp_obj_t alarm_touch_touchalarm_make_new(const mp_obj_type_t *type,
 
     const mcu_pin_obj_t *pin = validate_obj_is_free_pin(args[ARG_pin].u_obj, MP_QSTR_pin);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    alarm_touch_touchalarm_obj_t *self = mp_obj_malloc_with_finaliser(alarm_touch_touchalarm_obj_t, &alarm_touch_touchalarm_type);
+    #else
     alarm_touch_touchalarm_obj_t *self = mp_obj_malloc(alarm_touch_touchalarm_obj_t, &alarm_touch_touchalarm_type);
+    #endif
     common_hal_alarm_touch_touchalarm_construct(self, pin);
 
     return MP_OBJ_FROM_PTR(self);

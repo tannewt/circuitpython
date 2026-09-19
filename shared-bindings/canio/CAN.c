@@ -64,7 +64,11 @@ static mp_obj_t canio_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
         mp_raise_ValueError(MP_ERROR_TEXT("tx and rx cannot both be None"));
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    canio_can_obj_t *self = mp_obj_malloc_with_finaliser(canio_can_obj_t, &canio_can_type);
+    #else
     canio_can_obj_t *self = mp_obj_malloc(canio_can_obj_t, &canio_can_type);
+    #endif
     common_hal_canio_can_construct(self, tx_pin, rx_pin, args[ARG_baudrate].u_int, args[ARG_loopback].u_bool, args[ARG_silent].u_bool);
 
     common_hal_canio_can_auto_restart_set(self, args[ARG_auto_restart].u_bool);
@@ -224,7 +228,11 @@ static mp_obj_t canio_can_listen(size_t n_args, const mp_obj_t *pos_args, mp_map
     }
 
     float timeout = args[ARG_timeout].u_obj ? mp_obj_get_float(args[ARG_timeout].u_obj) : 10.0f;
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    canio_listener_obj_t *listener = m_new_obj_with_finaliser(canio_listener_obj_t);
+    #else
     canio_listener_obj_t *listener = m_new_obj(canio_listener_obj_t);
+    #endif
     listener->base.type = &canio_listener_type;
     common_hal_canio_listener_construct(listener, self, nmatch, matches, timeout);
     return listener;
@@ -326,6 +334,9 @@ static const mp_rom_map_elem_t canio_can_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_auto_restart), MP_ROM_PTR(&canio_can_auto_restart_obj) },
     { MP_ROM_QSTR(MP_QSTR_baudrate), MP_ROM_PTR(&canio_can_baudrate_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&canio_can_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&canio_can_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_listen), MP_ROM_PTR(&canio_can_listen_obj) },
     { MP_ROM_QSTR(MP_QSTR_loopback), MP_ROM_PTR(&canio_can_loopback_obj) },
     { MP_ROM_QSTR(MP_QSTR_receive_error_count), MP_ROM_PTR(&canio_can_receive_error_count_obj) },

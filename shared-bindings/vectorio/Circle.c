@@ -47,7 +47,11 @@ static mp_obj_t vectorio_circle_make_new(const mp_obj_type_t *type, size_t n_arg
     mp_int_t radius = args[ARG_radius].u_int;
     mp_arg_validate_int_min(radius, 1, MP_QSTR_radius);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    vectorio_circle_t *self = mp_obj_malloc_with_finaliser(vectorio_circle_t, &vectorio_circle_type);
+    #else
     vectorio_circle_t *self = mp_obj_malloc(vectorio_circle_t, &vectorio_circle_type);
+    #endif
     uint16_t color_index = args[ARG_color_index].u_int;
     common_hal_vectorio_circle_construct(self, radius, color_index);
 

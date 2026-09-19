@@ -45,7 +45,11 @@ static mp_obj_t tilepalettemapper_tilepalettemapper_make_new(const mp_obj_type_t
         mp_raise_TypeError_varg(MP_ERROR_TEXT("unsupported %q type"), MP_QSTR_pixel_shader);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    tilepalettemapper_tilepalettemapper_t *self = mp_obj_malloc_with_finaliser(tilepalettemapper_tilepalettemapper_t, &tilepalettemapper_tilepalettemapper_type);
+    #else
     tilepalettemapper_tilepalettemapper_t *self = mp_obj_malloc(tilepalettemapper_tilepalettemapper_t, &tilepalettemapper_tilepalettemapper_type);
+    #endif
     common_hal_tilepalettemapper_tilepalettemapper_construct(self, pixel_shader, args[ARG_input_color_count].u_int);
 
     return MP_OBJ_FROM_PTR(self);

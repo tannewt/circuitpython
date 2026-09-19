@@ -51,7 +51,11 @@ static mp_obj_t vectorio_rectangle_make_new(const mp_obj_type_t *type, size_t n_
     mp_int_t height = args[ARG_height].u_int;
     mp_arg_validate_int_min(height, 1, MP_QSTR_height);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    vectorio_rectangle_t *self = mp_obj_malloc_with_finaliser(vectorio_rectangle_t, &vectorio_rectangle_type);
+    #else
     vectorio_rectangle_t *self = mp_obj_malloc(vectorio_rectangle_t, &vectorio_rectangle_type);
+    #endif
     uint16_t color_index = args[ARG_color_index].u_int;
     common_hal_vectorio_rectangle_construct(self, width, height, color_index);
 

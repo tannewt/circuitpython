@@ -76,7 +76,11 @@ static mp_obj_t picogame_sprite_make_new(const mp_obj_type_t *type, size_t n_arg
 
     mp_obj_t bitmap_obj = mp_arg_validate_type(args[ARG_bitmap].u_obj, &picogame_bitmap_type, MP_QSTR_bitmap);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_sprite_obj_t *self = mp_obj_malloc_with_finaliser(picogame_sprite_obj_t, type);
+    #else
     picogame_sprite_obj_t *self = mp_obj_malloc(picogame_sprite_obj_t, type);
+    #endif
     self->bitmap = MP_OBJ_TO_PTR(bitmap_obj);
     self->x = pg_int_to_fp8(args[ARG_x].u_int);   // pixel -> 24.8 fixed-point (overflow-clamped)
     self->y = pg_int_to_fp8(args[ARG_y].u_int);

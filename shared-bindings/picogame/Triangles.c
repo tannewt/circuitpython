@@ -47,7 +47,11 @@
 static mp_obj_t picogame_triangles_make_new(const mp_obj_type_t *type, size_t n_args,
     size_t n_kw, const mp_obj_t *all_args) {
     mp_arg_check_num(n_args, n_kw, 2, 2, false);
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_triangles_obj_t *self = mp_obj_malloc_with_finaliser(picogame_triangles_obj_t, type);
+    #else
     picogame_triangles_obj_t *self = mp_obj_malloc(picogame_triangles_obj_t, type);
+    #endif
     mp_buffer_info_t vi, ci;
     mp_get_buffer_raise(all_args[0], &vi, MP_BUFFER_READ);
     mp_get_buffer_raise(all_args[1], &ci, MP_BUFFER_READ);

@@ -105,7 +105,11 @@ static mp_obj_t bleio_descriptor_add_to_characteristic(size_t n_args, const mp_o
         mp_arg_validate_length_max(initial_value_bufinfo.len, max_length, MP_QSTR_initial_value);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    bleio_descriptor_obj_t *descriptor = mp_obj_malloc_with_finaliser(bleio_descriptor_obj_t, &bleio_descriptor_type);
+    #else
     bleio_descriptor_obj_t *descriptor = mp_obj_malloc(bleio_descriptor_obj_t, &bleio_descriptor_type);
+    #endif
 
     // Range checking on max_length arg is done by the common_hal layer, because
     // it may vary depending on underlying BLE implementation.

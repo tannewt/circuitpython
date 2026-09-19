@@ -128,7 +128,11 @@ static mp_obj_t displayio_tilegrid_make_new(const mp_obj_type_t *type, size_t n_
     int16_t x = args[ARG_x].u_int;
     int16_t y = args[ARG_y].u_int;
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    displayio_tilegrid_t *self = mp_obj_malloc_with_finaliser(displayio_tilegrid_t, &displayio_tilegrid_type);
+    #else
     displayio_tilegrid_t *self = mp_obj_malloc(displayio_tilegrid_t, &displayio_tilegrid_type);
+    #endif
     common_hal_displayio_tilegrid_construct(self, bitmap,
         bitmap_width / tile_width, bitmap_height / tile_height,
         pixel_shader, args[ARG_width].u_int, args[ARG_height].u_int,

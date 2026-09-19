@@ -48,7 +48,11 @@ static mp_obj_t picogame_display_make_new(const mp_obj_type_t *type, size_t n_ar
     if (native == MP_OBJ_NULL || !mp_obj_is_type(native, &busdisplay_busdisplay_type)) {
         mp_arg_validate_type(args[ARG_display].u_obj, &busdisplay_busdisplay_type, MP_QSTR_display);
     }
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_display_obj_t *self = mp_obj_malloc_with_finaliser(picogame_display_obj_t, type);
+    #else
     picogame_display_obj_t *self = mp_obj_malloc(picogame_display_obj_t, type);
+    #endif
     common_hal_picogame_display_construct(self, MP_OBJ_TO_PTR(native), args[ARG_rgb444].u_bool);
     return MP_OBJ_FROM_PTR(self);
 }

@@ -140,7 +140,11 @@ static mp_obj_t usb_hid_device_make_new(const mp_obj_type_t *type, size_t n_args
         mp_raise_ValueError_varg(MP_ERROR_TEXT("%q length must be %d"), MP_QSTR_report_id_space_0, 1);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    usb_hid_device_obj_t *self = mp_obj_malloc_with_finaliser(usb_hid_device_obj_t, &usb_hid_device_type);
+    #else
     usb_hid_device_obj_t *self = mp_obj_malloc(usb_hid_device_obj_t, &usb_hid_device_type);
+    #endif
     common_hal_usb_hid_device_construct(
         self, descriptor, usage_page, usage, report_ids_count, report_ids_array, in_report_lengths_array, out_report_lengths_array);
     return MP_OBJ_FROM_PTR(self);

@@ -38,7 +38,11 @@ static mp_obj_t hashlib_new(size_t n_args, const mp_obj_t *pos_args, mp_map_t *k
 
     const char *algorithm = mp_obj_str_get_str(args[ARG_name].u_obj);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    hashlib_hash_obj_t *self = mp_obj_malloc_with_finaliser(hashlib_hash_obj_t, &hashlib_hash_type);
+    #else
     hashlib_hash_obj_t *self = mp_obj_malloc(hashlib_hash_obj_t, &hashlib_hash_type);
+    #endif
 
     if (!common_hal_hashlib_new(self, algorithm)) {
         mp_raise_ValueError(MP_ERROR_TEXT("Unsupported hash algorithm"));

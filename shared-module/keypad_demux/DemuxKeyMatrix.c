@@ -165,9 +165,13 @@ static void demuxkeymatrix_scan_now(void *self_in, mp_obj_t timestamp) {
 void demuxkeymatrix_never_reset(keypad_demux_demuxkeymatrix_obj_t *self) {
     keypad_never_reset((keypad_scanner_obj_t *)self);
     for (size_t row_addr = 0; row_addr < self->row_addr_digitalinouts->len; row_addr++) {
+        #if !CIRCUITPY_FINALIZE_EVERYTHING
         common_hal_digitalio_digitalinout_never_reset(self->row_addr_digitalinouts->items[row_addr]);
+        #endif
     }
     for (size_t column = 0; column < self->column_digitalinouts->len; column++) {
+        #if !CIRCUITPY_FINALIZE_EVERYTHING
         common_hal_digitalio_digitalinout_never_reset(self->column_digitalinouts->items[column]);
+        #endif
     }
 }

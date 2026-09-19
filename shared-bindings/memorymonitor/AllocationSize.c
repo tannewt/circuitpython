@@ -42,8 +42,13 @@
 //|         ...
 //|
 static mp_obj_t memorymonitor_allocationsize_make_new(const mp_obj_type_t *type, size_t n_args, const mp_obj_t *all_args, mp_map_t *kw_args) {
+    #if CIRCUITPY_FINALIZE_EVERYTHING
     memorymonitor_allocationsize_obj_t *self =
-        m_new_obj(memorymonitor_allocationsize_obj_t, &memorymonitor_allocationsize_type);
+        mp_obj_malloc_with_finaliser(memorymonitor_allocationsize_obj_t, &memorymonitor_allocationsize_type);
+    #else
+    memorymonitor_allocationsize_obj_t *self =
+        mp_obj_malloc(memorymonitor_allocationsize_obj_t, &memorymonitor_allocationsize_type);
+    #endif
 
     common_hal_memorymonitor_allocationsize_construct(self);
 

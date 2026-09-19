@@ -33,7 +33,11 @@ static hmac_hmac_obj_t *hmac_new_internal(mp_obj_t key_in, psa_algorithm_t hash_
     mp_buffer_info_t keyinfo;
     mp_get_buffer_raise(key_in, &keyinfo, MP_BUFFER_READ);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    hmac_hmac_obj_t *self = mp_obj_malloc_with_finaliser(hmac_hmac_obj_t, &hmac_hmac_type);
+    #else
     hmac_hmac_obj_t *self = mp_obj_malloc(hmac_hmac_obj_t, &hmac_hmac_type);
+    #endif
     common_hal_hmac_new(self, keyinfo.buf, keyinfo.len, 0, hash_alg);
     return self;
 }

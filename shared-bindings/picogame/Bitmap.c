@@ -137,7 +137,11 @@ static mp_obj_t picogame_bitmap_make_new(const mp_obj_type_t *type, size_t n_arg
         mp_arg_validate_length_min(pal_len, 1, MP_QSTR_palette);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_bitmap_obj_t *self = mp_obj_malloc_with_finaliser(picogame_bitmap_obj_t, type);
+    #else
     picogame_bitmap_obj_t *self = mp_obj_malloc(picogame_bitmap_obj_t, type);
+    #endif
     self->data_obj = args[ARG_data].u_obj;
     self->palette_obj = palette_obj;
     self->data = data_info.buf;

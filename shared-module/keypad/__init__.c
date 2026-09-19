@@ -140,7 +140,9 @@ bool keypad_debounce(keypad_scanner_obj_t *self, mp_uint_t key_number, bool curr
 }
 
 void keypad_never_reset(keypad_scanner_obj_t *self) {
+    #if !CIRCUITPY_FINALIZE_EVERYTHING
     self->never_reset = true;
+    #endif
 }
 
 void common_hal_keypad_generic_reset(void *self_in) {

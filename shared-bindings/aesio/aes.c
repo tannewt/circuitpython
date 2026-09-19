@@ -103,7 +103,11 @@ static mp_obj_t aesio_aes_make_new(const mp_obj_type_t *type, size_t n_args,
         counter = mp_obj_get_int_truncated(args[ARG_counter].u_obj);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    aesio_aes_obj_t *self = mp_obj_malloc_with_finaliser(aesio_aes_obj_t, &aesio_aes_type);
+    #else
     aesio_aes_obj_t *self = mp_obj_malloc(aesio_aes_obj_t, &aesio_aes_type);
+    #endif
     common_hal_aesio_aes_construct(self, key, key_length, iv, mode, counter);
 
     return MP_OBJ_FROM_PTR(self);

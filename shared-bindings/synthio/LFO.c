@@ -95,7 +95,11 @@ static mp_obj_t synthio_lfo_make_new(const mp_obj_type_t *type_in, size_t n_args
     mp_arg_val_t args[MP_ARRAY_SIZE(lfo_properties)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(lfo_properties), lfo_properties, args);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    synthio_lfo_obj_t *self = mp_obj_malloc_with_finaliser(synthio_lfo_obj_t, &synthio_lfo_type);
+    #else
     synthio_lfo_obj_t *self = mp_obj_malloc(synthio_lfo_obj_t, &synthio_lfo_type);
+    #endif
 
     self->waveform_bufinfo = ((mp_buffer_info_t) {.buf = (void *)triangle, .len = MP_ARRAY_SIZE(triangle)});
     if (args[ARG_waveform].u_obj != mp_const_none) {

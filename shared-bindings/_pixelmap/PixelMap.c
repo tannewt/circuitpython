@@ -69,7 +69,11 @@ static mp_obj_t pixelmap_pixelmap_make_new(const mp_obj_type_t *type, size_t n_a
         }
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    pixelmap_pixelmap_obj_t *self = mp_obj_malloc_with_finaliser(pixelmap_pixelmap_obj_t, &pixelmap_pixelmap_type);
+    #else
     pixelmap_pixelmap_obj_t *self = mp_obj_malloc(pixelmap_pixelmap_obj_t, &pixelmap_pixelmap_type);
+    #endif
     shared_module_pixelmap_pixelmap_construct(self, pixelbuf, indices);
 
     return MP_OBJ_FROM_PTR(self);

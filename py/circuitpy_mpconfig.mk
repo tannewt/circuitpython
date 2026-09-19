@@ -321,6 +321,14 @@ CFLAGS += -DCIRCUITPY_EMMC_USB=$(CIRCUITPY_EMMC_USB)
 CIRCUITPY_ENABLE_MPY_NATIVE ?= 0
 CFLAGS += -DCIRCUITPY_ENABLE_MPY_NATIVE=$(CIRCUITPY_ENABLE_MPY_NATIVE)
 
+# Finalize everything: when enabled, every shared-bindings object is allocated
+# with a GC finaliser so that its deinit runs when the object is collected,
+# and the never_reset API is disabled. Each allocation site and each
+# never_reset declaration is switched individually, so this can be turned on
+# piecemeal while the transition to finalizers is in progress.
+CIRCUITPY_FINALIZE_EVERYTHING ?= 0
+CFLAGS += -DCIRCUITPY_FINALIZE_EVERYTHING=$(CIRCUITPY_FINALIZE_EVERYTHING)
+
 CIRCUITPY_ERRNO ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_ERRNO=$(CIRCUITPY_ERRNO)
 

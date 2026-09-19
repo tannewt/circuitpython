@@ -90,7 +90,11 @@ static mp_obj_t pewpew_make_new(const mp_obj_type_t *type, size_t n_args, size_t
 
     pew_obj_t *pew = MP_STATE_VM(pew_singleton);
     if (!pew) {
+        #if CIRCUITPY_FINALIZE_EVERYTHING
+        pew = mp_obj_malloc_with_finaliser(pew_obj_t, &pewpew_type);
+        #else
         pew = mp_obj_malloc(pew_obj_t, &pewpew_type);
+        #endif
         MP_STATE_VM(pew_singleton) = pew;
     }
 

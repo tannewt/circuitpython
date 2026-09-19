@@ -90,7 +90,11 @@ static mp_obj_t alarm_time_timealarm_make_new(const mp_obj_type_t *type,
         mp_raise_ValueError(MP_ERROR_TEXT("Time is in the past."));
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    alarm_time_timealarm_obj_t *self = mp_obj_malloc_with_finaliser(alarm_time_timealarm_obj_t, &alarm_time_timealarm_type);
+    #else
     alarm_time_timealarm_obj_t *self = mp_obj_malloc(alarm_time_timealarm_obj_t, &alarm_time_timealarm_type);
+    #endif
     common_hal_alarm_time_timealarm_construct(self, monotonic_time);
 
     return MP_OBJ_FROM_PTR(self);

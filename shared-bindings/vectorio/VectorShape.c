@@ -51,7 +51,11 @@ mp_obj_t vectorio_vector_shape_make_new(const mp_obj_t shape, const mp_obj_t pix
         mp_raise_TypeError_varg(MP_ERROR_TEXT("unsupported %q type"), MP_QSTR_shape);
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    vectorio_vector_shape_t *self = mp_obj_malloc_with_finaliser(vectorio_vector_shape_t, &vectorio_vector_shape_type);
+    #else
     vectorio_vector_shape_t *self = mp_obj_malloc(vectorio_vector_shape_t, &vectorio_vector_shape_type);
+    #endif
     common_hal_vectorio_vector_shape_construct(self,
         ishape, pixel_shader, x, y
         );

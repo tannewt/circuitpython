@@ -101,7 +101,11 @@ static mp_obj_t pixelbuf_pixelbuf_make_new(const mp_obj_type_t *type, size_t n_a
     }
 
     // Validation complete, allocate and populate object.
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    pixelbuf_pixelbuf_obj_t *self = mp_obj_malloc_with_finaliser(pixelbuf_pixelbuf_obj_t, &pixelbuf_pixelbuf_type);
+    #else
     pixelbuf_pixelbuf_obj_t *self = mp_obj_malloc(pixelbuf_pixelbuf_obj_t, &pixelbuf_pixelbuf_type);
+    #endif
     common_hal_adafruit_pixelbuf_pixelbuf_construct(self, args[ARG_size].u_int,
         &byteorder_details, brightness, args[ARG_auto_write].u_bool, header_bufinfo.buf,
         header_bufinfo.len, trailer_bufinfo.buf, trailer_bufinfo.len);

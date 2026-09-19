@@ -49,7 +49,11 @@ static mp_obj_t picogame_canvas_make_new(const mp_obj_type_t *type, size_t n_arg
     mp_int_t w = mp_arg_validate_int_range(args[ARG_width].u_int, 1, 1024, MP_QSTR_width);
     mp_int_t h = mp_arg_validate_int_range(args[ARG_height].u_int, 1, 1024, MP_QSTR_height);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    picogame_canvas_obj_t *self = mp_obj_malloc_with_finaliser(picogame_canvas_obj_t, type);
+    #else
     picogame_canvas_obj_t *self = mp_obj_malloc(picogame_canvas_obj_t, type);
+    #endif
     self->w = w;
     self->h = h;
     self->x = 0;

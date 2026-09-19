@@ -55,7 +55,11 @@ static mp_obj_t text_make_new(const mp_obj_type_t *type, size_t n_args,
         mp_raise_ValueError(MP_ERROR_TEXT("chars buffer too small"));
     }
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    text_obj_t *self = mp_obj_malloc_with_finaliser(text_obj_t, type);
+    #else
     text_obj_t *self = mp_obj_malloc(text_obj_t, type);
+    #endif
     self->width = width;
     self->height = height;
     self->x = 0;

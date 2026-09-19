@@ -48,7 +48,11 @@ static mp_obj_t bleio_address_make_new(const mp_obj_type_t *type, size_t n_args,
             BLEIO_ADDRESS_TYPE_MAX,
             MP_QSTR_address_type);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    bleio_address_obj_t *self = mp_obj_malloc_with_finaliser(bleio_address_obj_t, &bleio_address_type);
+    #else
     bleio_address_obj_t *self = mp_obj_malloc(bleio_address_obj_t, &bleio_address_type);
+    #endif
     common_hal_bleio_address_construct(self, buf_info.buf, address_type);
 
     return MP_OBJ_FROM_PTR(self);

@@ -89,7 +89,11 @@ static mp_obj_t _next_device(usb_core_devices_obj_t *iter) {
 
         // We passed the filters. Now make a properly allocated object to
         // return to the user.
+        #if CIRCUITPY_FINALIZE_EVERYTHING
+        usb_core_device_obj_t *self = mp_obj_malloc_with_finaliser(usb_core_device_obj_t, &usb_core_device_type);
+        #else
         usb_core_device_obj_t *self = mp_obj_malloc(usb_core_device_obj_t, &usb_core_device_type);
+        #endif
         common_hal_usb_core_device_construct(self, i);
 
         iter->next_index = i + 1;
@@ -142,7 +146,11 @@ static mp_obj_t usb_core_find(size_t n_args, const mp_obj_t *pos_args, mp_map_t 
         // Copy the temp iter contents to a heap object before we return it.
         // We could do this up front but GCC falsely detects that we may return
         // the stack copy.
+        #if CIRCUITPY_FINALIZE_EVERYTHING
+        usb_core_devices_obj_t *iter = m_new_obj_with_finaliser(usb_core_devices_obj_t);
+        #else
         usb_core_devices_obj_t *iter = m_new_obj(usb_core_devices_obj_t);
+        #endif
         memcpy(iter, &temp_iter, sizeof(usb_core_devices_obj_t));
         return MP_OBJ_FROM_PTR(iter);
     }

@@ -58,7 +58,11 @@ static mp_obj_t layer_make_new(const mp_obj_type_t *type, size_t n_args,
     }
 
     // Only allocate after validation is finished.
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    layer_obj_t *self = mp_obj_malloc_with_finaliser(layer_obj_t, type);
+    #else
     layer_obj_t *self = mp_obj_malloc(layer_obj_t, type);
+    #endif
 
     self->width = width;
     self->height = height;

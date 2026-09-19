@@ -44,7 +44,11 @@ static mp_obj_t camera_make_new(const mp_obj_type_t *type, size_t n_args, size_t
     // No arguments
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    camera_obj_t *self = mp_obj_malloc_with_finaliser(camera_obj_t, &camera_type);
+    #else
     camera_obj_t *self = mp_obj_malloc(camera_obj_t, &camera_type);
+    #endif
     common_hal_camera_construct(self);
     return MP_OBJ_FROM_PTR(self);
 }
@@ -99,6 +103,9 @@ MP_DEFINE_CONST_FUN_OBJ_KW(camera_take_picture_obj, 1, camera_obj_take_picture);
 
 static const mp_rom_map_elem_t camera_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&camera_deinit_obj) },
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&camera_deinit_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_take_picture), MP_ROM_PTR(&camera_take_picture_obj) },
 };
 static MP_DEFINE_CONST_DICT(camera_locals_dict, camera_locals_dict_table);

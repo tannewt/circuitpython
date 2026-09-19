@@ -73,7 +73,11 @@ static mp_obj_t lvfontio_ondiskfont_make_new(const mp_obj_type_t *type, size_t n
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     // Allocate the BuiltinFont object
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    lvfontio_ondiskfont_t *self = m_new_obj_with_finaliser(lvfontio_ondiskfont_t);
+    #else
     lvfontio_ondiskfont_t *self = m_new_obj(lvfontio_ondiskfont_t);
+    #endif
     self->base.type = &lvfontio_ondiskfont_type;
 
     // Extract arguments

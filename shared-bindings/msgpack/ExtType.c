@@ -29,7 +29,11 @@ static mp_obj_t mod_msgpack_exttype_make_new(const mp_obj_type_t *type, size_t n
     int code = mp_arg_validate_int_range(args[ARG_code].u_int, 0, 127, MP_QSTR_code);
     mp_obj_t data = args[ARG_data].u_obj;
 
+    #if CIRCUITPY_FINALIZE_EVERYTHING
+    mod_msgpack_extype_obj_t *self = mp_obj_malloc_with_finaliser(mod_msgpack_extype_obj_t, &mod_msgpack_exttype_type);
+    #else
     mod_msgpack_extype_obj_t *self = mp_obj_malloc(mod_msgpack_extype_obj_t, &mod_msgpack_exttype_type);
+    #endif
     self->code = code;
     self->data = data;
 
