@@ -1029,6 +1029,10 @@ void picogame_set_invert(picogame_output_t *display, bool on) {
 // Set the panel pixel format (COLMOD 0x3A): rgb444 -> 12-bit RGB444 (0x53), else 16-bit RGB565
 // (0x55). Asserting it on every Display construct also recovers from a previous program that left
 // the panel in the other format (survives soft reset).
+// The display currently switched to RGB444, or NULL; picogame_reset() restores it to RGB565 at
+// the end of the program.
+static picogame_output_t *rgb444_display = NULL;
+
 void picogame_set_pixel_format(picogame_output_t *display, bool rgb444) {
     uint8_t cmd = 0x3A;
     uint8_t param = rgb444 ? 0x53 : 0x55;
@@ -1038,6 +1042,20 @@ void picogame_set_pixel_format(picogame_output_t *display, bool rgb444) {
     display->bus.send(display->bus.bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &cmd, 1);
     display->bus.send(display->bus.bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, &param, 1);
     displayio_display_bus_end_transaction(&display->bus);
+    rgb444_display = rgb444 ? display : NULL;
+}
+
+// Called at the end of a program, before reset_displays() takes the bus away.
+void picogame_reset(void) {
+    if (rgb444_display == NULL) {
+        return;
+    }
+    // A released display has a None bus.
+    if (mp_obj_get_type(rgb444_display->bus.bus) == &mp_type_NoneType) {
+        rgb444_display = NULL;
+        return;
+    }
+    picogame_set_pixel_format(rgb444_display, false);   // clears rgb444_display
 }
 
 // Pack a strip of `npix` (must be even) WIRE-order RGB565 pixels IN-PLACE to ST7789 12-bit RGB444
