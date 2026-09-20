@@ -217,7 +217,10 @@ CFLAGS += \
 	-DPICO_NO_BI_BOOTSEL_VIA_DOUBLE_RESET=0 \
 	-DDVI_1BPP_BIT_REVERSE=0
 
-OPTIMIZATION_FLAGS ?= -O3
+# -O2 plus the two -O3 flags that measure: -funswitch-loops (16 KB) carries the sprite
+# blits, -fvect-cost-model=dynamic (4 KB) the fills and memcpy. Same speed as -O3 on both
+# cores for about 125 KB less flash. Boards may override this in mpconfigboard.mk.
+OPTIMIZATION_FLAGS ?= -O2 -funswitch-loops -fvect-cost-model=dynamic
 # TinyUSB defines
 CFLAGS += \
 	-DCFG_TUSB_OS=OPT_OS_PICO \
