@@ -49,16 +49,11 @@ endif
 export BSIM_COMPONENTS_PATH := $(CURDIR)/tools/bsim/components
 export BSIM_OUT_PATH := $(CURDIR)/tools/bsim
 
-# The translation reaches build_circuitpython.py through the environment rather than as a
-# cmake argument, so that building another language does not reconfigure.
+# In the environment, not a cmake argument, so a new language does not reconfigure.
 export TRANSLATION
 
-# Giving west any cmake argument makes it rerun the whole sysbuild configure, which takes
-# longer than an incremental build. So configure only when the build directory is new or
-# the arguments differ from the ones recorded at the last configure; otherwise let ninja
-# decide. ninja still reconfigures by itself when a Kconfig, overlay or CMake file changes.
-# The record is written before west runs and removed if west fails, so a failed configure
-# cannot leave the directory configured with arguments the record does not show.
+# west reruns the whole sysbuild configure whenever it gets a cmake argument, so pass
+# them only when the build directory is new or they changed since the last configure.
 WEST_CONFIGURE_ARGS := -b $(BOARD) $(WEST_SHIELD_ARGS) --sysbuild -- $(WEST_CMAKE_ARGS)
 WEST_ARGS_STAMP := $(BUILD)/west_configure_args.txt
 
