@@ -41,7 +41,9 @@ CP_BOARD_CONF := $(DEBUG_CONF_FILE)
 endif
 endif
 # Always pass the conf file, even if empty. This undoes DEBUG=1 when it's omitted on a later run.
-WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(CP_BOARD_CONF)
+# Quoted because with DEBUG=1 the value is a semicolon-separated list, and an unquoted semicolon
+# would end the shell command.
+WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE="$(CP_BOARD_CONF)"
 
 .PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules
 
