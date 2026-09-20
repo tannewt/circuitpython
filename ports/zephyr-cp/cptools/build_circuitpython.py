@@ -367,9 +367,8 @@ async def build_circuitpython():  # noqa: C901
     board = cmake_args["BOARD_ALIAS"]
     if not board:
         board = zephyr_board
-    translation = cmake_args["TRANSLATION"]
-    if not translation:
-        translation = "en_US"
+    # The environment wins, so the Makefile can switch languages without a reconfigure.
+    translation = os.environ.get("TRANSLATION") or cmake_args["TRANSLATION"] or "en_US"
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
     lto = cmake_args.get("LTO", "n") == "y"
