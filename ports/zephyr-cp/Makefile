@@ -40,9 +40,8 @@ else
 CP_BOARD_CONF := $(DEBUG_CONF_FILE)
 endif
 endif
-ifneq ($(CP_BOARD_CONF),)
+# Always pass the conf file, even if empty. This undoes DEBUG=1 when it's omitted on a later run.
 WEST_CMAKE_ARGS += -Dzephyr-cp_EXTRA_CONF_FILE=$(CP_BOARD_CONF)
-endif
 
 .PHONY: $(BUILD)/zephyr-cp/zephyr/zephyr.elf flash recover debug debug-jlink debugserver attach run run-sim clean menuconfig all clean-all sim clean-sim test fetch-port-submodules
 
