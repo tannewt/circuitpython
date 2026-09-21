@@ -210,7 +210,6 @@ extern "C" {
 #define CFG_TUH_HUB                 2
 #define CFG_TUH_CDC                 0
 #define CFG_TUH_MSC                 0
-#define CFG_TUH_VENDOR              0
 #define CFG_TUH_API_EDPT_XFER       1
 
 // max device support (excluding hub device)
