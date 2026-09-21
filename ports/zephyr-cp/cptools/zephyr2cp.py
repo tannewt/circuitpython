@@ -956,9 +956,9 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
         port_indexes[label] = int(match.group(1)) if match else len(port_indexes)
     # Package pin map selected through the IOBROKER_PACKAGE choice: map each
     # SoC pad to the package pin it is bonded to so that the pin objects can
-    # hand package pins straight to the iobroker module. When no package
-    # applies to the SoC (IOBROKER_PACKAGE_NONE) there is no map, so the pin
-    # objects get IOBROKER_NO_PIN instead.
+    # hand package pins straight to the iobroker module. The 1:1 choice is an
+    # identity map (package pin number == global pin number); IOBROKER_PACKAGE_NONE
+    # has no map, so the pin objects get IOBROKER_NO_PIN instead.
     package_pin_of_pad = {}
     package_pins = None
     package_choice = None
@@ -968,8 +968,16 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             if not stripped.startswith("CONFIG_IOBROKER_PACKAGE_") or not stripped.endswith("=y"):
                 continue
             package_choice = stripped[len("CONFIG_IOBROKER_PACKAGE_") : -len("=y")].lower()
-            if package_choice == "none":
-                continue
+            break
+        if package_choice == "one_to_one":
+            # Identity map over the enabled GPIO controllers.
+            package_pins = []
+            for ioport in sorted(ioports.keys()):
+                for num in ioports[ioport]:
+                    global_number = port_indexes[ioport] * 32 + num
+                    package_pins.append({"pin": global_number, "pad": global_number})
+                    package_pin_of_pad[global_number] = global_number
+        elif package_choice not in (None, "none"):
             package_toml = (
                 pathlib.Path(__file__).resolve().parent.parent
                 / "modules"
@@ -983,7 +991,6 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             for package_pin_entry in package_pins:
                 if "pad" in package_pin_entry:
                     package_pin_of_pad[package_pin_entry["pad"]] = package_pin_entry["pin"]
-            break
     # Board pin names from circuitpython.toml: ``[pins]`` maps a board module
     # name to a package pin number or ball id, resolved to a SoC pad with the
     # package pin map above. This is independent of Zephyr's devicetree

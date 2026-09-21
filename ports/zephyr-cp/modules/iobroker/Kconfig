@@ -18,8 +18,18 @@ choice IOBROKER_PACKAGE
 	help
 	  The module resolves requested package pins to SoC pads through the
 	  package pin map selected here. Reference maps shipped with the module
-	  live in packages/; when none applies to the SoC, the NONE option keeps
-	  the map empty and every package pin lookup fails with -EINVAL.
+	  live in packages/; the ONE_TO_ONE option is an identity map for boards
+	  without a transcribed physical package, and NONE keeps the map empty so
+	  every package pin lookup fails with -EINVAL.
+
+config IOBROKER_PACKAGE_ONE_TO_ONE
+	bool "1:1 (package pin number is the global pin number)"
+	help
+	  Identity package pin map: package pin N maps to SoC pad N, where the
+	  SoC pad is the global pin numbering (gpio port index * 32 + pin within
+	  the port). Boards without a transcribed physical package, such as the
+	  native simulator, use this so that pin objects can hand the iobroker
+	  module a package pin that resolves to their pad.
 
 config IOBROKER_PACKAGE_NONE
 	bool "None (package pin lookups fail)"

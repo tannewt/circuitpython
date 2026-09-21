@@ -39,6 +39,11 @@ int iobroker_gpio_split(uint16_t number, const struct device **port_out,
 int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
     package_pin_t *package_pin_out) {
     uint16_t soc_pad = (uint16_t)((uint32_t)port * 32U + pin);
+    #if defined(CONFIG_IOBROKER_PACKAGE_ONE_TO_ONE)
+    // Identity map: the package pin is the global pin number.
+    *package_pin_out = soc_pad;
+    return 0;
+    #else
     for (size_t i = 0; i < iobroker_package_pin_count; i++) {
         if (iobroker_package_pins[i].soc_pad == soc_pad) {
             *package_pin_out = iobroker_package_pins[i].package_pin;
@@ -46,6 +51,7 @@ int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
         }
     }
     return -EINVAL;
+    #endif
 }
 
 int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out) {
@@ -53,6 +59,11 @@ int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out) {
         *soc_pad_out = IOBROKER_NO_PIN;
         return 0;
     }
+    #if defined(CONFIG_IOBROKER_PACKAGE_ONE_TO_ONE)
+    // Identity map: the package pin is the global pin number.
+    *soc_pad_out = pin;
+    return 0;
+    #else
     for (size_t i = 0; i < iobroker_package_pin_count; i++) {
         if (iobroker_package_pins[i].package_pin == pin) {
             *soc_pad_out = iobroker_package_pins[i].soc_pad;
@@ -60,6 +71,7 @@ int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out) {
         }
     }
     return -EINVAL;
+    #endif
 }
 
 #if !IOBROKER_ROUTING

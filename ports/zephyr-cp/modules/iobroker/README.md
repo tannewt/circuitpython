@@ -59,10 +59,14 @@ const uint16_t iobroker_reserved_pads[];   // + _pin_count
 The package pin map is selected from the module's reference maps:
 `Kconfig.packages` offers one option per transcribed package
 (`packages/*.toml`), each visible only for the SoCs it applies to and
-preselected for the development kits. When no map applies to a SoC the
-`IOBROKER_PACKAGE_NONE` choice is used and an empty map is generated, so
+preselected for the development kits. SoCs with no reference map fall back to
+`IOBROKER_PACKAGE_ONE_TO_ONE`, an identity map where the package pin number
+is the global pin number (gpio port index * 32 + pin within the port), so
+boards without a transcribed physical package can still resolve their pins.
+`IOBROKER_PACKAGE_NONE` is also available and generates an empty map, making
 package pin lookups fail with `-EINVAL`. The selected TOML (or the empty
-map) is rendered into a build-directory translation unit at build time.
+map) is rendered into a build-directory translation unit at build time. The
+identity map needs no rendered table: the core applies it directly.
 New maps are transcribed from a SoC datasheet with `tools/gen_package.py`
 (see the script's docstring; the datasheets live in `datasheets/`).
 

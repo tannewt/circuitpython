@@ -8,8 +8,8 @@
 # Choice defaults live here too, most-specific first: the development kits'
 # packages preselect the reference map for their SoC; boards with more than
 # one matching package (e.g. nRF52840 modules) set their choice explicitly in
-# board.conf; everything else falls back to NONE so package pin lookups fail
-# cleanly.
+# board.conf; SoCs with no reference map fall back to the 1:1 identity map
+# (package pin number == global pin number), which lets their pins resolve.
 
 config IOBROKER_PACKAGE_NRF54L15_QFN48
 	bool "nRF54L15/10/05 QFN48 (QFAA)"
@@ -67,5 +67,5 @@ choice IOBROKER_PACKAGE
 	default IOBROKER_PACKAGE_NRF5340_QKAA if SOC_NRF5340_CPUAPP_QKAA
 	default IOBROKER_PACKAGE_NRF52840_AQFN73 if SOC_NRF52840_QIAA
 	default IOBROKER_PACKAGE_RP2040_QFN56 if SOC_RP2040
-	default IOBROKER_PACKAGE_NONE
+	default IOBROKER_PACKAGE_ONE_TO_ONE
 endchoice
