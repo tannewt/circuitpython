@@ -34,7 +34,8 @@ extern volatile bool filesystem_flush_requested;
 
 // Supervisor-level filesystem API. These functions work on both FAT and
 // littlefs mounts so that supervisor code (workflows, settings) doesn't have to
-// care which one is active.
+// care which one is active. These APIs do not raise Python exceptions or use VM
+// heap allocated memory so they are safe use when the Python VM isn't active.
 
 // Open flags for supervisor_vfs_open_file().
 #define SUPERVISOR_FS_OPEN_READ         0x01
