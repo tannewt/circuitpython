@@ -52,7 +52,8 @@ static void mark(picogame_canvas_obj_t *cv, int lx1, int ly1, int lx2, int ly2) 
 // 8 calls/iteration). Inlining bloated them (circle was ~1.4 KB); a real call keeps
 // them small. Shapes aren't the hot path (the sprite/tilemap blits don't use put).
 static __attribute__((noinline)) void put(picogame_canvas_obj_t *cv, int x, int y, uint16_t c) {
-    if (x >= 0 && y >= 0 && x < cv->w && y < cv->h) {
+    // Unsigned compares also reject negative coordinates.
+    if ((unsigned)x < (unsigned)cv->w && (unsigned)y < (unsigned)cv->h) {
         cv->data[y * cv->w + x] = c;
     }
 }
@@ -306,7 +307,8 @@ void picogame_canvas_line(picogame_canvas_obj_t *cv, int x0, int y0, int x1, int
 
 // Clamp a row span to the surface and word-fill it (the span-pass idiom shared by the filled
 // shapes; the per-pixel put() loops it replaced clipped and indexed every pixel).
-static inline int64_t edge_slope(int32_t dx, int32_t dy) {
+// Not inlined: each inlined copy carried both divides.
+static __attribute__((noinline)) int64_t edge_slope(int32_t dx, int32_t dy) {
     if (dx >= -32768 && dx <= 32767) {
         return (int32_t)(dx << 16) / dy;
     }
@@ -420,8 +422,15 @@ void picogame_canvas_fill_triangle(picogame_canvas_obj_t *cv,
         // top half: rows [Y0, Y1) walk edges A->C and A->B
         int ys = Y[0] < 0 ? 0 : Y[0];
         int ye = (Y[1] - 1) < (h - 1) ? (Y[1] - 1) : (h - 1);
-        int64_t accAC = ((int64_t)X[0] << 16) + sAC * (ys - Y[0]);
-        int64_t acc2 = ((int64_t)X[0] << 16) + sAB * (ys - Y[0]);
+        // skip is 0 unless the triangle is clipped at the top, so the int64 multiplies
+        // usually do not run.
+        int skip = ys - Y[0];
+        int64_t accAC = (int64_t)X[0] << 16;
+        int64_t acc2 = accAC;
+        if (skip) {
+            accAC += sAC * skip;
+            acc2 += sAB * skip;
+        }
         for (int y = ys; y <= ye; y++) {
             int xac = (int)(accAC >> 16);
             int xsh = (int)(acc2 >> 16);
@@ -441,8 +450,12 @@ void picogame_canvas_fill_triangle(picogame_canvas_obj_t *cv,
         // bottom half: rows [Y1, Y2] walk edges A->C and B->C (a flat bottom degenerates to sBC=0)
         ys = Y[1] < 0 ? 0 : Y[1];
         ye = Y[2] < (h - 1) ? Y[2] : (h - 1);
-        accAC = ((int64_t)X[0] << 16) + sAC * (ys - Y[0]);
-        acc2 = ((int64_t)X[1] << 16) + sBC * (ys - Y[1]);
+        accAC = ((int64_t)X[0] << 16) + sAC * (ys - Y[0]);   // spans the whole top half: rarely 0
+        acc2 = (int64_t)X[1] << 16;
+        skip = ys - Y[1];
+        if (skip) {
+            acc2 += sBC * skip;
+        }
         for (int y = ys; y <= ye; y++) {
             int xac = (int)(accAC >> 16);
             int xsh = (int)(acc2 >> 16);
@@ -581,6 +594,11 @@ void picogame_canvas_text(picogame_canvas_obj_t *cv, int x, int y, const char *t
     bool onebit = (sheet->bits_per_value == 1);   // terminalio.FONT is 1-bpp; other fonts take the fallback
     const uint8_t *sdata = (const uint8_t *)sheet->data;
     int sstride_b = sheet->stride * 4;            // atlas row stride in BYTES (stride counts uint32)
+    // Copy to locals: the uint16_t store may alias sheet->bitmask, so the fields
+    // would be reloaded for every pixel.
+    int sx_shift = sheet->x_shift;
+    size_t sx_mask = sheet->x_mask;
+    uint16_t sbitmask = sheet->bitmask;
     for (const uint8_t *p = (const uint8_t *)text; *p; p++) {
         uint8_t gi = fontio_builtinfont_get_glyph_index(f, *p);
         if (gi != 0xff) {                   // 0xff = no glyph -> blank advance
@@ -596,7 +614,7 @@ void picogame_canvas_text(picogame_canvas_obj_t *cv, int x, int y, const char *t
                     const uint8_t *srow = sdata + (size_t)sy * sstride_b;
                     for (int gx = gx0; gx < gx1; gx++) {
                         int sx = tx + gx;
-                        if ((srow[sx >> sheet->x_shift] >> (sheet->x_mask - (sx & sheet->x_mask))) & sheet->bitmask) {
+                        if ((srow[sx >> sx_shift] >> (sx_mask - ((size_t)sx & sx_mask))) & sbitmask) {
                             drow[gx] = fg;
                         } else if (has_bg) {
                             drow[gx] = bg;
