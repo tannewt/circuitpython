@@ -688,6 +688,7 @@ uint32_t _common_hal_bleio_adapter_start_advertising(bleio_adapter_obj_t *self,
         self->advertising_timeout_msecs = timeout * 1000;
         self->advertising_start_ticks = supervisor_ticks_ms64();
 
+        // Duration 0 and max events 0 mean "advertise until disabled by the host".
         uint8_t handle[1] = { 0 };
         uint16_t duration_10msec[1] = { 0 };
         uint8_t max_ext_adv_evts[1] = { 0 };
@@ -806,6 +807,7 @@ void common_hal_bleio_adapter_stop_advertising(bleio_adapter_obj_t *self) {
 
     int result;
     if (adapter_uses_extended_advertising(self)) {
+        // Duration and max events are ignored when disabling.
         uint8_t handle[1] = { 0 };
         uint16_t duration_10msec[1] = { 0 };
         uint8_t max_ext_adv_evts[1] = { 0 };
