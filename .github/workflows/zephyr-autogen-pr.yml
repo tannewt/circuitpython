@@ -50,6 +50,7 @@ jobs:
         uses: ./.github/actions/deps/submodules
         with:
           target: zephyr-cp
+          version: true
       - name: Set up external
         uses: ./.github/actions/deps/external
       - name: Build all boards
