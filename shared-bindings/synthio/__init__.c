@@ -220,7 +220,7 @@ static mp_obj_t synthio_from_file(size_t n_args, const mp_obj_t *pos_args, mp_ma
 
     uint8_t chunk_header[14];
     int errcode;
-    if (mp_stream_seek(file_obj, 0, MP_SEEK_SET, &errcode) == MP_STREAM_ERROR) {
+    if (mp_stream_seek(file_obj, 0, MP_SEEK_SET, &errcode) == (mp_off_t)-1) {
         mp_raise_OSError(errcode);
     }
     mp_uint_t bytes_read = mp_stream_rw(file_obj, chunk_header, sizeof(chunk_header), &errcode, MP_STREAM_RW_READ);
