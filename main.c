@@ -80,6 +80,10 @@
 #include "shared-bindings/epaperdisplay/EPaperDisplay.h"
 #endif
 
+#if CIRCUITPY_PICOGAME_RGB444
+#include "shared-module/picogame/__init__.h"
+#endif
+
 #if CIRCUITPY_KEYPAD
 #include "shared-module/keypad/__init__.h"
 #endif
@@ -372,6 +376,11 @@ static void cleanup_after_vm(mp_obj_t exception) {
 
     #if CIRCUITPY_ATEXIT
     atexit_reset();
+    #endif
+
+    // Restore the panel's pixel format while the display bus is still alive.
+    #if CIRCUITPY_PICOGAME_RGB444
+    picogame_reset();
     #endif
 
     // Turn off the display and flush the filesystem before the heap disappears.

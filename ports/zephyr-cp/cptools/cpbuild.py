@@ -96,13 +96,27 @@ class _MakeJobClient:
         self.new_token(token)
 
 
+def _default_job_count():
+    # process_cpu_count() (Python 3.13+) counts only the CPUs this process is allowed to
+    # run on, e.g. inside a container or under taskset. cpu_count() counts all CPUs.
+    if hasattr(os, "process_cpu_count"):
+        return os.process_cpu_count() or 1
+    return os.cpu_count() or 1
+
+
 def _create_semaphore():
     match = re.search(r"fifo:([^\s]+)", os.environ.get("MAKEFLAGS", ""))
     fifo_path = None
     if match:
         fifo_path = match.group(1)
         return _MakeJobClient(fifo_path=fifo_path)
-    return asyncio.BoundedSemaphore(1)
+    # No fifo jobserver found. Either we were not run from make at all, or make is older
+    # than 4.4. Older make shares its jobserver as a pair of inherited file descriptors
+    # (--jobserver-auth=R,W in MAKEFLAGS), and only keeps them open for commands that
+    # start with "+" or $(MAKE); the west build command is neither, so we cannot use them.
+    # ubuntu-24.04 CI runners have make 4.3. Rather than compile one file at a time,
+    # run as many compiles as there are CPUs.
+    return asyncio.BoundedSemaphore(_default_job_count())
 
 
 shared_semaphore = _create_semaphore()
@@ -420,8 +434,13 @@ class Compiler:
     async def archive(self, objects: list[pathlib.Path], output_file: pathlib.Path):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         responsefile = output_file.with_suffix(".rsp")
+        # Always create the archive from scratch. `ar r` on an existing archive replaces the
+        # members named on its command line and keeps every other member, so after a build
+        # of another language the old translations-*.o and autogen_display_resources-*.o
+        # stayed in the archive ahead of the new ones and the linker used them.
+        output_file.unlink(missing_ok=True)
         await run_command(
-            [self.ar, "rvs", output_file, *objects],
+            [self.ar, "rcs", output_file, *objects],
             description=f"Create archive {output_file.relative_to(self.srcdir)}",
             working_directory=self.srcdir,
             responsefile=responsefile,

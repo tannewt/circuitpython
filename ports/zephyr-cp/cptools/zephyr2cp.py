@@ -332,10 +332,11 @@ def find_flash_devices(device_tree):
     logger.debug("Flash devices:")
 
     # Traverse all nodes in the device tree
-    remaining_nodes = set([device_tree.root])
+    # A list, not a set, so the nodes are visited in the same order every build.
+    remaining_nodes = [device_tree.root]
     while remaining_nodes:
         node = remaining_nodes.pop()
-        remaining_nodes.update(node.nodes.values())
+        remaining_nodes.extend(node.nodes.values())
 
         # Get compatible strings
         compatible = []
@@ -433,7 +434,8 @@ def find_ram_regions(device_tree):
         rams.append((label, "z_mapped_end", _label_to_end(label), size, chosen.path))
 
     # Traverse all nodes in the device tree to find memory-region nodes
-    remaining_nodes = set([device_tree.root])
+    # A list, not a set, so the nodes are visited in the same order every build.
+    remaining_nodes = [device_tree.root]
     while remaining_nodes:
         node = remaining_nodes.pop()
 
@@ -450,7 +452,7 @@ def find_ram_regions(device_tree):
         if node == chosen:
             continue
 
-        remaining_nodes.update(node.nodes.values())
+        remaining_nodes.extend(node.nodes.values())
 
         if "compatible" not in node.props or not node.labels:
             continue
@@ -616,10 +618,11 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             board_info["zephyr_display"] = True
             board_info["displayio"] = True
 
-    remaining_nodes = set([device_tree.root])
+    # A list, not a set, so the nodes are visited in the same order every build.
+    remaining_nodes = [device_tree.root]
     while remaining_nodes:
         node = remaining_nodes.pop()
-        remaining_nodes.update(node.nodes.values())
+        remaining_nodes.extend(node.nodes.values())
         gpio = node.props.get("gpio-controller", False)
         gpio_map = node.props.get("gpio-map", [])
         status = node.props.get("status", None)
@@ -691,7 +694,7 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                 ngpios = 32
             all_ioports.append(node.labels[0])
             if status == "okay":
-                ioports[node.labels[0]] = set(range(0, ngpios))
+                ioports[node.labels[0]] = range(0, ngpios)
         if gpio_map and compatible and compatible[0] != "gpio-nexus":
             connector_pins = CONNECTORS.get(compatible[0], None)
             if connector_pins is None:
@@ -1059,7 +1062,12 @@ CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
 
 MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
 """
-    board_c.write_text(new_board_c_content)
+    # Only write board.c when it has changed. Rewriting it on every build gives it a new
+    # modification time even if the content is the same, and cpbuild then recompiles it,
+    # regenerates qstrdefs.generated.h from its qstrs, and recompiles every file that
+    # includes that header, which is all of them.
+    if not board_c.exists() or board_c.read_text() != new_board_c_content:
+        board_c.write_text(new_board_c_content)
     if ble_hardware_present:
         if not config_present:
             raise RuntimeError(
