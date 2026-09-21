@@ -589,6 +589,18 @@ static mp_obj_t picogame_fbm1d_fx(size_t n_args, const mp_obj_t *pos, mp_map_t *
 static MP_DEFINE_CONST_FUN_OBJ_KW(picogame_fbm1d_fx_obj, 1, picogame_fbm1d_fx);
 
 
+#if !CIRCUITPY_PICOGAME_FPU
+// ((int64_t)a * b) >> 16 with two 32-bit multiplies. Exact for |b| <= 65536.
+static __attribute__((noinline)) int32_t pg_fmul_basis(int32_t a, int32_t b) {
+    uint32_t hi = (uint32_t)(a >> 16) * (uint32_t)b;      // modulo 2^32 on purpose
+    uint32_t l = (uint32_t)(a & 0xFFFF);
+    if (b >= 0) {
+        return (int32_t)(hi + ((l * (uint32_t)b) >> 16));
+    }
+    return (int32_t)(hi - ((l * (uint32_t)(-b) + 0xFFFFu) >> 16));
+}
+#endif
+
 //| def project(
 //|     cam: ReadableBuffer,
 //|     pts: ReadableBuffer,
@@ -666,10 +678,13 @@ static mp_obj_t picogame_project(size_t n_args, const mp_obj_t *args) {
     // the near plane - host-measured 23-34 px warps on close fly-bys at a file-browser world scale
     // (walls visibly broke). Correctness first: Q16 keeps the worst error a few px at any cz >= near,
     // for coords up to +-32k units; still ~4-5x faster than the same math in Python on the M0+.
+    // FMULB: same result as FMUL for |b| <= 65536 (every basis component), without
+    // __aeabi_lmul. The products by k keep FMUL because k is not bounded.
     #define FMUL(a, b) ((int32_t)(((int64_t)(a) * (b)) >> 16))
+    #define FMULB(a, b) pg_fmul_basis((a), (b))
     for (int i = 0; i < n; i++) {
         int32_t X = pts[i * 3] - ex, Y = pts[i * 3 + 1] - ey, Z = pts[i * 3 + 2] - ez;
-        int32_t cz = FMUL(X, fx) + FMUL(Y, fy) + FMUL(Z, fz);
+        int32_t cz = FMULB(X, fx) + FMULB(Y, fy) + FMULB(Z, fz);
         if (cz < near) {
             osx[i] = -32768;
             osy[i] = -32768;
@@ -679,12 +694,13 @@ static mp_obj_t picogame_project(size_t n_args, const mp_obj_t *args) {
         // an int64 divide on the M0+ (no HW divide) and the lost cz precision costs <0.02 px (host-
         // measured). Needs FOCAL < ~250 (focal<<8 in uint32) and near >= 1/256 (cz>>8 nonzero).
         int32_t k = (int32_t)(((uint32_t)focal << 8) / (uint32_t)(cz >> 8));
-        int32_t rr = FMUL(X, rx) + FMUL(Z, rz);
-        int32_t uu = FMUL(X, ux) + FMUL(Y, uy) + FMUL(Z, uz);
+        int32_t rr = FMULB(X, rx) + FMULB(Z, rz);
+        int32_t uu = FMULB(X, ux) + FMULB(Y, uy) + FMULB(Z, uz);
         osx[i] = (int16_t)((cx0 + FMUL(rr, k)) >> 16);
         osy[i] = (int16_t)((cy0 - FMUL(uu, k)) >> 16);
     }
 #undef FMUL
+#undef FMULB
     #endif
     return mp_const_none;
 }
