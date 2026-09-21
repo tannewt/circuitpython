@@ -208,4 +208,14 @@ void alarm_pin_pinalarm_enable_powman_wakeups(void) {
             powman_wakeups[i].edge, powman_wakeups[i].value);
     }
 }
+
+bool alarm_pin_pinalarm_first_powman_wakeup(uint *pin_number, bool *edge, bool *value) {
+    if (powman_wakeup_count == 0) {
+        return false;
+    }
+    *pin_number = powman_wakeups[0].pin_number;
+    *edge = powman_wakeups[0].edge;
+    *value = powman_wakeups[0].value;
+    return true;
+}
 #endif

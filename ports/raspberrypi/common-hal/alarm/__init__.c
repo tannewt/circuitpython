@@ -39,6 +39,7 @@
 
 #if PICO_RP2350
 #include "hardware/powman.h"
+#include "pico/low_power.h"
 #endif
 
 // Watchdog scratch register
@@ -246,35 +247,27 @@ void common_hal_alarm_set_deep_sleep_alarms(size_t n_alarms, const mp_obj_t *ala
 
 #if PICO_RP2350
 // Power down with powman. Waking up reboots into main(), so this does not return.
-// The sequence follows low_power_go_pstate() in the SDK's pico_low_power library.
 static void MP_NORETURN rp2350_enter_deep_sleep(void) {
     #if CIRCUITPY_CYW43
     cyw43_enter_deep_sleep();
     #endif
 
+    // pico_low_power arms one wakeup per call and leaves the others alone, so
+    // arm every pin alarm first.
     alarm_pin_pinalarm_enable_powman_wakeups();
 
-    // Don't let an attached debugger keep the core powered.
-    powman_set_debug_power_request_ignored(true);
-    // The always-on timer has to run from the low power oscillator while XOSC is off.
-    powman_timer_set_1khz_tick_source_lposc();
-    // Unlock the regulator so it can switch to low power mode.
-    hw_set_bits(&powman_hw->vreg_ctrl, POWMAN_PASSWORD_BITS | POWMAN_VREG_CTRL_UNLOCK_BITS);
-
-    // alarm.sleep_memory lives in SRAM bank 0, so keep that powered.
-    powman_power_state off_state = POWMAN_POWER_STATE_NONE;
-    off_state = powman_power_state_with_domain_on(off_state, POWMAN_POWER_DOMAIN_SRAM_BANK0);
-
-    if (powman_configure_wakeup_state(off_state, powman_get_power_state())) {
-        // Boot normally on wake.
-        for (size_t i = 0; i < count_of(powman_hw->boot); i++) {
-            powman_hw->boot[i] = 0;
-        }
-        if (powman_set_power_state(off_state) == PICO_OK) {
-            while (true) {
-                __wfi();
-            }
-        }
+    // A NULL power state keeps only the SRAM that holds .persistent_data powered.
+    // That is where alarm.sleep_memory lives.
+    uint pin_number;
+    bool edge;
+    bool value;
+    if (!alarm_time_timealarm_is_set() &&
+        alarm_pin_pinalarm_first_powman_wakeup(&pin_number, &edge, &value)) {
+        low_power_pstate_until_gpio_pin_state(pin_number, edge, value, NULL, NULL);
+    } else {
+        // With no alarm at all, sleep until a time that never comes.
+        uint64_t wakeup_ms = alarm_time_timealarm_is_set() ? alarm_time_timealarm_get_wakeup_ms() : INT64_MAX / 1000;
+        low_power_pstate_until_aon_timer(from_us_since_boot(wakeup_ms * 1000), NULL, NULL);
     }
 
     // Could not power down, most likely because an alarm already fired.

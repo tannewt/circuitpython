@@ -15,6 +15,9 @@
 
 static bool woke_up = false;
 static bool _timealarm_set = false;
+#if PICO_RP2350
+static uint64_t _wakeup_ms;
+#endif
 
 static void timer_callback(void) {
     woke_up = true;
@@ -89,6 +92,9 @@ void alarm_time_timealarm_set_alarms(bool deep_sleep, size_t n_alarms, const mp_
 
     // On RP2350 the last argument makes the alarm a powman wakeup source.
     aon_timer_enable_alarm(&t, &timer_callback, deep_sleep);
+    #if PICO_RP2350
+    _wakeup_ms = (uint64_t)t.tv_sec * 1000;
+    #endif
 
     woke_up = false;
 }
@@ -96,3 +102,9 @@ void alarm_time_timealarm_set_alarms(bool deep_sleep, size_t n_alarms, const mp_
 bool alarm_time_timealarm_is_set(void) {
     return _timealarm_set;
 }
+
+#if PICO_RP2350
+uint64_t alarm_time_timealarm_get_wakeup_ms(void) {
+    return _wakeup_ms;
+}
+#endif

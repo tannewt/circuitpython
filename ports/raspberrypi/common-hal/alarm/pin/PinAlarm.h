@@ -31,4 +31,7 @@ void alarm_pin_pinalarm_entering_deep_sleep(void);
 // Arms the powman GPIO wakeups for the pin alarms given to
 // alarm_pin_pinalarm_set_alarms() with deep_sleep true.
 void alarm_pin_pinalarm_enable_powman_wakeups(void);
+// Returns false and leaves the outputs alone when no pin alarm was set for deep sleep.
+// Otherwise fills in the pin alarm that uses powman wakeup slot 0 and returns true.
+bool alarm_pin_pinalarm_first_powman_wakeup(uint *pin_number, bool *edge, bool *value);
 #endif
