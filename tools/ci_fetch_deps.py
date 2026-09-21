@@ -54,7 +54,6 @@ PORT_DEPS = {
         "lib/tlsf",
         "data/nvm.toml/",
     ],
-    "broadcom": ["extmod/ulab/", "lib/tlsf", "lib/tinyusb/"],
     "cxd56": ["extmod/ulab/", "lib/tlsf", "lib/tinyusb/"],
     "espressif": [
         "extmod/ulab/",
@@ -88,7 +87,6 @@ PORT_DEPS = {
         "lib/tlsf",
         "data/nvm.toml/",
     ],
-    "renode": ["lib/tlsf"],
     "silabs": ["extmod/ulab/", "data/nvm.toml/", "lib/tlsf"],
     "stm": [
         "extmod/ulab/",
