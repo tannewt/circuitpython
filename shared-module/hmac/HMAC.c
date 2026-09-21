@@ -30,6 +30,10 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
     self->finished = false;
     self->digest_len = 0;
     self->mac_op = psa_mac_operation_init();
+    self->buffered = (borrowed_key_id != 0);
+    if (self->buffered) {
+        vstr_init(&self->buf, 0);
+    }
 
     if (psa_crypto_init() != PSA_SUCCESS) {
         mp_raise_RuntimeError(NULL);
@@ -57,6 +61,11 @@ void common_hal_hmac_new(hmac_hmac_obj_t *self, const uint8_t *key, size_t key_l
             psa_destroy_key(self->key_id);
             self->owns_key = false;
         }
+        if (status == PSA_ERROR_NOT_PERMITTED) {
+            // A hardware-backed key can be locked to one digest algorithm --
+            // a common restriction for this kind of peripheral.
+            mp_raise_ValueError(MP_ERROR_TEXT("key does not support this digest"));
+        }
         mp_raise_RuntimeError(NULL);
     }
 }
@@ -65,11 +74,27 @@ void common_hal_hmac_update(hmac_hmac_obj_t *self, const uint8_t *data, size_t d
     if (self->finished) {
         mp_raise_RuntimeError(NULL);
     }
+    if (self->buffered) {
+        vstr_add_strn(&self->buf, (const char *)data, data_len);
+        return;
+    }
     check_psa(self, psa_mac_update(&self->mac_op, data, data_len));
 }
 
 void common_hal_hmac_digest(hmac_hmac_obj_t *self, uint8_t *out, size_t out_len) {
     if (!self->finished) {
+        if (self->buffered) {
+            if (self->buf.len == 0) {
+                // Some hardware-backed keys' PSA drivers reject a
+                // zero-length psa_mac_update() outright (and skipping the
+                // call entirely would leave the result at all-zero bytes
+                // from setup -- a wrong answer, not an error), so an empty
+                // message can't be computed through this path.
+                psa_mac_abort(&self->mac_op);
+                mp_raise_ValueError(MP_ERROR_TEXT("HMAC of an empty message is not supported with a hardware key"));
+            }
+            check_psa(self, psa_mac_update(&self->mac_op, (const uint8_t *)self->buf.buf, self->buf.len));
+        }
         psa_status_t status = psa_mac_sign_finish(&self->mac_op, self->digest, sizeof(self->digest),
             &self->digest_len);
         // The operation is spent either way -- successful finish or not, it
