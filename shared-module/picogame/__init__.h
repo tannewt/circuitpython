@@ -44,11 +44,16 @@ static inline bool src_pixel_s(int format, const uint8_t *data, const uint16_t *
     #pragma GCC diagnostic ignored "-Wcast-align"
     uint16_t v = ((const uint16_t *)data)[idx];
     #pragma GCC diagnostic pop
-    if (transp && v == key) {
+    if ((int32_t)v == key) {
         return false;
     }
     *out = v;
     return true;
+}
+
+// The transparent key of bm, or -1 when it is opaque.
+static inline int32_t picogame_key_of(const picogame_bitmap_obj_t *bm) {
+    return bm->has_transparent ? (int32_t)bm->transparent : -1;
 }
 
 

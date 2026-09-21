@@ -179,7 +179,7 @@ typedef struct {
     int fmt, stride, shx, shy, mx, my, horizon, y_off;
     int32_t z, rx0, ry0, rsx, rsy, cam_x, cam_y;
     bool transp;
-    uint16_t key;
+    int32_t key;
 } mode7_ctx_t;
 
 static void mode7_rows(void *arg, int lo, int hi) {
@@ -217,7 +217,7 @@ static void mode7_rows(void *arg, int lo, int hi) {
         for (int sx = 0; sx < w; sx++) {
             int tx = (fx >> c->shx) & c->mx, ty = (fy >> c->shy) & c->my;
             uint16_t val;
-            if (src_pixel_s(c->fmt, c->data, c->pal, c->transp, c->key, ty * c->stride + tx, &val)) {
+            if (src_pixel_s(c->fmt, c->data, c->pal, c->key, ty * c->stride + tx, &val)) {
                 drow[sx] = val;
             }
             fx += stepx;
@@ -247,8 +247,8 @@ void picogame_canvas_mode7(picogame_canvas_obj_t *cv, picogame_bitmap_obj_t *tex
     int fmt = tex->format;
     const uint8_t *data = tex->data;
     const uint16_t *pal = tex->palette;
-    bool transp = tex->has_transparent;
-    uint16_t key = tex->transparent;
+    bool transp = tex->has_transparent;           // still gates the interp fast path above
+    int32_t key = picogame_key_of(tex);
     // sy is a row WITHIN this surface (a StripDraw view is a Canvas onto one strip);
     // the absolute screen row is sy + y_off, so the horizon test uses that. y_off = 0
     // for a full-screen Canvas, = the strip's screen y for a StripDraw view (0-RAM floor).
