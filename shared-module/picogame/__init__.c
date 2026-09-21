@@ -867,9 +867,7 @@ mp_obj_t picogame_blit_strip_layers(
         uint32_t *w32 = (uint32_t *)(buf + i);       // now 4-byte aligned
         #pragma GCC diagnostic pop
         int nw = (npix - i) >> 1;
-        for (int k = 0; k < nw; k++) {
-            w32[k] = w;
-        }
+        picogame_fill_words(w32, nw, w);
         i += nw << 1;
         if (i < npix) {                              // odd trailing pixel
             buf[i] = background;

@@ -62,8 +62,16 @@ static __attribute__((noinline)) void put(picogame_canvas_obj_t *cv, int x, int 
 // so it stays safe on Cortex-M0+ (RP2040), which faults on an unaligned 32-bit access - a StripDraw
 // view's rows into the render strip can start on an odd pixel. This is the per-frame path for
 // view.clear / Sky / HUD-bar / Fade fills, so the word-fill is worth it.
+// Not in SRAM: every caller is in flash, and the long-branch veneer made it slower.
 static void fill565(uint16_t *p, int n, uint16_t color) {
     if (n <= 0) {
+        return;
+    }
+    // Short spans (triangle rows, wall runs) skip the word path's setup.
+    if (n <= 4) {
+        do {
+            *p++ = color;
+        } while (--n);
         return;
     }
     if (color == 0) {
@@ -79,10 +87,7 @@ static void fill565(uint16_t *p, int n, uint16_t color) {
     #pragma GCC diagnostic ignored "-Wcast-align"
     uint32_t *w32 = (uint32_t *)p;             // now 4-byte aligned
     #pragma GCC diagnostic pop
-    int nw = n >> 1;
-    for (int i = 0; i < nw; i++) {
-        w32[i] = w;
-    }
+    picogame_fill_words(w32, n >> 1, w);
     if (n & 1) {                               // trailing odd pixel
         p[n - 1] = color;
     }
