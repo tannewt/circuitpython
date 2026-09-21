@@ -120,6 +120,11 @@
 	pinctrl-names = "default", "sleep";
 };
 
+// SPI1 is the same peripheral instance as I2C1, so leave it disabled.
+&spi1 {
+	status = "disabled";
+};
+
 &spi2 {
 	status = "okay";
 	zephyr,deferred-init;

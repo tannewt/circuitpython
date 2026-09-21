@@ -120,6 +120,12 @@
 	pinctrl-names = "default", "sleep";
 };
 
+// SPI1 shares the 0x40004000 instance with I2C1, which is enabled above, so
+// leave SPI1 disabled.
+&spi1 {
+	status = "disabled";
+};
+
 &spi3 {
 	status = "okay";
 	zephyr,deferred-init;
