@@ -64,7 +64,6 @@ PORT_DEPS = {
         "lib/tlsf",
         "lib/tinyusb/",
     ],
-    "litex": ["extmod/ulab/", "lib/tinyusb/", "lib/tlsf"],
     "mimxrt10xx": ["extmod/ulab/", "lib/mp3/", "lib/tinyusb/", "lib/tlsf", "data/nvm.toml/"],
     "nordic": [
         "extmod/ulab/",
