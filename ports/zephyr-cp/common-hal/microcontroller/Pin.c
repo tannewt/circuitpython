@@ -5,25 +5,14 @@
 // SPDX-License-Identifier: MIT
 
 #include "shared-bindings/microcontroller/Pin.h"
-#include "shared-bindings/digitalio/DigitalInOut.h"
 
 #include "py/mphal.h"
 
-// Bit mask of claimed pins on each of up to two ports. nrf52832 has one port; nrf52840 has two.
-// static uint32_t claimed_pins[GPIO_COUNT];
-// static uint32_t never_reset_pins[GPIO_COUNT];
-
-void claim_pin(const mcu_pin_obj_t *pin) {
-    // Set bit in claimed_pins bitmask.
-    // claimed_pins[nrf_pin_port(pin->number)] |= 1 << nrf_relative_pin_number(pin->number);
-}
-
-
-bool pin_number_is_free(uint8_t pin_number) {
-    return false; // !(claimed_pins[nrf_pin_port(pin_number)] & (1 << nrf_relative_pin_number(pin_number)));
-}
+#include <iobroker/iobroker.h>
 
 bool common_hal_mcu_pin_is_free(const mcu_pin_obj_t *pin) {
-    return true;
-
+    if (pin == NULL) {
+        return true;
+    }
+    return !iobroker_pin_in_use(pin->package_pin);
 }
