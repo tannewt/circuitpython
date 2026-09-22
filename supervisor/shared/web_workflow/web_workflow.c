@@ -17,6 +17,7 @@
 #include "genhdr/mpversion.h"
 #include "py/mperrno.h"
 #include "py/mpstate.h"
+#include "py/persistentcode.h"
 
 #include "shared-bindings/wifi/Radio.h"
 #include "supervisor/filesystem.h"
@@ -927,6 +928,9 @@ static void _reply_with_version_json(socketpool_socket_obj_t *socket, _request *
         "\"build_date\": \"" MICROPY_BUILD_DATE "\", "
         "\"board_name\": \"%s\", "
         "\"mcu_name\": \"" MICROPY_HW_MCU_NAME "\", "
+        #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+        "\"architecture\": \"" MPY_FEATURE_ARCH_NAME "\", "
+        #endif
         "\"board_id\": \"" CIRCUITPY_BOARD_ID "\", "
         "\"creator_id\": %u, "
         "\"creation_id\": %u, "
