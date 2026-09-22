@@ -1192,11 +1192,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1223,6 +1218,20 @@ msgstr ""
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "Δεν μπορεί να οριστεί CCCD σε τοπικό Characteristic"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1255,15 +1264,6 @@ msgstr ""
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/__init__.c
@@ -4091,8 +4091,12 @@ msgstr "Το buffer δεν είναι ένα bytearray."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr ""
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
+msgstr ""
+
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
 msgstr ""
 
 #: shared-bindings/i2cioexpander/IOExpander.c
@@ -4307,10 +4311,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q πρέπει να είναι υποκλάση του %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q εκτός ορίων"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr ""
@@ -4381,7 +4381,7 @@ msgstr "Δεν μπόρεσε να δεσμευτεί decoder"
 msgid "Failed to parse MP3 file"
 msgstr ""
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr ""
 
@@ -4437,6 +4437,14 @@ msgstr ""
 
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
 msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
@@ -4756,6 +4764,9 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr ""
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q εκτός ορίων"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q μεταονομάστηκε σε %q"

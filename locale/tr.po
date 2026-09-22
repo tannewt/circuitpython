@@ -1193,11 +1193,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1224,6 +1219,20 @@ msgstr ""
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "Yerel Karakteristikte CCCD ayarlanamaz"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1257,15 +1266,6 @@ msgstr ""
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
 msgstr "Geçersiz BLE parametresi"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
-msgstr ""
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: shared-module/audiofilewriter/AudioFileWriter.c
@@ -4093,8 +4093,12 @@ msgstr "Buffer bir bytearray değil."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr ""
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
+msgstr ""
+
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
 msgstr ""
 
 #: shared-bindings/i2cioexpander/IOExpander.c
@@ -4310,10 +4314,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q, %q'nün alt türü olmalıdır"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q sınırların dışında"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr ""
@@ -4384,7 +4384,7 @@ msgstr "Deşifre edici tahsis edilemedi"
 msgid "Failed to parse MP3 file"
 msgstr "MP3 dosyası ayrıştırılamadı"
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr "%q çok uzun"
 
@@ -4441,6 +4441,14 @@ msgstr ""
 
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
 msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
@@ -4760,6 +4768,9 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "IP yok"
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q sınırların dışında"
 
 #, c-format
 #~ msgid "Buffer + offset too small %d %d %d"

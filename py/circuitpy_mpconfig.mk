@@ -372,6 +372,12 @@ CFLAGS += -DCIRCUITPY_HASHLIB_MBEDTLS=$(CIRCUITPY_HASHLIB_MBEDTLS)
 CIRCUITPY_HASHLIB_MBEDTLS_ONLY ?= $(call enable-if-all,$(CIRCUITPY_HASHLIB_MBEDTLS) $(call enable-if-not,$(CIRCUITPY_SSL)))
 CFLAGS += -DCIRCUITPY_HASHLIB_MBEDTLS_ONLY=$(CIRCUITPY_HASHLIB_MBEDTLS_ONLY)
 
+# hmac: CPython-compatible HMAC, backed by PSA Crypto. Available wherever a full PSA
+# crypto build with HMAC is already present (SSL builds, espressif's ESP-IDF mbedtls);
+# the HASHLIB_MBEDTLS_ONLY subset does not include the PSA MAC driver yet.
+CIRCUITPY_HMAC ?= $(call enable-if-all,$(CIRCUITPY_HASHLIB_MBEDTLS) $(call enable-if-not,$(CIRCUITPY_HASHLIB_MBEDTLS_ONLY)))
+CFLAGS += -DCIRCUITPY_HMAC=$(CIRCUITPY_HMAC)
+
 # Always zero because it is for Zephyr only
 CFLAGS += -DCIRCUITPY_HOSTNETWORK=0
 
@@ -557,6 +563,11 @@ CFLAGS += -DCIRCUITPY_SDCARDIO=$(CIRCUITPY_SDCARDIO)
 
 CIRCUITPY_SDIOIO ?= 0
 CFLAGS += -DCIRCUITPY_SDIOIO=$(CIRCUITPY_SDIOIO)
+
+# hardwarekey: cryptographic operations with hardware-held, non-readable keys.
+# Off unless a port provides a common-hal/hardwarekey backend.
+CIRCUITPY_HARDWAREKEY ?= 0
+CFLAGS += -DCIRCUITPY_HARDWAREKEY=$(CIRCUITPY_HARDWAREKEY)
 
 CIRCUITPY_BLE_SERIAL_SERVICE ?= 0
 CFLAGS += -DCIRCUITPY_BLE_SERIAL_SERVICE=$(CIRCUITPY_BLE_SERIAL_SERVICE)
@@ -771,14 +782,10 @@ CFLAGS += -DCIRCUITPY_ZLIB=$(CIRCUITPY_ZLIB)
 CIRCUITPY_ULAB ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_ULAB=$(CIRCUITPY_ULAB)
 
-# whether to use -Os optimization on files in ulab
+# Enabling this compiles ulab with -Os and uses function-pointer dispatch for
+# ndarray binary operators. This saves about 4 kB of flash but makes
+# element-wise array arithmetic roughly 1.5x slower.
 CIRCUITPY_ULAB_OPTIMIZE_SIZE ?= 0
-
-# CIRCUITPY_VIDEOCORE is handled in the broadcom tree.
-# Only for Broadcom chips.
-# Assume not a Broadcom build.
-CIRCUITPY_VIDEOCORE ?= 0
-CFLAGS += -DCIRCUITPY_VIDEOCORE=$(CIRCUITPY_VIDEOCORE)
 
 CIRCUITPY_WARNINGS ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_WARNINGS=$(CIRCUITPY_WARNINGS)

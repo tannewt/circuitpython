@@ -15,6 +15,9 @@
 #include "supervisor/shared/serial.h"
 #include "py/mpprint.h"
 #include "py/runtime.h"
+#if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+#include "py/persistentcode.h"
+#endif
 
 #include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
@@ -28,6 +31,9 @@
 #include "common-hal/busio/SPI.h"
 #include "common-hal/busio/UART.h"
 #include "common-hal/dualbank/__init__.h"
+#if CIRCUITPY_HARDWAREKEY
+#include "common-hal/hardwarekey/__init__.h"
+#endif
 #include "common-hal/ps2io/Ps2.h"
 #include "common-hal/watchdog/WatchDogTimer.h"
 #include "common-hal/socketpool/Socket.h"
@@ -86,6 +92,10 @@
 #include "esp_ipc.h"
 #include "esp_rom_efuse.h"
 #include "esp_timer.h"
+
+#if MICROPY_PERSISTENT_CODE_LOAD_NATIVE && defined(CONFIG_IDF_TARGET_ESP32S2)
+#include "esp_memory_utils.h"
+#endif
 
 #ifdef CONFIG_IDF_TARGET_ESP32
 #include "hal/efuse_hal.h"
@@ -287,6 +297,12 @@ safe_mode_t port_init(void) {
 
     _never_reset_spi_ram_flash();
 
+    #if CIRCUITPY_HARDWAREKEY
+    // Populate board.EFUSE_KEY* from the eFuse key blocks. eFuse reads and the
+    // PSA key import need no filesystem or VM, so this is safe here.
+    espressif_hardwarekey_init();
+    #endif
+
     esp_reset_reason_t reason = esp_reset_reason();
     switch (reason) {
         case ESP_RST_BROWNOUT:
@@ -346,6 +362,56 @@ size_t port_heap_get_largest_free_size(void) {
     size_t free_size = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     return free_size;
 }
+
+#if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+// Loaded native code, kept outside the GC heap until port_gc_deinit().
+typedef struct _native_code_node_t {
+    struct _native_code_node_t *next;
+    uint32_t data[];
+} native_code_node_t;
+
+static native_code_node_t *native_code_head = NULL;
+
+void port_gc_deinit(void) {
+    while (native_code_head != NULL) {
+        native_code_node_t *next = native_code_head->next;
+        heap_caps_free(native_code_head);
+        native_code_head = next;
+    }
+}
+
+// Copy `len` bytes of machine code from `buf` into executable memory and return
+// the executable address, applying the relocations in `reloc` (if any) against
+// that address first. Raises MemoryError when no executable memory is available.
+void *esp_native_code_commit(void *buf, size_t len, void *reloc) {
+    len = (len + 3) & ~3;
+    size_t len_node = sizeof(native_code_node_t) + len;
+    native_code_node_t *node = heap_caps_malloc(len_node, MALLOC_CAP_EXEC);
+    #if defined(CONFIG_IDF_TARGET_ESP32S2)
+    // The S2 can hand out MALLOC_CAP_EXEC memory that the CPU cannot fetch from.
+    if (node != NULL && !esp_ptr_executable(node)) {
+        heap_caps_free(node);
+        node = NULL;
+    }
+    #endif
+    if (node == NULL) {
+        m_malloc_fail(len_node);
+    }
+    node->next = native_code_head;
+    native_code_head = node;
+    void *p = node->data;
+    if (reloc) {
+        mp_native_relocate(reloc, buf, (uintptr_t)p);
+    }
+    // Word copy: Xtensa executable RAM is not byte-addressable.
+    const uint32_t *src = buf;
+    uint32_t *dst = p;
+    for (size_t i = 0; i < len / 4; i++) {
+        dst[i] = src[i];
+    }
+    return p;
+}
+#endif
 
 void reset_port_early(void) {
     // esp-camera adds an I2C device on the ESP I2C bus, and keeps it there. This

@@ -261,8 +261,14 @@ endif
 ifeq ($(CIRCUITPY_GNSS),1)
 SRC_PATTERNS += gnss/%
 endif
+ifeq ($(CIRCUITPY_HARDWAREKEY),1)
+SRC_PATTERNS += hardwarekey/%
+endif
 ifeq ($(CIRCUITPY_HASHLIB),1)
 SRC_PATTERNS += hashlib/%
+endif
+ifeq ($(CIRCUITPY_HMAC),1)
+SRC_PATTERNS += hmac/%
 endif
 ifeq ($(CIRCUITPY_I2CDISPLAYBUS),1)
 SRC_PATTERNS += i2cdisplaybus/%
@@ -477,9 +483,6 @@ endif
 ifeq ($(CIRCUITPY_VECTORIO),1)
 SRC_PATTERNS += vectorio/%
 endif
-ifeq ($(CIRCUITPY_VIDEOCORE),1)
-SRC_PATTERNS += videocore/%
-endif
 ifeq ($(CIRCUITPY_WARNINGS),1)
 SRC_PATTERNS += warnings/%
 endif
@@ -598,6 +601,8 @@ SRC_COMMON_HAL_ALL = \
 	rtc/__init__.c \
 	sdioio/SDCard.c \
 	sdioio/__init__.c \
+	hardwarekey/HardwareKey.c \
+	hardwarekey/__init__.c \
 	socketpool/__init__.c \
 	socketpool/SocketPool.c \
 	socketpool/Socket.c \
@@ -840,6 +845,7 @@ SRC_SHARED_MODULE_ALL = \
 	rotaryio/IncrementalEncoder.c \
 	sdcardio/SDCard.c \
 	sdcardio/__init__.c \
+	hardwarekey/HardwareKey.c \
 	sharpdisplay/SharpMemoryFramebuffer.c \
 	sharpdisplay/__init__.c \
 	socket/__init__.c \
@@ -964,7 +970,7 @@ ifeq ($(CIRCUITPY_GIFIO),1)
 SRC_MOD += $(addprefix lib/AnimatedGIF/, \
 	gif.c \
 )
-$(BUILD)/lib/AnimatedGIF/gif.o: CFLAGS += -DCIRCUITPY
+$(BUILD)/lib/AnimatedGIF/gif.o: CFLAGS += -DCIRCUITPY -Wno-unused-but-set-variable
 endif
 
 ifeq ($(CIRCUITPY_JPEGIO),1)
@@ -1036,6 +1042,12 @@ else
 SRC_COMMON_HAL_ALL += \
 	hashlib/Hash.c \
 	hashlib/__init__.c
+endif
+
+ifeq ($(CIRCUITPY_HMAC),1)
+SRC_SHARED_MODULE_ALL += \
+	hmac/HMAC.c \
+	hmac/__init__.c
 endif
 
 ifeq ($(CIRCUITPY_RGBMATRIX),1)

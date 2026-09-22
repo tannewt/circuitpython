@@ -70,6 +70,29 @@ def flash_usage(port, build_dir):
         return None, None
 
 
+def record_size(port, board, language, used, region, status, source):
+    """Record one language build's flash usage in sizes/<board>.json.
+
+    CI uploads the file as its own small artifact so a later job can gather every
+    board's sizes without scraping logs. `source` is "measured" for a linked build and
+    "predicted" for a language skipped by the size prediction; `used` is None, written as
+    null, when the build failed or the port does not report its flash region.
+    """
+    os.makedirs("../sizes", exist_ok=True)
+    path = f"../sizes/{board}.json"
+    try:
+        with open(path, "r") as f:
+            record = json.load(f)
+    except FileNotFoundError:
+        record = {"port": port, "board": board, "region": None, "languages": {}}
+    if region is not None:
+        record["region"] = region
+    record["languages"][language] = {"used": used, "status": status, "source": source}
+    with open(path, "w") as f:
+        json.dump(record, f, indent=1)
+        f.write("\n")
+
+
 def c_array_bytes(path):
     """Sum the bytes of the const arrays initialised in a generated C file."""
     if not path.exists():
@@ -218,6 +241,15 @@ for board in build_boards:
                     flush=True,
                 )
                 if skip:
+                    record_size(
+                        board_info["port"],
+                        board,
+                        language,
+                        predicted_flash,
+                        flash_region,
+                        "skipped",
+                        "predicted",
+                    )
                     continue
 
         make_result = subprocess.run(
@@ -275,29 +307,43 @@ for board in build_boards:
         print(make_result.stdout.decode("utf-8"))
         print(other_output)
 
-        if predicted_flash is not None and make_result.returncode == 0:
-            actual_flash, _ = flash_usage(board_info["port"], build_dir)
-            if actual_flash is not None:
-                print(
-                    "Flash size check {board} {language}: predicted {predicted},"
-                    " actual {actual}, error {error:+d}".format(
-                        board=board,
-                        language=language,
-                        predicted=predicted_flash,
-                        actual=actual_flash,
-                        error=predicted_flash - actual_flash,
-                    )
+        # Languages share a build directory, so a failed link leaves the previous
+        # language's firmware.size.json behind; only trust it after a successful build.
+        actual_flash, actual_region = None, None
+        if make_result.returncode == 0:
+            actual_flash, actual_region = flash_usage(board_info["port"], build_dir)
+        record_size(
+            board_info["port"],
+            board,
+            language,
+            actual_flash,
+            actual_region,
+            "succeeded" if make_result.returncode == 0 else "failed",
+            "measured",
+        )
+
+        if predicted_flash is not None and actual_flash is not None:
+            print(
+                "Flash size check {board} {language}: predicted {predicted},"
+                " actual {actual}, error {error:+d}".format(
+                    board=board,
+                    language=language,
+                    predicted=predicted_flash,
+                    actual=actual_flash,
+                    error=predicted_flash - actual_flash,
                 )
+            )
 
         # Flush so we will see something before 10 minutes has passed.
         print(flush=True)
 
+        if extensions == ["exe"] and language == LANGUAGE_FIRST and exit_status == 0:
+            # The board builds a host executable for testing. There is no flash for a
+            # translation to overflow, and nobody downloads a translated simulator.
+            print("Skipping languages")
+            break
+
         if (not build_all) and (language == LANGUAGE_FIRST) and (exit_status == 0):
-            if extensions == ["exe"]:
-                # The board builds a host executable, so there is no flash for a
-                # translation to overflow and nothing for the other 16 to prove.
-                print("Skipping languages")
-                break
             used_flash, flash_region = flash_usage(board_info["port"], build_dir)
             if used_flash is None:
                 print("Flash usage unknown, building all languages")

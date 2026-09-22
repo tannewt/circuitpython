@@ -67,7 +67,7 @@ static mp_obj_t alarm_time_timealarm_make_new(const mp_obj_type_t *type,
         monotonic_time = mp_obj_get_float(args[ARG_monotonic_time].u_obj);
     }
 
-    mp_float_t monotonic_time_now = common_hal_time_monotonic_ms() / 1000.0;
+    mp_float_t monotonic_time_now = uint64_to_float(common_hal_time_monotonic_ms()) / MICROPY_FLOAT_CONST(1000.0);
 
     if (have_epoch) {
         #if MICROPY_LONGINT_IMPL == MICROPY_LONGINT_IMPL_NONE

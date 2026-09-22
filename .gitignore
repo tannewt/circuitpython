@@ -36,6 +36,8 @@ dist/
 ######################
 build/
 bin/
+sizes/
+node_modules/
 circuitpython-stubs/
 test-stubs/
 build-*/

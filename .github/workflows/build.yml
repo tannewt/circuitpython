@@ -10,11 +10,13 @@ on:
       - main
       - '*.x'
   pull_request:
+  merge_group:
+    types: [checks_requested]
   release:
     types: [published]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -69,15 +71,15 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
         EXCLUDE_COMMIT: ${{ github.event.pull_request.head.sha }}
     - name: Set head sha (pull)
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
       env:
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
       run: echo "HEAD_SHA=$HEAD_SHA" >> $GITHUB_ENV
     - name: Set base sha (pull)
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
       run: git cat-file -e $SHA && echo "BASE_SHA=$SHA" >> $GITHUB_ENV || true
       env:
-        SHA: ${{ steps.get-last-commit-with-checks.outputs.commit_sha || github.event.pull_request.base.sha }}
+        SHA: ${{ steps.get-last-commit-with-checks.outputs.commit_sha || github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
     - name: Set head sha (push)
       if: github.event_name == 'push'
       env:
@@ -227,10 +229,107 @@ jobs:
     uses: ./.github/workflows/build-boards.yml
     secrets: inherit
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
+      max-parallel: 55
       matrix:
         port: ${{ fromJSON(needs.scheduler.outputs.ports).ports }}
     with:
       boards: ${{ toJSON(fromJSON(needs.scheduler.outputs.ports)[matrix.port]) }}
       cp-version: ${{ needs.scheduler.outputs.cp-version }}
       port: ${{ fromJSON(needs.scheduler.outputs.ports).split_ports[matrix.port] || matrix.port }}
+
+  build-ci:
+    # Final gate for ruleset checks: always runs so the required check is
+    # reported, and fails if any job (or matrix leg) failed or was cancelled.
+    needs: [scheduler, tests, zephyr-tests, mpy-cross, mpy-cross-mac, docs, ports]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    env:
+      CP_VERSION: ${{ needs.scheduler.outputs.cp-version }}
+    steps:
+    # Firmware size report. Each board job uploads its sizes/<board>.json as zz-sizes-<board>;
+    # merge them into one table and a job summary. This is reporting only, so none of it
+    # may fail the gate: every step continues on error.
+    - name: Set up repository
+      continue-on-error: true
+      uses: actions/checkout@v6
+      with:
+        submodules: false
+        show-progress: false
+        fetch-depth: 1
+        persist-credentials: false
+
+    # actions/download-artifact matches a pattern against a listing of the run's
+    # artifacts that stops at 1000, and a full build has more. The script fetches each
+    # board's record by exact name instead, from the board list the scheduler produced.
+    # It runs from github-script because only action steps get the artifact API token.
+    - name: Install the artifact client
+      continue-on-error: true
+      run: npm install --no-save --no-package-lock --no-audit --no-fund @actions/artifact@6
+
+    - name: Download firmware sizes
+      continue-on-error: true
+      uses: actions/github-script@v9
+      env:
+        BOARDS: ${{ needs.scheduler.outputs.ports }}
+      with:
+        script: |
+          const { pathToFileURL } = require("node:url");
+          const sizes = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/tools/ci_download_sizes.mjs`));
+          await sizes.downloadSizes({
+            boards: sizes.boardsFromSchedule(JSON.parse(process.env.BOARDS || "{}")),
+            outDir: "sizes",
+            info: core.info,
+            warning: core.warning,
+          });
+
+    - name: Summarize firmware sizes
+      continue-on-error: true
+      run: python3 tools/ci_firmware_sizes.py sizes sizes-report
+
+    # Uploaded unzipped, one file per artifact, so each opens directly; with
+    # `archive: false` the file name is the artifact name.
+    - name: Upload firmware size report (HTML)
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        path: sizes-report/0-sizes.html
+        archive: false
+        if-no-files-found: ignore
+
+    - name: Upload firmware size report (JSON)
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        path: sizes-report/0-sizes.json
+        archive: false
+        if-no-files-found: ignore
+
+    # The action itself only uploads on pushes to main and release branches and on
+    # published releases. The S3 names carry the version, so the directory keeps a history.
+    - name: Upload firmware size report to S3 (HTML)
+      continue-on-error: true
+      uses: ./.github/actions/upload_aws
+      with:
+        source: sizes-report/0-sizes.html
+        destination: 0-sizes/adafruit-circuitpython-sizes-${{ env.CP_VERSION }}.html
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Upload firmware size report to S3 (JSON)
+      continue-on-error: true
+      uses: ./.github/actions/upload_aws
+      with:
+        source: sizes-report/0-sizes.json
+        destination: 0-sizes/adafruit-circuitpython-sizes-${{ env.CP_VERSION }}.json
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Check build results
+      run: |
+        echo "Job results: ${{ toJSON(needs.*.result) }}"
+        if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+          echo "One or more jobs failed or were cancelled"
+          exit 1
+        fi
+        echo "All build jobs succeeded"

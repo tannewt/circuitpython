@@ -1,0 +1,15 @@
+#
+# Espressif IoT Development Framework Configuration
+#
+#
+# Component config
+#
+#
+# ESP System Settings
+#
+# CONFIG_ESP_SYSTEM_MEMPROT is not set
+# end of ESP System Settings
+
+# end of Component config
+
+# end of Espressif IoT Development Framework Configuration

@@ -12,20 +12,20 @@ jobs:
     runs-on: ubuntu-24.04
     name: ${{ matrix.shard }}
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       # One job per board family, so the bsim suites, which take the longest, run
       # side by side instead of after each other.
       matrix:
         include:
           - shard: native_sim
-            boards: native_native_sim native_native_sim_asan
-            pytest_args: tests/ --ignore=tests/bsim
+            boards: native_native_sim native_native_sim_asan native_native_sim_lfs
+            pytest_args: tests/ --ignore=tests/bsim -n $(nproc) --dist loadfile
           - shard: nrf5340bsim
             boards: native_nrf5340bsim
-            pytest_args: tests/bsim -k native_nrf5340bsim
+            pytest_args: tests/bsim -k native_nrf5340bsim -n $(nproc) --dist loadfile
           - shard: nrf54lm20bsim
             boards: native_nrf54lm20bsim
-            pytest_args: tests/bsim -k native_nrf54lm20bsim
+            pytest_args: tests/bsim -k native_nrf54lm20bsim -n $(nproc) --dist loadfile
     env:
       CP_VERSION: ${{ inputs.cp-version }}
     steps:
@@ -55,4 +55,4 @@ jobs:
         run: make -j $(nproc) everything
         working-directory: ports/zephyr-cp/tools/bsim
       - name: Run Zephyr tests
-        run: make -C ports/zephyr-cp test TEST_BOARDS="${{ matrix.boards }}" PYTEST_ARGS="${{ matrix.pytest_args }}"
+        run: make -C ports/zephyr-cp -j$(nproc) test TEST_BOARDS="${{ matrix.boards }}" PYTEST_ARGS="${{ matrix.pytest_args }}"

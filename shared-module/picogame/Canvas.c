@@ -9,7 +9,9 @@
 #include "shared-module/picogame/Canvas.h"
 #include "shared-module/picogame/Bitmap.h"
 #include "shared-module/picogame/__init__.h"
+#if CIRCUITPY_FONTIO
 #include "shared-module/fontio/BuiltinFont.h"
+#endif
 #include "shared-bindings/displayio/Bitmap.h"
 
 // Thin wrappers over the shared int32 accumulator (dx1,dy1,dx2,dy2 are contiguous int32 at the
@@ -558,6 +560,7 @@ void picogame_blit_canvas(
 // font's 1-bit atlas on the fly (no Python glyph cache, no per-call Bitmap/Sprite). Because the
 // StripDraw `view` is a Canvas pointing at the live strip buffer, view.text() draws immediate-mode
 // text into the frame with zero retained RAM - the same primitive serves retained Canvas screens.
+#if CIRCUITPY_FONTIO
 void picogame_canvas_text(picogame_canvas_obj_t *cv, int x, int y, const char *text,
     uint16_t fg, uint16_t bg, bool has_bg, const void *font) {
     const fontio_builtinfont_t *f = font;
@@ -609,6 +612,7 @@ void picogame_canvas_text(picogame_canvas_obj_t *cv, int x, int y, const char *t
     }
     mark(cv, x0, y, x, y + fh);
 }
+#endif
 
 // Fill a screen-space triangle batch with per-triangle band reject - shared by the
 // Canvas.fill_triangles binding and the compositor's Triangles layer (one loop, one place).

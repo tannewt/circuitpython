@@ -102,6 +102,7 @@ PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_CXX:.cpp=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_C:.c=.o))
 PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_CXX:.cpp=.o))
+PY_O += $(addprefix $(BUILD)/, $(SRC_USERMOD_PATHFIX_LIB_ASM:.S=.o))
 endif # USER_C_MODULES
 
 # CIRCUITPY-CHANGE
@@ -113,7 +114,9 @@ SRC_QSTR += $(ULAB_SRC_PATHFIX)
 CFLAGS_MOD += -DCIRCUITPY_ULAB=1 -DMODULE_ULAB_ENABLED=1 -DULAB_HAS_USER_MODULE=0 -iquote $(TOP)/extmod/ulab/code
 $(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Wno-missing-declarations -Wno-missing-prototypes -Wno-unused-parameter -Wno-float-equal -Wno-sign-compare -Wno-cast-align -Wno-shadow -DCIRCUITPY
 ifeq ($(CIRCUITPY_ULAB_OPTIMIZE_SIZE),1)
-$(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Os
+# Function-pointer dispatch for ndarray binary operators saves about 4 kB of
+# flash at the cost of roughly 1.5x slower element-wise arithmetic.
+$(BUILD)/extmod/ulab/code/%.o: CFLAGS += -Os -DNDARRAY_BINARY_USES_FUN_POINTER=1
 endif # CIRCUITPY_ULAB_OPTIMIZE_SIZE
 endif # CIRCUITPY_ULAB
 
@@ -302,6 +305,14 @@ $(HEADER_BUILD)/compressed.data.h: $(HEADER_BUILD)/compressed.collected
 $(HEADER_BUILD)/$(TRANSLATION).mo: $(TOP)/locale/$(TRANSLATION).po | $(HEADER_BUILD)
 	$(Q)$(PYTHON) $(TOP)/tools/msgfmt.py -o $@ $^
 
+# Records which TRANSLATION the generated header was built for. It is rewritten
+# only when the language changes, so that building another language in the
+# same build directory regenerates compressed_translations.generated.h and
+# translations-*.c instead of linking one language's strings against another
+# language's tables.
+$(HEADER_BUILD)/translation.stamp: FORCE | $(HEADER_BUILD)
+	$(Q)if [ "$$(cat $@ 2>/dev/null)" != "$(TRANSLATION)" ]; then echo "$(TRANSLATION)" > $@; fi
+
 # translations-*.c is generated as a side-effect of building compressed_translations.generated.h
 # Specifying both in a single rule actually causes the rule to be run twice!
 # This alternative makes it run just once.
@@ -310,7 +321,7 @@ $(HEADER_BUILD)/$(TRANSLATION).mo: $(TOP)/locale/$(TRANSLATION).po | $(HEADER_BU
 $(PY_BUILD)/translations-$(TRANSLATION).c: $(HEADER_BUILD)/compressed_translations.generated.h
 	@true
 
-$(HEADER_BUILD)/compressed_translations.generated.h: $(PY_SRC)/maketranslationdata.py $(HEADER_BUILD)/$(TRANSLATION).mo $(HEADER_BUILD)/qstrdefs.generated.h
+$(HEADER_BUILD)/compressed_translations.generated.h: $(PY_SRC)/maketranslationdata.py $(HEADER_BUILD)/$(TRANSLATION).mo $(HEADER_BUILD)/qstrdefs.generated.h $(HEADER_BUILD)/translation.stamp
 	$(STEPECHO) "GEN $@"
 	$(Q)mkdir -p $(PY_BUILD)
 	$(Q)$(PYTHON) $(PY_SRC)/maketranslationdata.py --compression_filename $(HEADER_BUILD)/compressed_translations.generated.h --translation $(HEADER_BUILD)/$(TRANSLATION).mo --translation_filename $(PY_BUILD)/translations-$(TRANSLATION).c --qstrdefs_filename  $(HEADER_BUILD)/qstrdefs.generated.h --compression_level $(CIRCUITPY_MESSAGE_COMPRESSION_LEVEL) $(HEADER_BUILD)/qstrdefs.preprocessed.h

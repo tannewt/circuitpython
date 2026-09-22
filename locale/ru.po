@@ -1196,11 +1196,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr "Таймаут слишком длинный: максимальная длина таймаута %d секунд"
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr "Защита от MITM не поддерживается"
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1227,6 +1222,20 @@ msgstr "Для этой характеристики нет CCCD"
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "Невозможно установить CCCD для локальной характеристики"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr "Не подключено"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1260,15 +1269,6 @@ msgstr "Изображение памяти"
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
 msgstr "Недопустимый параметр BLE"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
-msgstr "Не подключено"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: shared-module/audiofilewriter/AudioFileWriter.c
@@ -4142,9 +4142,13 @@ msgstr "Буфер не является байтовым массивом."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr "Системная запись должна быть gnss. Спутниковая система"
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
 msgstr "Неподдерживаемый алгоритм хеширования"
+
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
+msgstr ""
 
 #: shared-bindings/i2cioexpander/IOExpander.c
 msgid "num_pins must be 8 or 16"
@@ -4366,10 +4370,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q должен быть подклассом %q"
 
-#: shared-bindings/wifi/Monitor.c
-msgid "%q out of bounds"
-msgstr "%q за пределом"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "Неверный шестнадцатеричный пароль"
@@ -4440,7 +4440,7 @@ msgstr "Не удалось выделить место для декодера"
 msgid "Failed to parse MP3 file"
 msgstr "Не удалось распарсить файл MP3"
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr "%q слишком долго"
 
@@ -4499,6 +4499,14 @@ msgstr "Неподдерживаемый тип шины дисплея"
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
 msgstr "неподдерживаемое цветовое пространство для GifWriter"
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
+msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
 #: shared-module/is31fl3741/IS31FL3741.c
@@ -4821,6 +4829,12 @@ msgstr "выключить"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Нет IP"
+
+#~ msgid "MITM security not supported"
+#~ msgstr "Защита от MITM не поддерживается"
+
+#~ msgid "%q out of bounds"
+#~ msgstr "%q за пределом"
 
 #~ msgid "chr() arg not in range(0x110000)"
 #~ msgstr "chr() аргумент вне диапазона (0x110000)"

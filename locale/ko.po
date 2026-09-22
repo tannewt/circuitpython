@@ -1196,11 +1196,6 @@ msgid "Timeout is too long: Maximum timeout length is %d seconds"
 msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Characteristic.c
-#: ports/espressif/common-hal/_bleio/Descriptor.c
-msgid "MITM security not supported"
-msgstr ""
-
-#: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 #: ports/nordic/common-hal/_bleio/Descriptor.c
 msgid "Value length != required fixed length"
@@ -1227,6 +1222,20 @@ msgstr "이 특성에 대한 CCCD가 없습니다"
 #: ports/nordic/common-hal/_bleio/Characteristic.c
 msgid "Can't set CCCD on local Characteristic"
 msgstr "로컬 특성에 CCCD를 설정할 수 없습니다"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: shared-bindings/_bleio/CharacteristicBuffer.c
+msgid "Not connected"
+msgstr "연결되지 않았습니다"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+msgid "No pairing in progress"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 #: ports/nordic/common-hal/_bleio/Connection.c
@@ -1261,15 +1270,6 @@ msgstr "빠른 메모리 부족"
 #: ports/nordic/common-hal/_bleio/__init__.c
 msgid "Invalid BLE parameter"
 msgstr "잘못된 BLE 파라미터"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
-#: shared-bindings/_bleio/CharacteristicBuffer.c
-msgid "Not connected"
-msgstr "연결되지 않았습니다"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: shared-module/audiofilewriter/AudioFileWriter.c
@@ -4130,8 +4130,12 @@ msgstr "버퍼는 바이트 배열이 아닙니다."
 msgid "System entry must be gnss.SatelliteSystem"
 msgstr ""
 
-#: shared-bindings/hashlib/__init__.c
+#: shared-bindings/hashlib/__init__.c shared-bindings/hmac/__init__.c
 msgid "Unsupported hash algorithm"
+msgstr ""
+
+#: shared-bindings/hmac/__init__.c
+msgid "hardware key slot is unused"
 msgstr ""
 
 #: shared-bindings/i2cioexpander/IOExpander.c
@@ -4349,11 +4353,6 @@ msgstr ""
 msgid "%q must be a subclass of %q"
 msgstr "%q는 %q의 하위 클래스여야 합니다"
 
-#: shared-bindings/wifi/Monitor.c
-#, fuzzy
-msgid "%q out of bounds"
-msgstr "%q가 경계를 벗어남"
-
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "잘못된 16진수 패스워드"
@@ -4424,7 +4423,7 @@ msgstr "디코더를 할당할 수 없습니다"
 msgid "Failed to parse MP3 file"
 msgstr "MP3 파일 분석에 실패했습니다"
 
-#: shared-module/bitbangio/I2C.c
+#: shared-module/bitbangio/I2C.c shared-module/msgpack/__init__.c
 msgid "%q too long"
 msgstr ""
 
@@ -4481,6 +4480,14 @@ msgstr ""
 
 #: shared-module/gifio/GifWriter.c
 msgid "unsupported colorspace for GifWriter"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "key does not support this digest"
+msgstr ""
+
+#: shared-module/hmac/HMAC.c
+msgid "HMAC of an empty message is not supported with a hardware key"
 msgstr ""
 
 #: shared-module/i2cdisplaybus/I2CDisplayBus.c
@@ -4804,6 +4811,10 @@ msgstr ""
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "IP가 없습니다"
+
+#, fuzzy
+#~ msgid "%q out of bounds"
+#~ msgstr "%q가 경계를 벗어남"
 
 #~ msgid "%q renamed %q"
 #~ msgstr "%q가 %q로 이름이 변경되었습니다"
