@@ -1009,7 +1009,7 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             package_pin = package_pin_of_pad.get(global_number)
             package_pin_init = str(package_pin) if package_pin is not None else "IOBROKER_NO_PIN"
             pin_defs.append(
-                f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = &mcu_pin_type, .number = {global_number}, .package_pin = {package_pin_init}}};"
+                f"const mcu_pin_obj_t pin_{pin_object_name} = {{ .base.type = &mcu_pin_type, .package_pin = {package_pin_init}}};"
             )
             pin_declarations.append(f"extern const mcu_pin_obj_t pin_{pin_object_name};")
             mcu_pin_mapping.append(
