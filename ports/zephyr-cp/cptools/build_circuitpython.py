@@ -331,13 +331,19 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("ssl")
         module_reasons["ssl"] = "Zephyr networking enabled"
 
-    for port_module in (portdir / "bindings").iterdir():
+    # Iterate the shared-bindings directory in a stable (sorted) order. Several
+    # modules can enable the same reverse dependency, and the "reason" comment
+    # recorded in autogen_board_info.toml belongs to whichever module enabled it
+    # first. Directory iteration order is filesystem dependent (it differs
+    # between machines and CI runners), so an unsorted walk made the generated
+    # comments - and therefore the committed toml files - change between builds.
+    for port_module in sorted((portdir / "bindings").iterdir(), key=lambda x: x.name):
         if not board_info.get(port_module.name, False):
             continue
         enabled_modules.add(port_module.name)
         module_reasons[port_module.name] = f"Zephyr board has {port_module.name}"
 
-    for shared_module in (srcdir / "shared-bindings").iterdir():
+    for shared_module in sorted((srcdir / "shared-bindings").iterdir(), key=lambda x: x.name):
         if not board_info.get(shared_module.name, False) or not shared_module.glob("*.c"):
             continue
         enabled_modules.add(shared_module.name)
