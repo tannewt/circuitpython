@@ -27,10 +27,9 @@
 #include <zephyr/drivers/gpio.h>
 
 // Runtime bus routing lets the module re-route a bus instance's pins at
-// runtime. It is available only on nRF SoCs, and only when the nRF pinctrl
-// driver is built with dynamic pinctrl states and device de-init support.
-// Without it the bus allocate/release functions report -ENOSYS and the bus
-// instance tables are not used.
+// runtime. It is available when Zephyr is built with dynamic pinctrl states and
+// device de-init support. Without it the bus allocate/release functions report
+// -ENOSYS and the bus instance tables are not used.
 #if defined(CONFIG_PINCTRL_NRF) && defined(CONFIG_PINCTRL_DYNAMIC) && \
     defined(CONFIG_DEVICE_DEINIT_SUPPORT)
 #define IOBROKER_ROUTING 1

@@ -4,6 +4,25 @@ A Zephyr module for **dynamic peripheral allocation and runtime pin routing**:
 pick a free bus instance (I2C, SPI, UART) enabled in the devicetree, re-route
 it to requested pins at runtime and hand the Zephyr device to the caller.
 
+Pins are specified using `package_pin_t` and represent a single pin on a package
+or module containing a system-on-a-chip (SoC). This is the most common boundary
+between an SoC and printed circuit board (PCB). Packages and modules may choose
+to map more than one SoC pin to a package pin and this way IOBroker ensures that
+each package pin is only used for one thing at a time. GPIO port and pin numbers
+are often used as names for these pins but using package pins allow us to
+accommodate pins without GPIO and those with multiple GPIO.
+
+IOBroker takes in a number of package pins and a device type. Device types are
+usually `drivers/<device type>` in the zephyr source tree. For example,
+`int iobroker_i2c_allocate(package_pin_t sda, package_pin_t scl, const struct device **dev_out);`
+will find a Zephyr I2C device that pins sda and scl can be connected to, connect
+them using pinctrl, claim these resources and return it. It will return
+`-ENODEV` if no such device can be found. The board DTS must enable these
+devices with `status = "okay";`, mark them as `zephyr,deferred-init;` and
+provide default pinctrl settings that will be overridden.
+
+## Status
+
 Currently, runtime routing is implemented for nRF SoCs, whose pin control
 encoding can be computed at runtime and whose peripherals can be routed to
 (almost) any pin via PSEL. On other SoCs the module compiles but the allocate

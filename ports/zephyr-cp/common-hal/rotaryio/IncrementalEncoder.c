@@ -37,6 +37,17 @@ static void incrementalencoder_gpio_callback(const struct device *port,
     shared_module_softencoder_state_update(self, new_state);
 }
 
+// Runs an iobroker/GPIO call and, on failure, releases any partial setup
+// before raising a Python exception with the Zephyr errno.
+#define CHECK_RESULT_OR_DEINIT(x) \
+    do { \
+        int _res = (x); \
+        if (_res < 0) { \
+            common_hal_rotaryio_incrementalencoder_deinit(self); \
+            raise_zephyr_error(_res); \
+        } \
+    } while (0)
+
 void common_hal_rotaryio_incrementalencoder_construct(rotaryio_incrementalencoder_obj_t *self,
     const mcu_pin_obj_t *pin_a, const mcu_pin_obj_t *pin_b) {
     // Ensure object starts in its deinit state.
@@ -50,64 +61,26 @@ void common_hal_rotaryio_incrementalencoder_construct(rotaryio_incrementalencode
     // refuse them while this object holds them. The calls also resolve the
     // GPIO controller devices and pin numbers from the pins' global numbers;
     // they are kept in the object for every later pad operation.
-    int ret = iobroker_gpio_allocate(pin_a->package_pin, &self->port_a, &self->number_a);
-    if (ret < 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(ret);
-    }
+    CHECK_RESULT_OR_DEINIT(iobroker_gpio_allocate(pin_a->package_pin, &self->port_a, &self->number_a));
+    CHECK_RESULT_OR_DEINIT(iobroker_gpio_allocate(pin_b->package_pin, &self->port_b, &self->number_b));
 
-    ret = iobroker_gpio_allocate(pin_b->package_pin, &self->port_b, &self->number_b);
-    if (ret < 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(ret);
-    }
+    CHECK_RESULT_OR_DEINIT(device_is_ready(self->port_a) && device_is_ready(self->port_b) ? 0 : -ENODEV);
 
-    if (!device_is_ready(self->port_a) || !device_is_ready(self->port_b)) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(-ENODEV);
-    }
-
-    int result = gpio_pin_configure(self->port_a, self->number_a, GPIO_INPUT | GPIO_PULL_UP);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
-
-    result = gpio_pin_configure(self->port_b, self->number_b, GPIO_INPUT | GPIO_PULL_UP);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
+    CHECK_RESULT_OR_DEINIT(gpio_pin_configure(self->port_a, self->number_a, GPIO_INPUT | GPIO_PULL_UP));
+    CHECK_RESULT_OR_DEINIT(gpio_pin_configure(self->port_b, self->number_b, GPIO_INPUT | GPIO_PULL_UP));
 
     self->callback_a.encoder = self;
     gpio_init_callback(&self->callback_a.callback, incrementalencoder_gpio_callback,
         BIT(self->number_a));
-    result = gpio_add_callback(self->port_a, &self->callback_a.callback);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
+    CHECK_RESULT_OR_DEINIT(gpio_add_callback(self->port_a, &self->callback_a.callback));
 
     self->callback_b.encoder = self;
     gpio_init_callback(&self->callback_b.callback, incrementalencoder_gpio_callback,
         BIT(self->number_b));
-    result = gpio_add_callback(self->port_b, &self->callback_b.callback);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
+    CHECK_RESULT_OR_DEINIT(gpio_add_callback(self->port_b, &self->callback_b.callback));
 
-    result = gpio_pin_interrupt_configure(self->port_a, self->number_a, GPIO_INT_EDGE_BOTH);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
-
-    result = gpio_pin_interrupt_configure(self->port_b, self->number_b, GPIO_INT_EDGE_BOTH);
-    if (result != 0) {
-        common_hal_rotaryio_incrementalencoder_deinit(self);
-        raise_zephyr_error(result);
-    }
+    CHECK_RESULT_OR_DEINIT(gpio_pin_interrupt_configure(self->port_a, self->number_a, GPIO_INT_EDGE_BOTH));
+    CHECK_RESULT_OR_DEINIT(gpio_pin_interrupt_configure(self->port_b, self->number_b, GPIO_INT_EDGE_BOTH));
 
     int a = gpio_pin_get(self->port_a, self->number_a);
     int b = gpio_pin_get(self->port_b, self->number_b);
