@@ -483,9 +483,6 @@ endif
 ifeq ($(CIRCUITPY_VECTORIO),1)
 SRC_PATTERNS += vectorio/%
 endif
-ifeq ($(CIRCUITPY_VIDEOCORE),1)
-SRC_PATTERNS += videocore/%
-endif
 ifeq ($(CIRCUITPY_WARNINGS),1)
 SRC_PATTERNS += warnings/%
 endif
