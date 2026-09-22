@@ -690,14 +690,14 @@ uint32_t _common_hal_bleio_adapter_start_advertising(bleio_adapter_obj_t *self,
 
         // Duration 0 and max events 0 mean "advertise until disabled by the host".
         uint8_t handle[1] = { 0 };
-        uint16_t duration_10msec[1] = { 0 };
+        uint16_t duration_forever[1] = { 0 };
         uint8_t max_ext_adv_evts[1] = { 0 };
         hci_check_error(
             hci_le_set_extended_advertising_enable(
                 BT_HCI_LE_ADV_ENABLE,
                 1,                // one advertising set.
                 handle,
-                duration_10msec,
+                duration_forever,
                 max_ext_adv_evts
                 ));
     } else {
@@ -809,9 +809,9 @@ void common_hal_bleio_adapter_stop_advertising(bleio_adapter_obj_t *self) {
     if (adapter_uses_extended_advertising(self)) {
         // Duration and max events are ignored when disabling.
         uint8_t handle[1] = { 0 };
-        uint16_t duration_10msec[1] = { 0 };
+        uint16_t duration_forever[1] = { 0 };
         uint8_t max_ext_adv_evts[1] = { 0 };
-        result = hci_le_set_extended_advertising_enable(BT_HCI_LE_ADV_DISABLE, 1, handle, duration_10msec, max_ext_adv_evts);
+        result = hci_le_set_extended_advertising_enable(BT_HCI_LE_ADV_DISABLE, 1, handle, duration_forever, max_ext_adv_evts);
     } else {
         result = hci_le_set_advertising_enable(BT_HCI_LE_ADV_DISABLE);
     }
