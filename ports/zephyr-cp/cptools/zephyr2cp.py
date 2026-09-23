@@ -1050,7 +1050,6 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
     zephyr_binding_headers = []
     zephyr_binding_objects = []
     zephyr_binding_labels = []
-    i2sout_instance_names = []
     for driver, instances in active_zephyr_devices.items():
         # Determine if this is busio or audiobusio
         if driver in BUSIO_CLASSES:
@@ -1098,27 +1097,29 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
             if driver == "serial":
                 # UART needs a receiver buffer
                 buffer_decl = f"static byte {instance_name}_buffer[128];"
-                construct_call = f"common_hal_busio_uart_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})), 128, {instance_name}_buffer)"
+                construct_call = f"common_hal_busio_uart_construct_from_device(self, DEVICE_DT_GET(DT_NODELABEL({labels[0]})), 128, {instance_name}_buffer)"
             else:
                 # Default case (I2C, SPI, I2S)
                 buffer_decl = ""
-                construct_call = f"common_hal_{module}_{driverclass.lower()}_construct_from_device(&{instance_name}_obj, DEVICE_DT_GET(DT_NODELABEL({labels[0]})))"
+                construct_call = f"common_hal_{module}_{driverclass.lower()}_construct_from_device(self, DEVICE_DT_GET(DT_NODELABEL({labels[0]})))"
 
-            if driver == "i2s":
-                i2sout_instance_names.append(instance_name)
-
+            # The binding object is allocated dynamically and the singleton
+            # pointer is registered as a root pointer, so it is zeroed between
+            # VM runs and the object is finalized (deinit'd) by GC. Otherwise
+            # a static object would never be deinited and would keep the
+            # peripheral (e.g. I2S) running across VM resets.
             zephyr_binding_objects.append(
                 f"""{buffer_decl}
-static {obj_type}_obj_t {instance_name}_obj;
-static mp_obj_t {singleton_ptr} = mp_const_none;
 static mp_obj_t {c_function_name}(void) {{
-    if ({singleton_ptr} != mp_const_none) {{
-        return {singleton_ptr};
+    if (MP_STATE_VM({singleton_ptr}) != MP_OBJ_NULL) {{
+        return MP_STATE_VM({singleton_ptr});
     }}
-    {singleton_ptr} = {construct_call};
-    return {singleton_ptr};
+    {obj_type}_obj_t *self = mp_obj_malloc({obj_type}_obj_t, &{obj_type}_type);
+    MP_STATE_VM({singleton_ptr}) = {construct_call};
+    return MP_STATE_VM({singleton_ptr});
 }}
-static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstrip()
+static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});
+MP_REGISTER_ROOT_POINTER(mp_obj_t {singleton_ptr});""".lstrip()
             )
             for label in labels:
                 zephyr_binding_labels.append(
@@ -1279,18 +1280,6 @@ const size_t iobroker_gpio_port_count = {count};
     if table_parts:
         iobroker_tables = iobroker_tables + "\n\n" + "\n\n".join(table_parts)
 
-    # Generate i2sout_reset() that stops all board I2SOut instances
-    if i2sout_instance_names:
-        stop_calls = "\n    ".join(
-            f"common_hal_audiobusio_i2sout_stop(&{name}_obj);" for name in i2sout_instance_names
-        )
-        i2sout_reset_func = f"""
-void i2sout_reset(void) {{
-    {stop_calls}
-}}"""
-    else:
-        i2sout_reset_func = ""
-
     zephyr_display_header = ""
     zephyr_display_object = ""
     zephyr_display_board_entry = ""
@@ -1404,6 +1393,7 @@ void board_init(void) {
 
 #include "py/obj.h"
 #include "py/mphal.h"
+#include "py/mpstate.h"
 
 {zephyr_binding_headers}
 {iobroker_includes}
@@ -1423,7 +1413,6 @@ const size_t circuitpy_max_ram_size = {max_size};
 {zephyr_binding_objects}
 {iobroker_tables}
 {zephyr_display_object}
-{i2sout_reset_func}
 
 static const mp_rom_map_elem_t mcu_pin_globals_table[] = {{
 {mcu_pin_mapping}

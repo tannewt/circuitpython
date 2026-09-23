@@ -234,10 +234,6 @@ void reset_cpu(void) {
 }
 
 void reset_port(void) {
-    #if CIRCUITPY_AUDIOBUSIO_I2SOUT
-    i2sout_reset();
-    #endif
-
     #if defined(CONFIG_ARCH_POSIX)
     native_sim_reset_port_count++;
     if (native_sim_port_resets != INT32_MAX &&
