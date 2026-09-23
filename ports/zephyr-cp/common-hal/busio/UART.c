@@ -17,6 +17,7 @@
 #include "py/stream.h"
 
 #include "bindings/zephyr_kernel/__init__.h"
+#include "supervisor/port.h"
 
 #include <stdatomic.h>
 #include <string.h>
@@ -47,7 +48,11 @@ static void serial_cb(const struct device *dev, void *user_data) {
             common_hal_busio_uart_clear_rx_buffer(self);
             mp_sched_keyboard_interrupt();
         } else if (!self->rx_paused) {
-            if (k_msgq_put(&self->msgq, &c, K_NO_WAIT) != 0) {
+            if (k_msgq_put(&self->msgq, &c, K_NO_WAIT) == 0) {
+                // Wake the main task so it can service the new RX data
+                // instead of sleeping out its full timeout.
+                port_wake_main_task_from_isr();
+            } else {
                 self->rx_paused = true;
             }
         }
