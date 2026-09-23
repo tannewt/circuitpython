@@ -197,8 +197,10 @@ void common_hal_gifio_ondiskgif_construct(gifio_ondiskgif_t *self, mp_obj_t file
 }
 
 void common_hal_gifio_ondiskgif_deinit(gifio_ondiskgif_t *self) {
+    // Just drop the references. Do not deinit the bitmap here: during GC
+    // finalization the bitmap may already have been collected, and its own
+    // finalization frees its data buffer.
     self->file = NULL;
-    common_hal_displayio_bitmap_deinit(self->bitmap);
     self->bitmap = NULL;
     self->palette = NULL;
 }

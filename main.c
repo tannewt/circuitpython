@@ -398,7 +398,9 @@ static void cleanup_after_vm(mp_obj_t exception) {
     bleio_user_reset();
     #endif
 
-    #if CIRCUITPY_CANIO
+    #if CIRCUITPY_CANIO && CIRCUITPY_BULK_RESET
+    // Bulk-reset ports reset CAN controllers here. Finalizer ports rely on
+    // GC finalizers calling deinit on the CAN objects.
     common_hal_canio_reset();
     #endif
 
@@ -420,22 +422,28 @@ static void cleanup_after_vm(mp_obj_t exception) {
     wifi_user_reset();
     #endif
 
-    // reset_board_buses() first because it may release pins from the never_reset state, so that
-    // reset_port() can reset them.
+    // reset_board_buses() first to preserve display buses and deinit others.
     #if CIRCUITPY_BOARD
     reset_board_buses();
     #endif
+
+    #if CIRCUITPY_BULK_RESET
     reset_port();
     reset_board();
+    #endif
 
-    // Free the heap last because other modules may reference heap memory and need to shut down.
+    // Flush before GC might free file objects.
     filesystem_flush();
 
-    // Runs finalisers while shutting down the heap.
+    // Runs finalisers while shutting down the heap. Finalizers call deinit on all user objects.
     stop_mp();
 
+    #if !CIRCUITPY_BULK_RESET
+    // Port-wide cleanup after finalizers have run.
+    reset_port();
+    reset_board();
+    #else
     // Don't reset pins until finalisers have run.
-    #if CIRCUITPY_BULK_RESET
     reset_all_pins();
     #endif
 
