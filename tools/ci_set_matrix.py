@@ -55,6 +55,7 @@ IGNORE_BOARD = {
     ".github/workflows/run-tests.yml",
     ".github/workflows/run-zephyr-tests.yml",
     ".github/workflows/build-board-custom.yml",
+    ".github/workflows/zephyr-autogen-pr.yml",
     ".github/workflows/bundle_cron.yml",
     ".github/workflows/create-website-pr.yml",
     ".github/workflows/learn_cron.yml",
@@ -74,8 +75,11 @@ GITHUB_MATRIX_LIMIT = 256
 
 # The Zephyr tests build native_sim and the two bsim boards out of the shared sources, so a
 # change confined to these cannot reach them: another port, a translation, a frozen library
-# (this port has none), documentation or the unix test suite.
-PATTERN_ZEPHYR_TESTS_IGNORE = re.compile(r"^(?:docs|frozen|locale|tests)/|^ports/(?!zephyr-cp/)")
+# (this port has none), documentation, the unix test suite or the autogen PR workflow.
+PATTERN_ZEPHYR_TESTS_IGNORE = re.compile(
+    r"^(?:docs|frozen|locale|tests)/|^ports/(?!zephyr-cp/)"
+    r"|^\.github/workflows/zephyr-autogen-pr\.yml$"
+)
 
 # Zephyr boards don't use make, so their module tables can't be computed here. Each
 # board's build writes autogen_board_info.toml next to its circuitpython.toml and that
@@ -228,7 +232,9 @@ def set_boards(build_all: bool):
             module_matches = pattern_module.search(file)
             port = port_matches.group(1) if port_matches else None
             if port and not module_matches:
-                if port != "unix":
+                # The port may have been removed entirely. In that case, its
+                # boards are gone too, so there is nothing to build for it.
+                if port != "unix" and port in port_to_board:
                     boards_to_build.update(port_to_board[port])
                 continue
 
@@ -238,7 +244,7 @@ def set_boards(build_all: bool):
                 # Take a copy, because we remove items from it below. For
                 # instance, if we remove items from, say, all_board_ids, then
                 # the logic to build all boards breaks.
-                boards = set(port_to_board[port] if port else all_board_ids)
+                boards = set(port_to_board.get(port, ()) if port else all_board_ids)
 
                 # Zephyr boards don't use make, so decide them here from their committed
                 # module table and leave them out of the settings computation below.

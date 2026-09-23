@@ -114,7 +114,7 @@ REVERSE_DEPENDENCIES = {
 # Other flags to set when a module is enabled
 EXTRA_FLAGS = {
     "audiobusio": {"AUDIOBUSIO_I2SOUT": 1, "AUDIOBUSIO_PDMIN": 0},
-    "busio": {"BUSIO_SPI": 1, "BUSIO_I2C": 1},
+    "busio": {"BUSIO_SPI": 1, "BUSIO_I2C": 1, "BUSIO_UART": 1},
     "rotaryio": {"ROTARYIO_SOFTENCODER": 1},
     "synthio": {"SYNTHIO_MAX_CHANNELS": 12},
 }
@@ -168,20 +168,25 @@ async def preprocess_and_split_defs(compiler, source_file, build_path, flags):
             )
 
 
+def _concatenate_if_changed(inputs, output_file):
+    """Write the concatenation of inputs to output_file, but only if it differs from what is
+    already there, so an unchanged output keeps its modification time."""
+    content = "".join(path.read_text() for path in inputs)
+    if not output_file.exists() or output_file.read_text() != content:
+        output_file.write_text(content)
+
+
 async def collect_defs(mode, build_path):
     output_file = build_path / f"{mode}defs.collected"
     splitdir = build_path / "genhdr" / mode
-    to_collect = list(splitdir.glob(f"**/*.{mode}"))
-    batch_size = 50
-    await cpbuild.run_command(
-        ["cat", "-s", *to_collect[:batch_size], ">", output_file],
-        splitdir,
+    # Sorted so the output does not depend on directory order.
+    to_collect = sorted(splitdir.glob(f"**/*.{mode}"))
+    await cpbuild.run_function(
+        _concatenate_if_changed,
+        (to_collect, output_file),
+        {},
+        description=f"Collect {mode} definitions -> {output_file.relative_to(build_path)}",
     )
-    for i in range(0, len(to_collect), batch_size):
-        await cpbuild.run_command(
-            ["cat", "-s", *to_collect[i : i + batch_size], ">>", output_file],
-            splitdir,
-        )
     return output_file
 
 
@@ -189,9 +194,13 @@ async def generate_qstr_headers(build_path, compiler, flags, translation):
     collected = await collect_defs("qstr", build_path)
     generated = build_path / "genhdr" / "qstrdefs.generated.h"
 
+    # check_hash: the collected file is rewritten on every build, so this reruns every
+    # build too. Keep the old modification time when the header comes out unchanged, or
+    # every file that includes it would be recompiled.
     await cpbuild.run_command(
         ["python", srcdir / "py" / "makeqstrdata.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
     compression_level = 9
@@ -230,29 +239,21 @@ async def generate_qstr_headers(build_path, compiler, flags, translation):
 
 async def generate_module_header(build_path):
     collected = await collect_defs("module", build_path)
+    generated = build_path / "genhdr" / "moduledefs.h"
     await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "makemoduledefs.py",
-            collected,
-            ">",
-            build_path / "genhdr" / "moduledefs.h",
-        ],
+        ["python", srcdir / "py" / "makemoduledefs.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
 
 async def generate_root_pointer_header(build_path):
     collected = await collect_defs("root_pointer", build_path)
+    generated = build_path / "genhdr" / "root_pointers.h"
     await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "py" / "make_root_pointers.py",
-            collected,
-            ">",
-            build_path / "genhdr" / "root_pointers.h",
-        ],
+        ["python", srcdir / "py" / "make_root_pointers.py", collected, ">", generated],
         srcdir,
+        check_hash=[generated],
     )
 
 
@@ -330,13 +331,19 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("ssl")
         module_reasons["ssl"] = "Zephyr networking enabled"
 
-    for port_module in (portdir / "bindings").iterdir():
+    # Iterate the shared-bindings directory in a stable (sorted) order. Several
+    # modules can enable the same reverse dependency, and the "reason" comment
+    # recorded in autogen_board_info.toml belongs to whichever module enabled it
+    # first. Directory iteration order is filesystem dependent (it differs
+    # between machines and CI runners), so an unsorted walk made the generated
+    # comments - and therefore the committed toml files - change between builds.
+    for port_module in sorted((portdir / "bindings").iterdir(), key=lambda x: x.name):
         if not board_info.get(port_module.name, False):
             continue
         enabled_modules.add(port_module.name)
         module_reasons[port_module.name] = f"Zephyr board has {port_module.name}"
 
-    for shared_module in (srcdir / "shared-bindings").iterdir():
+    for shared_module in sorted((srcdir / "shared-bindings").iterdir(), key=lambda x: x.name):
         if not board_info.get(shared_module.name, False) or not shared_module.glob("*.c"):
             continue
         enabled_modules.add(shared_module.name)
@@ -366,14 +373,16 @@ async def build_circuitpython():  # noqa: C901
     board = cmake_args["BOARD_ALIAS"]
     if not board:
         board = zephyr_board
-    translation = cmake_args["TRANSLATION"]
-    if not translation:
-        translation = "en_US"
+    # The environment wins, so the Makefile can switch languages without a reconfigure.
+    translation = os.environ.get("TRANSLATION") or cmake_args["TRANSLATION"] or "en_US"
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
     lto = cmake_args.get("LTO", "n") == "y"
     circuitpython_flags.append(f"-DCIRCUITPY_ENABLE_MPY_NATIVE={1 if enable_mpy_native else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_FULL_BUILD={1 if full_build else 0}")
+    # Zephyr does not reset all pins in bulk on soft reset, so never_reset is
+    # compiled out and hardware is released by GC finalizers instead.
+    circuitpython_flags.append("-DCIRCUITPY_BULK_RESET=0")
     circuitpython_flags.append("-DCIRCUITPY_OPT_LOAD_ATTR_FAST_PATH=1")
     circuitpython_flags.append(f"-DCIRCUITPY_OPT_MAP_LOOKUP_CACHE={1 if full_build else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_SETTINGS_TOML={1 if full_build else 0}")
@@ -433,6 +442,16 @@ async def build_circuitpython():  # noqa: C901
         )
 
     autogen_board_info_fn = mpconfigboard_fn.parent / "autogen_board_info.toml"
+
+    # Filesystem type is a compile-time choice made by the partition layout:
+    # zephyr2cp reports littlefs when the devicetree has a littlefs_partition
+    # node, otherwise the supervisor mounts FAT.
+    filesystem_littlefs = board_info.get("littlefs", False)
+    circuitpython_flags.append(
+        f"-DCIRCUITPY_FILESYSTEM_LITTLEFS={1 if filesystem_littlefs else 0}"
+    )
+    if filesystem_littlefs:
+        circuitpython_flags.append("-DMICROPY_VFS_LFS2=1")
 
     creator_id = mpconfigboard.get("CIRCUITPY_CREATOR_ID", mpconfigboard.get("USB_VID", 0x1209))
     creation_id = mpconfigboard.get("CIRCUITPY_CREATION_ID", mpconfigboard.get("USB_PID", 0x000C))
@@ -501,6 +520,16 @@ async def build_circuitpython():  # noqa: C901
         supervisor_source.extend(top.glob("supervisor/shared/web_workflow/*.c"))
 
     usb_ok = board_info.get("usb_device", False)
+    if usb_ok and filesystem_littlefs:
+        # USB MSC can only expose a FAT block image; a littlefs CIRCUITPY has
+        # no MSC-compatible layout and USB MSC of it would corrupt the drive.
+        # Rename the filesystem partition to fatfs_partition in the board's
+        # Adaboot layout dtsi, or remove the USB device from the devicetree.
+        raise SystemExit(
+            f"{board}: littlefs CIRCUITPY filesystem is incompatible with USB. "
+            "Rename the littlefs_partition node to fatfs_partition in the board's "
+            "layout dtsi, or disable the USB device controller in the devicetree."
+        )
     circuitpython_flags.append(f"-DCIRCUITPY_USB_DEVICE={1 if usb_ok else 0}")
 
     if usb_ok:
@@ -682,6 +711,23 @@ async def build_circuitpython():  # noqa: C901
     )
 
     source_files = supervisor_source + hal_source + ["extmod/vfs.c"]
+    if filesystem_littlefs:
+        source_files.extend(
+            (
+                "extmod/vfs_lfs.c",
+                "lib/littlefs/lfs2.c",
+                "lib/littlefs/lfs2_util.c",
+            )
+        )
+        circuitpython_flags.extend(
+            (
+                "-DLFS2_NO_MALLOC",
+                "-DLFS2_NO_DEBUG",
+                "-DLFS2_NO_WARN",
+                "-DLFS2_NO_ERROR",
+                "-DLFS2_NO_ASSERT",
+            )
+        )
     if ulab_enabled:
         source_files.extend(sorted((top / "extmod" / "ulab" / "code").rglob("*.c")))
     assembly_files = []

@@ -219,6 +219,13 @@ CFLAGS += -DCIRCUITPY_BUSDEVICE=$(CIRCUITPY_BUSDEVICE)
 CIRCUITPY_BUILTINS_POW3 ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_BUILTINS_POW3=$(CIRCUITPY_BUILTINS_POW3)
 
+# Bulk reset: when enabled, pins and buses registered with never_reset survive a
+# soft reset (the port resets all remaining pins in bulk). When disabled, ports
+# rely solely on GC finalizers to release hardware, so never_reset is compiled
+# out. Ports that do not perform a bulk pin reset should set this to 0.
+CIRCUITPY_BULK_RESET ?= 1
+CFLAGS += -DCIRCUITPY_BULK_RESET=$(CIRCUITPY_BULK_RESET)
+
 CIRCUITPY_BUSIO ?= 1
 CFLAGS += -DCIRCUITPY_BUSIO=$(CIRCUITPY_BUSIO)
 
@@ -371,6 +378,12 @@ CFLAGS += -DCIRCUITPY_HASHLIB_MBEDTLS=$(CIRCUITPY_HASHLIB_MBEDTLS)
 # i.e., we need to include a subset of mbedtls only for hashlib's own needs
 CIRCUITPY_HASHLIB_MBEDTLS_ONLY ?= $(call enable-if-all,$(CIRCUITPY_HASHLIB_MBEDTLS) $(call enable-if-not,$(CIRCUITPY_SSL)))
 CFLAGS += -DCIRCUITPY_HASHLIB_MBEDTLS_ONLY=$(CIRCUITPY_HASHLIB_MBEDTLS_ONLY)
+
+# hmac: CPython-compatible HMAC, backed by PSA Crypto. Available wherever a full PSA
+# crypto build with HMAC is already present (SSL builds, espressif's ESP-IDF mbedtls);
+# the HASHLIB_MBEDTLS_ONLY subset does not include the PSA MAC driver yet.
+CIRCUITPY_HMAC ?= $(call enable-if-all,$(CIRCUITPY_HASHLIB_MBEDTLS) $(call enable-if-not,$(CIRCUITPY_HASHLIB_MBEDTLS_ONLY)))
+CFLAGS += -DCIRCUITPY_HMAC=$(CIRCUITPY_HMAC)
 
 # Always zero because it is for Zephyr only
 CFLAGS += -DCIRCUITPY_HOSTNETWORK=0
@@ -557,6 +570,11 @@ CFLAGS += -DCIRCUITPY_SDCARDIO=$(CIRCUITPY_SDCARDIO)
 
 CIRCUITPY_SDIOIO ?= 0
 CFLAGS += -DCIRCUITPY_SDIOIO=$(CIRCUITPY_SDIOIO)
+
+# hardwarekey: cryptographic operations with hardware-held, non-readable keys.
+# Off unless a port provides a common-hal/hardwarekey backend.
+CIRCUITPY_HARDWAREKEY ?= 0
+CFLAGS += -DCIRCUITPY_HARDWAREKEY=$(CIRCUITPY_HARDWAREKEY)
 
 CIRCUITPY_BLE_SERIAL_SERVICE ?= 0
 CFLAGS += -DCIRCUITPY_BLE_SERIAL_SERVICE=$(CIRCUITPY_BLE_SERIAL_SERVICE)
@@ -775,12 +793,6 @@ CFLAGS += -DCIRCUITPY_ULAB=$(CIRCUITPY_ULAB)
 # ndarray binary operators. This saves about 4 kB of flash but makes
 # element-wise array arithmetic roughly 1.5x slower.
 CIRCUITPY_ULAB_OPTIMIZE_SIZE ?= 0
-
-# CIRCUITPY_VIDEOCORE is handled in the broadcom tree.
-# Only for Broadcom chips.
-# Assume not a Broadcom build.
-CIRCUITPY_VIDEOCORE ?= 0
-CFLAGS += -DCIRCUITPY_VIDEOCORE=$(CIRCUITPY_VIDEOCORE)
 
 CIRCUITPY_WARNINGS ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_WARNINGS=$(CIRCUITPY_WARNINGS)
