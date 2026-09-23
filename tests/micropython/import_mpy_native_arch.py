@@ -34,9 +34,7 @@ arch = [
 
 # a bytecode-only .mpy of an empty module, as written by mpy-cross; it loads
 # on any architecture, so only the file name decides which one is imported
-empty_mpy = bytes(
-    b"\x43\x06\x00\x1f\x02\x00\x10empty.py\x00\x0f\x28\x00\x02\x01\x51\x63"
-)
+empty_mpy = b"\x43\x06\x00\x1f\x02\x00\x10empty.py\x00\x0f\x28\x00\x02\x01\x51\x63"
 
 files = {
     "foo." + arch + ".mpy": empty_mpy,
