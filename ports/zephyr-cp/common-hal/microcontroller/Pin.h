@@ -14,10 +14,6 @@
 
 typedef struct {
     mp_obj_base_t base;
-    // Global pin number: gpio port index * 32 + pin within the port. The
-    // GPIO controller device and pin number within it are resolved from it
-    // when needed (iobroker_gpio_split()).
-    uint16_t number;
     // Package pin of the SoC package the pad is bonded to, resolved at
     // build time from the board's package pin map. IOBROKER_NO_PIN when the
     // pad has no entry in the map (or the SoC has no package pin map).
@@ -25,5 +21,3 @@ typedef struct {
 } mcu_pin_obj_t;
 
 #include "autogen-pins.h"
-
-void reset_all_pins(void);

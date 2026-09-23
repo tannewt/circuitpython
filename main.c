@@ -434,7 +434,9 @@ static void cleanup_after_vm(mp_obj_t exception) {
     stop_mp();
 
     // Don't reset pins until finalisers have run.
+    #if CIRCUITPY_BULK_RESET
     reset_all_pins();
+    #endif
 
     // Let the workflows know we've reset in case they want to restart.
     supervisor_workflow_reset();
@@ -814,7 +816,9 @@ static bool __attribute__((noinline)) run_code_py(safe_mode_t safe_mode, bool *s
         common_hal_alarm_clear_pin_preservations();
         #endif
         // Reset pins, as if there was a hard reset.
+        #if CIRCUITPY_BULK_RESET
         reset_all_pins();
+        #endif
         // Pretend that the next run is the first run, as if we were reset.
         *simulate_reset = true;
     }
@@ -1035,7 +1039,9 @@ int __attribute__((used)) main(void) {
     set_safe_mode(port_init());
 
     // All ports need pins reset, after never-reset pins are marked in port_init();
+    #if CIRCUITPY_BULK_RESET
     reset_all_pins();
+    #endif
 
     port_heap_init();
 
