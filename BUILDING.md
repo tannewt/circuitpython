@@ -35,7 +35,7 @@ Or everything one port needs, which is what you want if you build several boards
     make -C ports/raspberrypi fetch-port-submodules
 
 There is also a target that fetches the submodules of every port at once. That is a few gigabytes
-against a few hundred megabytes for one board, so reach for it only if you really are building for
+against a few hundred megabytes for one board, so use it only if you really are building for
 more than one port:
 
     make fetch-all-submodules
