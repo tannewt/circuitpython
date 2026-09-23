@@ -31,7 +31,6 @@
 
 #include "peripherals/pins.h"
 
-void reset_all_pins(void);
 void common_hal_reset_pin(const mcu_pin_obj_t *pin);
 
 uint8_t common_hal_mcu_pin_number(const mcu_pin_obj_t *pin);
