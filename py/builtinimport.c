@@ -77,11 +77,27 @@ static mp_import_stat_t stat_path(vstr_t *path) {
 // argument. This is the logic that makes .py files take precedent over .mpy
 // files. This uses stat_path above, rather than mp_import_stat directly, so
 // that the .frozen path prefix is handled.
+// CIRCUITPY-CHANGE: builds that can load native code also try .<arch>.mpy
+// between .py and .mpy.
 static mp_import_stat_t stat_file_py_or_mpy(vstr_t *path) {
     mp_import_stat_t stat = stat_path(path);
     if (stat == MP_IMPORT_STAT_FILE) {
         return stat;
     }
+
+    #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+    // CIRCUITPY-CHANGE: replace the '.py' with '.<arch>.mpy', where <arch> is the
+    // mpy-cross -march name of this build, and put the '.py' back on a miss.
+    size_t orig_len = path->len;
+    path->len -= 3;
+    vstr_add_str(path, "." MPY_FEATURE_ARCH_NAME ".mpy");
+    stat = stat_path(path);
+    if (stat == MP_IMPORT_STAT_FILE) {
+        return stat;
+    }
+    path->len = orig_len - 3;
+    vstr_add_str(path, ".py");
+    #endif
 
     #if MICROPY_PERSISTENT_CODE_LOAD
     // Didn't find .py -- try the .mpy instead by inserting an 'm' into the '.py'.
