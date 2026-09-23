@@ -88,15 +88,19 @@ static mp_import_stat_t stat_file_py_or_mpy(vstr_t *path) {
     #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
     // CIRCUITPY-CHANGE: replace the '.py' with '.<arch>.mpy', where <arch> is the
     // mpy-cross -march name of this build, and put the '.py' back on a miss.
-    size_t orig_len = path->len;
-    path->len -= 3;
-    vstr_add_str(path, "." MPY_FEATURE_ARCH_NAME ".mpy");
-    stat = stat_path(path);
-    if (stat == MP_IMPORT_STAT_FILE) {
-        return stat;
+    // path is a fixed MICROPY_ALLOC_PATH_MAX buffer, so skip the probe when the
+    // longer name would not fit rather than let vstr raise.
+    if (path->len - 3 + sizeof("." MPY_FEATURE_ARCH_NAME ".mpy") <= path->alloc) {
+        size_t orig_len = path->len;
+        path->len -= 3;
+        vstr_add_str(path, "." MPY_FEATURE_ARCH_NAME ".mpy");
+        stat = stat_path(path);
+        if (stat == MP_IMPORT_STAT_FILE) {
+            return stat;
+        }
+        path->len = orig_len - 3;
+        vstr_add_str(path, ".py");
     }
-    path->len = orig_len - 3;
-    vstr_add_str(path, ".py");
     #endif
 
     #if MICROPY_PERSISTENT_CODE_LOAD
