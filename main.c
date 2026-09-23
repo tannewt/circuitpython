@@ -15,6 +15,7 @@
 #include "py/compile.h"
 #include "py/frozenmod.h"
 #include "py/mphal.h"
+#include "py/persistentcode.h"
 #include "py/runtime.h"
 #include "py/repl.h"
 #include "py/gc.h"
@@ -898,6 +899,9 @@ static void __attribute__ ((noinline)) run_boot_py(safe_mode_t safe_mode) {
 
         // Write version info
         mp_printf(&mp_plat_print, "%s\nBoard ID:%s\n", MICROPY_FULL_VERSION_INFO, CIRCUITPY_BOARD_ID);
+        #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+        mp_printf(&mp_plat_print, "%q:%s\n", MP_QSTR_architecture, MPY_FEATURE_ARCH_NAME);
+        #endif
         #if CIRCUITPY_MICROCONTROLLER && COMMON_HAL_MCU_PROCESSOR_UID_LENGTH > 0
         uint8_t raw_id[COMMON_HAL_MCU_PROCESSOR_UID_LENGTH];
         common_hal_mcu_processor_get_uid(raw_id);
