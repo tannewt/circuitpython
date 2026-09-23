@@ -82,11 +82,6 @@ static NRF_PWM_Type *find_free_pwm(void) {
 }
 
 static size_t pixels_pattern_heap_size = 0;
-// Called during reset_port() to free the pattern buffer
-void neopixel_write_reset(void) {
-    MP_STATE_VM(pixels_pattern_heap) = NULL;
-    pixels_pattern_heap_size = 0;
-}
 
 uint64_t next_start_raw_ticks = 0;
 
@@ -129,6 +124,13 @@ void common_hal_neopixel_write(const digitalio_digitalinout_obj_t *digitalinout,
             (void)sd_softdevice_is_enabled(&sd_en);
             #endif
 
+            // MP_STATE_VM(pixels_pattern_heap) is a root pointer, so it is
+            // zeroed between VM runs while this static size is not. Re-sync
+            // the size whenever the buffer is gone so a stale size never
+            // skips a needed allocation.
+            if (MP_STATE_VM(pixels_pattern_heap) == NULL) {
+                pixels_pattern_heap_size = 0;
+            }
             if (pixels_pattern_heap_size < pattern_size) {
                 // Current heap buffer is too small.
                 if (MP_STATE_VM(pixels_pattern_heap)) {
