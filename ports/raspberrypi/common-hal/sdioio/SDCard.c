@@ -178,8 +178,9 @@ bool sdioio_sdcard_ioctl(mp_obj_t self_in, size_t cmd, size_t arg,
     switch (cmd) {
         case MP_BLOCKDEV_IOCTL_DEINIT:
         case MP_BLOCKDEV_IOCTL_SYNC:
-            // SDIO operations are synchronous, no action needed.
-            return true;
+            // The driver keeps multi-block writes open between calls, so end
+            // the transfer and wait for the card to finish programming.
+            return sdfat_pio_card_sync(&self->card);
 
         case MP_BLOCKDEV_IOCTL_BLOCK_COUNT:
             *out_value = common_hal_sdioio_sdcard_get_count(self);
@@ -215,6 +216,8 @@ void common_hal_sdioio_sdcard_deinit(sdioio_sdcard_obj_t *self) {
 
     unregister_card(self);
 
+    // Commit any open write before the PIO is released.
+    sdfat_pio_card_sync(&self->card);
     sdfat_pio_card_end(&self->card);
     sdfat_pio_card_free(&self->card);
 
