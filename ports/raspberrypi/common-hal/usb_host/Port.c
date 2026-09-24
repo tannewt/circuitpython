@@ -196,8 +196,8 @@ usb_host_port_obj_t *common_hal_usb_host_port_construct(const mcu_pin_obj_t *dp,
         if (iso_buf != NULL) {
             pio_usb_host_set_iso_ring(iso_buf, rounded);
         } else {
-            mp_printf(&mp_plat_print,
-                "memory allocation failed, allocating %u bytes\n", (uint)rounded);
+            mp_raise_RuntimeError_varg(MP_ERROR_TEXT("Failed to allocate %q buffer"),
+                MP_QSTR_USB_HOST_ISO_BUFFER);
         }
     }
     #endif
