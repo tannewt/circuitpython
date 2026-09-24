@@ -85,32 +85,31 @@ static mp_import_stat_t stat_file_py_or_mpy(vstr_t *path) {
         return stat;
     }
 
+    #if MICROPY_PERSISTENT_CODE_LOAD || MICROPY_PERSISTENT_CODE_LOAD_NATIVE
+    size_t base_len = path->len - 3; // drop ".py"
+    #endif
+
     #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
-    // CIRCUITPY-CHANGE: replace the '.py' with '.<arch>.mpy', where <arch> is the
-    // mpy-cross -march name of this build, and put the '.py' back on a miss.
-    // path is a fixed MICROPY_ALLOC_PATH_MAX buffer, so skip the probe when the
-    // longer name would not fit rather than let vstr raise.
-    if (path->len - 3 + sizeof("." MPY_FEATURE_ARCH_NAME ".mpy") <= path->alloc) {
-        size_t orig_len = path->len;
-        path->len -= 3;
+    // CIRCUITPY-CHANGE: try '.<arch>.mpy' first, where <arch> is the mpy-cross -march
+    // name of this build. path is a fixed MICROPY_ALLOC_PATH_MAX buffer, so skip the
+    // probe when the longer name (plus NUL) would not fit rather than let vstr raise.
+    if (base_len + sizeof("." MPY_FEATURE_ARCH_NAME ".mpy") <= path->alloc) {
+        path->len = base_len;
         vstr_add_str(path, "." MPY_FEATURE_ARCH_NAME ".mpy");
-        stat = stat_path(path);
-        if (stat == MP_IMPORT_STAT_FILE) {
-            return stat;
+        if (stat_path(path) == MP_IMPORT_STAT_FILE) {
+            return MP_IMPORT_STAT_FILE;
         }
-        path->len = orig_len - 3;
-        vstr_add_str(path, ".py");
     }
     #endif
 
     #if MICROPY_PERSISTENT_CODE_LOAD
-    // Didn't find .py -- try the .mpy instead by inserting an 'm' into the '.py'.
+    // Didn't find .py -- try the .mpy instead.
     // Note: There's no point doing this if it's a frozen path, but adding the check
     // would be extra code, and no harm letting mp_find_frozen_module fail instead.
-    vstr_ins_byte(path, path->len - 2, 'm');
-    stat = stat_path(path);
-    if (stat == MP_IMPORT_STAT_FILE) {
-        return stat;
+    path->len = base_len;
+    vstr_add_str(path, ".mpy");
+    if (stat_path(path) == MP_IMPORT_STAT_FILE) {
+        return MP_IMPORT_STAT_FILE;
     }
     #endif
 
