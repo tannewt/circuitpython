@@ -53,6 +53,10 @@ static const char *nrf_fun_name(uint32_t fun) {
         "SPIM_SCK", "SPIM_MOSI", "SPIM_MISO",
         "SPIS_SCK", "SPIS_MOSI", "SPIS_MISO", "SPIS_CSN",
         "TWIM_SCL", "TWIM_SDA",
+        "I2S_SCK_M", "I2S_SCK_S", "I2S_LRCK_M", "I2S_LRCK_S", "I2S_SDIN",
+        "I2S_SDOUT", "I2S_MCK",
+        "PDM_CLK", "PDM_DIN",
+        "PWM_OUT0", "PWM_OUT1", "PWM_OUT2", "PWM_OUT3",
     };
     if (fun < ARRAY_SIZE(names)) {
         return names[fun];
@@ -238,6 +242,9 @@ static int iobroker_route(const iobroker_instance_t *inst, iobroker_state_t *sta
 static int iobroker_allocate(const char *kind, const iobroker_instance_t *buses,
     size_t count, iobroker_state_t *states, const package_pin_t *requested,
     const pinctrl_soc_pin_t *pins, uint8_t pin_count, const struct device **dev_out) {
+    // TODO(nRF54L): instances only reach pads in their own power domain;
+    // add a reachability check (returning -ENXIO) before enabling routing
+    // there. nRF52 and nRF53 are a full crossbar.
     for (size_t i = 0; i < count; i++) {
         iobroker_state_t *state = &states[i];
         if (state->in_use) {
@@ -312,7 +319,32 @@ static bool iobroker_state_find(const struct device *dev, iobroker_state_t **sta
             return true;
         }
     }
+    for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
+        if (iobroker_pwm_buses[i].dev == dev) {
+            *state_out = &iobroker_pwm_bus_states[i];
+            return true;
+        }
+    }
     return false;
+}
+
+int iobroker_instance_reg_addr(const struct device *dev, uint32_t *addr_out) {
+    const iobroker_instance_t *const pools[] = {
+        iobroker_i2c_buses, iobroker_spi_buses, iobroker_uart_buses, iobroker_pwm_buses,
+    };
+    const size_t counts[] = {
+        iobroker_i2c_bus_count, iobroker_spi_bus_count, iobroker_uart_bus_count,
+        iobroker_pwm_bus_count,
+    };
+    for (size_t p = 0; p < ARRAY_SIZE(pools); p++) {
+        for (size_t i = 0; i < counts[p]; i++) {
+            if (pools[p][i].dev == dev) {
+                *addr_out = pools[p][i].reg_addr;
+                return 0;
+            }
+        }
+    }
+    return -ENODEV;
 }
 
 bool iobroker_release(const struct device *dev) {
@@ -326,6 +358,8 @@ bool iobroker_release(const struct device *dev) {
     // De-init so that the device ends up de-initialized (like deferred-init
     // devices are after boot); the caller initializes it again when it
     // allocates the instance next.
+    // TODO: pwm_nrfx has no deinit hook (-ENOTSUP), which matters once pwmio
+    // initializes PWM instances.
     (void)device_deinit(dev);
     state->in_use = false;
     state->routed = false;
@@ -454,6 +488,44 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     pins[3] = nrf_psel_encode(NRF_FUN_UART_CTS, cts_pad, false);
     return iobroker_allocate("uart", iobroker_uart_buses, iobroker_uart_bus_count,
         iobroker_uart_bus_states, requested, pins, 4, dev_out);
+}
+
+int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
+    package_pin_t out2, package_pin_t out3, const struct device **dev_out) {
+    LOG_INF("pwm allocate: out0=%u out1=%u out2=%u out3=%u", (unsigned)out0,
+        (unsigned)out1, (unsigned)out2, (unsigned)out3);
+    const package_pin_t requested[] = { out0, out1, out2, out3 };
+    int ret = iobroker_check_request("pwm", requested, 4);
+    if (ret < 0) {
+        return ret;
+    }
+    uint16_t pads[4];
+    for (size_t i = 0; i < 4; i++) {
+        if (iobroker_package_pin_soc_pad(requested[i], &pads[i]) < 0) {
+            LOG_WRN("pwm allocate: package pin %u is not in the map",
+                (unsigned)requested[i]);
+            return -EINVAL;
+        }
+        if (!nrf_pad_ok(pads[i])) {
+            LOG_WRN("pwm allocate: pad %u is not on a GPIO controller",
+                (unsigned)pads[i]);
+            return -EINVAL;
+        }
+    }
+    char names[4][12];
+    LOG_INF("pwm allocate: OUT0 package pin %u -> %s, OUT1 %u -> %s, OUT2 %u -> %s, OUT3 %u -> %s",
+        (unsigned)out0, nrf_pad_name(pads[0], names[0], sizeof(names[0])),
+        (unsigned)out1, nrf_pad_name(pads[1], names[1], sizeof(names[1])),
+        (unsigned)out2, nrf_pad_name(pads[2], names[2], sizeof(names[2])),
+        (unsigned)out3, nrf_pad_name(pads[3], names[3], sizeof(names[3])));
+    pinctrl_soc_pin_t pins[4];
+    // All outputs are push-pull; no pulls.
+    pins[0] = nrf_psel_encode(NRF_FUN_PWM_OUT0, pads[0], false);
+    pins[1] = nrf_psel_encode(NRF_FUN_PWM_OUT1, pads[1], false);
+    pins[2] = nrf_psel_encode(NRF_FUN_PWM_OUT2, pads[2], false);
+    pins[3] = nrf_psel_encode(NRF_FUN_PWM_OUT3, pads[3], false);
+    return iobroker_allocate("pwm", iobroker_pwm_buses, iobroker_pwm_bus_count,
+        iobroker_pwm_bus_states, requested, pins, 4, dev_out);
 }
 
 #endif // IOBROKER_ROUTING

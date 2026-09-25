@@ -1,8 +1,9 @@
 # iobroker
 
 A Zephyr module for **dynamic peripheral allocation and runtime pin routing**:
-pick a free bus instance (I2C, SPI, UART) enabled in the devicetree, re-route
-it to requested pins at runtime and hand the Zephyr device to the caller.
+pick a free peripheral instance (I2C, SPI, UART, PWM) enabled in the
+devicetree, re-route it to requested pins at runtime and hand the Zephyr
+device to the caller.
 
 Pins are specified using `package_pin_t` and represent a single pin on a package
 or module containing a system-on-a-chip (SoC). This is the most common boundary
@@ -70,6 +71,7 @@ provide per-board tables (the generated `board.c` always emits them):
 const iobroker_instance_t iobroker_i2c_buses[];   // + _states[] and _bus_count
 const iobroker_instance_t iobroker_spi_buses[];   // ...
 const iobroker_instance_t iobroker_uart_buses[];  // ...
+const iobroker_instance_t iobroker_pwm_buses[];   // ...
 const struct device * const iobroker_gpio_port_devices[];  // + _indexes[] and _count
 const iobroker_package_pin_t iobroker_package_pins[];   // + _pin_count
 const uint16_t iobroker_reserved_pads[];   // + _pin_count
@@ -89,10 +91,11 @@ identity map needs no rendered table: the core applies it directly.
 New maps are transcribed from a SoC datasheet with `tools/gen_package.py`
 (see the script's docstring; the datasheets live in `datasheets/`).
 
-Each instance entry contains the Zephyr device, its `struct
-pinctrl_dev_config` (via `PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the
-devicetree state has fixed pins, the raw `pinctrl_soc_pin_t` values of the
-"default" state. Instances whose devicetree "default" state leaves every
+Each instance entry contains the Zephyr device, its register block address
+(for callers that drive an allocated instance directly, via
+`iobroker_instance_reg_addr()`), its `struct pinctrl_dev_config` (via
+`PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the devicetree state has
+fixed pins, the raw `pinctrl_soc_pin_t` values of the "default" state. Instances whose devicetree "default" state leaves every
 signal disconnected (`NRF_PIN_DISCONNECTED`) set `.dt_psels = NULL` and can be
 routed to any pin at runtime. Instances with fixed devicetree pins are only
 allocatable when a request matches their existing state.
@@ -138,6 +141,12 @@ quiescent state (disconnected) on release, and GPIO claims conflict with bus
 allocations the same way bus allocations conflict with each other.
 `iobroker_gpio_allocate()` resolves the package pin through the map
 and returns both the GPIO controller device and the pin number within it.
+PWM instances are allocated with `iobroker_pwm_allocate()`, one package pin
+per output OUT0..OUT3; every output may be `IOBROKER_NO_PIN`, in which case
+the call claims only the instance for a caller that drives PSEL itself (the
+Zephyr device is left uninitialized) and disconnects the outputs again
+before `iobroker_release()`. Such a caller keeps ownership of the pin it
+drives through a separate GPIO claim.
 `iobroker_gpio_package_pin()` maps a GPIO controller's hardware port index
 and pin number (the two halves of the global pin numbering) back to the
 package pin the pad is bonded to.

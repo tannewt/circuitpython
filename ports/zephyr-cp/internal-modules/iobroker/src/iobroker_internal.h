@@ -11,9 +11,3 @@
 #pragma once
 
 #include <iobroker/iobroker.h>
-
-// Resolve a package pin to the SoC pad it is bonded to (defined by the core).
-// IOBROKER_NO_PIN passes through unchanged so that disconnected optional
-// signals stay disconnected. Returns 0, or -EINVAL when the pin is not in
-// the map.
-int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out);

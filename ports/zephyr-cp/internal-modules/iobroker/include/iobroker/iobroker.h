@@ -93,6 +93,13 @@ int iobroker_gpio_split(uint16_t number, const struct device **port_out,
 int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
     package_pin_t *package_pin_out);
 
+// Resolve a package pin to the SoC pad it is bonded to, in the global pin
+// numbering (GPIO controller port index * 32 + pin within the port).
+// IOBROKER_NO_PIN passes through unchanged so that disconnected optional
+// signals stay disconnected. Returns 0, or -EINVAL when the pin is not in
+// the map; *soc_pad_out is untouched on error.
+int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out);
+
 #if defined(CONFIG_PINCTRL_NRF)
 
 #include <zephyr/drivers/pinctrl.h>
@@ -100,6 +107,10 @@ int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
 // Description of one allocatable bus instance. Filled in by the board tables.
 typedef struct {
     const struct device *dev;
+    // Register block address of the instance, from the devicetree, for
+    // callers that drive the allocated instance's registers directly
+    // instead of through its Zephyr driver (see iobroker_instance_reg_addr()).
+    uint32_t reg_addr;
     // Pin control configuration of the device. Mutable because
     // CONFIG_PINCTRL_DYNAMIC moves these to RAM so that states can be
     // swapped at runtime.
@@ -142,6 +153,12 @@ extern const iobroker_instance_t iobroker_uart_buses[];
 extern const size_t iobroker_uart_bus_count;
 extern iobroker_state_t iobroker_uart_bus_states[];
 
+// PWM instances. Each nRF PWM instance has four outputs (OUT0..OUT3) that
+// are routed with the same pinctrl mechanism as bus signals.
+extern const iobroker_instance_t iobroker_pwm_buses[];
+extern const size_t iobroker_pwm_bus_count;
+extern iobroker_state_t iobroker_pwm_bus_states[];
+
 // SoC pads owned by fixed peripherals (console UART, flash instance, I2S,
 // ...): the pads their devicetree pinctrl default state drives at boot.
 // iobroker_pin_in_use() reports these as always busy so that allocate()
@@ -165,6 +182,13 @@ int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     package_pin_t miso, const struct device **dev_out);
 int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     package_pin_t rts, package_pin_t cts, const struct device **dev_out);
+// Allocate a PWM instance and route its outputs OUT0..OUT3 to the given
+// package pins. Any output may be IOBROKER_NO_PIN; with all four disconnected
+// the call claims only the instance, for a caller that connects the outputs
+// itself through the SoC registers (neopixel_write) and disconnects them
+// again before iobroker_release().
+int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
+    package_pin_t out2, package_pin_t out3, const struct device **dev_out);
 
 // Returns true when the package pin is currently claimed by an allocated bus
 // instance, a GPIO allocation, or a fixed peripheral (console UART, flash
@@ -193,6 +217,13 @@ int iobroker_gpio_allocate(package_pin_t pin,
 // GPIO_DISCONNECTED support). Pass the device and pin number that the
 // allocate call returned. Returns true when a claim was held.
 bool iobroker_gpio_release(const struct device *port, gpio_pin_t number);
+
+// Register block address of an instance returned by one of the allocate
+// functions, for a caller that drives the hardware directly instead of
+// through the Zephyr driver (neopixel_write). Returns 0, or -ENODEV when
+// the device is not an iobroker-managed instance; *addr_out is untouched on
+// error.
+int iobroker_instance_reg_addr(const struct device *dev, uint32_t *addr_out);
 
 // Release an instance previously returned by one of the allocate functions.
 // Returns true when the instance had been dynamically routed, in which case

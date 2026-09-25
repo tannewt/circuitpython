@@ -647,6 +647,23 @@ def add_toml_pin_names(
         board_names.setdefault(pin_key, []).append(board_name)
 
 
+def _toml_status_pin(mpconfigboard, board_names, key):
+    """Resolve a circuitpython.toml status pin key to its ``(ioport, num)``.
+
+    The key's value is a board pin name (``[pins]`` entries and
+    devicetree-derived names alike, matched after sanitizing the same way).
+    Returns None when the key is absent; raises when the name is unknown.
+    """
+    name = (mpconfigboard or {}).get(key)
+    if name is None:
+        return None
+    wanted = str(name).upper().replace(" ", "_").replace("-", "_")
+    for pin_key, names in board_names.items():
+        if any(existing.upper() == wanted for existing in names):
+            return pin_key
+    raise RuntimeError(f"circuitpython.toml {key} = {name!r} is not a board pin name")
+
+
 @cpbuild.run_in_thread
 def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfigboard=None):  # noqa: C901
     board_dir = builddir / "board"
@@ -658,6 +675,7 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
         "_bleio": False,
         "hostnetwork": board_id in ["native_sim"],
         "audiobusio": False,
+        "neopixel_write": False,
     }
 
     config_bt_enabled = False
@@ -818,6 +836,13 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                 # busio driver (i2c, spi, uart)
                 board_info["busio"] = True
                 logger.info(f"Supported busio driver: {driver}")
+                if driver not in active_zephyr_devices:
+                    active_zephyr_devices[driver] = []
+                active_zephyr_devices[driver].append(node.labels)
+            elif driver == "pwm":
+                # PWM instances are allocated at runtime through iobroker
+                # for neopixel_write and pwmio; no board singleton.
+                logger.info(f"Supported pwm driver: {driver}")
                 if driver not in active_zephyr_devices:
                     active_zephyr_devices[driver] = []
                 active_zephyr_devices[driver].append(node.labels)
@@ -1006,6 +1031,11 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
     add_toml_pin_names(
         board_names, mpconfigboard, package_pins, package_choice, port_indexes, ioports
     )
+    # Status NeoPixel from circuitpython.toml: ``STATUS_NEOPIXEL`` (and the
+    # optional ``STATUS_NEOPIXEL_POWER``) name a board pin, usually one from
+    # the [pins] table, that the status LED code drives with neopixel_write.
+    status_neopixel = _toml_status_pin(mpconfigboard, board_names, "STATUS_NEOPIXEL")
+    status_neopixel_power = _toml_status_pin(mpconfigboard, board_names, "STATUS_NEOPIXEL_POWER")
     for ioport in sorted(ioports.keys()):
         for num in ioports[ioport]:
             pin_object_name = f"P{ioport[len(shared_prefix) :].upper()}_{num:02d}"
@@ -1013,6 +1043,10 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                 status_led = pin_object_name
             if boot_button and (ioport, num) == boot_button:
                 boot_button = pin_object_name
+            if status_neopixel and (ioport, num) == status_neopixel:
+                status_neopixel = pin_object_name
+            if status_neopixel_power and (ioport, num) == status_neopixel_power:
+                status_neopixel_power = pin_object_name
             global_number = port_indexes[ioport] * 32 + num
             package_pin = package_pin_of_pad.get(global_number)
             package_pin_init = str(package_pin) if package_pin is not None else "IOBROKER_NO_PIN"
@@ -1142,11 +1176,19 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
     # instances with fixed devicetree pins are only usable when the requested
     # pins match their state.
     pinctrl_nrf = False
+    pwm_nrfx = False
     if config_present:
         for line in config.read_text().splitlines():
             if line.startswith("CONFIG_PINCTRL_NRF="):
                 pinctrl_nrf = line.strip().endswith("=y")
-                break
+            elif line.startswith("CONFIG_PWM_NRFX="):
+                # Zephyr's nRF PWM driver defines the PWM instance devices.
+                # Without it, PWM nodes have no device to reference, and
+                # neopixel_write (common-hal/neopixel_write/nrf.c, which
+                # borrows an instance through iobroker) cannot transmit, so
+                # both the pwm pool and the module follow this symbol.
+                pwm_nrfx = line.strip().endswith("=y")
+    board_info["neopixel_write"] = pwm_nrfx
 
     iobroker_includes = """
 #include <zephyr/device.h>
@@ -1180,12 +1222,16 @@ const size_t iobroker_gpio_port_count = {count};
     )
 
     if pinctrl_nrf:
-        pool_kinds = (("i2c", "i2c"), ("spi", "spi"), ("serial", "uart"))
+        pool_kinds = (("i2c", "i2c"), ("spi", "spi"), ("serial", "uart"), ("pwm", "pwm"))
         bus_table_parts = []
         for driver, pool in pool_kinds:
             dynamic_entries = []
             fixed_entries = []
-            for labels in active_zephyr_devices.get(driver, []):
+            # PWM instances only exist as devices when the driver is built.
+            instances = (
+                active_zephyr_devices.get(driver, []) if driver != "pwm" or pwm_nrfx else []
+            )
+            for labels in instances:
                 node = device_tree.label2node[labels[0]]
                 if node in path2chosen:
                     # Console and other system devices are not allocatable.
@@ -1200,7 +1246,7 @@ const size_t iobroker_gpio_port_count = {count};
 
             entries = dynamic_entries + fixed_entries
 
-            # Always define all three pools, even when empty: iobroker.c and
+            # Always define all four pools, even when empty: iobroker.c and
             # the nRF routing code reference every pool's tables whenever
             # CONFIG_PINCTRL_NRF is on, so an empty pool is still an empty
             # array plus a zero count.
@@ -1222,6 +1268,7 @@ const size_t iobroker_gpio_port_count = {count};
                 declares.append(f"PINCTRL_DT_DEV_CONFIG_DECLARE(DT_NODELABEL({label}));")
                 entry = (
                     f"    {{ .dev = DEVICE_DT_GET(DT_NODELABEL({label})), "
+                    f".reg_addr = DT_REG_ADDR(DT_NODELABEL({label})), "
                     f".pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL({label}))"
                 )
                 if psels is not None:
@@ -1355,6 +1402,16 @@ void board_init(void) {
     else:
         boot_button = ""
         boot_button_active_high = ""
+    if status_neopixel:
+        status_neopixel = f"#define MICROPY_HW_NEOPIXEL (&pin_{status_neopixel})\n"
+    else:
+        status_neopixel = ""
+    if status_neopixel_power:
+        status_neopixel_power = (
+            f"#define CIRCUITPY_STATUS_LED_POWER (&pin_{status_neopixel_power})\n"
+        )
+    else:
+        status_neopixel_power = ""
     ram_list = []
     ram_externs = []
     max_size = 0
@@ -1386,6 +1443,8 @@ void board_init(void) {
 {status_led_inverted}
 {boot_button}
 {boot_button_active_high}
+{status_neopixel}
+{status_neopixel_power}
         """
     if not header.exists() or header.read_text() != new_header_content:
         header.write_text(new_header_content)
