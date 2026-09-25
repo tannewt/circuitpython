@@ -412,16 +412,13 @@ typedef long mp_off_t;
 #define CIRCUITPY_DISPLAY_LIMIT (1)
 #endif
 
-// Display area buffer size in bytes for _refresh_area() VLA.
-// Allocated on stack; boards with larger displays can override per-board.
-// Default 512 bytes = 128 uint32_t words.
+// Normally set from CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE in the .mk files.
 #ifndef CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE
 #define CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE (512)
 #endif
 
 #else
 #define CIRCUITPY_DISPLAY_LIMIT (0)
-#define CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE (0)
 #endif
 
 // This is not a top-level module; it's microcontroller.nvm.
