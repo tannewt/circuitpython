@@ -140,6 +140,41 @@ static pinctrl_soc_pin_t nrf_psel_encode(uint32_t fun, uint16_t soc_pad,
     return psel;
 }
 
+// Whether an instance can drive a pad. nRF52 and nRF53 are a full crossbar.
+// On nRF54L, peripherals and GPIO controllers are grouped in power domains
+// and a peripheral can only drive pads of its own domain; the domain is
+// encoded in the register address (each occupies its own 256 KiB window:
+// 0x4xxxx for the "00" instances and P2, 0xcxxxx-0xfxxxx for the "2x"
+// instances and P1/P3, 0x10xxxx for the "30" instances and P0).
+static bool nrf_instance_reaches_pad(uint32_t reg_addr, uint16_t soc_pad) {
+    #if defined(CONFIG_SOC_SERIES_NRF54L)
+    uint8_t port = (uint8_t)(soc_pad / 32U);
+    for (size_t i = 0; i < iobroker_gpio_port_count; i++) {
+        if (iobroker_gpio_port_indexes[i] == port) {
+            return (reg_addr >> 18) == (iobroker_gpio_port_addrs[i] >> 18);
+        }
+    }
+    return false;
+    #else
+    (void)reg_addr;
+    (void)soc_pad;
+    return true;
+    #endif
+}
+
+// Whether an instance can drive every connected pad of a set of encoded
+// entries (disconnected entries pass).
+static bool nrf_instance_reaches_all(uint32_t reg_addr,
+    const pinctrl_soc_pin_t *pins, uint8_t pin_count) {
+    for (uint8_t i = 0; i < pin_count; i++) {
+        uint32_t pad = NRF_GET_PIN(pins[i]);
+        if (pad != NRF_PIN_DISCONNECTED && !nrf_instance_reaches_pad(reg_addr, (uint16_t)pad)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // Check whether a set of requested entries matches the devicetree default
 // state of an instance (pin + function only; configuration bits ignored).
 static bool nrf_psels_match(const pinctrl_soc_pin_t *psels, uint8_t count,
@@ -242,11 +277,13 @@ static int iobroker_route(const iobroker_instance_t *inst, iobroker_state_t *sta
 static int iobroker_allocate(const char *kind, const iobroker_instance_t *buses,
     size_t count, iobroker_state_t *states, const package_pin_t *requested,
     const pinctrl_soc_pin_t *pins, uint8_t pin_count, const struct device **dev_out) {
-    // TODO(nRF54L): instances only reach pads in their own power domain;
-    // add a reachability check (returning -ENXIO) before enabling routing
-    // there. nRF52 and nRF53 are a full crossbar.
+    bool reachable = false;
     for (size_t i = 0; i < count; i++) {
         iobroker_state_t *state = &states[i];
+        if (!nrf_instance_reaches_all(buses[i].reg_addr, pins, pin_count)) {
+            continue;
+        }
+        reachable = true;
         if (state->in_use) {
             continue;
         }
@@ -281,6 +318,10 @@ static int iobroker_allocate(const char *kind, const iobroker_instance_t *buses,
                 kind, buses[i].dev->name);
             return 0;
         }
+    }
+    if (!reachable) {
+        LOG_WRN("%s: no instance can be routed to the requested pins", kind);
+        return -ENXIO;
     }
     LOG_WRN("%s: no free instance for the requested pins", kind);
     return -ENODEV;
@@ -515,7 +556,12 @@ int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_
         LOG_WRN("pwm allocate unrouted: package pin %u is not a routable pad", (unsigned)pin);
         return -EINVAL;
     }
+    bool reachable = false;
     for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
+        if (!nrf_instance_reaches_pad(iobroker_pwm_buses[i].reg_addr, pad)) {
+            continue;
+        }
+        reachable = true;
         iobroker_state_t *state = &iobroker_pwm_bus_states[i];
         if (state->in_use) {
             continue;
@@ -529,6 +575,12 @@ int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_
         LOG_DBG("pwm allocate unrouted: %s for %s", (*dev_out)->name,
             nrf_pad_name(pad, name, sizeof(name)));
         return 0;
+    }
+    if (!reachable) {
+        char name[12];
+        LOG_WRN("pwm allocate unrouted: no PWM instance can drive %s",
+            nrf_pad_name(pad, name, sizeof(name)));
+        return -ENXIO;
     }
     LOG_WRN("pwm allocate unrouted: no free PWM instance");
     return -ENODEV;

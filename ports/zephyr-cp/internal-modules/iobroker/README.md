@@ -147,6 +147,15 @@ and drives the instance's registers itself (the neopixel module) uses
 module can check it, but claims only the instance, leaving the Zephyr device
 uninitialized and the outputs unrouted; the caller disconnects the output
 again before `iobroker_release()`.
+
+Not every instance can reach every pad. On nRF52 and nRF53 the routing is a
+full crossbar, but on nRF54L peripherals and GPIO controllers are grouped in
+power domains and a peripheral can only drive pads of its own domain (the
+domain is encoded in the register addresses, which the instance and GPIO
+controller tables carry). An allocate call whose pins no instance of the
+requested kind can reach fails with `-ENXIO`, distinct from `-ENODEV` for
+"every instance that could is busy", so callers can report a wrong pin
+choice rather than a busy peripheral.
 `iobroker_gpio_package_pin()` maps a GPIO controller's hardware port index
 and pin number (the two halves of the global pin numbering) back to the
 package pin the pad is bonded to.

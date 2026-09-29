@@ -77,6 +77,9 @@ extern const size_t iobroker_package_pin_count;
 // controllers generate an empty table, so lookups return -EINVAL.
 extern const struct device *const iobroker_gpio_port_devices[];
 extern const uint8_t iobroker_gpio_port_indexes[];
+// Register block address of each controller, same order; see
+// iobroker_instance_t.reg_addr.
+extern const uint32_t iobroker_gpio_port_addrs[];
 extern const size_t iobroker_gpio_port_count;
 
 // Resolve a global pin number to its GPIO controller device and the pin
@@ -107,6 +110,11 @@ int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out);
 // Description of one allocatable bus instance. Filled in by the board tables.
 typedef struct {
     const struct device *dev;
+    // Register block address of the instance, from the devicetree. The SoC
+    // routing code uses it to decide which pads the instance can reach: on
+    // nRF54L, peripherals only drive pads of their own power domain, which
+    // the address encodes.
+    uint32_t reg_addr;
     // Pin control configuration of the device. Mutable because
     // CONFIG_PINCTRL_DYNAMIC moves these to RAM so that states can be
     // swapped at runtime.
@@ -167,6 +175,8 @@ extern const size_t iobroker_reserved_pads_count;
 // The functions below return 0 on success and set *dev_out to the Zephyr
 // device of an allocated instance. A negative errno is returned on failure:
 //   -ENODEV: no compatible instance is free
+//   -ENXIO: no instance of this kind can be routed to the requested pins
+//           on this SoC (a pin-to-peripheral restriction, not a busy one)
 //   -ENOSYS: dynamic pin routing is unsupported on this SoC
 //   -EBUSY: a requested pin is already claimed by an allocated instance
 //   -EINVAL/-EIO: a pin or routing operation failed
@@ -190,8 +200,9 @@ int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
 // instance's output to it through the SoC registers itself, then
 // disconnects it again before iobroker_release(). The Zephyr device is left
 // uninitialized. Returns 0, or -EINVAL when the pin is disconnected or not
-// in the package pin map, -ENODEV when no instance is free, -ENOSYS without
-// routing support; *dev_out is untouched on error.
+// in the package pin map, -ENXIO when no PWM instance can drive the pin,
+// -ENODEV when every instance that can is busy, -ENOSYS without routing
+// support; *dev_out is untouched on error.
 int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out);
 
 // Returns true when the package pin is currently claimed by an allocated bus

@@ -1208,15 +1208,20 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
             f"DEVICE_DT_GET(DT_NODELABEL({label}))" for label in sorted(ioports.keys())
         )
         indexes = ", ".join(str(port_indexes[label]) for label in sorted(ioports.keys()))
+        addrs = ", ".join(
+            f"DT_REG_ADDR(DT_NODELABEL({label}))" for label in sorted(ioports.keys())
+        )
         count = len(port_indexes)
     else:
         devices = "NULL"
         indexes = "0"
+        addrs = "0"
         count = 0
     table_parts.append(
         f"""
 const struct device * const iobroker_gpio_port_devices[] = {{ {devices} }};
 const uint8_t iobroker_gpio_port_indexes[] = {{ {indexes} }};
+const uint32_t iobroker_gpio_port_addrs[] = {{ {addrs} }};
 const size_t iobroker_gpio_port_count = {count};
 """
     )
@@ -1268,6 +1273,7 @@ const size_t iobroker_gpio_port_count = {count};
                 declares.append(f"PINCTRL_DT_DEV_CONFIG_DECLARE(DT_NODELABEL({label}));")
                 entry = (
                     f"    {{ .dev = DEVICE_DT_GET(DT_NODELABEL({label})), "
+                    f".reg_addr = DT_REG_ADDR(DT_NODELABEL({label})), "
                     f".pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL({label}))"
                 )
                 if psels is not None:
