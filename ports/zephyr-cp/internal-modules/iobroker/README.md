@@ -91,11 +91,10 @@ identity map needs no rendered table: the core applies it directly.
 New maps are transcribed from a SoC datasheet with `tools/gen_package.py`
 (see the script's docstring; the datasheets live in `datasheets/`).
 
-Each instance entry contains the Zephyr device, its register block address
-(for callers that drive an allocated instance directly, via
-`iobroker_instance_reg_addr()`), its `struct pinctrl_dev_config` (via
-`PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the devicetree state has
-fixed pins, the raw `pinctrl_soc_pin_t` values of the "default" state. Instances whose devicetree "default" state leaves every
+Each instance entry contains the Zephyr device, its `struct
+pinctrl_dev_config` (via `PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the
+devicetree state has fixed pins, the raw `pinctrl_soc_pin_t` values of the
+"default" state. Instances whose devicetree "default" state leaves every
 signal disconnected (`NRF_PIN_DISCONNECTED`) set `.dt_psels = NULL` and can be
 routed to any pin at runtime. Instances with fixed devicetree pins are only
 allocatable when a request matches their existing state.
@@ -142,11 +141,12 @@ allocations the same way bus allocations conflict with each other.
 `iobroker_gpio_allocate()` resolves the package pin through the map
 and returns both the GPIO controller device and the pin number within it.
 PWM instances are allocated with `iobroker_pwm_allocate()`, one package pin
-per output OUT0..OUT3; every output may be `IOBROKER_NO_PIN`, in which case
-the call claims only the instance for a caller that drives PSEL itself (the
-Zephyr device is left uninitialized) and disconnects the outputs again
-before `iobroker_release()`. Such a caller keeps ownership of the pin it
-drives through a separate GPIO claim.
+per output OUT0..OUT3. A caller that already owns a pin through a GPIO claim
+and drives the instance's registers itself (the neopixel module) uses
+`iobroker_pwm_allocate_unrouted()` instead: it names the pin so that the
+module can check it, but claims only the instance, leaving the Zephyr device
+uninitialized and the outputs unrouted; the caller disconnects the output
+again before `iobroker_release()`.
 `iobroker_gpio_package_pin()` maps a GPIO controller's hardware port index
 and pin number (the two halves of the global pin numbering) back to the
 package pin the pad is bonded to.

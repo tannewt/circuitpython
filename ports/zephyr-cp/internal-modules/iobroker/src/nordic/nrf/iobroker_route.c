@@ -328,25 +328,6 @@ static bool iobroker_state_find(const struct device *dev, iobroker_state_t **sta
     return false;
 }
 
-int iobroker_instance_reg_addr(const struct device *dev, uint32_t *addr_out) {
-    const iobroker_instance_t *const pools[] = {
-        iobroker_i2c_buses, iobroker_spi_buses, iobroker_uart_buses, iobroker_pwm_buses,
-    };
-    const size_t counts[] = {
-        iobroker_i2c_bus_count, iobroker_spi_bus_count, iobroker_uart_bus_count,
-        iobroker_pwm_bus_count,
-    };
-    for (size_t p = 0; p < ARRAY_SIZE(pools); p++) {
-        for (size_t i = 0; i < counts[p]; i++) {
-            if (pools[p][i].dev == dev) {
-                *addr_out = pools[p][i].reg_addr;
-                return 0;
-            }
-        }
-    }
-    return -ENODEV;
-}
-
 bool iobroker_release(const struct device *dev) {
     iobroker_state_t *state = NULL;
     if (!iobroker_state_find(dev, &state)) {
@@ -526,6 +507,31 @@ int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
     pins[3] = nrf_psel_encode(NRF_FUN_PWM_OUT3, pads[3], false);
     return iobroker_allocate("pwm", iobroker_pwm_buses, iobroker_pwm_bus_count,
         iobroker_pwm_bus_states, requested, pins, 4, dev_out);
+}
+
+int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out) {
+    uint16_t pad;
+    if (pin == IOBROKER_NO_PIN || iobroker_package_pin_soc_pad(pin, &pad) < 0 || !nrf_pad_ok(pad)) {
+        LOG_WRN("pwm allocate unrouted: package pin %u is not a routable pad", (unsigned)pin);
+        return -EINVAL;
+    }
+    for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
+        iobroker_state_t *state = &iobroker_pwm_bus_states[i];
+        if (state->in_use) {
+            continue;
+        }
+        // Instance only: no pins recorded, nothing routed, device untouched.
+        state->in_use = true;
+        state->routed = false;
+        state->pin_count = 0;
+        *dev_out = iobroker_pwm_buses[i].dev;
+        char name[12];
+        LOG_DBG("pwm allocate unrouted: %s for %s", (*dev_out)->name,
+            nrf_pad_name(pad, name, sizeof(name)));
+        return 0;
+    }
+    LOG_WRN("pwm allocate unrouted: no free PWM instance");
+    return -ENODEV;
 }
 
 #endif // IOBROKER_ROUTING

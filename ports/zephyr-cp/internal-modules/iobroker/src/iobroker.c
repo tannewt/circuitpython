@@ -122,10 +122,10 @@ bool iobroker_release(const struct device *dev) {
     return false;
 }
 
-int iobroker_instance_reg_addr(const struct device *dev, uint32_t *addr_out) {
-    (void)dev;
-    (void)addr_out;
-    return -ENODEV;
+int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out) {
+    (void)pin;
+    (void)dev_out;
+    return -ENOSYS;
 }
 
 #endif // !IOBROKER_ROUTING

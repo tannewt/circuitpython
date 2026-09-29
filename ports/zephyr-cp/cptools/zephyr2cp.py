@@ -1184,8 +1184,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
             elif line.startswith("CONFIG_PWM_NRFX="):
                 # Zephyr's nRF PWM driver defines the PWM instance devices.
                 # Without it, PWM nodes have no device to reference, and
-                # neopixel_write (common-hal/neopixel_write/nrf.c, which
-                # borrows an instance through iobroker) cannot transmit, so
+                # neopixel_write (the neopixel module's nRF implementation,
+                # which allocates an instance through iobroker) cannot transmit, so
                 # both the pwm pool and the module follow this symbol.
                 pwm_nrfx = line.strip().endswith("=y")
     board_info["neopixel_write"] = pwm_nrfx
@@ -1268,7 +1268,6 @@ const size_t iobroker_gpio_port_count = {count};
                 declares.append(f"PINCTRL_DT_DEV_CONFIG_DECLARE(DT_NODELABEL({label}));")
                 entry = (
                     f"    {{ .dev = DEVICE_DT_GET(DT_NODELABEL({label})), "
-                    f".reg_addr = DT_REG_ADDR(DT_NODELABEL({label})), "
                     f".pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL({label}))"
                 )
                 if psels is not None:

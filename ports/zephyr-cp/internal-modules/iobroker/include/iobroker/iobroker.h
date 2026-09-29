@@ -107,10 +107,6 @@ int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out);
 // Description of one allocatable bus instance. Filled in by the board tables.
 typedef struct {
     const struct device *dev;
-    // Register block address of the instance, from the devicetree, for
-    // callers that drive the allocated instance's registers directly
-    // instead of through its Zephyr driver (see iobroker_instance_reg_addr()).
-    uint32_t reg_addr;
     // Pin control configuration of the device. Mutable because
     // CONFIG_PINCTRL_DYNAMIC moves these to RAM so that states can be
     // swapped at runtime.
@@ -189,6 +185,14 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
 // again before iobroker_release().
 int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
     package_pin_t out2, package_pin_t out3, const struct device **dev_out);
+// Allocate a PWM instance to drive `pin` without routing or claiming the
+// pin: the caller already holds it (a GPIO claim) and connects the
+// instance's output to it through the SoC registers itself, then
+// disconnects it again before iobroker_release(). The Zephyr device is left
+// uninitialized. Returns 0, or -EINVAL when the pin is disconnected or not
+// in the package pin map, -ENODEV when no instance is free, -ENOSYS without
+// routing support; *dev_out is untouched on error.
+int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out);
 
 // Returns true when the package pin is currently claimed by an allocated bus
 // instance, a GPIO allocation, or a fixed peripheral (console UART, flash
@@ -217,13 +221,6 @@ int iobroker_gpio_allocate(package_pin_t pin,
 // GPIO_DISCONNECTED support). Pass the device and pin number that the
 // allocate call returned. Returns true when a claim was held.
 bool iobroker_gpio_release(const struct device *port, gpio_pin_t number);
-
-// Register block address of an instance returned by one of the allocate
-// functions, for a caller that drives the hardware directly instead of
-// through the Zephyr driver (neopixel_write). Returns 0, or -ENODEV when
-// the device is not an iobroker-managed instance; *addr_out is untouched on
-// error.
-int iobroker_instance_reg_addr(const struct device *dev, uint32_t *addr_out);
 
 // Release an instance previously returned by one of the allocate functions.
 // Returns true when the instance had been dynamically routed, in which case
