@@ -23,6 +23,10 @@
 #include "shared-bindings/microcontroller/__init__.h"
 #include "shared-bindings/rtc/__init__.h"
 
+#if CIRCUITPY_USB_HOST
+#include "shared-bindings/usb/core/Device.h"
+#endif
+
 #if CIRCUITPY_AUDIOCORE
 #include "audio_dma.h"
 #endif
@@ -476,6 +480,9 @@ safe_mode_t port_init(void) {
 }
 
 void reset_port(void) {
+    #if CIRCUITPY_USB_HOST
+    usb_core_device_reset();
+    #endif
     #if CIRCUITPY_BUSIO
     reset_uart();
     #endif

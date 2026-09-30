@@ -797,7 +797,7 @@ msgstr ""
 #: shared-bindings/i2cioexpander/IOPin.c shared-bindings/mipidsi/Display.c
 #: shared-bindings/pwmio/PWMOut.c shared-bindings/supervisor/__init__.c
 #: shared-module/aurora_epaper/aurora_framebuffer.c
-#: shared-module/lvfontio/OnDiskFont.c
+#: shared-module/lvfontio/OnDiskFont.c shared-module/usb/core/Device.c
 msgid "Invalid %q"
 msgstr ""
 
@@ -941,7 +941,7 @@ msgstr ""
 msgid "No pull up found on SDA or SCL; check your wiring"
 msgstr ""
 
-#: ports/atmel-samd/common-hal/busio/UART.c
+#: ports/atmel-samd/common-hal/busio/UART.c shared-bindings/usb/core/Device.c
 msgid "%q must be power of 2"
 msgstr ""
 
@@ -1023,6 +1023,7 @@ msgstr ""
 #: ports/espressif/common-hal/espidf/__init__.c
 #: ports/raspberrypi/common-hal/picogame/Display.c
 #: shared-bindings/picogame/Canvas.c shared-bindings/picogame/__init__.c
+#: shared-module/usb/core/Device.c
 msgid "Operation or feature not supported"
 msgstr ""
 
@@ -1108,7 +1109,7 @@ msgstr ""
 #: ports/espressif/bindings/espnow/ESPNow.c
 #: ports/espressif/common-hal/espulp/ULP.c
 #: shared-module/memorymonitor/AllocationAlarm.c
-#: shared-module/memorymonitor/AllocationSize.c
+#: shared-module/memorymonitor/AllocationSize.c shared-module/usb/core/Device.c
 msgid "Already running"
 msgstr ""
 
@@ -1543,7 +1544,7 @@ msgstr ""
 #: ports/raspberrypi/common-hal/usb_host/Port.c
 #: shared-bindings/digitalio/DigitalInOut.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/i2cioexpander/IOPin.c shared-bindings/microcontroller/Pin.c
-#: shared-module/max3421e/Max3421E.c
+#: shared-module/max3421e/Max3421E.c shared-module/usb/core/Device.c
 msgid "%q in use"
 msgstr ""
 
@@ -4600,6 +4601,10 @@ msgstr ""
 
 #: shared-module/usb/core/Device.c
 msgid "No configuration set"
+msgstr ""
+
+#: shared-module/usb/core/Device.c
+msgid "No continuous capture running"
 msgstr ""
 
 #: shared-module/usb_hid/Device.c

@@ -15,4 +15,6 @@ typedef struct {
     uint8_t *configuration_descriptor; // Contains the length of the all descriptors.
     uint8_t open_endpoints[8];
     uint16_t first_langid;
+    // Continuous bulk IN capture losses, kept after stop until the next start.
+    uint32_t bulk_in_lost_packets;
 } usb_core_device_obj_t;

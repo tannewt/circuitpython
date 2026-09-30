@@ -21,6 +21,76 @@
 #include "supervisor/shared/tick.h"
 #include "supervisor/usb.h"
 
+// Continuous bulk IN capture needs the RP2 PIO host built with bulk streams.
+#if CFG_TUH_RPI_PIO_USB && defined(PIO_USB_HOST_BULK_STREAM) && PIO_USB_HOST_BULK_STREAM
+#define USB_CORE_BULK_CAPTURE (1)
+#include "pio_usb_bulk_stream.h"
+#else
+#define USB_CORE_BULK_CAPTURE (0)
+#endif
+
+#if USB_CORE_BULK_CAPTURE
+MP_REGISTER_ROOT_POINTER(mp_obj_t usb_bulk_in_owner);
+static pio_usb_bulk_ring_t *_bulk_ring;
+static uint8_t *_bulk_storage;
+static uint8_t _bulk_device_address;
+static uint8_t _bulk_endpoint;
+
+static usb_core_device_obj_t *_bulk_owner(void) {
+    return MP_STATE_VM(usb_bulk_in_owner) == MP_OBJ_NULL ? NULL : MP_OBJ_TO_PTR(MP_STATE_VM(usb_bulk_in_owner));
+}
+
+// No Python allocation here: also called on disconnect and VM reset. On a
+// timeout both SRAM allocations are kept until the host core lets go of them.
+static bool _bulk_stop(bool abandon_owner) {
+    if (_bulk_ring == NULL) {
+        return true;
+    }
+    usb_core_device_obj_t *owner = _bulk_owner();
+    bool stopped = pio_usb_host_bulk_stream_stop(_bulk_ring, 100000);
+    if (owner != NULL) {
+        owner->bulk_in_lost_packets = _bulk_ring->stats.overrun_packets;
+    }
+    if (stopped) {
+        port_free(_bulk_storage);
+        port_free(_bulk_ring);
+        _bulk_storage = NULL;
+        _bulk_ring = NULL;
+    }
+    if (stopped || abandon_owner) {
+        MP_STATE_VM(usb_bulk_in_owner) = MP_OBJ_NULL;
+    }
+    return stopped;
+}
+
+static void _bulk_stop_device(uint8_t device_address) {
+    if (_bulk_ring != NULL && _bulk_device_address == device_address && !_bulk_stop(false)) {
+        mp_raise_usb_core_USBTimeoutError();
+    }
+}
+
+static void _bulk_check_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
+    if (_bulk_ring != NULL && _bulk_device_address == self->device_address && _bulk_endpoint == endpoint) {
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("%q in use"), MP_QSTR_endpoint);
+    }
+}
+#else
+static void _bulk_stop_device(uint8_t device_address) {
+    (void)device_address;
+}
+
+static void _bulk_check_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
+    (void)self;
+    (void)endpoint;
+}
+#endif
+
+void usb_core_device_reset(void) {
+    #if USB_CORE_BULK_CAPTURE
+    _bulk_stop(true);
+    #endif
+}
+
 // Track what device numbers are mounted. We can't use tuh_ready() because it is
 // true before enumeration completes and TinyUSB drivers are started.
 static size_t _mounted_devices = 0;
@@ -31,6 +101,11 @@ void tuh_mount_cb(uint8_t dev_addr) {
 
 void tuh_umount_cb(uint8_t dev_addr) {
     _mounted_devices &= ~(1 << dev_addr);
+    #if USB_CORE_BULK_CAPTURE
+    if (_bulk_ring != NULL && _bulk_device_address == dev_addr) {
+        _bulk_stop(true);
+    }
+    #endif
 }
 
 static xfer_result_t _xfer_result;
@@ -70,6 +145,7 @@ bool common_hal_usb_core_device_construct(usb_core_device_obj_t *self, uint8_t d
     }
     self->device_address = device_address;
     self->first_langid = 0;
+    self->bulk_in_lost_packets = 0;
     _xfer_result = XFER_RESULT_INVALID;
     return true;
 }
@@ -82,6 +158,7 @@ void common_hal_usb_core_device_deinit(usb_core_device_obj_t *self) {
     if (common_hal_usb_core_device_deinited(self)) {
         return;
     }
+    _bulk_stop_device(self->device_address);
     size_t open_size = sizeof(self->open_endpoints);
     for (size_t i = 0; i < open_size; i++) {
         if (self->open_endpoints[i] != 0) {
@@ -377,6 +454,7 @@ mp_int_t common_hal_usb_core_device_get_speed(usb_core_device_obj_t *self) {
 void common_hal_usb_core_device_set_configuration(usb_core_device_obj_t *self, mp_int_t configuration) {
     // We assume that the config index is one less than the value.
     uint8_t config_index = configuration - 1;
+    _bulk_stop_device(self->device_address);
     // Get the configuration descriptor and cache it. We'll use it later to open
     // endpoints.
 
@@ -460,7 +538,95 @@ static bool _open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
     return open;
 }
 
+bool common_hal_usb_core_device_open_endpoint(usb_core_device_obj_t *self, mp_int_t endpoint) {
+    return _open_endpoint(self, endpoint);
+}
+
+void common_hal_usb_core_device_start_bulk_in(usb_core_device_obj_t *self, mp_int_t endpoint, mp_int_t buffer_size) {
+    #if USB_CORE_BULK_CAPTURE
+    if (_bulk_ring != NULL) {
+        if (_bulk_owner() != NULL) {
+            mp_raise_usb_core_USBError(MP_ERROR_TEXT("Already running"));
+        }
+        if (!_bulk_stop(true)) {
+            mp_raise_usb_core_USBTimeoutError();
+        }
+    }
+    tuh_bus_info_t bus_info;
+    if (!tuh_bus_info_get(self->device_address, &bus_info) || bus_info.rhport < 1 || bus_info.speed != TUSB_SPEED_FULL) {
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("Operation or feature not supported"));
+    }
+    if (!_open_endpoint(self, endpoint)) {
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_endpoint);
+    }
+    pio_usb_bulk_ring_t *ring = port_malloc(sizeof(*ring), true);
+    if (ring == NULL) {
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Could not allocate DMA capable buffer"));
+    }
+    memset(ring, 0, sizeof(*ring));
+    uint8_t *storage = port_malloc(buffer_size, true);
+    if (storage == NULL) {
+        port_free(ring);
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Could not allocate DMA capable buffer"));
+    }
+    // TinyUSB numbers the PIO root ports from 1.
+    if (!pio_usb_host_bulk_stream_start(bus_info.rhport - 1, self->device_address, endpoint,
+        ring, storage, buffer_size)) {
+        port_free(storage);
+        port_free(ring);
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_endpoint);
+    }
+    _bulk_ring = ring;
+    _bulk_storage = storage;
+    _bulk_device_address = self->device_address;
+    _bulk_endpoint = endpoint;
+    self->bulk_in_lost_packets = 0;
+    // Keep the Device alive until explicit stop, disconnect, deinit or VM reset.
+    MP_STATE_VM(usb_bulk_in_owner) = MP_OBJ_FROM_PTR(self);
+    #else
+    mp_raise_NotImplementedError(MP_ERROR_TEXT("Operation or feature not supported"));
+    #endif
+}
+
+mp_int_t common_hal_usb_core_device_read_bulk_into(usb_core_device_obj_t *self, uint8_t *buffer, mp_int_t length) {
+    #if USB_CORE_BULK_CAPTURE
+    if (_bulk_ring == NULL || _bulk_owner() != self) {
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("No continuous capture running"));
+    }
+    uint32_t count = pio_usb_host_bulk_stream_read(_bulk_ring, buffer, length);
+    // A STALL or unplug detaches the ring by itself; report it once drained.
+    if (count == 0 && !_bulk_ring->active) {
+        mp_raise_usb_core_USBError(MP_ERROR_TEXT("No continuous capture running"));
+    }
+    return count;
+    #else
+    mp_raise_NotImplementedError(MP_ERROR_TEXT("Operation or feature not supported"));
+    #endif
+}
+
+uint32_t common_hal_usb_core_device_get_bulk_in_lost_packets(usb_core_device_obj_t *self) {
+    #if USB_CORE_BULK_CAPTURE
+    if (_bulk_ring != NULL && _bulk_owner() == self) {
+        self->bulk_in_lost_packets = _bulk_ring->stats.overrun_packets;
+    }
+    return self->bulk_in_lost_packets;
+    #else
+    mp_raise_NotImplementedError(MP_ERROR_TEXT("Operation or feature not supported"));
+    #endif
+}
+
+void common_hal_usb_core_device_stop_bulk_in(usb_core_device_obj_t *self) {
+    #if USB_CORE_BULK_CAPTURE
+    if (_bulk_ring != NULL && _bulk_owner() == self && !_bulk_stop(false)) {
+        mp_raise_usb_core_USBTimeoutError();
+    }
+    #else
+    mp_raise_NotImplementedError(MP_ERROR_TEXT("Operation or feature not supported"));
+    #endif
+}
+
 mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t endpoint, const uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    _bulk_check_endpoint(self, endpoint);
     if (!_open_endpoint(self, endpoint)) {
         mp_raise_usb_core_USBError(NULL);
         return 0;
@@ -492,6 +658,7 @@ mp_int_t common_hal_usb_core_device_write(usb_core_device_obj_t *self, mp_int_t 
 }
 
 mp_int_t common_hal_usb_core_device_read(usb_core_device_obj_t *self, mp_int_t endpoint, uint8_t *buffer, mp_int_t len, mp_int_t timeout, bool raise_on_timeout) {
+    _bulk_check_endpoint(self, endpoint);
     if (!_open_endpoint(self, endpoint)) {
         mp_raise_usb_core_USBError(NULL);
         return 0;
@@ -530,6 +697,11 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
     mp_int_t bmRequestType, mp_int_t bRequest,
     mp_int_t wValue, mp_int_t wIndex,
     uint8_t *buffer, mp_int_t len, mp_int_t timeout) {
+    // Stop capture before the device changes or disables its streaming endpoint.
+    if (len == 0 && ((bmRequestType == 0x01 && bRequest == TUSB_REQ_SET_INTERFACE) ||
+                     (bmRequestType == 0x00 && bRequest == TUSB_REQ_SET_CONFIGURATION))) {
+        _bulk_stop_device(self->device_address);
+    }
     // Timeout is in ms.
 
     #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
