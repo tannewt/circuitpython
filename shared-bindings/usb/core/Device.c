@@ -195,90 +195,6 @@ static mp_obj_t usb_core_device_set_configuration(size_t n_args, const mp_obj_t 
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(usb_core_device_set_configuration_obj, 1, usb_core_device_set_configuration);
 
-//|     def start_bulk_in(self, endpoint: int, buffer_size: int = 65536) -> None:
-//|         """Start continuous full-speed bulk IN capture into internal SRAM.
-//|
-//|         The USB host polls the endpoint every frame, independently of Python,
-//|         and stores the data in a ring of ``buffer_size`` bytes, a power of two
-//|         from 4096 to 65536. A full ring drops the newest packets and counts
-//|         them in `bulk_in_lost_packets`. NAKs and duplicate packets are not
-//|         errors. A stalled endpoint stops capture. Only one capture may run at
-//|         a time, and it keeps this Device alive until stopped, disconnected,
-//|         deinitialized or reset.
-//|
-//|         Only available with the PIO USB host.
-//|         """
-//|         ...
-//|
-static mp_obj_t usb_core_device_start_bulk_in(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_endpoint, ARG_buffer_size };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_endpoint, MP_ARG_REQUIRED | MP_ARG_INT },
-        { MP_QSTR_buffer_size, MP_ARG_INT, {.u_int = 65536} },
-    };
-    usb_core_device_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
-    check_for_deinit(self);
-    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
-    // IN endpoint addresses 1-15; endpoint 0 is control only.
-    mp_int_t endpoint = mp_arg_validate_int_range(args[ARG_endpoint].u_int, 0x81, 0x8F, MP_QSTR_endpoint);
-    mp_int_t buffer_size = mp_arg_validate_int_range(args[ARG_buffer_size].u_int, 4096, 65536, MP_QSTR_buffer_size);
-    if ((buffer_size & (buffer_size - 1)) != 0) {
-        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q must be power of 2"), MP_QSTR_buffer_size);
-    }
-    common_hal_usb_core_device_start_bulk_in(self, endpoint, buffer_size);
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_KW(usb_core_device_start_bulk_in_obj, 2, usb_core_device_start_bulk_in);
-
-//|     def read_bulk_into(self, buffer: WriteableBuffer) -> int:
-//|         """Copy captured bulk IN bytes into ``buffer`` without waiting.
-//|
-//|         Returns the number of bytes copied, possibly zero. Raises `USBError`
-//|         once capture has stopped, for example because the device stalled or
-//|         was unplugged, and every byte captured before that has been read."""
-//|         ...
-//|
-static mp_obj_t usb_core_device_read_bulk_into(mp_obj_t self_in, mp_obj_t buffer_in) {
-    usb_core_device_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    check_for_deinit(self);
-    mp_buffer_info_t buffer;
-    mp_get_buffer_raise(buffer_in, &buffer, MP_BUFFER_WRITE);
-    return mp_obj_new_int(common_hal_usb_core_device_read_bulk_into(self, buffer.buf, buffer.len));
-}
-MP_DEFINE_CONST_FUN_OBJ_2(usb_core_device_read_bulk_into_obj, usb_core_device_read_bulk_into);
-
-//|     bulk_in_lost_packets: int
-//|     """Packets dropped since `start_bulk_in` because the ring was full, meaning
-//|     `read_bulk_into` was not called often enough. Zero means the captured
-//|     stream has no gaps. The count stays readable after capture stops, until
-//|     the next `start_bulk_in`. (read-only)"""
-//|
-static mp_obj_t usb_core_device_obj_get_bulk_in_lost_packets(mp_obj_t self_in) {
-    usb_core_device_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    return mp_obj_new_int_from_uint(common_hal_usb_core_device_get_bulk_in_lost_packets(self));
-}
-MP_DEFINE_CONST_FUN_OBJ_1(usb_core_device_get_bulk_in_lost_packets_obj, usb_core_device_obj_get_bulk_in_lost_packets);
-
-MP_PROPERTY_GETTER(usb_core_device_bulk_in_lost_packets_obj,
-    (mp_obj_t)&usb_core_device_get_bulk_in_lost_packets_obj);
-
-//|     def stop_bulk_in(self) -> None:
-//|         """Stop capture and free its SRAM once the USB host has let go of it.
-//|
-//|         If stopping times out, the memory stays allocated and this raises
-//|         `USBTimeoutError`; call it again to retry. Calling it when no capture is
-//|         running does nothing. Setting a configuration or an interface on the
-//|         device also stops its capture.
-//|         """
-//|         ...
-//|
-static mp_obj_t usb_core_device_stop_bulk_in(mp_obj_t self_in) {
-    common_hal_usb_core_device_stop_bulk_in(MP_OBJ_TO_PTR(self_in));
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_1(usb_core_device_stop_bulk_in_obj, usb_core_device_stop_bulk_in);
-
 //|     def write(self, endpoint: int, data: ReadableBuffer, timeout: Optional[int] = None) -> int:
 //|         """Write data to a specific endpoint on the device.
 //|
@@ -481,10 +397,6 @@ static const mp_rom_map_elem_t usb_core_device_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_speed),            MP_ROM_PTR(&usb_core_device_speed_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_set_configuration), MP_ROM_PTR(&usb_core_device_set_configuration_obj) },
-    { MP_ROM_QSTR(MP_QSTR_start_bulk_in),    MP_ROM_PTR(&usb_core_device_start_bulk_in_obj) },
-    { MP_ROM_QSTR(MP_QSTR_read_bulk_into),   MP_ROM_PTR(&usb_core_device_read_bulk_into_obj) },
-    { MP_ROM_QSTR(MP_QSTR_bulk_in_lost_packets), MP_ROM_PTR(&usb_core_device_bulk_in_lost_packets_obj) },
-    { MP_ROM_QSTR(MP_QSTR_stop_bulk_in),     MP_ROM_PTR(&usb_core_device_stop_bulk_in_obj) },
     { MP_ROM_QSTR(MP_QSTR_write),            MP_ROM_PTR(&usb_core_device_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_read),             MP_ROM_PTR(&usb_core_device_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_ctrl_transfer),    MP_ROM_PTR(&usb_core_device_ctrl_transfer_obj) },

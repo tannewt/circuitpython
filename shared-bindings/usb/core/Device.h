@@ -36,9 +36,3 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
 bool common_hal_usb_core_device_is_kernel_driver_active(usb_core_device_obj_t *self, mp_int_t interface);
 void common_hal_usb_core_device_detach_kernel_driver(usb_core_device_obj_t *self, mp_int_t interface);
 void common_hal_usb_core_device_attach_kernel_driver(usb_core_device_obj_t *self, mp_int_t interface);
-
-void usb_core_device_reset(void);
-void common_hal_usb_core_device_start_bulk_in(usb_core_device_obj_t *self, mp_int_t endpoint, mp_int_t buffer_size);
-mp_int_t common_hal_usb_core_device_read_bulk_into(usb_core_device_obj_t *self, uint8_t *buffer, mp_int_t length);
-uint32_t common_hal_usb_core_device_get_bulk_in_lost_packets(usb_core_device_obj_t *self);
-void common_hal_usb_core_device_stop_bulk_in(usb_core_device_obj_t *self);
