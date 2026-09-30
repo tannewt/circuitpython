@@ -499,6 +499,20 @@ INPUT_KEY_NAMES = {}
 NRF_PIN_FIELD_MASK = 0x1FF
 
 
+def _reg_addr_expr(device_tree, label):
+    """C expression for a node's register block address, or 0 when it has none.
+
+    The iobroker tables carry the address for SoC routing code that decides
+    reachability from it (nRF54L power domains). Some nodes the tables list
+    have no reg property (native_sim's gpio_emul, PIO-based buses), and
+    DT_REG_ADDR() does not compile for them.
+    """
+    node = device_tree.label2node.get(label)
+    if node is None or "reg" not in node.props:
+        return "0"
+    return f"DT_REG_ADDR(DT_NODELABEL({label}))"
+
+
 def _pinctrl_default_psels(node):
     """Return the raw nRF psel entries of a node's "default" pinctrl state.
 
@@ -1208,9 +1222,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
             f"DEVICE_DT_GET(DT_NODELABEL({label}))" for label in sorted(ioports.keys())
         )
         indexes = ", ".join(str(port_indexes[label]) for label in sorted(ioports.keys()))
-        addrs = ", ".join(
-            f"DT_REG_ADDR(DT_NODELABEL({label}))" for label in sorted(ioports.keys())
-        )
+        addrs = ", ".join(_reg_addr_expr(device_tree, label) for label in sorted(ioports.keys()))
         count = len(port_indexes)
     else:
         devices = "NULL"
@@ -1273,7 +1285,7 @@ const size_t iobroker_gpio_port_count = {count};
                 declares.append(f"PINCTRL_DT_DEV_CONFIG_DECLARE(DT_NODELABEL({label}));")
                 entry = (
                     f"    {{ .dev = DEVICE_DT_GET(DT_NODELABEL({label})), "
-                    f".reg_addr = DT_REG_ADDR(DT_NODELABEL({label})), "
+                    f".reg_addr = {_reg_addr_expr(device_tree, label)}, "
                     f".pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL({label}))"
                 )
                 if psels is not None:
