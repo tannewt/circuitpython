@@ -13,6 +13,9 @@
 #include "shared-bindings/usb_host_bulk/InStream.h"
 #include "shared-bindings/util.h"
 
+//| import usb.core
+//|
+//|
 //| class InStream:
 //|     """Continuously receive from a full-speed bulk IN endpoint in the background.
 //|
