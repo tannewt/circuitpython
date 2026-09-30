@@ -217,6 +217,10 @@ CFLAGS += \
 	-DPICO_NO_BI_BOOTSEL_VIA_DOUBLE_RESET=0 \
 	-DDVI_1BPP_BIT_REVERSE=0
 
+# Shared IRQ handlers, counted over all IRQs: USB (2), CYW43, audio, rp2pio, PinAlarm and
+# max3421e. The SDK default of 4 is too few on Pico W boards.
+CFLAGS += -DPICO_MAX_SHARED_IRQ_HANDLERS=8
+
 # -O2 plus the two -O3 flags that measure: -funswitch-loops (16 KB) carries the sprite
 # blits, -fvect-cost-model=dynamic (4 KB) the fills and memcpy. Same speed as -O3 on both
 # cores for about 125 KB less flash. Boards may override this in mpconfigboard.mk.
@@ -609,6 +613,11 @@ SRC_C += \
 
 INC += \
 	-isystem lib/Pico-PIO-USB/src
+
+ifeq ($(CIRCUITPY_USB_HOST_BULK),1)
+# Pico-PIO-USB bulk IN ring, polled from the host frame handler.
+CFLAGS += -DPIO_USB_HOST_BULK_STREAM=1
+endif
 
 # Core1 posts USB events while core0 may hold the TinyUSB queue mutex. The
 # contended wait path calls these two flash-resident SDK functions, and core1

@@ -204,6 +204,32 @@ size_t usb_cdc_add_descriptor(uint8_t *descriptor_buf, descriptor_counts_t *desc
     descriptor_counts->num_out_endpoints++;
     descriptor_counts->current_endpoint++;
 
+    #if CIRCUITPY_FULL_BUILD
+    const char *control_interface_name =
+        console ? console_cdc_comm_interface_name : data_cdc_comm_interface_name;
+    const char *data_interface_name =
+        console ? console_cdc_data_interface_name : data_cdc_data_interface_name;
+
+    char *custom_control_interface_name =
+        console ? custom_usb_cdc_console_control_interface_name : custom_usb_cdc_data_control_interface_name;
+    char *custom_data_interface_name =
+        console ? custom_usb_cdc_console_data_interface_name : custom_usb_cdc_data_data_interface_name;
+
+    if (custom_control_interface_name != NULL) {
+        control_interface_name = custom_control_interface_name;
+    }
+    if (custom_data_interface_name != NULL) {
+        data_interface_name = custom_data_interface_name;
+    }
+
+    usb_add_interface_string(*current_interface_string, control_interface_name);
+    descriptor_buf[CDC_COMM_INTERFACE_STRING_INDEX] = *current_interface_string;
+    (*current_interface_string)++;
+
+    usb_add_interface_string(*current_interface_string, data_interface_name);
+    descriptor_buf[CDC_DATA_INTERFACE_STRING_INDEX] = *current_interface_string;
+    (*current_interface_string)++;
+    #else
     usb_add_interface_string(*current_interface_string,
         console ? console_cdc_comm_interface_name : data_cdc_comm_interface_name);
     descriptor_buf[CDC_COMM_INTERFACE_STRING_INDEX] = *current_interface_string;
@@ -213,6 +239,7 @@ size_t usb_cdc_add_descriptor(uint8_t *descriptor_buf, descriptor_counts_t *desc
         console ? console_cdc_data_interface_name : data_cdc_data_interface_name);
     descriptor_buf[CDC_DATA_INTERFACE_STRING_INDEX] = *current_interface_string;
     (*current_interface_string)++;
+    #endif
 
     return sizeof(usb_cdc_descriptor_template);
 }

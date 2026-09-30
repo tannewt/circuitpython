@@ -435,6 +435,19 @@ extern const struct _mp_obj_module_t nvm_module;
 #define ULAB_NUMPY_HAS_RANDOM_MODULE (0)
 #endif
 
+// The scipy.integrate module is about 6 kB.
+#ifndef ULAB_SCIPY_HAS_INTEGRATE_MODULE
+#define ULAB_SCIPY_HAS_INTEGRATE_MODULE (0)
+#endif
+
+// The ndarray modulo operators are about 4 kB.
+#ifndef NDARRAY_HAS_BINARY_OP_MODULO
+#define NDARRAY_HAS_BINARY_OP_MODULO (0)
+#endif
+#ifndef NDARRAY_HAS_INPLACE_MODULO
+#define NDARRAY_HAS_INPLACE_MODULO (0)
+#endif
+
 #if CIRCUITPY_ULAB
 // ulab requires reverse special methods
 #if defined(MICROPY_PY_REVERSE_SPECIAL_METHODS) && !MICROPY_PY_REVERSE_SPECIAL_METHODS
@@ -584,6 +597,11 @@ void background_callback_run_all(void);
 #define CIRCUITPY_USB_HOST_HIGH_SPEED 0
 #endif
 
+// usb_host_bulk takes a usb.core.Device and uses TinyUSB host calls.
+#if CIRCUITPY_USB_HOST_BULK && !(CIRCUITPY_USB_HOST && CIRCUITPY_PYUSB)
+#error CIRCUITPY_USB_HOST_BULK requires CIRCUITPY_USB_HOST and CIRCUITPY_PYUSB
+#endif
+
 // If the port requires certain USB endpoint numbers, define these in mpconfigport.h.
 
 #ifndef USB_CDC_EP_NUM_NOTIFICATION
@@ -711,6 +729,13 @@ void background_callback_run_all(void);
 #endif
 #if defined(CIRCUITPY_BOOT_BUTTON) && CIRCUITPY_BOOT_BUTTON_NO_GPIO
 #error "CIRCUITPY_BOOT_BUTTON and CIRCUITPY_BOOT_BUTTON_NO_GPIO are mutually exclusive"
+#endif
+
+// Boards that define CIRCUITPY_BOOT_BUTTON can set
+// CIRCUITPY_BOOT_BUTTON_ACTIVE_HIGH to 1 when the button pin reads high while
+// pressed. The default is active-low (the pin reads low while pressed).
+#ifndef CIRCUITPY_BOOT_BUTTON_ACTIVE_HIGH
+#define CIRCUITPY_BOOT_BUTTON_ACTIVE_HIGH (0)
 #endif
 
 #if defined(__GNUC__) && !defined(__ZEPHYR__)
