@@ -10,9 +10,11 @@
 // (GRB or GRBW), as a NeoPixel waveform on a pin the caller owns. The SoC
 // implementation chooses the transmit hardware per call: on nRF a PWM
 // instance from the iobroker module, with a bit-bang fallback when every
-// instance is busy. The caller must have configured the pin as an output
-// driving low, and it is left that way; the strip latches the data when the
-// line stays low afterwards, which the caller paces.
+// instance is busy or none can reach the pin (nRF54L PWMs drive only their
+// own power domain's pads), except where the CPU's GPIO access is too slow
+// to bit-bang (nRF54L P0). The caller must have configured the pin as an
+// output driving low, and it is left that way; the strip latches the data
+// when the line stays low afterwards, which the caller paces.
 
 #pragma once
 
@@ -42,7 +44,8 @@
 //   -ENOSYS: no transmit implementation for this SoC
 //   -EINVAL: the pin is not in the package pin map, or the pattern buffer
 //            is too small or misaligned
-//   -ENXIO: no transmit hardware can drive this pin
+//   -ENXIO: no transmit hardware can drive this pin (on nRF: an nRF54L P0
+//           pad)
 //   other negative values: the transfer could not be completed
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size);

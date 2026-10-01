@@ -14,7 +14,8 @@
 // caller; OUT0 is connected to it through PSEL here and disconnected again
 // before the release. Zephyr's PWM driver is compiled so the instance
 // devices exist, but it is never initialized on them. When every instance
-// is busy, the waveform is bit-banged instead.
+// is busy, or none can reach the pad, the waveform is bit-banged instead,
+// except on nRF54L P0, whose GPIO is too slow for it.
 
 #include <errno.h>
 #include <stdbool.h>
@@ -69,7 +70,7 @@ static NRF_PWM_Type *pwm_regs_for(const struct device *dev) {
     return NULL;
 }
 
-// Fallback when every PWM instance is busy: bit-bang the waveform with
+// Fallback when no PWM instance is free or none can reach the pad: bit-bang the waveform with
 // interrupts locked, timed by the DWT cycle counter. The cycle counts are
 // ports/nordic's 64 MHz values (71 per bit, 18 high for a zero, 41 high for
 // a one) expressed as dividers of SystemCoreClock: a 1.11 us bit interval,
@@ -173,6 +174,26 @@ static int pwm_send(NRF_PWM_Type *pwm, uint32_t pin, const uint8_t *pixels, size
     return 0;
 }
 
+// Whether the CPU can bit-bang the waveform on a pad. On nRF54L the P0 GPIO
+// port sits in the low-power (LP) domain, which runs at 16 MHz asynchronously
+// to the CPU: a register write to it stalls about 0.5 us (65 cycles at
+// 128 MHz, measured on the nRF54LM20A), longer than a zero bit's 0.3 us high
+// time, so every bit would read as a one. P1-P3 (PERI and MCU domains) take
+// 7 to 26 cycles. The domain is in bits 18-20 of the register address, the
+// same decoding as nrfx_gppi_domain_id_get(); LP is 3.
+#define NRF54L_DOMAIN_LP 3
+
+static bool pad_can_bitbang(uint16_t pad) {
+    #if defined(CONFIG_SOC_SERIES_NRF54L)
+    uint32_t pin_number = pad;
+    uintptr_t port_addr = (uintptr_t)nrf_gpio_pin_port_decode(&pin_number);
+    return ((port_addr >> 18) & 0x7) - 1 != NRF54L_DOMAIN_LP;
+    #else
+    (void)pad;
+    return true;
+    #endif
+}
+
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size) {
     // iobroker's global pin number (port * 32 + pin) is also the nrfx pin
@@ -189,11 +210,14 @@ int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
 
     const struct device *dev = NULL;
     ret = iobroker_pwm_allocate_unrouted(pin, &dev);
-    if (ret == -ENODEV) {
-        // Every instance is busy (pwmio or something else is holding them all):
-        // bit-bang instead. That locks ordinary interrupts for the frame; the
+    if (ret == -ENODEV || (ret == -ENXIO && pad_can_bitbang(pad))) {
+        // Every instance is busy (pwmio or something else is holding them all),
+        // or none can reach this pad (nRF54L PWMs drive only their own power
+        // domain's pads) but the CPU can drive it fast enough: bit-bang
+        // instead. That locks ordinary interrupts for the frame; the
         // zero-latency radio interrupt can still preempt it and glitch the
-        // output, which bitbang_send() detects and resends.
+        // output, which bitbang_send() detects and resends. A pad that neither
+        // can drive keeps -ENXIO.
         return bitbang_send(pad, pixels, num_bytes);
     }
     if (ret < 0) {

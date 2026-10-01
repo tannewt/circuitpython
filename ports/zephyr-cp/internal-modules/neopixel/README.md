@@ -5,7 +5,10 @@ chosen at runtime. Callers hand it pixel bytes in the strip's byte order and
 a package pin they own; the SoC implementation picks the transmit hardware
 per call. On nRF that is a PWM instance's DMA sequence playback, allocated
 from the [iobroker](../iobroker/README.md) module for the duration of the
-transfer, with a bit-bang fallback when every instance is busy.
+transfer, with a bit-bang fallback when every instance is busy or none can
+reach the pin (nRF54L PWMs drive only their own power domain's pads),
+except where the CPU's GPIO access is too slow to bit-bang (nRF54L P0, whose
+pins raise `ValueError`).
 
 ## Status
 

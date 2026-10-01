@@ -75,12 +75,14 @@ void common_hal_neopixel_write(const digitalio_digitalinout_obj_t *digitalinout,
     next_start_raw_ticks = port_get_raw_ticks(NULL) + 4;
 
     if (ret == -ENXIO) {
-        // No transmit hardware can drive this pad: a wrong pin choice, so say so.
+        // No transmit hardware can drive this pad, neither a PWM instance nor
+        // bit-bang (such as nRF54L P0): a wrong pin choice, so say so.
         raise_ValueError_invalid_pin();
     }
     if (ret < 0) {
-        // A runtime condition (busy hardware, preempted frame) the status LED
-        // must survive, since it calls this from the supervisor: skip the write.
+        // A runtime condition (a frame preempted on every resend, a transfer
+        // error) the status LED must survive, since it calls this from the
+        // supervisor: skip the write.
         LOG_WRN("write skipped (%d)", ret);
     }
 }
