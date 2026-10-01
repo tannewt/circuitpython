@@ -29,36 +29,77 @@
 //|
 //|     Synchronous example::
 //|
+//|         import time
+//|         import usb.core
 //|         import usb_host_bulk
 //|
+//|         # Replace these with your device's vendor and product IDs.
+//|         device = usb.core.find(idVendor=0x0BDA, idProduct=0x2838)
+//|         if device is None:
+//|             raise RuntimeError("USB device not found")
+//|         device.set_configuration()
+//|         # Many devices only start sending after device-specific setup, such as
+//|         # vendor requests made with device.ctrl_transfer(). Do that here.
+//|
+//|         buf = bytearray(8192)
+//|         received = 0
+//|         report_at = time.monotonic() + 1
 //|         with usb_host_bulk.InStream(device, 0x81) as stream:
 //|             while True:
-//|                 n = stream.readinto(buf)
-//|                 if n is None:
-//|                     continue  # nothing waiting yet
+//|                 n = stream.readinto(buf)  # None while nothing is waiting
 //|                 if n == 0:
 //|                     break  # the device stalled or was unplugged
-//|                 process(buf, n)
-//|             print("lost packets:", stream.lost_packets)
+//|                 if n:
+//|                     received += n  # process buf[:n] here
+//|                 if time.monotonic() >= report_at:
+//|                     print("received", received, "bytes, lost packets:", stream.lost_packets)
+//|                     report_at += 1
 //|
 //|     asyncio example::
 //|
 //|         import asyncio
+//|         from asyncio import StreamReader
+//|         import usb.core
 //|         import usb_host_bulk
 //|
-//|         async def receive(device):
-//|             with usb_host_bulk.InStream(device, 0x81) as stream:
-//|                 reader = asyncio.StreamReader(stream)
-//|                 buf = bytearray(8192)
-//|                 while True:
-//|                     n = await reader.readinto(buf)
-//|                     if not n:
-//|                         break  # the device stalled or was unplugged
-//|                     process(buf, n)
+//|         # Replace these with your device's vendor and product IDs.
+//|         device = usb.core.find(idVendor=0x0BDA, idProduct=0x2838)
+//|         if device is None:
+//|             raise RuntimeError("USB device not found")
+//|         device.set_configuration()
+//|         # Many devices only start sending after device-specific setup, such as
+//|         # vendor requests made with device.ctrl_transfer(). Do that here.
 //|
-//|     ``asyncio.StreamReader(stream)`` is a CircuitPython and MicroPython idiom. Use
-//|     ``readinto`` rather than ``readexactly`` at high data rates, because
-//|     ``readexactly`` allocates on every call.
+//|         received = 0
+//|
+//|         async def receive(stream):
+//|             global received
+//|             reader = StreamReader(stream)
+//|             buf = bytearray(8192)
+//|             while True:
+//|                 n = await reader.readinto(buf)
+//|                 if not n:
+//|                     break  # the device stalled or was unplugged
+//|                 received += n  # process buf[:n] here
+//|
+//|         async def report(stream):
+//|             while True:
+//|                 await asyncio.sleep(1)
+//|                 print("received", received, "bytes, lost packets:", stream.lost_packets)
+//|
+//|         async def main():
+//|             with usb_host_bulk.InStream(device, 0x81) as stream:
+//|                 reporter = asyncio.create_task(report(stream))
+//|                 await receive(stream)
+//|                 reporter.cancel()
+//|
+//|         asyncio.run(main())
+//|
+//|     ``asyncio.StreamReader(stream)`` is a CircuitPython and MicroPython idiom. Import
+//|     ``StreamReader`` before starting the stream: asyncio loads it on first use, which
+//|     can take long enough to overflow the ring. Use ``readinto`` rather than
+//|     ``readexactly`` at high data rates, because ``readexactly`` allocates on every
+//|     call.
 //|     """
 //|
 //|     def __init__(
@@ -108,6 +149,9 @@ static void check_for_deinit(usb_host_bulk_instream_obj_t *self) {
 
 //|     def readinto(self, buf: WriteableBuffer, nbytes: Optional[int] = None) -> Optional[int]:
 //|         """Copy waiting bytes into ``buf``, at most ``nbytes`` of them if given.
+//|
+//|         Capture ends on its own when the device stalls the endpoint, is unplugged, or
+//|         is reconfigured. Bytes captured before that can still be read.
 //|
 //|         :return: the number of bytes copied, ``None`` if nothing is waiting yet, or 0
 //|           once capture has ended and every captured byte has been read
@@ -187,21 +231,6 @@ MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_get_lost_packets_obj, usb_host_
 MP_PROPERTY_GETTER(usb_host_bulk_instream_lost_packets_obj,
     (mp_obj_t)&usb_host_bulk_instream_get_lost_packets_obj);
 
-//|     ended: bool
-//|     """True once capture stopped on its own: the device stalled the endpoint or was
-//|     unplugged, or the device was reconfigured. Bytes captured before that can still
-//|     be read. (read-only)"""
-//|
-static mp_obj_t usb_host_bulk_instream_obj_get_ended(mp_obj_t self_in) {
-    usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    check_for_deinit(self);
-    return mp_obj_new_bool(common_hal_usb_host_bulk_instream_get_ended(self));
-}
-MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_get_ended_obj, usb_host_bulk_instream_obj_get_ended);
-
-MP_PROPERTY_GETTER(usb_host_bulk_instream_ended_obj,
-    (mp_obj_t)&usb_host_bulk_instream_get_ended_obj);
-
 //|     def reset_input_buffer(self) -> None:
 //|         """Discard every byte waiting in the ring."""
 //|         ...
@@ -263,7 +292,6 @@ static const mp_rom_map_elem_t usb_host_bulk_instream_locals_dict_table[] = {
     // Properties
     { MP_ROM_QSTR(MP_QSTR_in_waiting), MP_ROM_PTR(&usb_host_bulk_instream_in_waiting_obj) },
     { MP_ROM_QSTR(MP_QSTR_lost_packets), MP_ROM_PTR(&usb_host_bulk_instream_lost_packets_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ended), MP_ROM_PTR(&usb_host_bulk_instream_ended_obj) },
 };
 static MP_DEFINE_CONST_DICT(usb_host_bulk_instream_locals_dict, usb_host_bulk_instream_locals_dict_table);
 
