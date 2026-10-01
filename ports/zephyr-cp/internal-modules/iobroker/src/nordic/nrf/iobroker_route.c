@@ -577,8 +577,10 @@ int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_
         return 0;
     }
     if (!reachable) {
+        // Debug level: neopixel calls this on every write and bit-bangs
+        // instead, so a pad no instance reaches is an expected case.
         char name[12];
-        LOG_WRN("pwm allocate unrouted: no PWM instance can drive %s",
+        LOG_DBG("pwm allocate unrouted: no PWM instance can drive %s",
             nrf_pad_name(pad, name, sizeof(name)));
         return -ENXIO;
     }
