@@ -151,8 +151,9 @@ static void check_for_deinit(usb_host_bulk_instream_obj_t *self) {
 //|     def readinto(self, buf: WriteableBuffer, nbytes: Optional[int] = None) -> Optional[int]:
 //|         """Copy waiting bytes into ``buf``, at most ``nbytes`` of them if given.
 //|
-//|         Capture ends on its own when the device stalls the endpoint, is unplugged, or
-//|         is reconfigured. Bytes captured before that can still be read.
+//|         Capture ends when the stream is deinited, which also happens on its own when
+//|         the device stalls the endpoint, is unplugged, or is reconfigured. Bytes captured
+//|         before that can still be read.
 //|
 //|         :return: the number of bytes copied, ``None`` if nothing is waiting yet, or 0
 //|           once capture has ended and every captured byte has been read
@@ -168,12 +169,11 @@ static void check_for_deinit(usb_host_bulk_instream_obj_t *self) {
 // Standard stream methods, implemented in py/stream.c on top of this.
 static mp_uint_t usb_host_bulk_instream_read_stream(mp_obj_t self_in, void *buf, mp_uint_t size, int *errcode) {
     usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    check_for_deinit(self);
-    // Look at ended first: the host detaches the ring only after its last
-    // write, so a stream seen ended here has all of its data visible below.
-    bool ended = common_hal_usb_host_bulk_instream_get_ended(self);
+    // Look at deinited first: a stream seen deinited here has all of its data
+    // visible below, so an empty read means the end.
+    bool deinited = common_hal_usb_host_bulk_instream_deinited(self);
     uint32_t count = common_hal_usb_host_bulk_instream_read(self, buf, size);
-    if (count > 0 || ended) {
+    if (count > 0 || deinited) {
         return count;
     }
     *errcode = MP_EAGAIN;
@@ -186,17 +186,16 @@ static mp_uint_t usb_host_bulk_instream_ioctl(mp_obj_t self_in, mp_uint_t reques
         common_hal_usb_host_bulk_instream_deinit(self, false);
         return 0;
     }
-    check_for_deinit(self);
     if (request == MP_STREAM_POLL) {
         mp_uint_t flags = arg;
         mp_uint_t ret = 0;
-        // An ended stream is readable (it returns EOF) so that waiters wake up.
-        bool ended = common_hal_usb_host_bulk_instream_get_ended(self);
+        // A deinited stream is readable (it returns EOF) so that waiters wake up.
+        bool deinited = common_hal_usb_host_bulk_instream_deinited(self);
         if ((flags & MP_STREAM_POLL_RD) &&
-            (ended || common_hal_usb_host_bulk_instream_get_in_waiting(self) > 0)) {
+            (deinited || common_hal_usb_host_bulk_instream_get_in_waiting(self) > 0)) {
             ret |= MP_STREAM_POLL_RD;
         }
-        if (ended) {
+        if (deinited) {
             ret |= MP_STREAM_POLL_HUP;
         }
         return ret;
@@ -206,11 +205,10 @@ static mp_uint_t usb_host_bulk_instream_ioctl(mp_obj_t self_in, mp_uint_t reques
 }
 
 //|     in_waiting: int
-//|     """Bytes waiting in the ring. (read-only)"""
+//|     """Bytes waiting to be read, including those left after `deinit`. (read-only)"""
 //|
 static mp_obj_t usb_host_bulk_instream_obj_get_in_waiting(mp_obj_t self_in) {
     usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    check_for_deinit(self);
     return mp_obj_new_int_from_uint(common_hal_usb_host_bulk_instream_get_in_waiting(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_get_in_waiting_obj, usb_host_bulk_instream_obj_get_in_waiting);
@@ -233,7 +231,8 @@ MP_PROPERTY_GETTER(usb_host_bulk_instream_lost_packets_obj,
     (mp_obj_t)&usb_host_bulk_instream_get_lost_packets_obj);
 
 //|     def reset_input_buffer(self) -> None:
-//|         """Discard every byte waiting in the ring."""
+//|         """Discard every byte waiting in the ring. Raises `ValueError` once the stream
+//|         is deinited, because no more data will come."""
 //|         ...
 //|
 static mp_obj_t usb_host_bulk_instream_obj_reset_input_buffer(mp_obj_t self_in) {
@@ -245,8 +244,10 @@ static mp_obj_t usb_host_bulk_instream_obj_reset_input_buffer(mp_obj_t self_in) 
 static MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_reset_input_buffer_obj, usb_host_bulk_instream_obj_reset_input_buffer);
 
 //|     def deinit(self) -> None:
-//|         """Stop capture and free the ring. Raises `usb.core.USBTimeoutError` if the host
-//|         does not let go of the ring in time; call it again to retry."""
+//|         """Stop capture and free the ring. Bytes already captured can still be read:
+//|         they move to a buffer that is freed once they have all been read. Raises
+//|         `usb.core.USBTimeoutError` if the host does not let go of the ring in time;
+//|         call it again to retry."""
 //|         ...
 //|
 static mp_obj_t usb_host_bulk_instream_obj_deinit(mp_obj_t self_in) {

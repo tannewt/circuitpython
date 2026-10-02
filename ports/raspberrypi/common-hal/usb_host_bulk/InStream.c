@@ -20,8 +20,8 @@
 
 #define STOP_TIMEOUT_US (100000)
 
-// The streams the host is polling, at most one per endpoint. Weak links: each
-// Python object owns its ring, and its finaliser clears its slot.
+// Store the streams the host is polling, at most one per endpoint, so that if
+// a device disappears we can deinit all streams polling it.
 static usb_host_bulk_instream_obj_t *_active[PIO_USB_EP_POOL_CNT];
 
 static void _forget(usb_host_bulk_instream_obj_t *self) {
@@ -42,13 +42,51 @@ static bool _stop(usb_host_bulk_instream_obj_t *self) {
     return true;
 }
 
+static uint32_t _ring_in_waiting(pio_usb_bulk_ring_t *ring) {
+    uint32_t const read = ring->read_pos;
+    uint32_t const written = ring->write_pos;
+    __dmb();
+    uint32_t const available = written - read;
+    return available > ring->capacity ? 0 : available;
+}
+
+static void _free_ring(usb_host_bulk_instream_obj_t *self) {
+    self->lost_packets = self->ring->stats.overrun_packets;
+    port_free(self->storage);
+    port_free(self->ring);
+    self->ring = NULL;
+    self->storage = NULL;
+    self->device = MP_OBJ_NULL;
+}
+
+// Finish deiniting a stream whose ring the host has let go of: move the
+// unread bytes to the VM heap, which the GC cleans up, and free the ring.
+// Returns false, leaving the stream as it was, if there is no room for them.
+static bool _retire(usb_host_bulk_instream_obj_t *self, bool raise_on_no_memory) {
+    uint32_t remaining = _ring_in_waiting(self->ring);
+    if (remaining > 0) {
+        uint8_t *leftover = raise_on_no_memory ?
+            m_malloc_without_collect(remaining) :
+            m_malloc_maybe_without_collect(remaining);
+        if (leftover == NULL) {
+            return false;
+        }
+        pio_usb_host_bulk_stream_read(self->ring, leftover, remaining);
+        self->leftover = leftover;
+        self->leftover_len = remaining;
+        self->leftover_pos = 0;
+    }
+    _free_ring(self);
+    return true;
+}
+
 void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *self,
     usb_core_device_obj_t *device, uint8_t endpoint, uint32_t buffer_size) {
     size_t slot = MP_ARRAY_SIZE(_active);
     for (size_t i = 0; i < MP_ARRAY_SIZE(_active); i++) {
         usb_host_bulk_instream_obj_t *other = _active[i];
         if (other != NULL && !other->ring->active) {
-            // It ended on its own and keeps its ring until it is deinited.
+            // It ended on its own, and finishes deiniting when next used.
             _active[i] = other = NULL;
         }
         if (other == NULL) {
@@ -90,6 +128,9 @@ void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *s
     self->device = MP_OBJ_FROM_PTR(device);
     self->ring = ring;
     self->storage = storage;
+    self->leftover = NULL;
+    self->leftover_len = 0;
+    self->leftover_pos = 0;
     self->lost_packets = 0;
     self->device_address = device->device_address;
     self->endpoint = endpoint;
@@ -97,43 +138,66 @@ void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *s
 }
 
 bool common_hal_usb_host_bulk_instream_deinited(usb_host_bulk_instream_obj_t *self) {
+    if (self->device != MP_OBJ_NULL && !self->ring->active) {
+        // Clearing active is the host's last access, so the ring now holds
+        // every byte it wrote.
+        __dmb();
+        _retire(self, false);
+    }
     return self->device == MP_OBJ_NULL;
 }
 
 // Uses only this object's own fields: in a finaliser, the Device may already
 // have been swept.
 void common_hal_usb_host_bulk_instream_deinit(usb_host_bulk_instream_obj_t *self, bool abandon) {
-    if (common_hal_usb_host_bulk_instream_deinited(self)) {
+    if (self->device == MP_OBJ_NULL) {
         return;
     }
-    bool stopped = _stop(self);
-    if (!stopped && !abandon) {
-        mp_raise_usb_core_USBTimeoutError();
+    if (!_stop(self)) {
+        if (!abandon) {
+            mp_raise_usb_core_USBTimeoutError();
+        }
+        // The host core is not running frames (a stop is honoured within one
+        // frame), so leak the ring rather than free memory it may still own.
+        self->lost_packets = self->ring->stats.overrun_packets;
+        _forget(self);
+        self->ring = NULL;
+        self->storage = NULL;
+        self->device = MP_OBJ_NULL;
+        return;
     }
-    self->lost_packets = self->ring->stats.overrun_packets;
-    if (stopped) {
-        port_free(self->storage);
-        port_free(self->ring);
+    if (abandon) {
+        // Being collected, so nothing will read the bytes.
+        _free_ring(self);
+    } else {
+        // On MemoryError the stopped stream stays readable until drained.
+        _retire(self, true);
     }
-    // Otherwise the host core is not running frames (a stop is honoured within
-    // one frame), so leak the ring rather than free memory it may still own.
-    _forget(self);
-    self->ring = NULL;
-    self->storage = NULL;
-    self->device = MP_OBJ_NULL;
 }
 
 uint32_t common_hal_usb_host_bulk_instream_read(usb_host_bulk_instream_obj_t *self, uint8_t *data, uint32_t len) {
-    return pio_usb_host_bulk_stream_read(self->ring, data, len);
+    if (self->ring != NULL) {
+        return pio_usb_host_bulk_stream_read(self->ring, data, len);
+    }
+    uint32_t count = MIN(len, self->leftover_len - self->leftover_pos);
+    if (count > 0) {
+        memcpy(data, self->leftover + self->leftover_pos, count);
+        self->leftover_pos += count;
+    }
+    if (self->leftover != NULL && self->leftover_pos == self->leftover_len) {
+        m_del(uint8_t, self->leftover, self->leftover_len);
+        self->leftover = NULL;
+        self->leftover_len = 0;
+        self->leftover_pos = 0;
+    }
+    return count;
 }
 
 uint32_t common_hal_usb_host_bulk_instream_get_in_waiting(usb_host_bulk_instream_obj_t *self) {
-    pio_usb_bulk_ring_t *ring = self->ring;
-    uint32_t const read = ring->read_pos;
-    uint32_t const written = ring->write_pos;
-    __dmb();
-    uint32_t const available = written - read;
-    return available > ring->capacity ? 0 : available;
+    if (self->ring != NULL) {
+        return _ring_in_waiting(self->ring);
+    }
+    return self->leftover_len - self->leftover_pos;
 }
 
 uint32_t common_hal_usb_host_bulk_instream_get_lost_packets(usb_host_bulk_instream_obj_t *self) {
@@ -141,14 +205,6 @@ uint32_t common_hal_usb_host_bulk_instream_get_lost_packets(usb_host_bulk_instre
         return self->ring->stats.overrun_packets;
     }
     return self->lost_packets;
-}
-
-bool common_hal_usb_host_bulk_instream_get_ended(usb_host_bulk_instream_obj_t *self) {
-    bool ended = !self->ring->active;
-    // Clearing active is the host's last access, so later reads of the ring
-    // see every byte it wrote.
-    __dmb();
-    return ended;
 }
 
 void common_hal_usb_host_bulk_instream_reset_input_buffer(usb_host_bulk_instream_obj_t *self) {

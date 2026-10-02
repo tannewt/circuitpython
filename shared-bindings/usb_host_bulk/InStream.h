@@ -16,15 +16,18 @@ extern const mp_obj_type_t usb_host_bulk_instream_type;
 
 void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *self,
     usb_core_device_obj_t *device, uint8_t endpoint, uint32_t buffer_size);
-// Raises USBTimeoutError, and stays usable, if the host keeps the ring. From a
-// finaliser, pass abandon=true instead: the memory is then leaked rather than
-// freed while the host may still write to it.
+// Stops capture and moves the unread bytes to the VM heap, where they stay
+// readable. Raises USBTimeoutError, and stays usable, if the host keeps the
+// ring. From a finaliser, pass abandon=true instead: nothing is allocated, the
+// unread bytes are dropped, and the ring is leaked rather than freed while the
+// host may still write to it.
 void common_hal_usb_host_bulk_instream_deinit(usb_host_bulk_instream_obj_t *self, bool abandon);
+// A stream the host ended by itself (stall, unplug, reconfiguration) is deinited
+// here, so this may allocate: call it only from the VM.
 bool common_hal_usb_host_bulk_instream_deinited(usb_host_bulk_instream_obj_t *self);
 uint32_t common_hal_usb_host_bulk_instream_read(usb_host_bulk_instream_obj_t *self, uint8_t *data, uint32_t len);
 uint32_t common_hal_usb_host_bulk_instream_get_in_waiting(usb_host_bulk_instream_obj_t *self);
 uint32_t common_hal_usb_host_bulk_instream_get_lost_packets(usb_host_bulk_instream_obj_t *self);
-bool common_hal_usb_host_bulk_instream_get_ended(usb_host_bulk_instream_obj_t *self);
 void common_hal_usb_host_bulk_instream_reset_input_buffer(usb_host_bulk_instream_obj_t *self);
 
 // Hooks for usb.core.Device, which must not leave a stream polling an endpoint
