@@ -16,30 +16,20 @@
 #include "tusb.h"
 
 #include "pio_usb_bulk_stream.h"
+#include "pio_usb_configuration.h"
 
 #define STOP_TIMEOUT_US (100000)
 
-// The stream the host is polling, if any. A weak link: the Python object owns
-// the ring, and its finaliser clears this.
-static usb_host_bulk_instream_obj_t *_active;
+// The streams the host is polling, at most one per endpoint. Weak links: each
+// Python object owns its ring, and its finaliser clears its slot.
+static usb_host_bulk_instream_obj_t *_active[PIO_USB_EP_POOL_CNT];
 
-// A ring whose stop timed out in a finaliser. The host core may still write
-// to it, so it is kept until a later stop succeeds.
-static pio_usb_bulk_ring_t *_orphan_ring;
-static uint8_t *_orphan_storage;
-
-static bool _stop_orphan(void) {
-    if (_orphan_ring == NULL) {
-        return true;
+static void _forget(usb_host_bulk_instream_obj_t *self) {
+    for (size_t i = 0; i < MP_ARRAY_SIZE(_active); i++) {
+        if (_active[i] == self) {
+            _active[i] = NULL;
+        }
     }
-    if (!pio_usb_host_bulk_stream_stop(_orphan_ring, STOP_TIMEOUT_US)) {
-        return false;
-    }
-    port_free(_orphan_storage);
-    port_free(_orphan_ring);
-    _orphan_storage = NULL;
-    _orphan_ring = NULL;
-    return true;
 }
 
 // Detach the ring from the host but keep it, so that bytes captured before
@@ -48,23 +38,28 @@ static bool _stop(usb_host_bulk_instream_obj_t *self) {
     if (!pio_usb_host_bulk_stream_stop(self->ring, STOP_TIMEOUT_US)) {
         return false;
     }
-    if (_active == self) {
-        _active = NULL;
-    }
+    _forget(self);
     return true;
 }
 
 void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *self,
     usb_core_device_obj_t *device, uint8_t endpoint, uint32_t buffer_size) {
-    if (!_stop_orphan()) {
-        mp_raise_usb_core_USBTimeoutError();
-    }
-    if (_active != NULL) {
-        if (_active->ring->active) {
+    size_t slot = MP_ARRAY_SIZE(_active);
+    for (size_t i = 0; i < MP_ARRAY_SIZE(_active); i++) {
+        usb_host_bulk_instream_obj_t *other = _active[i];
+        if (other != NULL && !other->ring->active) {
+            // It ended on its own and keeps its ring until it is deinited.
+            _active[i] = other = NULL;
+        }
+        if (other == NULL) {
+            slot = i;
+        } else if (other->device_address == device->device_address &&
+                   other->endpoint == endpoint) {
             mp_raise_RuntimeError(MP_ERROR_TEXT("Already running"));
         }
-        // It ended on its own and keeps its ring until it is deinited.
-        _active = NULL;
+    }
+    if (slot == MP_ARRAY_SIZE(_active)) {
+        mp_raise_RuntimeError_varg(MP_ERROR_TEXT("Too many %q"), MP_QSTR_InStream);
     }
     tuh_bus_info_t bus_info;
     if (!tuh_bus_info_get(device->device_address, &bus_info) || bus_info.rhport < 1 ||
@@ -98,7 +93,7 @@ void common_hal_usb_host_bulk_instream_construct(usb_host_bulk_instream_obj_t *s
     self->lost_packets = 0;
     self->device_address = device->device_address;
     self->endpoint = endpoint;
-    _active = self;
+    _active[slot] = self;
 }
 
 bool common_hal_usb_host_bulk_instream_deinited(usb_host_bulk_instream_obj_t *self) {
@@ -119,15 +114,10 @@ void common_hal_usb_host_bulk_instream_deinit(usb_host_bulk_instream_obj_t *self
     if (stopped) {
         port_free(self->storage);
         port_free(self->ring);
-    } else if (_stop_orphan()) {
-        _orphan_ring = self->ring;
-        _orphan_storage = self->storage;
     }
-    // Otherwise two rings are stuck. Leak this one rather than free memory
-    // the host core may still write to.
-    if (_active == self) {
-        _active = NULL;
-    }
+    // Otherwise the host core is not running frames (a stop is honoured within
+    // one frame), so leak the ring rather than free memory it may still own.
+    _forget(self);
     self->ring = NULL;
     self->storage = NULL;
     self->device = MP_OBJ_NULL;
@@ -166,26 +156,45 @@ void common_hal_usb_host_bulk_instream_reset_input_buffer(usb_host_bulk_instream
     self->ring->read_pos = self->ring->write_pos;
 }
 
+// Stops every stream from device_address, or every stream opened through
+// device if it is not NULL. Returns false if any of them timed out.
+static bool _stop_matching(uint8_t device_address, usb_core_device_obj_t *device) {
+    bool stopped = true;
+    for (size_t i = 0; i < MP_ARRAY_SIZE(_active); i++) {
+        usb_host_bulk_instream_obj_t *stream = _active[i];
+        if (stream == NULL) {
+            continue;
+        }
+        if (device != NULL ? stream->device == MP_OBJ_FROM_PTR(device) :
+            stream->device_address == device_address) {
+            stopped = _stop(stream) && stopped;
+        }
+    }
+    return stopped;
+}
+
 void usb_host_bulk_stop_device(uint8_t device_address) {
-    if (_active != NULL && _active->device_address == device_address && !_stop(_active)) {
+    if (!_stop_matching(device_address, NULL)) {
         mp_raise_usb_core_USBTimeoutError();
     }
 }
 
 bool usb_host_bulk_endpoint_busy(uint8_t device_address, uint8_t endpoint) {
-    return _active != NULL && _active->device_address == device_address &&
-           _active->endpoint == endpoint && _active->ring->active;
+    for (size_t i = 0; i < MP_ARRAY_SIZE(_active); i++) {
+        usb_host_bulk_instream_obj_t *stream = _active[i];
+        if (stream != NULL && stream->device_address == device_address &&
+            stream->endpoint == endpoint && stream->ring->active) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void usb_host_bulk_device_deinit(usb_core_device_obj_t *device) {
-    if (_active != NULL && _active->device == MP_OBJ_FROM_PTR(device)) {
-        _stop(_active);
-    }
+    _stop_matching(0, device);
 }
 
 void usb_host_bulk_device_gone(uint8_t device_address) {
-    // The host core also detaches the ring by itself once it sees the unplug.
-    if (_active != NULL && _active->device_address == device_address) {
-        _stop(_active);
-    }
+    // The host core also detaches the rings by itself once it sees the unplug.
+    _stop_matching(device_address, NULL);
 }

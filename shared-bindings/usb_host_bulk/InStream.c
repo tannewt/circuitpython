@@ -25,7 +25,8 @@
 //|     Reads never block. To wait for data, wrap the stream with ``asyncio.StreamReader``
 //|     or poll `in_waiting`.
 //|
-//|     Only one stream can run at a time.
+//|     One stream per endpoint can run. They share the bandwidth of
+//|     their host port.
 //|
 //|     Synchronous example::
 //|
