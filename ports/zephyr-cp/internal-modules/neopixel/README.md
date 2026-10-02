@@ -2,10 +2,11 @@
 
 A Zephyr module that transmits NeoPixel (WS2812-style) LED data on a pin
 chosen at runtime. Callers hand it pixel bytes in the strip's byte order and
-a package pin they own; the SoC implementation picks the transmit hardware
-per call. On nRF that is a PWM instance's DMA sequence playback, allocated
-from the [iobroker](../iobroker/README.md) module for the duration of the
-transfer, with a bit-bang fallback when every instance is busy or none can
+a package pin, which they must not hold claimed during the call; the SoC
+implementation picks the transmit hardware per call and allocates it, with
+the pin, from the [iobroker](../iobroker/README.md) module for the duration
+of the transfer. On nRF that is a PWM instance's DMA sequence playback, with
+a bit-bang fallback when every instance is busy or none can
 reach the pin (nRF54L PWMs drive only their own power domain's pads),
 except where the CPU's GPIO access is too slow to bit-bang (nRF54L P0, whose
 pins raise `ValueError`).

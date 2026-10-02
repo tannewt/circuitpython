@@ -7,14 +7,16 @@
 // SPDX-License-Identifier: MIT
 
 // Send a buffer of pixel bytes, already in the byte order the strip expects
-// (GRB or GRBW), as a NeoPixel waveform on a pin the caller owns. The SoC
-// implementation chooses the transmit hardware per call: on nRF a PWM
-// instance from the iobroker module, with a bit-bang fallback when every
-// instance is busy or none can reach the pin (nRF54L PWMs drive only their
-// own power domain's pads), except where the CPU's GPIO access is too slow
-// to bit-bang (nRF54L P0). The caller must have configured the pin as an
-// output driving low, and it is left that way; the strip latches the data
-// when the line stays low afterwards, which the caller paces.
+// (GRB or GRBW), as a NeoPixel waveform on a package pin. The SoC
+// implementation chooses the transmit hardware per call and allocates it,
+// with the pin, from the iobroker module for the frame: on nRF a PWM
+// instance routed to the pin, with a bit-bang fallback on the pin as a GPIO
+// when every instance is busy or none can reach the pin (nRF54L PWMs drive
+// only their own power domain's pads), except where the CPU's GPIO access is
+// too slow to bit-bang (nRF54L P0). The pin must not be claimed in iobroker
+// during the call; a caller that holds it as a GPIO releases it first and
+// drives it low again afterwards, so that the strip latches the data when
+// the line stays low, which the caller paces.
 
 #pragma once
 

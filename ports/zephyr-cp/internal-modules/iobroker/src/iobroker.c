@@ -140,12 +140,8 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     return -ENOSYS;
 }
 
-int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
-    package_pin_t out2, package_pin_t out3, const struct device **dev_out) {
-    (void)out0;
-    (void)out1;
-    (void)out2;
-    (void)out3;
+int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out) {
+    (void)pin;
     (void)dev_out;
     return -ENOSYS;
 }
@@ -154,12 +150,6 @@ bool iobroker_release(const struct device *dev) {
     (void)dev;
     LOG_DBG("release: no routing support on this SoC, nothing to release");
     return false;
-}
-
-int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out) {
-    (void)pin;
-    (void)dev_out;
-    return -ENOSYS;
 }
 
 #endif // !IOBROKER_ROUTING

@@ -503,75 +503,31 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
         iobroker_uart_bus_states, requested, pins, 4, dev_out);
 }
 
-int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
-    package_pin_t out2, package_pin_t out3, const struct device **dev_out) {
-    LOG_INF("pwm allocate: out0=%u out1=%u out2=%u out3=%u", (unsigned)out0,
-        (unsigned)out1, (unsigned)out2, (unsigned)out3);
-    const package_pin_t requested[] = { out0, out1, out2, out3 };
-    int ret = iobroker_check_request("pwm", requested, 4);
+int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out) {
+    LOG_INF("pwm allocate: pin=%u", (unsigned)pin);
+    // The pin goes to OUT0; OUT1..OUT3 stay disconnected, and are recorded as
+    // disconnected so the instance's pin list is complete.
+    const package_pin_t requested[] = { pin, IOBROKER_NO_PIN, IOBROKER_NO_PIN, IOBROKER_NO_PIN };
+    int ret = iobroker_check_request("pwm", requested, 1);
     if (ret < 0) {
         return ret;
     }
-    uint16_t pads[4];
-    for (size_t i = 0; i < 4; i++) {
-        if (iobroker_package_pin_gpio_pad(requested[i], &pads[i]) < 0) {
-            LOG_WRN("pwm allocate: package pin %u is unknown or has no GPIO",
-                (unsigned)requested[i]);
-            return -EINVAL;
-        }
-    }
-    char names[4][12];
-    LOG_INF("pwm allocate: OUT0 package pin %u -> %s, OUT1 %u -> %s, OUT2 %u -> %s, OUT3 %u -> %s",
-        (unsigned)out0, nrf_pad_name(pads[0], names[0], sizeof(names[0])),
-        (unsigned)out1, nrf_pad_name(pads[1], names[1], sizeof(names[1])),
-        (unsigned)out2, nrf_pad_name(pads[2], names[2], sizeof(names[2])),
-        (unsigned)out3, nrf_pad_name(pads[3], names[3], sizeof(names[3])));
-    pinctrl_soc_pin_t pins[4];
-    // All outputs are push-pull; no pulls.
-    pins[0] = nrf_psel_encode(NRF_FUN_PWM_OUT0, pads[0], false);
-    pins[1] = nrf_psel_encode(NRF_FUN_PWM_OUT1, pads[1], false);
-    pins[2] = nrf_psel_encode(NRF_FUN_PWM_OUT2, pads[2], false);
-    pins[3] = nrf_psel_encode(NRF_FUN_PWM_OUT3, pads[3], false);
-    return iobroker_allocate("pwm", iobroker_pwm_buses, iobroker_pwm_bus_count,
-        iobroker_pwm_bus_states, requested, pins, 4, dev_out);
-}
-
-int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out) {
     uint16_t pad;
     if (pin == IOBROKER_NO_PIN || iobroker_package_pin_gpio_pad(pin, &pad) < 0) {
-        LOG_WRN("pwm allocate unrouted: package pin %u is unknown or has no GPIO", (unsigned)pin);
+        LOG_WRN("pwm allocate: package pin %u is unknown or has no GPIO", (unsigned)pin);
         return -EINVAL;
     }
-    bool reachable = false;
-    for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
-        if (!nrf_instance_reaches_pad(iobroker_pwm_buses[i].reg_addr, pad)) {
-            continue;
-        }
-        reachable = true;
-        iobroker_state_t *state = &iobroker_pwm_bus_states[i];
-        if (state->in_use) {
-            continue;
-        }
-        // Instance only: no pins recorded, nothing routed, device untouched.
-        state->in_use = true;
-        state->routed = false;
-        state->pin_count = 0;
-        *dev_out = iobroker_pwm_buses[i].dev;
-        char name[12];
-        LOG_DBG("pwm allocate unrouted: %s for %s", (*dev_out)->name,
-            nrf_pad_name(pad, name, sizeof(name)));
-        return 0;
-    }
-    if (!reachable) {
-        // Debug level: neopixel calls this on every write and bit-bangs
-        // instead, so a pad no instance reaches is an expected case.
-        char name[12];
-        LOG_DBG("pwm allocate unrouted: no PWM instance can drive %s",
-            nrf_pad_name(pad, name, sizeof(name)));
-        return -EINVAL;
-    }
-    LOG_WRN("pwm allocate unrouted: no free PWM instance");
-    return -ENODEV;
+    char name[12];
+    LOG_INF("pwm allocate: OUT0 package pin %u -> %s", (unsigned)pin,
+        nrf_pad_name(pad, name, sizeof(name)));
+    pinctrl_soc_pin_t pins[4];
+    // Push-pull output, no pull.
+    pins[0] = nrf_psel_encode(NRF_FUN_PWM_OUT0, pad, false);
+    pins[1] = nrf_psel_encode(NRF_FUN_PWM_OUT1, IOBROKER_NO_PIN, false);
+    pins[2] = nrf_psel_encode(NRF_FUN_PWM_OUT2, IOBROKER_NO_PIN, false);
+    pins[3] = nrf_psel_encode(NRF_FUN_PWM_OUT3, IOBROKER_NO_PIN, false);
+    return iobroker_allocate("pwm", iobroker_pwm_buses, iobroker_pwm_bus_count,
+        iobroker_pwm_bus_states, requested, pins, 4, dev_out);
 }
 
 #endif // IOBROKER_ROUTING

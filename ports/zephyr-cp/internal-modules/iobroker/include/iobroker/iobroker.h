@@ -223,22 +223,14 @@ int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     package_pin_t miso, const struct device **dev_out);
 int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     package_pin_t rts, package_pin_t cts, const struct device **dev_out);
-// Allocate a PWM instance and route its outputs OUT0..OUT3 to the given
-// package pins. Any output may be IOBROKER_NO_PIN; with all four disconnected
-// the call claims only the instance, for a caller that connects the outputs
-// itself through the SoC registers (neopixel_write) and disconnects them
-// again before iobroker_release().
-int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
-    package_pin_t out2, package_pin_t out3, const struct device **dev_out);
-// Allocate a PWM instance to drive `pin` without routing or claiming the
-// pin: the caller already holds it (a GPIO claim) and connects the
-// instance's output to it through the SoC registers itself, then
-// disconnects it again before iobroker_release(). The Zephyr device is left
-// uninitialized. Returns 0, or -EINVAL when the pin is disconnected, not
-// in the package pin map, or no PWM instance can drive it, -ENODEV when
-// every instance that can is busy, -ENOSYS without routing support;
-// *dev_out is untouched on error.
-int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out);
+// Allocate a whole PWM instance for one output pin, routed to the
+// instance's first output (OUT0 on nRF); its other outputs stay
+// disconnected. The instance is not shared, so the caller may program all
+// of it (neopixel_write plays its own sequence). Like the bus allocate
+// functions, the caller initializes the device (device_init()) and returns
+// it with iobroker_release(). Sharing an instance between pins with the same
+// base frequency, as pwmio will want, is not supported yet.
+int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out);
 
 // Allocate a package pin for the ADC. Analog inputs have no runtime routing:
 // the pad's analog input is fixed by the SoC, so the call resolves and

@@ -9,13 +9,13 @@
 // <vendor>/<soc> = nordic/nrf: play the NeoPixel waveform with a PWM
 // instance's EasyDMA sequence, one 16-bit entry per data bit setting that
 // bit's high time, as CircuitPython's ports/nordic does. The PWM instance is
-// allocated from iobroker for the duration of each transfer and released
-// afterwards, with its outputs left unrouted, so the pin stays owned by the
-// caller; OUT0 is connected to it through PSEL here and disconnected again
-// before the release. Zephyr's PWM driver is compiled so the instance
-// devices exist, but it is never initialized on them. When every instance
-// is busy, or none can reach the pad, the waveform is bit-banged instead,
-// except on nRF54L P0, whose GPIO is too slow for it.
+// allocated from iobroker, routed to the pin, for the duration of each
+// transfer: initializing the Zephyr device applies its pinctrl state, which
+// connects OUT0 to the pin, and releasing it de-initializes the device again.
+// The waveform itself is programmed through the HAL, since Zephyr's PWM API
+// has no sequence playback. When every instance is busy, or none can reach
+// the pad, the waveform is bit-banged on the pin as a GPIO instead, except on
+// nRF54L P0, whose GPIO is too slow for it.
 
 #include <errno.h>
 #include <stdbool.h>
@@ -26,6 +26,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -134,7 +135,7 @@ static int bitbang_send(uint32_t pin, const uint8_t *pixels, size_t num_bytes) {
     return -EIO;
 }
 
-static int pwm_send(NRF_PWM_Type *pwm, uint32_t pin, const uint8_t *pixels, size_t num_bytes,
+static int pwm_send(NRF_PWM_Type *pwm, const uint8_t *pixels, size_t num_bytes,
     uint16_t *sequence) {
     size_t pos = 0;
     for (size_t n = 0; n < num_bytes; n++) {
@@ -155,9 +156,7 @@ static int pwm_send(NRF_PWM_Type *pwm, uint32_t pin, const uint8_t *pixels, size
     nrf_pwm_seq_refresh_set(pwm, 0, 0);
     nrf_pwm_seq_end_delay_set(pwm, 0, 0);
 
-    // PSEL must be set before the PWM is enabled.
-    nrf_pwm_pins_set(pwm, (uint32_t[]) {pin, NRF_PWM_PIN_NOT_CONNECTED,
-                                        NRF_PWM_PIN_NOT_CONNECTED, NRF_PWM_PIN_NOT_CONNECTED});
+    // OUT0's PSEL was set from the instance's pinctrl state by device_init().
     nrf_pwm_enable(pwm);
 
     nrf_pwm_event_clear(pwm, NRF_PWM_EVENT_SEQEND0);
@@ -168,9 +167,6 @@ static int pwm_send(NRF_PWM_Type *pwm, uint32_t pin, const uint8_t *pixels, size
     nrf_pwm_event_clear(pwm, NRF_PWM_EVENT_SEQEND0);
 
     nrf_pwm_disable(pwm);
-    // Hand the pad back to the GPIO output the caller configured.
-    nrf_pwm_pins_set(pwm, (uint32_t[]) {NRF_PWM_PIN_NOT_CONNECTED, NRF_PWM_PIN_NOT_CONNECTED,
-                                        NRF_PWM_PIN_NOT_CONNECTED, NRF_PWM_PIN_NOT_CONNECTED});
     return 0;
 }
 
@@ -194,6 +190,40 @@ static bool pad_can_bitbang(uint16_t pad) {
     #endif
 }
 
+// Send on an allocated PWM instance: initializing the device connects OUT0 to
+// the pin through its pinctrl state, driven low until the sequence starts.
+static int pwm_send_on(const struct device *dev, const uint8_t *pixels, size_t num_bytes,
+    uint16_t *sequence) {
+    NRF_PWM_Type *pwm = pwm_regs_for(dev);
+    if (pwm == NULL) {
+        LOG_WRN("%s has no register entry", dev->name);
+        return -ENODEV;
+    }
+    int ret = device_init(dev);
+    if (ret < 0) {
+        LOG_WRN("%s: device_init failed: %d", dev->name, ret);
+        return ret;
+    }
+    return pwm_send(pwm, pixels, num_bytes, sequence);
+}
+
+// Bit-bang on the pin as a GPIO output, allocated from iobroker for the frame.
+static int bitbang_send_on(package_pin_t pin, uint16_t pad, const uint8_t *pixels,
+    size_t num_bytes) {
+    const struct device *port;
+    gpio_pin_t number;
+    int ret = iobroker_gpio_allocate(pin, &port, &number);
+    if (ret < 0) {
+        return ret;
+    }
+    ret = gpio_pin_configure(port, number, GPIO_OUTPUT_LOW);
+    if (ret == 0) {
+        ret = bitbang_send(pad, pixels, num_bytes);
+    }
+    (void)iobroker_gpio_release(port, number);
+    return ret;
+}
+
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size) {
     // iobroker's global GPIO number (port * 32 + pin) is also the nrfx pin
@@ -209,7 +239,12 @@ int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     }
 
     const struct device *dev = NULL;
-    ret = iobroker_pwm_allocate_unrouted(pin, &dev);
+    ret = iobroker_pwm_allocate(pin, &dev);
+    if (ret == 0) {
+        ret = pwm_send_on(dev, pixels, num_bytes, pattern_buffer);
+        (void)iobroker_release(dev);
+        return ret;
+    }
     if (ret == -ENODEV || (ret == -EINVAL && pad_can_bitbang(pad))) {
         // Every instance is busy (pwmio or something else is holding them all),
         // or none can reach this pad (nRF54L PWMs drive only their own power
@@ -218,19 +253,7 @@ int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
         // zero-latency radio interrupt can still preempt it and glitch the
         // output, which bitbang_send() detects and resends. A pad that neither
         // can drive keeps -EINVAL.
-        return bitbang_send(pad, pixels, num_bytes);
+        return bitbang_send_on(pin, pad, pixels, num_bytes);
     }
-    if (ret < 0) {
-        return ret;
-    }
-    NRF_PWM_Type *pwm = pwm_regs_for(dev);
-    if (pwm == NULL) {
-        LOG_WRN("%s has no register entry", dev->name);
-        (void)iobroker_release(dev);
-        return -ENODEV;
-    }
-
-    ret = pwm_send(pwm, pad, pixels, num_bytes, pattern_buffer);
-    (void)iobroker_release(dev);
     return ret;
 }

@@ -11,8 +11,10 @@
 
 #include <errno.h>
 
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+#include <iobroker/iobroker.h>
 #include <neopixel/neopixel.h>
 
 #include "py/mpstate.h"
@@ -49,6 +51,32 @@ void neopixel_write_reset(void) {
     pattern_buffer_heap_size = 0;
 }
 
+// Claim the pin as a GPIO again after neopixel_send() and put it back in the
+// configuration the DigitalInOut recorded (normally an output driven low).
+static void reclaim_pin(const digitalio_digitalinout_obj_t *digitalinout) {
+    const struct device *port;
+    gpio_pin_t number;
+    if (iobroker_gpio_allocate(digitalinout->pin->package_pin, &port, &number) < 0) {
+        LOG_WRN("could not reclaim the pin after a write");
+        return;
+    }
+    gpio_flags_t flags;
+    if (digitalinout->direction == DIRECTION_OUTPUT) {
+        flags = digitalinout->value ? GPIO_OUTPUT_HIGH : GPIO_OUTPUT_LOW;
+        if (digitalinout->drive_mode == DRIVE_MODE_OPEN_DRAIN) {
+            flags |= GPIO_OPEN_DRAIN;
+        }
+    } else {
+        flags = GPIO_INPUT;
+        if (digitalinout->pull == PULL_UP) {
+            flags |= GPIO_PULL_UP;
+        } else if (digitalinout->pull == PULL_DOWN) {
+            flags |= GPIO_PULL_DOWN;
+        }
+    }
+    (void)gpio_pin_configure(port, number, flags);
+}
+
 void common_hal_neopixel_write(const digitalio_digitalinout_obj_t *digitalinout,
     uint8_t *pixels, uint32_t num_bytes) {
     size_t pattern_buffer_size = NEOPIXEL_PATTERN_BUFFER_SIZE(num_bytes);
@@ -70,8 +98,12 @@ void common_hal_neopixel_write(const digitalio_digitalinout_obj_t *digitalinout,
     while (port_get_raw_ticks(NULL) < next_start_raw_ticks) {
     }
 
+    // neopixel_send() allocates the transmit hardware and the pin itself, so
+    // the DigitalInOut's GPIO claim is released for the frame.
+    (void)iobroker_gpio_release(digitalinout->port, digitalinout->number);
     int ret = neopixel_send(digitalinout->pin->package_pin, pixels, num_bytes,
         pattern_buffer, pattern_buffer_size);
+    reclaim_pin(digitalinout);
     next_start_raw_ticks = port_get_raw_ticks(NULL) + 4;
 
     if (ret == -EINVAL) {

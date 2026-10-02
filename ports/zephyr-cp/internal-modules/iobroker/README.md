@@ -160,13 +160,11 @@ quiescent state (disconnected) on release, and GPIO claims conflict with bus
 allocations the same way bus allocations conflict with each other.
 `iobroker_gpio_allocate()` resolves the package pin through the map
 and returns both the GPIO controller device and the pin number within it.
-PWM instances are allocated with `iobroker_pwm_allocate()`, one package pin
-per output OUT0..OUT3. A caller that already owns a pin through a GPIO claim
-and drives the instance's registers itself (the neopixel module) uses
-`iobroker_pwm_allocate_unrouted()` instead: it names the pin so that the
-module can check it, but claims only the instance, leaving the Zephyr device
-uninitialized and the outputs unrouted; the caller disconnects the output
-again before `iobroker_release()`.
+PWM instances are allocated whole with `iobroker_pwm_allocate()`, for one
+package pin routed to the instance's first output; the caller initializes the
+device and returns it with `iobroker_release()`, as with the buses. Sharing an
+instance between pins with the same base frequency (for pwmio) is not
+supported yet.
 
 Not every instance can reach every pad. On nRF52 and nRF53 the routing is a
 full crossbar, but on nRF54L peripherals and GPIO controllers are grouped in
