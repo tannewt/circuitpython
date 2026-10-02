@@ -209,11 +209,12 @@ extern const size_t iobroker_reserved_pads_count;
 // The functions below return 0 on success and set *dev_out to the Zephyr
 // device of an allocated instance. A negative errno is returned on failure:
 //   -ENODEV: no compatible instance is free
-//   -ENXIO: no instance of this kind can be routed to the requested pins
-//           on this SoC (a pin-to-peripheral restriction, not a busy one)
 //   -ENOSYS: dynamic pin routing is unsupported on this SoC
 //   -EBUSY: a requested pin is already claimed by an allocated instance
-//   -EINVAL/-EIO: a pin or routing operation failed
+//   -EINVAL: a pin is not in the package map, has no GPIO, or no instance
+//            of this kind can be routed to the requested pins on this SoC
+//            (a pin-to-peripheral restriction, not a busy one)
+//   other negative values: a routing operation failed
 // Optional signals may be disconnected (IOBROKER_NO_PIN). Every allocate
 // call must be paired with iobroker_release().
 int iobroker_i2c_allocate(package_pin_t sda, package_pin_t scl,
@@ -233,10 +234,10 @@ int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
 // pin: the caller already holds it (a GPIO claim) and connects the
 // instance's output to it through the SoC registers itself, then
 // disconnects it again before iobroker_release(). The Zephyr device is left
-// uninitialized. Returns 0, or -EINVAL when the pin is disconnected or not
-// in the package pin map, -ENXIO when no PWM instance can drive the pin,
-// -ENODEV when every instance that can is busy, -ENOSYS without routing
-// support; *dev_out is untouched on error.
+// uninitialized. Returns 0, or -EINVAL when the pin is disconnected, not
+// in the package pin map, or no PWM instance can drive it, -ENODEV when
+// every instance that can is busy, -ENOSYS without routing support;
+// *dev_out is untouched on error.
 int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out);
 
 // Allocate a package pin for the ADC. Analog inputs have no runtime routing:

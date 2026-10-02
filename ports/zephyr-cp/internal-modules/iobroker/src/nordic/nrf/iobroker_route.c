@@ -311,7 +311,7 @@ static int iobroker_allocate(const char *kind, const iobroker_instance_t *buses,
     }
     if (!reachable) {
         LOG_WRN("%s: no instance can be routed to the requested pins", kind);
-        return -ENXIO;
+        return -EINVAL;
     }
     LOG_WRN("%s: no free instance for the requested pins", kind);
     return -ENODEV;
@@ -568,7 +568,7 @@ int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_
         char name[12];
         LOG_DBG("pwm allocate unrouted: no PWM instance can drive %s",
             nrf_pad_name(pad, name, sizeof(name)));
-        return -ENXIO;
+        return -EINVAL;
     }
     LOG_WRN("pwm allocate unrouted: no free PWM instance");
     return -ENODEV;

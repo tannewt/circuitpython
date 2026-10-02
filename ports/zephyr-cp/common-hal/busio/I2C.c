@@ -36,7 +36,7 @@ static void raise_no_i2c_peripheral(int err) {
     if (err == -EBUSY) {
         mp_raise_ValueError(MP_ERROR_TEXT("Internal resource(s) in use"));
     }
-    if (err == -ENXIO) {
+    if (err == -EINVAL) {
         raise_ValueError_invalid_pins();
     }
     mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_I2C);

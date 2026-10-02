@@ -42,10 +42,9 @@
 // at least NEOPIXEL_PATTERN_BUFFER_SIZE(num_bytes) bytes. Returns 0, or a
 // negative errno:
 //   -ENOSYS: no transmit implementation for this SoC
-//   -EINVAL: the pin is not in the package pin map, or the pattern buffer
+//   -EINVAL: the pin is not in the package pin map, no transmit hardware
+//            can drive it (on nRF: an nRF54L P0 pad), or the pattern buffer
 //            is too small or misaligned
-//   -ENXIO: no transmit hardware can drive this pin (on nRF: an nRF54L P0
-//           pad)
 //   other negative values: the transfer could not be completed
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size);

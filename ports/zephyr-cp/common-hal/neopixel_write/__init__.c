@@ -74,7 +74,7 @@ void common_hal_neopixel_write(const digitalio_digitalinout_obj_t *digitalinout,
         pattern_buffer, pattern_buffer_size);
     next_start_raw_ticks = port_get_raw_ticks(NULL) + 4;
 
-    if (ret == -ENXIO) {
+    if (ret == -EINVAL) {
         // No transmit hardware can drive this pad, neither a PWM instance nor
         // bit-bang (such as nRF54L P0): a wrong pin choice, so say so.
         raise_ValueError_invalid_pin();

@@ -210,14 +210,14 @@ int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
 
     const struct device *dev = NULL;
     ret = iobroker_pwm_allocate_unrouted(pin, &dev);
-    if (ret == -ENODEV || (ret == -ENXIO && pad_can_bitbang(pad))) {
+    if (ret == -ENODEV || (ret == -EINVAL && pad_can_bitbang(pad))) {
         // Every instance is busy (pwmio or something else is holding them all),
         // or none can reach this pad (nRF54L PWMs drive only their own power
         // domain's pads) but the CPU can drive it fast enough: bit-bang
         // instead. That locks ordinary interrupts for the frame; the
         // zero-latency radio interrupt can still preempt it and glitch the
         // output, which bitbang_send() detects and resends. A pad that neither
-        // can drive keeps -ENXIO.
+        // can drive keeps -EINVAL.
         return bitbang_send(pad, pixels, num_bytes);
     }
     if (ret < 0) {
