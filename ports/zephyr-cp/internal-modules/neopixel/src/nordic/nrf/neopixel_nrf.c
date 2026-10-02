@@ -196,10 +196,10 @@ static bool pad_can_bitbang(uint16_t pad) {
 
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size) {
-    // iobroker's global pin number (port * 32 + pin) is also the nrfx pin
+    // iobroker's global GPIO number (port * 32 + pin) is also the nrfx pin
     // number that PSEL and the GPIO HAL take.
     uint16_t pad;
-    int ret = iobroker_package_pin_soc_pad(pin, &pad);
+    int ret = iobroker_package_pin_gpio_pad(pin, &pad);
     if (ret < 0 || pad == IOBROKER_NO_PIN) {
         return -EINVAL;
     }

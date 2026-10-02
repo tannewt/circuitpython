@@ -129,12 +129,13 @@ int iobroker_gpio_split(uint16_t number, const struct device **port_out,
 int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
     package_pin_t *package_pin_out);
 
-// Resolve a package pin to the SoC pad it is bonded to, in the global pin
-// numbering (GPIO controller port index * 32 + pin within the port).
-// IOBROKER_NO_PIN passes through unchanged so that disconnected optional
-// signals stay disconnected. Returns 0, or -EINVAL when the pin is not in
-// the map; *soc_pad_out is untouched on error.
-int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out);
+// Resolve a package pin to the global GPIO number of the pad it is bonded to
+// (GPIO controller port index * 32 + pin within the port), for a caller that
+// drives the pad's registers itself. IOBROKER_NO_PIN passes through
+// unchanged. Returns 0, or -EINVAL when the pin is not in the map or its pad
+// has no GPIO controller (an analog-only pad); *gpio_pad_out is untouched on
+// error.
+int iobroker_package_pin_gpio_pad(package_pin_t pin, uint16_t *gpio_pad_out);
 
 #if defined(CONFIG_PINCTRL_NRF)
 

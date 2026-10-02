@@ -129,15 +129,16 @@ static pinctrl_soc_pin_t nrf_psel_encode(uint32_t fun, uint16_t soc_pad,
     return psel;
 }
 
-// Whether an instance can drive a pad. nRF52 and nRF53 are a full crossbar.
+// Whether an instance can drive a pad, given as its global GPIO number
+// (port index * 32 + pin). nRF52 and nRF53 are a full crossbar.
 // On nRF54L, peripherals and GPIO controllers are grouped in power domains
 // and a peripheral can only drive pads of its own domain; the domain is
 // encoded in the register address (each occupies its own 256 KiB window:
 // 0x4xxxx for the "00" instances and P2, 0xcxxxx-0xfxxxx for the "2x"
 // instances and P1/P3, 0x10xxxx for the "30" instances and P0).
-static bool nrf_instance_reaches_pad(uint32_t reg_addr, uint16_t soc_pad) {
+static bool nrf_instance_reaches_pad(uint32_t reg_addr, uint16_t gpio_pad) {
     #if defined(CONFIG_SOC_SERIES_NRF54L)
-    uint8_t port = (uint8_t)(soc_pad / 32U);
+    uint8_t port = (uint8_t)(gpio_pad / 32U);
     for (size_t i = 0; i < iobroker_gpio_port_count; i++) {
         if (iobroker_gpio_port_indexes[i] == port) {
             return (reg_addr >> 18) == (iobroker_gpio_port_addrs[i] >> 18);
@@ -146,7 +147,7 @@ static bool nrf_instance_reaches_pad(uint32_t reg_addr, uint16_t soc_pad) {
     return false;
     #else
     (void)reg_addr;
-    (void)soc_pad;
+    (void)gpio_pad;
     return true;
     #endif
 }
@@ -513,14 +514,9 @@ int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
     }
     uint16_t pads[4];
     for (size_t i = 0; i < 4; i++) {
-        if (iobroker_package_pin_soc_pad(requested[i], &pads[i]) < 0) {
-            LOG_WRN("pwm allocate: package pin %u is not in the map",
+        if (iobroker_package_pin_gpio_pad(requested[i], &pads[i]) < 0) {
+            LOG_WRN("pwm allocate: package pin %u is unknown or has no GPIO",
                 (unsigned)requested[i]);
-            return -EINVAL;
-        }
-        if (!nrf_pad_ok(pads[i])) {
-            LOG_WRN("pwm allocate: pad %u is not on a GPIO controller",
-                (unsigned)pads[i]);
             return -EINVAL;
         }
     }
@@ -542,8 +538,8 @@ int iobroker_pwm_allocate(package_pin_t out0, package_pin_t out1,
 
 int iobroker_pwm_allocate_unrouted(package_pin_t pin, const struct device **dev_out) {
     uint16_t pad;
-    if (pin == IOBROKER_NO_PIN || iobroker_package_pin_soc_pad(pin, &pad) < 0 || !nrf_pad_ok(pad)) {
-        LOG_WRN("pwm allocate unrouted: package pin %u is not a routable pad", (unsigned)pin);
+    if (pin == IOBROKER_NO_PIN || iobroker_package_pin_gpio_pad(pin, &pad) < 0) {
+        LOG_WRN("pwm allocate unrouted: package pin %u is unknown or has no GPIO", (unsigned)pin);
         return -EINVAL;
     }
     bool reachable = false;
