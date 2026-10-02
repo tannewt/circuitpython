@@ -33,6 +33,15 @@ LOG_MODULE_REGISTER(cpusb, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define USB_DEVICE DT_NODELABEL(zephyr_udc0)
 
+// usbd_register_class() below names the CDC ACM classes "cdc_acm_<n>", where
+// n is the devicetree instance number. A board or bootloader overlay that
+// adds its own cdc-acm-uart node renumbers them, so check that instance 0 is
+// the console and instance 1 the data port.
+BUILD_ASSERT(DT_SAME_NODE(DT_INST(0, zephyr_cdc_acm_uart), DT_NODELABEL(cdc_acm_console)),
+    "CDC ACM instance 0 must be cdc_acm_console");
+BUILD_ASSERT(DT_SAME_NODE(DT_INST(1, zephyr_cdc_acm_uart), DT_NODELABEL(cdc_acm_data)),
+    "CDC ACM instance 1 must be cdc_acm_data");
+
 USBD_DEVICE_DEFINE(main_usbd,
     DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
     USB_VID, USB_PID);

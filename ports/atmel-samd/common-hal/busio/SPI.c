@@ -154,6 +154,9 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
 
     setup_pin(clock, clock_pinmux, GPIO_DIRECTION_OUT);
     self->clock_pin = clock->number;
+    #if CIRCUITPY_BUSIO_SPI_ASYNC
+    self->async_active = false;
+    #endif
 
     if (mosi_none) {
         self->MOSI_pin = NO_PIN;
@@ -192,6 +195,9 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
     if (common_hal_busio_spi_deinited(self)) {
         return;
     }
+    #if CIRCUITPY_BUSIO_SPI_ASYNC
+    common_hal_busio_spi_end(self);
+    #endif
     allow_reset_sercom(self->spi_desc.dev.prvt);
 
     spi_m_sync_disable(&self->spi_desc);
@@ -284,6 +290,40 @@ bool common_hal_busio_spi_write(busio_spi_obj_t *self,
     }
     return status >= 0; // Status is number of chars read or an error code < 0.
 }
+
+#if CIRCUITPY_BUSIO_SPI_ASYNC
+void common_hal_busio_spi_write_start(busio_spi_obj_t *self, const uint8_t *data, size_t len,
+    circuitpy_async_flag_t *done) {
+    common_hal_busio_spi_end(self);
+    CIRCUITPY_ASYNC_FLAG_INIT(done);
+    self->async_done = done;
+    // One descriptor holds at most 65535 beats; longer writes and short ones go the normal way.
+    if (len >= 32 && len <= 65535) {
+        Sercom *sercom = self->spi_desc.dev.prvt;
+        shared_dma_transfer_start(&self->async_xfer, sercom, data, &sercom->SPI.DATA.reg,
+            NULL, NULL, len, 0);
+        if (self->async_xfer.failure == 0) {
+            self->async_active = true;
+            return;
+        }
+    }
+    common_hal_busio_spi_write(self, data, len);
+    CIRCUITPY_ASYNC_FLAG_SET(done);
+}
+
+void common_hal_busio_spi_end(busio_spi_obj_t *self) {
+    if (!self->async_active) {
+        return;
+    }
+    // finished() also clears the RX overflow a TX-only transfer leaves on the SERCOM.
+    // No background tasks here: the caller holds the bus, and one of them may want it.
+    while (!shared_dma_transfer_finished(&self->async_xfer)) {
+    }
+    shared_dma_transfer_close(&self->async_xfer);
+    self->async_active = false;
+    CIRCUITPY_ASYNC_FLAG_SET(self->async_done);
+}
+#endif
 
 bool common_hal_busio_spi_read(busio_spi_obj_t *self,
     uint8_t *data, size_t len, uint8_t write_value) {

@@ -95,17 +95,6 @@ static const char *nrf_pin_flags(uint32_t psel, char *buf, size_t size) {
     return buf;
 }
 
-// Check that a SoC pad can be encoded (it sits on a known GPIO controller,
-// so its number is a valid nRF pin).
-static bool nrf_pad_ok(uint16_t soc_pad) {
-    if (soc_pad == IOBROKER_NO_PIN) {
-        return true;
-    }
-    const struct device *port;
-    gpio_pin_t number;
-    return iobroker_gpio_split(soc_pad, &port, &number) == 0;
-}
-
 // Encode one nRF pin control entry. soc_pad may be IOBROKER_NO_PIN to
 // leave the signal disconnected. pull_up enables the internal pull resistor;
 // the caller picks it per bus signal (I2C SDA/SCL and UART RX idle high).
@@ -401,26 +390,25 @@ int iobroker_i2c_allocate(package_pin_t sda, package_pin_t scl,
     }
     uint16_t sda_pad;
     uint16_t scl_pad;
+    uint16_t sda_gpio;
+    uint16_t scl_gpio;
     if (iobroker_package_pin_soc_pad(sda, &sda_pad) < 0 ||
-        iobroker_package_pin_soc_pad(scl, &scl_pad) < 0) {
-        LOG_WRN("i2c allocate: package pin %u or %u not in package map",
+        iobroker_package_pin_soc_pad(scl, &scl_pad) < 0 ||
+        iobroker_pad_gpio(sda_pad, &sda_gpio) < 0 ||
+        iobroker_pad_gpio(scl_pad, &scl_gpio) < 0) {
+        LOG_WRN("i2c allocate: package pin %u or %u is unknown or has no GPIO",
             (unsigned)sda, (unsigned)scl);
-        return -EINVAL;
-    }
-    if (!nrf_pad_ok(sda_pad) || !nrf_pad_ok(scl_pad)) {
-        LOG_WRN("i2c allocate: pad %u or %u is not on a GPIO controller",
-            (unsigned)sda_pad, (unsigned)scl_pad);
         return -EINVAL;
     }
     char sda_name[12];
     char scl_name[12];
     LOG_INF("i2c allocate: SDA package pin %u -> %s, SCL package pin %u -> %s",
-        (unsigned)sda, nrf_pad_name(sda_pad, sda_name, sizeof(sda_name)),
-        (unsigned)scl, nrf_pad_name(scl_pad, scl_name, sizeof(scl_name)));
+        (unsigned)sda, nrf_pad_name(sda_gpio, sda_name, sizeof(sda_name)),
+        (unsigned)scl, nrf_pad_name(scl_gpio, scl_name, sizeof(scl_name)));
     pinctrl_soc_pin_t pins[2];
     // Open-drain bus: both lines idle high via the internal pull-up.
-    pins[0] = nrf_psel_encode(NRF_FUN_TWIM_SDA, sda_pad, true);
-    pins[1] = nrf_psel_encode(NRF_FUN_TWIM_SCL, scl_pad, true);
+    pins[0] = nrf_psel_encode(NRF_FUN_TWIM_SDA, sda_gpio, true);
+    pins[1] = nrf_psel_encode(NRF_FUN_TWIM_SCL, scl_gpio, true);
     return iobroker_allocate("i2c", iobroker_i2c_buses, iobroker_i2c_bus_count,
         iobroker_i2c_bus_states, requested, pins, 2, dev_out);
 }
@@ -437,30 +425,31 @@ int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     uint16_t clock_pad;
     uint16_t mosi_pad;
     uint16_t miso_pad;
+    uint16_t clock_gpio;
+    uint16_t mosi_gpio;
+    uint16_t miso_gpio;
     if (iobroker_package_pin_soc_pad(clock, &clock_pad) < 0 ||
         iobroker_package_pin_soc_pad(mosi, &mosi_pad) < 0 ||
-        iobroker_package_pin_soc_pad(miso, &miso_pad) < 0) {
-        LOG_WRN("spi allocate: a package pin (%u/%u/%u) is not in the map",
+        iobroker_package_pin_soc_pad(miso, &miso_pad) < 0 ||
+        iobroker_pad_gpio(clock_pad, &clock_gpio) < 0 ||
+        iobroker_pad_gpio(mosi_pad, &mosi_gpio) < 0 ||
+        iobroker_pad_gpio(miso_pad, &miso_gpio) < 0) {
+        LOG_WRN("spi allocate: a package pin (%u/%u/%u) is unknown or has no GPIO",
             (unsigned)clock, (unsigned)mosi, (unsigned)miso);
-        return -EINVAL;
-    }
-    if (!nrf_pad_ok(clock_pad) || !nrf_pad_ok(mosi_pad) || !nrf_pad_ok(miso_pad)) {
-        LOG_WRN("spi allocate: pad %u/%u/%u is not on a GPIO controller",
-            (unsigned)clock_pad, (unsigned)mosi_pad, (unsigned)miso_pad);
         return -EINVAL;
     }
     char clock_name[12];
     char mosi_name[12];
     char miso_name[12];
     LOG_INF("spi allocate: SCK package pin %u -> %s, MOSI %u -> %s, MISO %u -> %s",
-        (unsigned)clock, nrf_pad_name(clock_pad, clock_name, sizeof(clock_name)),
-        (unsigned)mosi, nrf_pad_name(mosi_pad, mosi_name, sizeof(mosi_name)),
-        (unsigned)miso, nrf_pad_name(miso_pad, miso_name, sizeof(miso_name)));
+        (unsigned)clock, nrf_pad_name(clock_gpio, clock_name, sizeof(clock_name)),
+        (unsigned)mosi, nrf_pad_name(mosi_gpio, mosi_name, sizeof(mosi_name)),
+        (unsigned)miso, nrf_pad_name(miso_gpio, miso_name, sizeof(miso_name)));
     pinctrl_soc_pin_t pins[3];
     // All signals are push-pull outputs (MISO from the peripheral's view).
-    pins[0] = nrf_psel_encode(NRF_FUN_SPIM_SCK, clock_pad, false);
-    pins[1] = nrf_psel_encode(NRF_FUN_SPIM_MOSI, mosi_pad, false);
-    pins[2] = nrf_psel_encode(NRF_FUN_SPIM_MISO, miso_pad, false);
+    pins[0] = nrf_psel_encode(NRF_FUN_SPIM_SCK, clock_gpio, false);
+    pins[1] = nrf_psel_encode(NRF_FUN_SPIM_MOSI, mosi_gpio, false);
+    pins[2] = nrf_psel_encode(NRF_FUN_SPIM_MISO, miso_gpio, false);
     return iobroker_allocate("spi", iobroker_spi_buses, iobroker_spi_bus_count,
         iobroker_spi_bus_states, requested, pins, 3, dev_out);
 }
@@ -478,19 +467,20 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     uint16_t rx_pad;
     uint16_t rts_pad;
     uint16_t cts_pad;
+    uint16_t tx_gpio;
+    uint16_t rx_gpio;
+    uint16_t rts_gpio;
+    uint16_t cts_gpio;
     if (iobroker_package_pin_soc_pad(tx, &tx_pad) < 0 ||
         iobroker_package_pin_soc_pad(rx, &rx_pad) < 0 ||
         iobroker_package_pin_soc_pad(rts, &rts_pad) < 0 ||
-        iobroker_package_pin_soc_pad(cts, &cts_pad) < 0) {
-        LOG_WRN("uart allocate: a package pin (%u/%u/%u/%u) is not in the map",
+        iobroker_package_pin_soc_pad(cts, &cts_pad) < 0 ||
+        iobroker_pad_gpio(tx_pad, &tx_gpio) < 0 ||
+        iobroker_pad_gpio(rx_pad, &rx_gpio) < 0 ||
+        iobroker_pad_gpio(rts_pad, &rts_gpio) < 0 ||
+        iobroker_pad_gpio(cts_pad, &cts_gpio) < 0) {
+        LOG_WRN("uart allocate: a package pin (%u/%u/%u/%u) is unknown or has no GPIO",
             (unsigned)tx, (unsigned)rx, (unsigned)rts, (unsigned)cts);
-        return -EINVAL;
-    }
-    if (!nrf_pad_ok(tx_pad) || !nrf_pad_ok(rx_pad) ||
-        !nrf_pad_ok(rts_pad) || !nrf_pad_ok(cts_pad)) {
-        LOG_WRN("uart allocate: pad %u/%u/%u/%u is not on a GPIO controller",
-            (unsigned)tx_pad, (unsigned)rx_pad, (unsigned)rts_pad,
-            (unsigned)cts_pad);
         return -EINVAL;
     }
     char tx_name[12];
@@ -498,16 +488,16 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     char rts_name[12];
     char cts_name[12];
     LOG_INF("uart allocate: TX package pin %u -> %s, RX %u -> %s, RTS %u -> %s, CTS %u -> %s",
-        (unsigned)tx, nrf_pad_name(tx_pad, tx_name, sizeof(tx_name)),
-        (unsigned)rx, nrf_pad_name(rx_pad, rx_name, sizeof(rx_name)),
-        (unsigned)rts, nrf_pad_name(rts_pad, rts_name, sizeof(rts_name)),
-        (unsigned)cts, nrf_pad_name(cts_pad, cts_name, sizeof(cts_name)));
+        (unsigned)tx, nrf_pad_name(tx_gpio, tx_name, sizeof(tx_name)),
+        (unsigned)rx, nrf_pad_name(rx_gpio, rx_name, sizeof(rx_name)),
+        (unsigned)rts, nrf_pad_name(rts_gpio, rts_name, sizeof(rts_name)),
+        (unsigned)cts, nrf_pad_name(cts_gpio, cts_name, sizeof(cts_name)));
     pinctrl_soc_pin_t pins[4];
     // RX floats until the peer drives it, so pull it up internally.
-    pins[0] = nrf_psel_encode(NRF_FUN_UART_TX, tx_pad, false);
-    pins[1] = nrf_psel_encode(NRF_FUN_UART_RX, rx_pad, true);
-    pins[2] = nrf_psel_encode(NRF_FUN_UART_RTS, rts_pad, false);
-    pins[3] = nrf_psel_encode(NRF_FUN_UART_CTS, cts_pad, false);
+    pins[0] = nrf_psel_encode(NRF_FUN_UART_TX, tx_gpio, false);
+    pins[1] = nrf_psel_encode(NRF_FUN_UART_RX, rx_gpio, true);
+    pins[2] = nrf_psel_encode(NRF_FUN_UART_RTS, rts_gpio, false);
+    pins[3] = nrf_psel_encode(NRF_FUN_UART_CTS, cts_gpio, false);
     return iobroker_allocate("uart", iobroker_uart_buses, iobroker_uart_bus_count,
         iobroker_uart_bus_states, requested, pins, 4, dev_out);
 }

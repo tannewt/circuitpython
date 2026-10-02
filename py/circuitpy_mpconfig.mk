@@ -238,6 +238,11 @@ CFLAGS += -DCIRCUITPY_BUSIO_I2C=$(CIRCUITPY_BUSIO_I2C)
 CIRCUITPY_BUSIO_SPI ?= $(CIRCUITPY_BUSIO)
 CFLAGS += -DCIRCUITPY_BUSIO_SPI=$(CIRCUITPY_BUSIO_SPI)
 
+# The port implements common_hal_busio_spi_write_start() and common_hal_busio_spi_end(), so a
+# display on a FourWire bus can send one strip while the next is being composited.
+CIRCUITPY_BUSIO_SPI_ASYNC ?= 0
+CFLAGS += -DCIRCUITPY_BUSIO_SPI_ASYNC=$(CIRCUITPY_BUSIO_SPI_ASYNC)
+
 CIRCUITPY_BUSIO_UART ?= $(CIRCUITPY_BUSIO)
 CFLAGS += -DCIRCUITPY_BUSIO_UART=$(CIRCUITPY_BUSIO_UART)
 

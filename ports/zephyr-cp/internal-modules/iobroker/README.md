@@ -29,6 +29,16 @@ encoding can be computed at runtime and whose peripherals can be routed to
 (almost) any pin via PSEL. On other SoCs the module compiles but the allocate
 functions always return `-ENOSYS`.
 
+Analog pads are allocated through two function pairs, ADC inputs via
+`iobroker_adc_allocate()` and DAC outputs via `iobroker_dac_allocate()`. Both
+have no routing: the pad's analog function is fixed by the SoC, so the call
+resolves it (for example a SAADC AIN number, or the RA's PmnPFS.ASEL analog
+switch) from a per-SoC table, claims the pad and hands out a free channel slot
+on the analog device. Zephyr's ADC API has no channel release, so the release
+implementation unconfigures the slot per SoC (through `nrfx` for the SAADC).
+See `src/nordic/nrf/iobroker_analog.c`, `src/nxp/mcxn/iobroker_analog.c`,
+`src/renesas/ra/iobroker_analog.c` and `src/emul/iobroker_analog.c`.
+
 ## Source layout
 
 The source is organized by vendor and SoC family under `src/`:
@@ -42,8 +52,12 @@ src/
   iobroker_internal.h              # helpers shared between core and
                                       # vendor implementations (private)
   nordic/
-    nrf/                              # every nRF SoC shares one pinctrl
-      iobroker_route.c             # encoding, so the family is one dir
+    nrf/                           # every nRF SoC shares one pinctrl
+      iobroker_route.c            # encoding, so the family is one dir
+  nxp/
+    mcxn/                        # NXP MCX N: LPADC inputs and the LPDAC
+      iobroker_analog.c         # output pad resolve from the pin
+                                   # functions table
 ```
 
 The core compiles on every SoC. Each vendor adds a `src/<vendor>/<soc>/`
@@ -80,17 +94,23 @@ const uint16_t iobroker_reserved_pads[];   // + _pin_count
 The package pin map is selected from the module's reference maps:
 `Kconfig.packages` offers one option per transcribed package
 (`packages/*.toml`), each visible only for the SoCs it applies to and
-preselected for the development kits. SoCs with no reference map fall back to
-`IOBROKER_PACKAGE_ONE_TO_ONE`, an identity map where the package pin number
-is the global pin number (gpio port index * 32 + pin within the port), so
-boards without a transcribed physical package can still resolve their pins.
-`IOBROKER_PACKAGE_NONE` is also available and generates an empty map, making
-package pin lookups fail with `-EINVAL`. The selected TOML (or the empty
-map) is rendered into a build-directory translation unit at build time. The
-identity map needs no rendered table: the core applies it directly.
+preselected for the development kits. The map's SoC pads are numbered by
+the package's own pin ids (row-major ball order, or the datasheet's pin
+number for a QFN/QFP package); each pad carries the global GPIO number
+it bonds to when it sits on a GPIO controller. Analog-only pads (pads no
+GPIO controller covers, e.g. MCX N's ANA pads) carry the datasheet's pad
+name in `pad_name` and become pin objects named by `zephyr2cp.py` from
+that name, so analogio can reach them. SoCs with no reference map fall
+back to `IOBROKER_PACKAGE_ONE_TO_ONE`, an identity map where the package
+pin number is the global pin number (gpio port index * 32 + pin within
+the port), so boards without a transcribed physical package can still
+resolve their pins. `IOBROKER_PACKAGE_NONE` is also available and
+generates an empty map, making package pin lookups fail with `-EINVAL`.
+The selected TOML (or the empty map) is rendered into a build-directory
+translation unit at build time. The identity map needs no rendered
+table: the core applies it directly.
 New maps are transcribed from a SoC datasheet with `tools/gen_package.py`
 (see the script's docstring; the datasheets live in `datasheets/`).
-
 Each instance entry contains the Zephyr device, its `struct
 pinctrl_dev_config` (via `PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the
 devicetree state has fixed pins, the raw `pinctrl_soc_pin_t` values of the

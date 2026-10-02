@@ -54,6 +54,7 @@ CIRCUITPY_FULL_BUILD ?= 1
 
 # The 24 KB stack has room for a larger display refresh buffer.
 CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE ?= 2048
+CIRCUITPY_BUSIO_SPI_ASYNC ?= 1
 
 # If SSL is enabled, it's mbedtls
 CIRCUITPY_SSL_MBEDTLS = 1

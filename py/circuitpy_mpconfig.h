@@ -404,6 +404,11 @@ typedef long mp_off_t;
 #define CIRCUITPY_CONSOLE_UART_HEXDUMP(...) (void)0
 #endif
 
+// Normally set from CIRCUITPY_BUSIO_SPI_ASYNC in the .mk files.
+#ifndef CIRCUITPY_BUSIO_SPI_ASYNC
+#define CIRCUITPY_BUSIO_SPI_ASYNC (0)
+#endif
+
 // These CIRCUITPY_xxx values should all be defined in the *.mk files as being on or off.
 // So if any are not defined in *.mk, they'll throw an error here.
 
