@@ -68,3 +68,12 @@
 };
 
 #include "../../../app.overlay"
+
+/* An SPI loopback for testing: MOSI wired to MISO. */
+&spi0 {
+	loopback: loopback@0 {
+		compatible = "circuitpython,spi-loopback";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};

@@ -14,6 +14,8 @@
 #include <errno.h>
 #include <stddef.h>
 
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
@@ -87,13 +89,28 @@ int iobroker_i2c_allocate(package_pin_t sda, package_pin_t scl,
     return -ENOSYS;
 }
 
+#if defined(CONFIG_BOARD_NATIVE_SIM) && DT_HAS_COMPAT_STATUS_OKAY(zephyr_spi_emul_controller)
+// native_sim has no pin routing: any pins get the emulated SPI controller.
+#define NATIVE_SIM_SPI DEVICE_DT_GET_ONE(zephyr_spi_emul_controller)
+static bool native_sim_spi_in_use;
+#endif
+
 int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     package_pin_t miso, const struct device **dev_out) {
     (void)clock;
     (void)mosi;
     (void)miso;
+    #ifdef NATIVE_SIM_SPI
+    if (native_sim_spi_in_use) {
+        return -ENODEV;
+    }
+    native_sim_spi_in_use = true;
+    *dev_out = NATIVE_SIM_SPI;
+    return 0;
+    #else
     (void)dev_out;
     return -ENOSYS;
+    #endif
 }
 
 int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
@@ -107,6 +124,11 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
 }
 
 bool iobroker_release(const struct device *dev) {
+    #ifdef NATIVE_SIM_SPI
+    if (dev == NATIVE_SIM_SPI) {
+        native_sim_spi_in_use = false;
+    }
+    #endif
     (void)dev;
     LOG_DBG("release: no routing support on this SoC, nothing to release");
     return false;
