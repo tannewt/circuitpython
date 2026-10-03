@@ -628,6 +628,13 @@ SRC_C += \
 	common-hal/picodvi/__init__.c \
 	common-hal/picodvi/Framebuffer_$(CHIP_VARIANT).c \
 
+ifeq ($(CIRCUITPY_PICODVI_AUDIOOUT),1)
+SRC_C += \
+	bindings/picodvi/AudioOut.c \
+	common-hal/picodvi/AudioOut.c \
+
+endif
+
 ifeq ($(CHIP_VARIANT),RP2040)
 SRC_PICODVI := \
 	lib/PicoDVI/software/libdvi/dvi.c \

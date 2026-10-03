@@ -161,6 +161,18 @@ static uint32_t vactive_line720[VACTIVE_LEN] = {
 
 picodvi_framebuffer_obj_t *active_picodvi = NULL;
 
+#if CIRCUITPY_PICODVI_AUDIOOUT
+#include "common-hal/picodvi/dvi_audio.c.inc"
+#else
+static inline uint32_t *dvi_audio_next_frame(void) {
+    return active_picodvi->dma_commands;
+}
+static inline void dvi_audio_frame_done(void) {
+}
+static inline void dvi_audio_free(picodvi_framebuffer_obj_t *self) {
+}
+#endif
+
 // Incremented once per completed frame by the DMA frame-boundary IRQ, so refresh() can block
 // until the next frame starts (vblank sync). A full-framebuffer repaint that begins right after a
 // frame boundary then races ahead of scanout, avoiding tearing without a second framebuffer.
@@ -176,8 +188,9 @@ static void __not_in_flash_func(dma_irq_handler)(void) {
     // Set the read_addr back to the start and trigger the first transfer (which
     // will trigger the pixel channel).
     dma_channel_hw_t *ch = &dma_hw->ch[active_picodvi->dma_command_channel];
-    ch->al3_read_addr_trig = (uintptr_t)active_picodvi->dma_commands;
+    ch->al3_read_addr_trig = (uintptr_t)dvi_audio_next_frame();
     framebuffer_frame_count++;    // frame boundary: scanout has wrapped back to the top
+    dvi_audio_frame_done();
 }
 
 bool common_hal_picodvi_framebuffer_preflight(
@@ -230,6 +243,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
         mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q and %q"), MP_QSTR_width, MP_QSTR_height);
     }
 
+    self->dvi_audio = NULL;
     self->dma_command_channel = -1;
     self->dma_pixel_channel = -1;
 
@@ -605,6 +619,16 @@ void common_hal_picodvi_framebuffer_deinit(picodvi_framebuffer_obj_t *self) {
         return;
     }
 
+    // Stop frame restarts before aborting either channel. An already pending
+    // frame IRQ must not repoint the command DMA during teardown.
+    uint32_t irq_state = save_and_disable_interrupts();
+    active_picodvi = NULL;
+    if (self->dma_pixel_channel >= 0) {
+        dma_channel_set_irq1_enabled(self->dma_pixel_channel, false);
+        dma_hw->ints1 = 1u << self->dma_pixel_channel;
+    }
+    restore_interrupts(irq_state);
+
     for (int i = 12; i <= 19; ++i) {
         reset_pin_number(i);
     }
@@ -614,7 +638,7 @@ void common_hal_picodvi_framebuffer_deinit(picodvi_framebuffer_obj_t *self) {
     self->dma_pixel_channel = -1;
     self->dma_command_channel = -1;
 
-    active_picodvi = NULL;
+    dvi_audio_free(self);
 
     port_free(self->framebuffer);
     self->framebuffer = NULL;

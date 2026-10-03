@@ -27,6 +27,10 @@
 #include "audio_dma.h"
 #endif
 
+#if CIRCUITPY_PICODVI_AUDIOOUT
+#include "common-hal/picodvi/AudioOut.h"
+#endif
+
 #if CIRCUITPY_SSL
 #include "shared-module/ssl/__init__.h"
 #include "psa/crypto.h"
@@ -499,6 +503,10 @@ void reset_port(void) {
 
     #if CIRCUITPY_AUDIOCORE
     audio_dma_reset();
+    #endif
+
+    #if CIRCUITPY_PICODVI_AUDIOOUT
+    picodvi_audioout_reset();
     #endif
 
     #if CIRCUITPY_SSL
