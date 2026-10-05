@@ -655,13 +655,15 @@ SRC_C += peripherals/touch.c
 endif
 
 ifneq ($(CIRCUITPY_USB_DEVICE),0)
-SRC_C += \
-	lib/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c \
-	lib/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c
+SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c
 endif
 
 ifeq ($(CIRCUITPY_USB_HOST),1)
 SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/hcd_dwc2.c
+endif
+
+ifneq ($(filter 1,$(CIRCUITPY_USB_DEVICE) $(CIRCUITPY_USB_HOST)),)
+SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c
 endif
 
 ifneq ($(CIRCUITPY_AUDIOBUSIO),0)
