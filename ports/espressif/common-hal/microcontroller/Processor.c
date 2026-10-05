@@ -162,7 +162,10 @@ void common_hal_mcu_processor_get_uid(uint8_t raw_id[]) {
     mac_address_part >>= 8;
     *ptr-- = swap_nibbles(mac_address_part & 0xff);
     #else
-    CHECK_ESP_RESULT(esp_efuse_mac_get_default(raw_id));
+    // USB descriptor setup also calls this outside the VM, so do not raise.
+    if (esp_efuse_mac_get_default(raw_id) != ESP_OK) {
+        memset(raw_id, 0, COMMON_HAL_MCU_PROCESSOR_UID_LENGTH);
+    }
     #endif
 }
 
