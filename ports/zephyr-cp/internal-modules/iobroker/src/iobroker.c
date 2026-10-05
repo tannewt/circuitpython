@@ -131,6 +131,12 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     return -ENOSYS;
 }
 
+int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out) {
+    (void)pin;
+    (void)dev_out;
+    return -ENOSYS;
+}
+
 bool iobroker_release(const struct device *dev) {
     (void)dev;
     LOG_DBG("release: no routing support on this SoC, nothing to release");
@@ -249,6 +255,16 @@ bool iobroker_pin_in_use(package_pin_t pin) {
         }
         for (uint8_t j = 0; j < iobroker_uart_bus_states[i].pin_count; j++) {
             if (iobroker_uart_bus_states[i].pins[j] == pin) {
+                return true;
+            }
+        }
+    }
+    for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
+        if (!iobroker_pwm_bus_states[i].in_use) {
+            continue;
+        }
+        for (uint8_t j = 0; j < iobroker_pwm_bus_states[i].pin_count; j++) {
+            if (iobroker_pwm_bus_states[i].pins[j] == pin) {
                 return true;
             }
         }
