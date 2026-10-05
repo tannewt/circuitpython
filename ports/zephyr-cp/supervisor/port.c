@@ -14,6 +14,10 @@
 #include "common-hal/audiobusio/I2SOut.h"
 #endif
 
+#if CIRCUITPY_RTC
+#include "shared-bindings/rtc/__init__.h"
+#endif
+
 #include <stdlib.h>
 
 #include <zephyr/autoconf.h>
@@ -259,6 +263,10 @@ void reset_cpu(void) {
 void reset_port(void) {
     #if CIRCUITPY_AUDIOBUSIO_I2SOUT
     i2sout_reset();
+    #endif
+
+    #if CIRCUITPY_RTC
+    rtc_reset();
     #endif
 
     #if defined(CONFIG_ARCH_POSIX)

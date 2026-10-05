@@ -731,6 +731,7 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
     config_bt_found = False
     config_adc_enabled = False
     config_dac_enabled = False
+    config_rtc_enabled = False
     config_present = True
     config = zephyrbuilddir / ".config"
     if not config.exists():
@@ -747,6 +748,8 @@ def zephyr_dts_to_cp_board(board_id, portdir, builddir, zephyrbuilddir, mpconfig
                 config_adc_enabled = line.strip().endswith("=y")
             elif line.startswith("CONFIG_DAC="):
                 config_dac_enabled = line.strip().endswith("=y")
+            elif line.startswith("CONFIG_RTC="):
+                config_rtc_enabled = line.strip().endswith("=y")
 
     runners = zephyrbuilddir / "runners.yaml"
     runners = yaml.safe_load(runners.read_text())
@@ -1693,6 +1696,21 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
     board_info["analogio"] = (adc_present and config_adc_enabled) or (
         dac_present and config_dac_enabled
     )
+    board_info["rtc"] = False
+    # RTC needs both a devicetree `rtc` alias pointing at the RTC device
+    # (the same selection Zephyr's own RTC sample uses) and the Zephyr RTC
+    # driver layer enabled (CONFIG_RTC).
+    rtc_node = device_tree.alias2node.get("rtc")
+    if rtc_node is not None:
+        rtc_status = rtc_node.props.get("status")
+        rtc_present = rtc_status is None or rtc_status.to_string() == "okay"
+        if rtc_present and config_rtc_enabled:
+            board_info["rtc"] = True
+        elif rtc_present:
+            logger.warning(
+                "Devicetree has a status-okay 'rtc' alias but CONFIG_RTC is "
+                "not enabled, so the rtc module is disabled."
+            )
     board_info["usb_num_endpoint_pairs"] = usb_num_endpoint_pairs
 
     # Detect NVM partition size from the device tree.
