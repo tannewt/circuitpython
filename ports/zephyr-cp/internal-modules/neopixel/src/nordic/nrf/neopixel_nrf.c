@@ -14,14 +14,14 @@
 // connects OUT0 to the pin, and releasing it de-initializes the device again.
 // The waveform itself is programmed through the HAL, since Zephyr's PWM API
 // has no sequence playback. When every instance is busy, or none can reach
-// the pad, the waveform is bit-banged on the pin as a GPIO instead, except on
-// nRF54L P0, whose GPIO is too slow for it.
+// the pin, the pin is allocated from iobroker as a GPIO and the waveform is
+// bit-banged on it instead, except on nRF54L P0, whose GPIO is too slow for
+// it.
 
 #include <errno.h>
 #include <stdbool.h>
 
 #include <nrfx.h>
-#include <hal/nrf_gpio.h>
 #include <hal/nrf_pwm.h>
 
 #include <zephyr/device.h>
@@ -71,7 +71,7 @@ static NRF_PWM_Type *pwm_regs_for(const struct device *dev) {
     return NULL;
 }
 
-// Fallback when no PWM instance is free or none can reach the pad: bit-bang the waveform with
+// Fallback when no PWM instance is free or none can reach the pin: bit-bang the waveform with
 // interrupts locked, timed by the DWT cycle counter. The cycle counts are
 // ports/nordic's 64 MHz values (71 per bit, 18 high for a zero, 41 high for
 // a one) expressed as dividers of SystemCoreClock: a 1.11 us bit interval,
@@ -92,15 +92,12 @@ static NRF_PWM_Type *pwm_regs_for(const struct device *dev) {
 // would replace; switch to that API once it lands.
 #define BITBANG_MAX_ATTEMPTS 8
 
-static int bitbang_send(uint32_t pin, const uint8_t *pixels, size_t num_bytes) {
+static int bitbang_send(NRF_GPIO_Type *port, uint32_t mask, const uint8_t *pixels,
+    size_t num_bytes) {
     uint32_t interval = SystemCoreClock / 900000;
     uint32_t t0 = SystemCoreClock / 3500000;
     uint32_t t1 = SystemCoreClock / 1560000;
     uint32_t limit = interval * 2;
-
-    uint32_t decoded_pin = pin;
-    NRF_GPIO_Type *port = nrf_gpio_pin_port_decode(&decoded_pin);
-    uint32_t mask = 1UL << decoded_pin;
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
@@ -170,7 +167,20 @@ static int pwm_send(NRF_PWM_Type *pwm, const uint8_t *pixels, size_t num_bytes,
     return 0;
 }
 
-// Whether the CPU can bit-bang the waveform on a pad. On nRF54L the P0 GPIO
+// Register block of a GPIO controller, from iobroker's controller table.
+// Zephyr's GPIO API is too slow to bit-bang with: a gpio_port_set_bits_raw()
+// call takes about 31 cycles on the nRF52840 at 64 MHz, more than a zero
+// bit's 18-cycle high time, where a register write takes about 3.
+static NRF_GPIO_Type *gpio_regs_for(const struct device *port) {
+    for (size_t i = 0; i < iobroker_gpio_port_count; i++) {
+        if (iobroker_gpio_port_devices[i] == port) {
+            return (NRF_GPIO_Type *)iobroker_gpio_port_addrs[i];
+        }
+    }
+    return NULL;
+}
+
+// Whether the CPU can bit-bang the waveform on a GPIO port. On nRF54L the P0
 // port sits in the low-power (LP) domain, which runs at 16 MHz asynchronously
 // to the CPU: a register write to it stalls about 0.5 us (65 cycles at
 // 128 MHz, measured on the nRF54LM20A), longer than a zero bit's 0.3 us high
@@ -179,13 +189,11 @@ static int pwm_send(NRF_PWM_Type *pwm, const uint8_t *pixels, size_t num_bytes,
 // same decoding as nrfx_gppi_domain_id_get(); LP is 3.
 #define NRF54L_DOMAIN_LP 3
 
-static bool pad_can_bitbang(uint16_t pad) {
+static bool port_can_bitbang(NRF_GPIO_Type *port) {
     #if defined(CONFIG_SOC_SERIES_NRF54L)
-    uint32_t pin_number = pad;
-    uintptr_t port_addr = (uintptr_t)nrf_gpio_pin_port_decode(&pin_number);
-    return ((port_addr >> 18) & 0x7) - 1 != NRF54L_DOMAIN_LP;
+    return (((uintptr_t)port >> 18) & 0x7) - 1 != NRF54L_DOMAIN_LP;
     #else
-    (void)pad;
+    (void)port;
     return true;
     #endif
 }
@@ -208,17 +216,25 @@ static int pwm_send_on(const struct device *dev, const uint8_t *pixels, size_t n
 }
 
 // Bit-bang on the pin as a GPIO output, allocated from iobroker for the frame.
-static int bitbang_send_on(package_pin_t pin, uint16_t pad, const uint8_t *pixels,
-    size_t num_bytes) {
+// A pin whose port is too slow to bit-bang on gets -EINVAL.
+static int bitbang_send_on(package_pin_t pin, const uint8_t *pixels, size_t num_bytes) {
     const struct device *port;
     gpio_pin_t number;
     int ret = iobroker_gpio_allocate(pin, &port, &number);
     if (ret < 0) {
         return ret;
     }
-    ret = gpio_pin_configure(port, number, GPIO_OUTPUT_LOW);
-    if (ret == 0) {
-        ret = bitbang_send(pad, pixels, num_bytes);
+    NRF_GPIO_Type *regs = gpio_regs_for(port);
+    if (regs == NULL) {
+        LOG_WRN("%s has no register entry", port->name);
+        ret = -ENODEV;
+    } else if (!port_can_bitbang(regs)) {
+        ret = -EINVAL;
+    } else {
+        ret = gpio_pin_configure(port, number, GPIO_OUTPUT_LOW);
+        if (ret == 0) {
+            ret = bitbang_send(regs, BIT(number), pixels, num_bytes);
+        }
     }
     (void)iobroker_gpio_release(port, number);
     return ret;
@@ -226,34 +242,26 @@ static int bitbang_send_on(package_pin_t pin, uint16_t pad, const uint8_t *pixel
 
 int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
     void *pattern_buffer, size_t pattern_buffer_size) {
-    // iobroker's global GPIO number (port * 32 + pin) is also the nrfx pin
-    // number that PSEL and the GPIO HAL take.
-    uint16_t pad;
-    int ret = iobroker_package_pin_gpio_pad(pin, &pad);
-    if (ret < 0 || pad == IOBROKER_NO_PIN) {
-        return -EINVAL;
-    }
     if (pattern_buffer_size < NEOPIXEL_PATTERN_BUFFER_SIZE(num_bytes) ||
         ((uintptr_t)pattern_buffer & 3) != 0) {
         return -EINVAL;
     }
 
     const struct device *dev = NULL;
-    ret = iobroker_pwm_allocate(pin, &dev);
+    int ret = iobroker_pwm_allocate(pin, &dev);
     if (ret == 0) {
         ret = pwm_send_on(dev, pixels, num_bytes, pattern_buffer);
         (void)iobroker_release(dev);
         return ret;
     }
-    if (ret == -ENODEV || (ret == -EINVAL && pad_can_bitbang(pad))) {
+    if (ret == -ENODEV || ret == -EINVAL) {
         // Every instance is busy (pwmio or something else is holding them all),
-        // or none can reach this pad (nRF54L PWMs drive only their own power
-        // domain's pads) but the CPU can drive it fast enough: bit-bang
-        // instead. That locks ordinary interrupts for the frame; the
-        // zero-latency radio interrupt can still preempt it and glitch the
-        // output, which bitbang_send() detects and resends. A pad that neither
-        // can drive keeps -EINVAL.
-        return bitbang_send_on(pin, pad, pixels, num_bytes);
+        // or none can reach this pin (nRF54L PWMs drive only their own power
+        // domain's pads): bit-bang instead. That locks ordinary interrupts for
+        // the frame; the zero-latency radio interrupt can still preempt it and
+        // glitch the output, which bitbang_send() detects and resends. A pin
+        // with no GPIO, or on a port too slow to bit-bang, gets -EINVAL.
+        return bitbang_send_on(pin, pixels, num_bytes);
     }
     return ret;
 }
