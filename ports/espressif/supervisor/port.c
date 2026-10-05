@@ -332,7 +332,13 @@ void port_heap_init(void) {
 void *port_malloc(size_t size, bool dma_capable) {
     if (dma_capable) {
         // SPIRAM is not DMA-capable, so don't bother to ask for it.
+        #if defined(CONFIG_IDF_TARGET_ESP32P4)
+        // Cache maintenance must not touch memory outside this allocation.
+        size = (size + CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1) & ~(CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1);
+        return heap_caps_aligned_alloc(CONFIG_CACHE_L1_CACHE_LINE_SIZE, size, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+        #else
         return heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+        #endif
     }
 
     void *ptr = NULL;
@@ -345,6 +351,13 @@ void *port_malloc(size_t size, bool dma_capable) {
     }
     return ptr;
 }
+
+#if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
+bool port_buffer_is_dma_capable(const void *ptr) {
+    // Python buffers may share cache lines with other objects, even when aligned.
+    return false;
+}
+#endif
 
 void port_free(void *ptr) {
     heap_caps_free(ptr);

@@ -248,18 +248,20 @@ static mp_obj_t _get_string(const uint16_t *temp_buf) {
     return utf16le_to_string(temp_buf + 1, utf16_len);
 }
 
+static void _get_descriptor(usb_core_device_obj_t *self, uint8_t type, uint8_t index,
+    uint16_t language, void *buffer, size_t len) {
+    common_hal_usb_core_device_ctrl_transfer(self, 0x80, TUSB_REQ_GET_DESCRIPTOR,
+        (type << 8) | index, language, buffer, len, 1000);
+}
+
 static void _get_langid(usb_core_device_obj_t *self) {
     if (self->first_langid != 0) {
         return;
     }
     // Two control bytes and one uint16_t language code.
     uint16_t temp_buf[2];
-    _prepare_for_transfer();
-    if (!tuh_descriptor_get_string(self->device_address, 0, 0, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
-        mp_raise_usb_core_USBError(NULL);
-    } else if (_wait_for_callback()) {
-        self->first_langid = temp_buf[1];
-    }
+    _get_descriptor(self, TUSB_DESC_STRING, 0, 0, temp_buf, sizeof(temp_buf));
+    self->first_langid = temp_buf[1];
 }
 
 mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *self) {
@@ -274,13 +276,8 @@ mp_obj_t common_hal_usb_core_device_get_serial_number(usb_core_device_obj_t *sel
     }
     // Device does provide this string, so continue
     _get_langid(self);
-    _prepare_for_transfer();
-    if (!tuh_descriptor_get_serial_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
-        mp_raise_usb_core_USBError(NULL);
-    } else if (_wait_for_callback()) {
-        return _get_string(temp_buf);
-    }
-    return mp_const_none;
+    _get_descriptor(self, TUSB_DESC_STRING, descriptor.iSerialNumber, self->first_langid, temp_buf, sizeof(temp_buf));
+    return _get_string(temp_buf);
 }
 
 mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
@@ -295,13 +292,8 @@ mp_obj_t common_hal_usb_core_device_get_product(usb_core_device_obj_t *self) {
     }
     // Device does provide this string, so continue
     _get_langid(self);
-    _prepare_for_transfer();
-    if (!tuh_descriptor_get_product_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
-        mp_raise_usb_core_USBError(NULL);
-    } else if (_wait_for_callback()) {
-        return _get_string(temp_buf);
-    }
-    return mp_const_none;
+    _get_descriptor(self, TUSB_DESC_STRING, descriptor.iProduct, self->first_langid, temp_buf, sizeof(temp_buf));
+    return _get_string(temp_buf);
 }
 
 mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self) {
@@ -316,13 +308,8 @@ mp_obj_t common_hal_usb_core_device_get_manufacturer(usb_core_device_obj_t *self
     }
     // Device does provide this string, so continue
     _get_langid(self);
-    _prepare_for_transfer();
-    if (!tuh_descriptor_get_manufacturer_string(self->device_address, self->first_langid, temp_buf, sizeof(temp_buf), _transfer_done_cb, 0)) {
-        mp_raise_usb_core_USBError(NULL);
-    } else if (_wait_for_callback()) {
-        return _get_string(temp_buf);
-    }
-    return mp_const_none;
+    _get_descriptor(self, TUSB_DESC_STRING, descriptor.iManufacturer, self->first_langid, temp_buf, sizeof(temp_buf));
+    return _get_string(temp_buf);
 }
 
 
@@ -382,17 +369,12 @@ void common_hal_usb_core_device_set_configuration(usb_core_device_obj_t *self, m
 
     // Get only the config descriptor first.
     tusb_desc_configuration_t desc;
-    if (!tuh_descriptor_get_configuration(self->device_address, config_index, &desc, sizeof(desc), _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
-        return;
-    }
+    _get_descriptor(self, TUSB_DESC_CONFIGURATION, config_index, 0, &desc, sizeof(desc));
 
     // Get the config descriptor plus interfaces and endpoints.
     self->configuration_descriptor = m_realloc(self->configuration_descriptor, desc.wTotalLength);
-    if (!tuh_descriptor_get_configuration(self->device_address, config_index, self->configuration_descriptor, desc.wTotalLength, _transfer_done_cb, 0) ||
-        !_wait_for_callback()) {
-        return;
-    }
+    _get_descriptor(self, TUSB_DESC_CONFIGURATION, config_index, 0, self->configuration_descriptor, desc.wTotalLength);
+    _prepare_for_transfer();
     tuh_configuration_set(self->device_address, configuration, _transfer_done_cb, 0);
     _wait_for_callback();
 }
@@ -566,6 +548,9 @@ mp_int_t common_hal_usb_core_device_ctrl_transfer(usb_core_device_obj_t *self,
 
     _prepare_for_transfer();
     if (!tuh_control_xfer(&xfer)) {
+        if (dma_buffer != buffer) {
+            port_free(dma_buffer);
+        }
         mp_raise_usb_core_USBError(NULL);
         return 0;
     }
