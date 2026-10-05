@@ -99,15 +99,6 @@ int iobroker_pad_gpio(uint16_t soc_pad, uint16_t *gpio_pad_out) {
     #endif
 }
 
-int iobroker_package_pin_gpio_pad(package_pin_t pin, uint16_t *gpio_pad_out) {
-    uint16_t soc_pad;
-    int ret = iobroker_package_pin_soc_pad(pin, &soc_pad);
-    if (ret < 0) {
-        return ret;
-    }
-    return iobroker_pad_gpio(soc_pad, gpio_pad_out);
-}
-
 #if !IOBROKER_ROUTING
 
 // SoCs without runtime routing: the bus allocate/release API still exists so

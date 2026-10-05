@@ -512,8 +512,11 @@ int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out) {
     if (ret < 0) {
         return ret;
     }
+    uint16_t soc_pad;
     uint16_t pad;
-    if (pin == IOBROKER_NO_PIN || iobroker_package_pin_gpio_pad(pin, &pad) < 0) {
+    if (pin == IOBROKER_NO_PIN ||
+        iobroker_package_pin_soc_pad(pin, &soc_pad) < 0 ||
+        iobroker_pad_gpio(soc_pad, &pad) < 0) {
         LOG_WRN("pwm allocate: package pin %u is unknown or has no GPIO", (unsigned)pin);
         return -EINVAL;
     }
