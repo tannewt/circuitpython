@@ -83,21 +83,23 @@ static void audioout_stage(picodvi_audioout_obj_t *self) {
 // resume(). Fills every free bank from the stage.
 static void audioout_refill(void *data) {
     picodvi_audioout_obj_t *self = data;
-    if (self->sample == MP_OBJ_NULL || self->paused) {
+    if (self->sample == MP_OBJ_NULL || self->paused || self->refilling) {
         return;
     }
+    self->refilling = true;
     while (true) {
         audioout_stage(self);
         if (self->stage_frames == 0) {
-            return;
+            break;
         }
         size_t used = picodvi_framebuffer_audio_fill(self->framebuffer, self->stage, self->stage_frames);
         if (used == 0) {
-            return;
+            break;
         }
         self->stage_frames -= used;
         memmove(self->stage, &self->stage[used * 2], self->stage_frames * 4);
     }
+    self->refilling = false;
 }
 
 void common_hal_picodvi_audioout_construct(picodvi_audioout_obj_t *self, picodvi_framebuffer_obj_t *framebuffer) {
@@ -156,6 +158,7 @@ void common_hal_picodvi_audioout_play(picodvi_audioout_obj_t *self, mp_obj_t sam
     self->stage_frames = 0;
     self->loop = loop;
     self->paused = false;
+    self->refilling = false;
     self->sample = sample;
     audioout_refill(self);
 }

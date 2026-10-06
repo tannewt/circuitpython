@@ -24,6 +24,9 @@ typedef struct {
     uint8_t bytes_per_frame;
     bool loop;
     bool paused;
+    // Set while a refill runs. A refill started inside it, such as from
+    // background tasks during an SD card read, returns at once.
+    bool refilling;
     // Converted 16-bit stereo frames waiting to be sent.
     size_t stage_frames;
     int16_t stage[PICODVI_AUDIOOUT_STAGE_FRAMES * 2];
