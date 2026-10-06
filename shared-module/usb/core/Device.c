@@ -250,8 +250,9 @@ static mp_obj_t _get_string(const uint16_t *temp_buf) {
 
 static bool _get_descriptor(usb_core_device_obj_t *self, uint8_t type, uint8_t index,
     uint16_t language, void *buffer, size_t len) {
-    // TinyUSB's descriptor helpers pass buffers directly to DMA. Use the same
-    // cache-safe buffer handling and USBError propagation as control transfers.
+    // TinyUSB's descriptor helpers pass buffers directly to DMA. Use our own
+    // control transfer function because it has cache-safe buffer handling and
+    // USBError propagation.
     mp_int_t count = common_hal_usb_core_device_ctrl_transfer(self, 0x80, TUSB_REQ_GET_DESCRIPTOR,
         (type << 8) | index, language, buffer, len, 1000);
     if (mp_hal_is_interrupted()) {
