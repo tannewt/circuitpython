@@ -279,7 +279,11 @@ static void mapped_files_add(DWORD sclust) {
 }
 
 void storage_map_file_check_writable(fs_user_mount_t *vfs, const char *path) {
-    if (MP_STATE_VM(storage_mapped_files) == MP_OBJ_NULL || vfs != filesystem_circuitpy()) {
+    // A bare fs_user_mount_t (e.g. an SD card mount) shares the supervisor_vfs_t
+    // prefix, so the cast is safe. If CIRCUITPY is littlefs, the FAT mount can
+    // never be the CIRCUITPY mount, so no mapped file can match either.
+    if (MP_STATE_VM(storage_mapped_files) == MP_OBJ_NULL ||
+        (supervisor_vfs_t *)vfs != filesystem_circuitpy()) {
         return;
     }
     FIL fp;
@@ -304,8 +308,13 @@ mp_obj_t common_hal_storage_map_file(mp_obj_t file_in) {
     if (fatfs == NULL || (file->fp.flag & FA_WRITE)) {
         mp_raise_OSError(MP_EINVAL);            // closed, or not open for reading only
     }
-    fs_user_mount_t *drive = filesystem_circuitpy();
-    if (drive == NULL || fatfs != &drive->fatfs) {
+    supervisor_vfs_t *fs_mount = filesystem_circuitpy();
+    // A littlefs CIRCUITPY doesn't store files as raw flash bytes to map.
+    if (fs_mount == NULL || fs_mount->common.base.type != &mp_fat_vfs_type) {
+        mp_raise_OSError(MP_EOPNOTSUPP);        // no FAT CIRCUITPY drive: not memory-mapped
+    }
+    fs_user_mount_t *drive = &fs_mount->fat;
+    if (fatfs != &drive->fatfs) {
         mp_raise_OSError(MP_EOPNOTSUPP);        // another mount (an SD card): not memory-mapped
     }
     DWORD *tbl = file->fp.cltbl;
