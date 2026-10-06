@@ -50,12 +50,14 @@ typedef struct dvi_audio_state {
     volatile dvi_audio_refill_t refill;
     void *refill_data;
     // Fixed lines the command lists point at: ACR, audio InfoFrame and AVI
-    // InfoFrame on lines 0-2, ACR on later blanking lines, and silence on a
-    // blanking line [0] and an active line [1].
+    // InfoFrame on lines 0-2, then ACR and silence on a blanking line [0] and
+    // an active line [1].
     dvi_audio_line_t header_line[3];
     uint32_t header_length[3];
-    dvi_audio_line_t acr_line;
-    uint32_t acr_length;
+    dvi_audio_line_t acr_line[2];
+    uint32_t acr_length[2];
+    // One bit per line that carries an ACR packet.
+    uint32_t acr_lines[(MODE_640_V_TOTAL_LINES + 31) / 32];
     dvi_audio_line_t silence_line[2];
     uint32_t silence_length[2];
 } dvi_audio_state_t;
@@ -126,7 +128,19 @@ static void dvi_audio_init_lines(dvi_audio_state_t *audio) {
     hstx_encode_data_island(&island, &packet, true, true);
     audio->header_length[0] = dvi_audio_build_line(audio->header_line[0], &island, true, false);
     hstx_encode_data_island(&island, &packet, false, true);
-    audio->acr_length = dvi_audio_build_line(audio->acr_line, &island, false, false);
+    for (int active = 0; active < 2; active++) {
+        audio->acr_length[active] = dvi_audio_build_line(audio->acr_line[active], &island, false, active);
+    }
+    // Spread ACR packets over the frame at 128 * 48000 / 6144 = 1000 per
+    // second, starting on line 0.
+    uint64_t acr_phase = audio->pixel_clock;
+    for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
+        if (acr_phase >= audio->pixel_clock) {
+            acr_phase -= audio->pixel_clock;
+            audio->acr_lines[line / 32] |= 1u << (line % 32);
+        }
+        acr_phase += (uint64_t)(128 * DVI_AUDIO_RATE / 6144) * DVI_AUDIO_H_TOTAL;
+    }
     hstx_packet_set_audio_infoframe(&packet, DVI_AUDIO_RATE, 2, 16);
     hstx_encode_data_island(&island, &packet, true, true);
     audio->header_length[1] = dvi_audio_build_line(audio->header_line[1], &island, true, false);
@@ -143,19 +157,18 @@ static void dvi_audio_init_lines(dvi_audio_state_t *audio) {
     }
 }
 
-// Header lines and ACR lines never carry sample packets.
-static bool dvi_audio_reserved_line(size_t line) {
-    const size_t active_start = MODE_640_V_SYNC_WIDTH + MODE_640_V_BACK_PORCH;
-    return line < 3 || (line < active_start && line % 4 == 0);
+static bool dvi_audio_acr_line(const dvi_audio_state_t *audio, size_t line) {
+    return (audio->acr_lines[line / 32] >> (line % 32)) & 1;
 }
 
-// Returns true when a sample packet is due on this line.
-static bool dvi_audio_packet_due(uint64_t *phase, uint32_t pixel_clock, size_t line) {
+// Returns true when a sample packet is due on this line. Header lines and
+// ACR lines never carry sample packets.
+static bool dvi_audio_packet_due(const dvi_audio_state_t *audio, uint64_t *phase, size_t line) {
     *phase += (uint64_t)DVI_AUDIO_RATE * DVI_AUDIO_H_TOTAL;
-    if (dvi_audio_reserved_line(line) || *phase < (uint64_t)pixel_clock * 4) {
+    if (line < 3 || dvi_audio_acr_line(audio, line) || *phase < (uint64_t)audio->pixel_clock * 4) {
         return false;
     }
-    *phase -= (uint64_t)pixel_clock * 4;
+    *phase -= (uint64_t)audio->pixel_clock * 4;
     return true;
 }
 
@@ -227,16 +240,16 @@ static void dvi_audio_allocate(picodvi_framebuffer_obj_t *self) {
     for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
         bool active = line >= active_start && line < active_end;
         uint32_t *entry = &audio->base_commands[command_word + entry_offset];
-        if (dvi_audio_packet_due(&phase, audio->pixel_clock, line)) {
+        if (dvi_audio_packet_due(audio, &phase, line)) {
             // Keep the audio link running with silence when no bank is ready.
             entry[0] = audio->silence_length[active];
             entry[1] = (uintptr_t)audio->silence_line[active];
         } else if (line < 3) {
             entry[0] = audio->header_length[line];
             entry[1] = (uintptr_t)audio->header_line[line];
-        } else if (line < active_start && line % 4 == 0) {
-            entry[0] = audio->acr_length;
-            entry[1] = (uintptr_t)audio->acr_line;
+        } else if (dvi_audio_acr_line(audio, line)) {
+            entry[0] = audio->acr_length[active];
+            entry[1] = (uintptr_t)audio->acr_line[active];
         } else if (active) {
             entry[0] = MP_ARRAY_SIZE(dvi_audio_vactive_line640);
             entry[1] = (uintptr_t)dvi_audio_vactive_line640;
@@ -336,7 +349,7 @@ size_t picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, const int
     for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
         bool active = line >= active_start && line < active_end;
         uint32_t *entry = &bank->commands[command_word + entry_offset];
-        if (!dvi_audio_packet_due(&audio->phase, audio->pixel_clock, line)) {
+        if (!dvi_audio_packet_due(audio, &audio->phase, line)) {
             // The base list may have silence here, on a different cadence.
             if (entry[1] == (uintptr_t)audio->silence_line[active]) {
                 if (active) {
