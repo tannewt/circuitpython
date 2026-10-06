@@ -624,13 +624,13 @@ endif
 ifeq ($(CIRCUITPY_PICODVI),1)
 SRC_C += \
 	bindings/picodvi/__init__.c \
+	bindings/picodvi/AudioOut.c \
 	bindings/picodvi/Framebuffer.c \
 	common-hal/picodvi/__init__.c \
 	common-hal/picodvi/Framebuffer_$(CHIP_VARIANT).c \
 
 ifeq ($(CIRCUITPY_PICODVI_AUDIOOUT),1)
 SRC_C += \
-	bindings/picodvi/AudioOut.c \
 	common-hal/picodvi/AudioOut.c \
 
 endif

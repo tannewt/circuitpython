@@ -15,7 +15,8 @@
 
 //| class AudioOut:
 //|     """Plays audio through the DVI cable of a `Framebuffer`, on displays
-//|     that have speakers or an audio output. RP2350 only."""
+//|     that have speakers or an audio output. RP2350 only: elsewhere the
+//|     constructor raises `NotImplementedError`."""
 //|
 //|     def __init__(self, framebuffer: Framebuffer) -> None:
 //|         """Create an AudioOut that sends audio with ``framebuffer``'s video.
@@ -53,6 +54,7 @@
 //|         ...
 //|
 static mp_obj_t picodvi_audioout_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
+    #if CIRCUITPY_PICODVI_AUDIOOUT
     enum { ARG_framebuffer };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_framebuffer, MP_ARG_OBJ | MP_ARG_REQUIRED },
@@ -66,8 +68,12 @@ static mp_obj_t picodvi_audioout_make_new(const mp_obj_type_t *type, size_t n_ar
     picodvi_audioout_obj_t *self = mp_obj_malloc_with_finaliser(picodvi_audioout_obj_t, &picodvi_audioout_type);
     common_hal_picodvi_audioout_construct(self, framebuffer);
     return MP_OBJ_FROM_PTR(self);
+    #else
+    mp_raise_NotImplementedError(NULL);
+    #endif
 }
 
+#if CIRCUITPY_PICODVI_AUDIOOUT
 //|     def deinit(self) -> None:
 //|         """Stops playback and releases the framebuffer for another AudioOut."""
 //|         ...
@@ -193,8 +199,10 @@ static MP_DEFINE_CONST_FUN_OBJ_1(picodvi_audioout_get_paused_obj, picodvi_audioo
 
 MP_PROPERTY_GETTER(picodvi_audioout_paused_obj,
     (mp_obj_t)&picodvi_audioout_get_paused_obj);
+#endif // CIRCUITPY_PICODVI_AUDIOOUT
 
 static const mp_rom_map_elem_t picodvi_audioout_locals_dict_table[] = {
+    #if CIRCUITPY_PICODVI_AUDIOOUT
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&picodvi_audioout_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&picodvi_audioout_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
@@ -206,6 +214,7 @@ static const mp_rom_map_elem_t picodvi_audioout_locals_dict_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_playing), MP_ROM_PTR(&picodvi_audioout_playing_obj) },
     { MP_ROM_QSTR(MP_QSTR_paused), MP_ROM_PTR(&picodvi_audioout_paused_obj) },
+    #endif // CIRCUITPY_PICODVI_AUDIOOUT
 };
 static MP_DEFINE_CONST_DICT(picodvi_audioout_locals_dict, picodvi_audioout_locals_dict_table);
 
