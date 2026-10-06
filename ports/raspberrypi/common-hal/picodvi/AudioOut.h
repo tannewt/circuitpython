@@ -39,10 +39,9 @@ typedef struct {
 uint32_t *picodvi_audioout_next_frame(void);
 // Called by the frame interrupt once the next frame has started.
 void picodvi_audioout_frame_done(void);
-// Called by framebuffer deinit, after DMA stops, to free the audio state.
+// Called by framebuffer deinit, after DMA stops, to free the audio state
+// and deinit its AudioOut.
 void picodvi_audioout_framebuffer_deinit(picodvi_framebuffer_obj_t *framebuffer);
 
-// Called by the framebuffer when it frees its audio state.
-void picodvi_audioout_framebuffer_deinited(void *self);
 // Deinit any AudioOut before the VM heap goes away.
 void picodvi_audioout_reset(void);

@@ -192,6 +192,7 @@ void common_hal_picodvi_framebuffer_construct(picodvi_framebuffer_obj_t *self,
     }
 
     self->dvi_audio = NULL;
+    self->audioout = MP_OBJ_NULL;
     self->dma_command_channel = -1;
     self->dma_pixel_channel = -1;
 

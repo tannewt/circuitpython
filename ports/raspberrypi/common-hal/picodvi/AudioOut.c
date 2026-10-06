@@ -27,7 +27,6 @@
 #define DVI_AUDIO_LINE_WORDS (7 + HSTX_DATA_ISLAND_WORDS + 4 + 9)
 
 typedef uint32_t dvi_audio_line_t[DVI_AUDIO_LINE_WORDS];
-typedef void (*dvi_audio_refill_t)(void *data);
 
 typedef struct {
     uint32_t *commands;
@@ -53,9 +52,6 @@ typedef struct dvi_audio_state {
     uint32_t max_packets;
     uint64_t phase;
     int channel_frame;
-    // Called in the background after every frame to refill banks, or NULL.
-    volatile dvi_audio_refill_t refill;
-    void *refill_data;
     // Fixed lines the command lists point at: ACR, audio InfoFrame and AVI
     // InfoFrame on lines 0-2, then ACR and silence on a blanking line [0] and
     // an active line [1].
@@ -196,14 +192,18 @@ static void dvi_audio_free_state(dvi_audio_state_t *audio) {
 
 // Frees the audio state. The caller makes sure DMA no longer reads it.
 void picodvi_audioout_framebuffer_deinit(picodvi_framebuffer_obj_t *self) {
+    // An AudioOut lives as long as its framebuffer.
+    if (self->audioout != MP_OBJ_NULL) {
+        picodvi_audioout_obj_t *audioout = MP_OBJ_TO_PTR(self->audioout);
+        audioout->sample = MP_OBJ_NULL;
+        audioout->framebuffer = NULL;
+        self->audioout = MP_OBJ_NULL;
+    }
     dvi_audio_state_t *audio = self->dvi_audio;
     if (!audio) {
         return;
     }
     self->dvi_audio = NULL;
-    if (audio->refill) {
-        picodvi_audioout_framebuffer_deinited(audio->refill_data);
-    }
     dvi_audio_free_state(audio);
 }
 
@@ -267,24 +267,22 @@ static void dvi_audio_allocate(picodvi_framebuffer_obj_t *self) {
     self->dvi_audio = audio;
 }
 
-// Looks the refill up again when it runs, so a refill cleared after the
+static void audioout_refill(picodvi_audioout_obj_t *self);
+
+// Looks the AudioOut up again when it runs, so one deinitialized after the
 // callback was queued is skipped. A deinitialized framebuffer's storage may
 // already hold another display, so only the active framebuffer is touched.
 static void dvi_audio_run_refill(void *data) {
     picodvi_framebuffer_obj_t *self = data;
-    if (self != active_picodvi) {
+    if (self != active_picodvi || self->audioout == MP_OBJ_NULL) {
         return;
     }
-    dvi_audio_state_t *audio = self->dvi_audio;
-    if (audio && audio->refill) {
-        audio->refill(audio->refill_data);
-    }
+    audioout_refill(MP_OBJ_TO_PTR(self->audioout));
 }
 
 // Called from the frame interrupt after the next frame has started.
 void __not_in_flash_func(picodvi_audioout_frame_done)(void) {
-    dvi_audio_state_t *audio = active_picodvi->dvi_audio;
-    if (audio && audio->refill) {
+    if (active_picodvi->dvi_audio && active_picodvi->audioout != MP_OBJ_NULL) {
         background_callback_add(&dvi_audio_refill_callback, dvi_audio_run_refill, active_picodvi);
     }
 }
@@ -411,13 +409,12 @@ static void picodvi_framebuffer_audio_reserve(picodvi_framebuffer_obj_t *self) {
 }
 
 // Stops audio and frees the audio state, waiting up to two frames for DMA to
-// stop reading it. Does not call the refill or its deinited callback.
+// stop reading it.
 static void picodvi_framebuffer_audio_release(picodvi_framebuffer_obj_t *self) {
     dvi_audio_state_t *audio = self->dvi_audio;
     if (!audio) {
         return;
     }
-    audio->refill = NULL;
     audio->detach = true;
     // Wait for the frame interrupt to move DMA back to the video commands.
     // Without frame interrupts, DMA stops at the end of the current frame.
@@ -428,22 +425,6 @@ static void picodvi_framebuffer_audio_release(picodvi_framebuffer_obj_t *self) {
     self->dvi_audio = NULL;
     restore_interrupts(irq_state);
     dvi_audio_free_state(audio);
-}
-
-// Asks for fun(data) to run in the background after every frame. Returns
-// false, changing nothing, if audio is not reserved or a refill is already
-// set. If the framebuffer is deinitialized first,
-// picodvi_audioout_framebuffer_deinited(data) is called.
-static bool picodvi_framebuffer_audio_set_refill(picodvi_framebuffer_obj_t *self, void (*fun)(void *data), void *data) {
-    dvi_audio_state_t *audio = self->dvi_audio;
-    if (!audio || audio->refill) {
-        return false;
-    }
-    uint32_t irq_state = save_and_disable_interrupts();
-    audio->refill_data = data;
-    audio->refill = fun;
-    restore_interrupts(irq_state);
-    return true;
 }
 
 // Returns the number of sample frames queued or playing, 0 if not reserved.
@@ -555,8 +536,7 @@ static void audioout_stage(picodvi_audioout_obj_t *self) {
 
 // Runs in the background after every frame, and once from play() and
 // resume(). Fills every free bank from the stage.
-static void audioout_refill(void *data) {
-    picodvi_audioout_obj_t *self = data;
+static void audioout_refill(picodvi_audioout_obj_t *self) {
     if (self->sample == MP_OBJ_NULL || self->paused || self->refilling) {
         return;
     }
@@ -577,28 +557,19 @@ static void audioout_refill(void *data) {
 }
 
 void common_hal_picodvi_audioout_construct(picodvi_audioout_obj_t *self, picodvi_framebuffer_obj_t *framebuffer) {
-    picodvi_framebuffer_audio_reserve(framebuffer);
-    if (!picodvi_framebuffer_audio_set_refill(framebuffer, audioout_refill, self)) {
+    if (framebuffer->audioout != MP_OBJ_NULL) {
         mp_raise_RuntimeError_varg(MP_ERROR_TEXT("%q in use"), MP_QSTR_framebuffer);
     }
+    picodvi_framebuffer_audio_reserve(framebuffer);
     self->framebuffer = framebuffer;
     self->sample = MP_OBJ_NULL;
-    // Keep this object alive while it is attached, as the frame interrupt
-    // schedules refills for it.
-    MP_STATE_PORT(picodvi_audioout) = MP_OBJ_FROM_PTR(self);
-}
-
-void picodvi_audioout_framebuffer_deinited(void *data) {
-    picodvi_audioout_obj_t *self = data;
-    self->sample = MP_OBJ_NULL;
-    self->framebuffer = NULL;
-    MP_STATE_PORT(picodvi_audioout) = MP_OBJ_NULL;
+    // The framebuffer keeps this object alive and schedules its refills.
+    framebuffer->audioout = MP_OBJ_FROM_PTR(self);
 }
 
 void picodvi_audioout_reset(void) {
-    mp_obj_t audioout = MP_STATE_PORT(picodvi_audioout);
-    if (audioout != MP_OBJ_NULL) {
-        common_hal_picodvi_audioout_deinit(MP_OBJ_TO_PTR(audioout));
+    if (active_picodvi != NULL && active_picodvi->audioout != MP_OBJ_NULL) {
+        common_hal_picodvi_audioout_deinit(MP_OBJ_TO_PTR(active_picodvi->audioout));
     }
 }
 
@@ -611,9 +582,9 @@ void common_hal_picodvi_audioout_deinit(picodvi_audioout_obj_t *self) {
         return;
     }
     common_hal_picodvi_audioout_stop(self);
+    self->framebuffer->audioout = MP_OBJ_NULL;
     picodvi_framebuffer_audio_release(self->framebuffer);
     self->framebuffer = NULL;
-    MP_STATE_PORT(picodvi_audioout) = MP_OBJ_NULL;
 }
 
 void common_hal_picodvi_audioout_play(picodvi_audioout_obj_t *self, mp_obj_t sample, bool loop) {
@@ -664,5 +635,3 @@ void common_hal_picodvi_audioout_resume(picodvi_audioout_obj_t *self) {
 bool common_hal_picodvi_audioout_get_paused(picodvi_audioout_obj_t *self) {
     return self->paused;
 }
-
-MP_REGISTER_ROOT_POINTER(mp_obj_t picodvi_audioout);

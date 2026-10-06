@@ -85,6 +85,9 @@ struct dvi_audio_state;
 typedef struct {
     mp_obj_base_t base;
     struct dvi_audio_state *dvi_audio;
+    // The picodvi.AudioOut using this framebuffer, or MP_OBJ_NULL. It lives
+    // as long as the framebuffer.
+    mp_obj_t audioout;
     uint32_t *framebuffer;
     size_t framebuffer_len; // in words
     uint32_t *dma_commands;
