@@ -34,10 +34,6 @@ static inline bool usb_host_bulk_endpoint_busy(uint8_t device_address, uint8_t e
     return false;
 }
 
-static inline void usb_host_bulk_device_gone(uint8_t device_address) {
-    (void)device_address;
-}
-
 static inline void usb_host_bulk_device_deinit(usb_core_device_obj_t *device) {
     (void)device;
 }
@@ -53,7 +49,7 @@ void tuh_mount_cb(uint8_t dev_addr) {
 
 void tuh_umount_cb(uint8_t dev_addr) {
     _mounted_devices &= ~(1 << dev_addr);
-    usb_host_bulk_device_gone(dev_addr);
+    usb_host_bulk_stop_device(dev_addr);
 }
 
 static xfer_result_t _xfer_result;

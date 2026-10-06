@@ -151,18 +151,18 @@ static void check_for_deinit(usb_host_bulk_instream_obj_t *self) {
 //|     def readinto(self, buf: WriteableBuffer, nbytes: Optional[int] = None) -> Optional[int]:
 //|         """Copy waiting bytes into ``buf``, at most ``nbytes`` of them if given.
 //|
-//|         Capture ends when the stream is deinited, which also happens on its own when
-//|         the device stalls the endpoint, is unplugged, or is reconfigured. Bytes captured
-//|         before that can still be read.
+//|         Capture ends when the stream is deinited, which drops any bytes not yet read.
+//|         It also ends on its own when the device stalls the endpoint, is unplugged, or is
+//|         reconfigured. Bytes captured before that can still be read.
 //|
 //|         :return: the number of bytes copied, ``None`` if nothing is waiting yet, or 0
-//|           once capture has ended and every captured byte has been read
+//|           once capture has ended and nothing is left to read
 //|         :rtype: int or None"""
 //|         ...
 //|
 //|     def read(self, nbytes: Optional[int] = None) -> Optional[bytes]:
 //|         """Same as `readinto`, but allocates and returns ``bytes``: ``None`` if nothing
-//|         is waiting yet, ``b""`` once capture has ended and every byte has been read."""
+//|         is waiting yet, ``b""`` once capture has ended and nothing is left to read."""
 //|         ...
 //|
 
@@ -183,7 +183,7 @@ static mp_uint_t usb_host_bulk_instream_read_stream(mp_obj_t self_in, void *buf,
 static mp_uint_t usb_host_bulk_instream_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (request == MP_STREAM_CLOSE) {
-        common_hal_usb_host_bulk_instream_deinit(self, false);
+        common_hal_usb_host_bulk_instream_deinit(self);
         return 0;
     }
     if (request == MP_STREAM_POLL) {
@@ -205,7 +205,8 @@ static mp_uint_t usb_host_bulk_instream_ioctl(mp_obj_t self_in, mp_uint_t reques
 }
 
 //|     in_waiting: int
-//|     """Bytes waiting to be read, including those left after `deinit`. (read-only)"""
+//|     """Bytes waiting to be read, including those left when capture ended on its own.
+//|     (read-only)"""
 //|
 static mp_obj_t usb_host_bulk_instream_obj_get_in_waiting(mp_obj_t self_in) {
     usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -244,26 +245,15 @@ static mp_obj_t usb_host_bulk_instream_obj_reset_input_buffer(mp_obj_t self_in) 
 static MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_reset_input_buffer_obj, usb_host_bulk_instream_obj_reset_input_buffer);
 
 //|     def deinit(self) -> None:
-//|         """Stop capture and free the ring. Bytes already captured can still be read:
-//|         they move to a buffer that is freed once they have all been read. Raises
-//|         `usb.core.USBTimeoutError` if the host does not let go of the ring in time;
-//|         call it again to retry."""
+//|         """Stop capture and free the ring, dropping any bytes not yet read."""
 //|         ...
 //|
 static mp_obj_t usb_host_bulk_instream_obj_deinit(mp_obj_t self_in) {
     usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    common_hal_usb_host_bulk_instream_deinit(self, false);
+    common_hal_usb_host_bulk_instream_deinit(self);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream_deinit_obj, usb_host_bulk_instream_obj_deinit);
-
-// A finaliser cannot raise, so it never waits for a retry.
-static mp_obj_t usb_host_bulk_instream_obj___del__(mp_obj_t self_in) {
-    usb_host_bulk_instream_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    common_hal_usb_host_bulk_instream_deinit(self, true);
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream___del___obj, usb_host_bulk_instream_obj___del__);
 
 //|     def __enter__(self) -> InStream:
 //|         """No-op used by Context Managers."""
@@ -280,7 +270,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(usb_host_bulk_instream___del___obj, usb_host_bu
 //  Provided by context manager helper.
 
 static const mp_rom_map_elem_t usb_host_bulk_instream_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&usb_host_bulk_instream___del___obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&usb_host_bulk_instream_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&usb_host_bulk_instream_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&default___enter___obj) },
     { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&default___exit___obj) },

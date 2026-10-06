@@ -17,7 +17,7 @@ typedef struct {
     mp_obj_t device;                 // keeps the usb.core.Device alive; NULL once deinited
     pio_usb_bulk_ring_t *ring;       // port heap; NULL once freed
     uint8_t *storage;
-    uint8_t *leftover;               // VM heap: bytes unread at deinit; NULL once read
+    uint8_t *leftover;               // VM heap: bytes unread when the host ended the stream
     uint32_t leftover_len;
     uint32_t leftover_pos;
     uint32_t lost_packets;           // latched when the ring is freed
