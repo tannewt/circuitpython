@@ -248,9 +248,13 @@ static void dvi_audio_allocate(picodvi_framebuffer_obj_t *self) {
 }
 
 // Looks the refill up again when it runs, so a refill cleared after the
-// callback was queued is skipped.
+// callback was queued is skipped. A deinitialized framebuffer's storage may
+// already hold another display, so only the active framebuffer is touched.
 static void dvi_audio_run_refill(void *data) {
     picodvi_framebuffer_obj_t *self = data;
+    if (self != active_picodvi) {
+        return;
+    }
     dvi_audio_state_t *audio = self->dvi_audio;
     if (audio && audio->refill) {
         audio->refill(audio->refill_data);
