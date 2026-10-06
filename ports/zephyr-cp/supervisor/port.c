@@ -13,6 +13,9 @@
 #if CIRCUITPY_AUDIOBUSIO_I2SOUT
 #include "common-hal/audiobusio/I2SOut.h"
 #endif
+#if CIRCUITPY_NEOPIXEL_WRITE
+#include "common-hal/neopixel_write/__init__.h"
+#endif
 
 #if CIRCUITPY_RTC
 #include "shared-bindings/rtc/__init__.h"
@@ -263,6 +266,9 @@ void reset_cpu(void) {
 void reset_port(void) {
     #if CIRCUITPY_AUDIOBUSIO_I2SOUT
     i2sout_reset();
+    #endif
+    #if CIRCUITPY_NEOPIXEL_WRITE
+    neopixel_write_reset();
     #endif
 
     #if CIRCUITPY_RTC
