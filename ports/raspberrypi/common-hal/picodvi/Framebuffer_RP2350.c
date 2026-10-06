@@ -42,58 +42,6 @@
 #include "hardware/structs/hstx_fifo.h"
 
 // ----------------------------------------------------------------------------
-// DVI constants
-
-#define TMDS_CTRL_00 0x354u
-#define TMDS_CTRL_01 0x0abu
-#define TMDS_CTRL_10 0x154u
-#define TMDS_CTRL_11 0x2abu
-
-#define SYNC_V0_H0 (TMDS_CTRL_00 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
-#define SYNC_V0_H1 (TMDS_CTRL_01 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
-#define SYNC_V1_H0 (TMDS_CTRL_10 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
-#define SYNC_V1_H1 (TMDS_CTRL_11 | (TMDS_CTRL_00 << 10) | (TMDS_CTRL_00 << 20))
-
-#define MODE_720_H_SYNC_POLARITY 0
-#define MODE_720_H_FRONT_PORCH   8
-#define MODE_720_H_SYNC_WIDTH    32
-#define MODE_720_H_BACK_PORCH    40
-#define MODE_720_H_ACTIVE_PIXELS 720
-
-#define MODE_720_V_SYNC_POLARITY 0
-#define MODE_720_V_FRONT_PORCH   3
-#define MODE_720_V_SYNC_WIDTH    4
-#define MODE_720_V_BACK_PORCH    218
-#define MODE_720_V_ACTIVE_LINES  400
-
-#define MODE_640_H_SYNC_POLARITY 0
-#define MODE_640_H_FRONT_PORCH   16
-#define MODE_640_H_SYNC_WIDTH    96
-#define MODE_640_H_BACK_PORCH    48
-#define MODE_640_H_ACTIVE_PIXELS 640
-
-#define MODE_640_V_SYNC_POLARITY 0
-#define MODE_640_V_FRONT_PORCH   10
-#define MODE_640_V_SYNC_WIDTH    2
-#define MODE_640_V_BACK_PORCH    133
-#define MODE_640_V_ACTIVE_LINES  480
-
-#define MODE_720_V_TOTAL_LINES  ( \
-    MODE_720_V_FRONT_PORCH + MODE_720_V_SYNC_WIDTH + \
-    MODE_720_V_BACK_PORCH + MODE_720_V_ACTIVE_LINES \
-    )
-#define MODE_640_V_TOTAL_LINES  ( \
-    MODE_640_V_FRONT_PORCH + MODE_640_V_SYNC_WIDTH + \
-    MODE_640_V_BACK_PORCH + MODE_640_V_ACTIVE_LINES \
-    )
-
-#define HSTX_CMD_RAW         (0x0u << 12)
-#define HSTX_CMD_RAW_REPEAT  (0x1u << 12)
-#define HSTX_CMD_TMDS        (0x2u << 12)
-#define HSTX_CMD_TMDS_REPEAT (0x3u << 12)
-#define HSTX_CMD_NOP         (0xfu << 12)
-
-// ----------------------------------------------------------------------------
 // HSTX command lists
 
 #define VSYNC_LEN 6
@@ -162,14 +110,14 @@ static uint32_t vactive_line720[VACTIVE_LEN] = {
 picodvi_framebuffer_obj_t *active_picodvi = NULL;
 
 #if CIRCUITPY_PICODVI_AUDIOOUT
-#include "common-hal/picodvi/dvi_audio.c.inc"
+#include "common-hal/picodvi/AudioOut.h"
 #else
-static inline uint32_t *dvi_audio_next_frame(void) {
+static inline uint32_t *picodvi_audioout_next_frame(void) {
     return active_picodvi->dma_commands;
 }
-static inline void dvi_audio_frame_done(void) {
+static inline void picodvi_audioout_frame_done(void) {
 }
-static inline void dvi_audio_free(picodvi_framebuffer_obj_t *self) {
+static inline void picodvi_audioout_framebuffer_deinit(picodvi_framebuffer_obj_t *self) {
 }
 #endif
 
@@ -188,9 +136,9 @@ static void __not_in_flash_func(dma_irq_handler)(void) {
     // Set the read_addr back to the start and trigger the first transfer (which
     // will trigger the pixel channel).
     dma_channel_hw_t *ch = &dma_hw->ch[active_picodvi->dma_command_channel];
-    ch->al3_read_addr_trig = (uintptr_t)dvi_audio_next_frame();
+    ch->al3_read_addr_trig = (uintptr_t)picodvi_audioout_next_frame();
     framebuffer_frame_count++;    // frame boundary: scanout has wrapped back to the top
-    dvi_audio_frame_done();
+    picodvi_audioout_frame_done();
 }
 
 bool common_hal_picodvi_framebuffer_preflight(
@@ -638,7 +586,7 @@ void common_hal_picodvi_framebuffer_deinit(picodvi_framebuffer_obj_t *self) {
     self->dma_pixel_channel = -1;
     self->dma_command_channel = -1;
 
-    dvi_audio_free(self);
+    picodvi_audioout_framebuffer_deinit(self);
 
     port_free(self->framebuffer);
     self->framebuffer = NULL;

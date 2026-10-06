@@ -34,6 +34,14 @@ typedef struct {
     int16_t stage[PICODVI_AUDIOOUT_STAGE_FRAMES * 2];
 } picodvi_audioout_obj_t;
 
+// Called by the frame interrupt at a frame boundary. Returns the command
+// list for the next frame.
+uint32_t *picodvi_audioout_next_frame(void);
+// Called by the frame interrupt once the next frame has started.
+void picodvi_audioout_frame_done(void);
+// Called by framebuffer deinit, after DMA stops, to free the audio state.
+void picodvi_audioout_framebuffer_deinit(picodvi_framebuffer_obj_t *framebuffer);
+
 // Called by the framebuffer when it frees its audio state.
 void picodvi_audioout_framebuffer_deinited(void *self);
 // Deinit any AudioOut before the VM heap goes away.

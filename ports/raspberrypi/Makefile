@@ -632,6 +632,7 @@ SRC_C += \
 ifeq ($(CIRCUITPY_PICODVI_AUDIOOUT),1)
 SRC_C += \
 	common-hal/picodvi/AudioOut.c \
+	common-hal/picodvi/dvi_audio_packet.c \
 
 endif
 
