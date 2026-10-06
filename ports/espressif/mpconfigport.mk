@@ -229,7 +229,7 @@ CIRCUITPY_PARALLELDISPLAYBUS = 0
 # No SDMMC
 CIRCUITPY_SDIOIO = 0
 
-# Smaller ulab so the 2MB firmware partition fits all translations
+# Fit the 2MB firmware partition
 CIRCUITPY_ULAB_OPTIMIZE_SIZE ?= 1
 
 # Features

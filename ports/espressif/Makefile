@@ -952,7 +952,7 @@ else
 ESP_IDF_COMPONENTS_LINK += esp_hal_regi2c
 endif
 ifneq ($(CIRCUITPY_WIFI),0)
-	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mbedtls mdns wpa_supplicant esp_phy
+	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
 endif
 ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32 := esp32
@@ -980,7 +980,7 @@ ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 
 	ifeq ($(BLE_IMPL),libble)
 	BINARY_BLOBS += esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libbtbb.a
-	# Same lookup as ESP-IDF's bt/controller/CMakeLists.txt: shared lib first, else the per-chip one.
+	# Shared lib first, else the per-chip one.
 	BLE_LIB_DIR = esp-idf/components/bt/controller/lib_$(BT_IDF_TARGET)/$(BT_IDF_TARGET)-bt-lib
 	BINARY_BLOBS += $(firstword $(wildcard $(BLE_LIB_DIR)/libble_app.a) $(BLE_LIB_DIR)/$(IDF_TARGET)/libble_app.a)
 	endif
