@@ -51,6 +51,8 @@ typedef struct dvi_audio_state {
     uint32_t pixel_clock;
     uint32_t max_packets;
     uint64_t phase;
+    // ACR timing, carried from frame to frame so the average is exact.
+    uint64_t acr_phase;
     int channel_frame;
     // Fixed lines the command lists point at: ACR, audio InfoFrame and AVI
     // InfoFrame on lines 0-2, then ACR and silence on a blanking line [0] and
@@ -59,7 +61,7 @@ typedef struct dvi_audio_state {
     uint32_t header_length[3];
     dvi_audio_line_t acr_line[2];
     uint32_t acr_length[2];
-    // One bit per line that carries an ACR packet.
+    // One bit per line that carries an ACR packet in the base list.
     uint32_t acr_lines[(MODE_640_V_TOTAL_LINES + 31) / 32];
     dvi_audio_line_t silence_line[2];
     uint32_t silence_length[2];
@@ -123,6 +125,17 @@ static uint32_t dvi_audio_build_line(uint32_t *p, const hstx_data_island_t *isla
     return p - start;
 }
 
+// Returns true when an ACR packet is due on this line. ACR packets go out at
+// 128 * 48000 / 6144 = 1000 per second, spread over every line.
+static bool dvi_audio_acr_due(uint64_t *phase, uint32_t pixel_clock) {
+    bool due = *phase >= pixel_clock;
+    if (due) {
+        *phase -= pixel_clock;
+    }
+    *phase += (uint64_t)(128 * DVI_AUDIO_RATE / 6144) * DVI_AUDIO_H_TOTAL;
+    return due;
+}
+
 static void dvi_audio_init_lines(dvi_audio_state_t *audio) {
     hstx_packet_t packet;
     hstx_data_island_t island;
@@ -134,16 +147,15 @@ static void dvi_audio_init_lines(dvi_audio_state_t *audio) {
     for (int active = 0; active < 2; active++) {
         audio->acr_length[active] = dvi_audio_build_line(audio->acr_line[active], &island, false, active);
     }
-    // Spread ACR packets over the frame at 128 * 48000 / 6144 = 1000 per
-    // second, starting on line 0.
+    // The base list, shown only when no bank is ready, has a fixed ACR
+    // pattern that starts on line 0.
     uint64_t acr_phase = audio->pixel_clock;
     for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
-        if (acr_phase >= audio->pixel_clock) {
-            acr_phase -= audio->pixel_clock;
+        if (dvi_audio_acr_due(&acr_phase, audio->pixel_clock)) {
             audio->acr_lines[line / 32] |= 1u << (line % 32);
         }
-        acr_phase += (uint64_t)(128 * DVI_AUDIO_RATE / 6144) * DVI_AUDIO_H_TOTAL;
     }
+    audio->acr_phase = audio->pixel_clock;
     hstx_packet_set_audio_infoframe(&packet, DVI_AUDIO_RATE, 2, 16);
     hstx_encode_data_island(&island, &packet, true, true);
     audio->header_length[1] = dvi_audio_build_line(audio->header_line[1], &island, true, false);
@@ -164,14 +176,14 @@ static bool dvi_audio_acr_line(const dvi_audio_state_t *audio, size_t line) {
     return (audio->acr_lines[line / 32] >> (line % 32)) & 1;
 }
 
-// Returns true when a sample packet is due on this line. Header lines and
-// ACR lines never carry sample packets.
-static bool dvi_audio_packet_due(const dvi_audio_state_t *audio, uint64_t *phase, size_t line) {
+// Returns true when a sample packet is due on this line. Reserved lines,
+// headers and ACR, never carry sample packets.
+static bool dvi_audio_packet_due(uint64_t *phase, uint32_t pixel_clock, bool reserved) {
     *phase += (uint64_t)DVI_AUDIO_RATE * DVI_AUDIO_H_TOTAL;
-    if (line < 3 || dvi_audio_acr_line(audio, line) || *phase < (uint64_t)audio->pixel_clock * 4) {
+    if (reserved || *phase < (uint64_t)pixel_clock * 4) {
         return false;
     }
-    *phase -= (uint64_t)audio->pixel_clock * 4;
+    *phase -= (uint64_t)pixel_clock * 4;
     return true;
 }
 
@@ -247,7 +259,7 @@ static void dvi_audio_allocate(picodvi_framebuffer_obj_t *self) {
     for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
         bool active = line >= active_start && line < active_end;
         uint32_t *entry = &audio->base_commands[command_word + entry_offset];
-        if (dvi_audio_packet_due(audio, &phase, line)) {
+        if (dvi_audio_packet_due(&phase, audio->pixel_clock, line < 3 || dvi_audio_acr_line(audio, line))) {
             // Keep the audio link running with silence when no bank is ready.
             entry[0] = audio->silence_length[active];
             entry[1] = (uintptr_t)audio->silence_line[active];
@@ -322,12 +334,13 @@ uint32_t *__not_in_flash_func(picodvi_audioout_next_frame)(void) {
 }
 
 // Encodes up to one frame of 16-bit stereo samples, interleaved left, right,
-// into a free bank. Returns the number of sample frames used, or 0 if audio
-// is not reserved or no bank is free. Never allocates or raises.
-static size_t picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, const int16_t *samples, size_t available) {
+// into a free bank, with silence after them. Sets *used to the sample frames
+// taken. Returns false, changing nothing, if audio is not reserved or no bank
+// is free. Never allocates or raises.
+static bool picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, const int16_t *samples, size_t available, size_t *used) {
     dvi_audio_state_t *audio = self->dvi_audio;
-    if (!audio || !available) {
-        return 0;
+    if (!audio) {
+        return false;
     }
     int bank_index = -1;
     // Read active + ready atomically: an IRQ can promote a ready bank to active
@@ -342,7 +355,7 @@ static size_t picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, co
     }
     restore_interrupts(irq_state);
     if (bank_index < 0) {
-        return 0;
+        return false;
     }
     dvi_audio_bank_t *bank = &audio->bank[bank_index];
     memcpy(bank->commands, audio->base_commands, self->dma_commands_len * sizeof(uint32_t));
@@ -357,17 +370,24 @@ static size_t picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, co
     for (size_t line = 0; line < MODE_640_V_TOTAL_LINES; line++) {
         bool active = line >= active_start && line < active_end;
         uint32_t *entry = &bank->commands[command_word + entry_offset];
-        if (!dvi_audio_packet_due(audio, &audio->phase, line)) {
-            // The base list may have silence here, on a different cadence.
-            if (entry[1] == (uintptr_t)audio->silence_line[active]) {
-                if (active) {
-                    entry[0] = MP_ARRAY_SIZE(dvi_audio_vactive_line640);
-                    entry[1] = (uintptr_t)dvi_audio_vactive_line640;
-                } else {
-                    const uint32_t *plain = &self->dma_commands[command_word + entry_offset];
-                    entry[0] = plain[0];
-                    entry[1] = plain[1];
-                }
+        bool acr = dvi_audio_acr_due(&audio->acr_phase, audio->pixel_clock);
+        bool due = dvi_audio_packet_due(&audio->phase, audio->pixel_clock, line < 3 || acr);
+        if (line == 0 && acr) {
+            entry[0] = audio->header_length[0];
+            entry[1] = (uintptr_t)audio->header_line[0];
+        } else if (line == 1 || line == 2) {
+            // InfoFrames, as in the base list.
+        } else if (acr) {
+            entry[0] = audio->acr_length[active];
+            entry[1] = (uintptr_t)audio->acr_line[active];
+        } else if (!due) {
+            if (active) {
+                entry[0] = MP_ARRAY_SIZE(dvi_audio_vactive_line640);
+                entry[1] = (uintptr_t)dvi_audio_vactive_line640;
+            } else {
+                const uint32_t *plain = &self->dma_commands[command_word + entry_offset];
+                entry[0] = plain[0];
+                entry[1] = plain[1];
             }
         } else if (samples_read >= available || packets >= audio->max_packets) {
             entry[0] = audio->silence_length[active];
@@ -395,7 +415,8 @@ static size_t picodvi_framebuffer_audio_fill(picodvi_framebuffer_obj_t *self, co
     bank->order = audio->next_order++;
     __dmb();
     bank->ready = true;
-    return samples_read;
+    *used = samples_read;
+    return true;
 }
 
 // Allocates the audio state and starts sending audio signaling and silence.
@@ -535,19 +556,25 @@ static void audioout_stage(picodvi_audioout_obj_t *self) {
 }
 
 // Runs in the background after every frame, and once from play() and
-// resume(). Fills every free bank from the stage.
+// resume(). Fills every free bank from the stage, or with silence when
+// nothing is playing, so the ACR timing carries on between frames.
 static void audioout_refill(picodvi_audioout_obj_t *self) {
-    if (self->sample == MP_OBJ_NULL || self->paused || self->refilling) {
+    if (self->refilling) {
         return;
     }
     self->refilling = true;
     while (true) {
-        audioout_stage(self);
-        if (self->stage_frames == 0) {
-            break;
+        size_t available = 0;
+        if (self->sample != MP_OBJ_NULL && !self->paused) {
+            audioout_stage(self);
+            available = self->stage_frames;
+            // Wait for more of a sample that is still playing.
+            if (available == 0 && !self->source_done) {
+                break;
+            }
         }
-        size_t used = picodvi_framebuffer_audio_fill(self->framebuffer, self->stage, self->stage_frames);
-        if (used == 0) {
+        size_t used;
+        if (!picodvi_framebuffer_audio_fill(self->framebuffer, self->stage, available, &used)) {
             break;
         }
         self->stage_frames -= used;
