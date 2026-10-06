@@ -21,6 +21,8 @@ typedef struct {
     size_t source_frames;
     bool source_last;
     bool source_done;
+    // True until the current pass through the sample gives a frame.
+    bool pass_empty;
     uint8_t bytes_per_frame;
     bool loop;
     bool paused;

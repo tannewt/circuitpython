@@ -57,11 +57,13 @@ static void audioout_stage(picodvi_audioout_obj_t *self) {
     while (!self->source_done && self->stage_frames < PICODVI_AUDIOOUT_STAGE_FRAMES) {
         if (self->source_frames == 0) {
             if (self->source_last) {
-                if (!self->loop) {
+                // Also stop a looping sample with no frames at all.
+                if (!self->loop || self->pass_empty) {
                     self->source_done = true;
                     return;
                 }
                 audiosample_reset_buffer(self->sample, false, 0);
+                self->pass_empty = true;
             }
             uint8_t *buffer;
             uint32_t length;
@@ -72,6 +74,9 @@ static void audioout_stage(picodvi_audioout_obj_t *self) {
             }
             self->source = buffer;
             self->source_frames = length / self->bytes_per_frame;
+            if (self->source_frames > 0) {
+                self->pass_empty = false;
+            }
             self->source_last = result == GET_BUFFER_DONE;
             continue;
         }
@@ -155,6 +160,7 @@ void common_hal_picodvi_audioout_play(picodvi_audioout_obj_t *self, mp_obj_t sam
     self->source_frames = 0;
     self->source_last = false;
     self->source_done = false;
+    self->pass_empty = true;
     self->stage_frames = 0;
     self->loop = loop;
     self->paused = false;
