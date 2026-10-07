@@ -38,14 +38,14 @@ int iobroker_gpio_split(uint16_t number, const struct device **port_out,
 
 int iobroker_gpio_package_pin(uint8_t port, gpio_pin_t pin,
     package_pin_t *package_pin_out) {
-    uint16_t soc_pad = (uint16_t)((uint32_t)port * 32U + pin);
+    uint16_t gpio_pad = (uint16_t)((uint32_t)port * 32U + pin);
     #if defined(CONFIG_IOBROKER_PACKAGE_ONE_TO_ONE)
     // Identity map: the package pin is the global pin number.
-    *package_pin_out = soc_pad;
+    *package_pin_out = gpio_pad;
     return 0;
     #else
     for (size_t i = 0; i < iobroker_package_pin_count; i++) {
-        if (iobroker_package_pins[i].soc_pad == soc_pad) {
+        if (iobroker_package_pins[i].gpio_pad == gpio_pad) {
             *package_pin_out = iobroker_package_pins[i].package_pin;
             return 0;
         }
@@ -67,6 +67,31 @@ int iobroker_package_pin_soc_pad(package_pin_t pin, uint16_t *soc_pad_out) {
     for (size_t i = 0; i < iobroker_package_pin_count; i++) {
         if (iobroker_package_pins[i].package_pin == pin) {
             *soc_pad_out = iobroker_package_pins[i].soc_pad;
+            return 0;
+        }
+    }
+    return -EINVAL;
+    #endif
+}
+
+int iobroker_pad_gpio(uint16_t soc_pad, uint16_t *gpio_pad_out) {
+    if (soc_pad == IOBROKER_NO_PIN) {
+        *gpio_pad_out = IOBROKER_NO_PIN;
+        return 0;
+    }
+    #if defined(CONFIG_IOBROKER_PACKAGE_ONE_TO_ONE)
+    // Identity map: the package pin is the global pin number, so every pad
+    // sits on its GPIO controller.
+    *gpio_pad_out = soc_pad;
+    return 0;
+    #else
+    for (size_t i = 0; i < iobroker_package_pin_count; i++) {
+        if (iobroker_package_pins[i].soc_pad == soc_pad) {
+            if (iobroker_package_pins[i].gpio_pad == IOBROKER_PAD_NO_GPIO) {
+                // Analog-only pad: no GPIO controller bond.
+                return -EINVAL;
+            }
+            *gpio_pad_out = iobroker_package_pins[i].gpio_pad;
             return 0;
         }
     }
@@ -106,6 +131,12 @@ int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     return -ENOSYS;
 }
 
+int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out) {
+    (void)pin;
+    (void)dev_out;
+    return -ENOSYS;
+}
+
 bool iobroker_release(const struct device *dev) {
     (void)dev;
     LOG_DBG("release: no routing support on this SoC, nothing to release");
@@ -113,6 +144,54 @@ bool iobroker_release(const struct device *dev) {
 }
 
 #endif // !IOBROKER_ROUTING
+
+#if !IOBROKER_ADC
+
+// SoCs without an ADC implementation: the ADC allocate/release API still
+// exists so analogio can call it, but every call reports -ENOSYS. The
+// implementations live in src/<vendor>/<soc>/ (nRF SAADC) and in src/emul/
+// (the emulated ADC).
+int iobroker_adc_allocate(package_pin_t pin, const struct device **dev_out,
+    uint8_t *channel_out, uint8_t *input_out) {
+    (void)pin;
+    (void)dev_out;
+    (void)channel_out;
+    (void)input_out;
+    return -ENOSYS;
+}
+
+bool iobroker_adc_release(const struct device *dev, uint8_t channel) {
+    (void)dev;
+    (void)channel;
+    LOG_DBG("adc release: no ADC support on this SoC, nothing to release");
+    return false;
+}
+
+#endif // !IOBROKER_ADC
+
+#if !IOBROKER_DAC
+
+// SoCs without a DAC implementation: the DAC allocate/release API still
+// exists so analogio can call it, but every call reports -ENOSYS. The
+// implementations live in src/<vendor>/<soc>/ (Renesas RA DAC) and in
+// src/emul/ (the emulated test DAC).
+int iobroker_dac_allocate(package_pin_t pin, const struct device **dev_out,
+    uint8_t *channel_out, uint8_t *input_out) {
+    (void)pin;
+    (void)dev_out;
+    (void)channel_out;
+    (void)input_out;
+    return -ENOSYS;
+}
+
+bool iobroker_dac_release(const struct device *dev, uint8_t channel) {
+    (void)dev;
+    (void)channel;
+    LOG_DBG("dac release: no DAC support on this SoC, nothing to release");
+    return false;
+}
+
+#endif // !IOBROKER_DAC
 
 // Pins currently claimed for plain GPIO use. The module leaves the pad alone
 // on allocate (the caller configures it) but returns it to a quiescent state
@@ -125,6 +204,20 @@ typedef struct {
 } gpio_claim_t;
 
 static gpio_claim_t gpio_claims[CONFIG_IOBROKER_GPIO_MAX_PINS];
+
+// Pads currently claimed for analog use (ADC inputs, DAC outputs). Analog
+// functions have no runtime routing; the claim only marks the pad busy for
+// bus and GPIO allocations, and records which analog device and channel slot
+// the allocation holds. The implementations keep the registry consistent
+// through the claim_add/claim_remove helpers below.
+typedef struct {
+    const struct device *dev;
+    uint8_t channel;
+    uint16_t soc_pad;
+    bool in_use;
+} analog_claim_t;
+
+static analog_claim_t analog_claims[CONFIG_IOBROKER_ANALOG_MAX_PINS];
 
 // Returns true when the package pin is claimed by a currently allocated
 // instance or a GPIO allocation. Disconnected signals (IOBROKER_NO_PIN)
@@ -166,6 +259,16 @@ bool iobroker_pin_in_use(package_pin_t pin) {
             }
         }
     }
+    for (size_t i = 0; i < iobroker_pwm_bus_count; i++) {
+        if (!iobroker_pwm_bus_states[i].in_use) {
+            continue;
+        }
+        for (uint8_t j = 0; j < iobroker_pwm_bus_states[i].pin_count; j++) {
+            if (iobroker_pwm_bus_states[i].pins[j] == pin) {
+                return true;
+            }
+        }
+    }
     #endif // CONFIG_PINCTRL_NRF
     uint16_t soc_pad;
     if (iobroker_package_pin_soc_pad(pin, &soc_pad) < 0) {
@@ -180,9 +283,21 @@ bool iobroker_pin_in_use(package_pin_t pin) {
         }
     }
     #endif
+    // Analog claims don't involve GPIO controllers (the analog input is a
+    // fixed mux setting of the SoC), so match by pad. Analog-only pads, which
+    // no GPIO controller covers, are reported through this loop.
+    for (size_t i = 0; i < ARRAY_SIZE(analog_claims); i++) {
+        if (analog_claims[i].in_use && analog_claims[i].soc_pad == soc_pad) {
+            return true;
+        }
+    }
+    uint16_t gpio_pad;
+    if (iobroker_pad_gpio(soc_pad, &gpio_pad) < 0) {
+        return false;
+    }
     const struct device *port;
     gpio_pin_t number;
-    if (iobroker_gpio_split(soc_pad, &port, &number) < 0) {
+    if (iobroker_gpio_split(gpio_pad, &port, &number) < 0) {
         return false;
     }
     for (size_t i = 0; i < ARRAY_SIZE(gpio_claims); i++) {
@@ -214,7 +329,13 @@ int iobroker_gpio_allocate(package_pin_t pin,
         LOG_WRN("gpio allocate: package pin %u not in package map", (unsigned)pin);
         return ret;
     }
-    ret = iobroker_gpio_split(soc_pad, port_out, pin_out);
+    uint16_t gpio_pad;
+    ret = iobroker_pad_gpio(soc_pad, &gpio_pad);
+    if (ret < 0) {
+        LOG_WRN("gpio allocate: no GPIO controller for pad %u", (unsigned)soc_pad);
+        return ret;
+    }
+    ret = iobroker_gpio_split(gpio_pad, port_out, pin_out);
     if (ret < 0) {
         LOG_WRN("gpio allocate: no GPIO controller for pad %u", (unsigned)soc_pad);
         return ret;
@@ -259,4 +380,74 @@ bool iobroker_gpio_release(const struct device *port, gpio_pin_t number) {
         }
     }
     return false;
+}
+
+// Shared analog claim registry helpers, used by the analog implementations.
+// See iobroker_internal.h for the contract.
+
+bool iobroker_analog_channel_in_use(const struct device *dev, uint8_t channel) {
+    for (size_t i = 0; i < ARRAY_SIZE(analog_claims); i++) {
+        if (analog_claims[i].in_use && analog_claims[i].dev == dev &&
+            analog_claims[i].channel == channel) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int iobroker_analog_claim_add(package_pin_t pin, const struct device *dev,
+    uint8_t channel) {
+    if (iobroker_pin_in_use(pin)) {
+        LOG_WRN("analog claim: package pin %u already claimed", (unsigned)pin);
+        return -EBUSY;
+    }
+    uint16_t soc_pad;
+    int ret = iobroker_package_pin_soc_pad(pin, &soc_pad);
+    if (ret < 0) {
+        LOG_WRN("analog claim: package pin %u not in package map", (unsigned)pin);
+        return ret;
+    }
+    for (size_t i = 0; i < ARRAY_SIZE(analog_claims); i++) {
+        if (analog_claims[i].in_use) {
+            continue;
+        }
+        analog_claims[i].dev = dev;
+        analog_claims[i].channel = channel;
+        analog_claims[i].soc_pad = soc_pad;
+        analog_claims[i].in_use = true;
+        LOG_DBG("analog claim: package pin %u (pad %u) -> %s channel %u",
+            (unsigned)pin, (unsigned)soc_pad, dev->name, (unsigned)channel);
+        return 0;
+    }
+    LOG_WRN("analog claim: registry full (%u pads)",
+        (unsigned)CONFIG_IOBROKER_ANALOG_MAX_PINS);
+    return -ENOMEM;
+}
+
+bool iobroker_analog_claim_remove(const struct device *dev, uint8_t channel,
+    uint16_t *soc_pad_out) {
+    for (size_t i = 0; i < ARRAY_SIZE(analog_claims); i++) {
+        if (analog_claims[i].in_use && analog_claims[i].dev == dev &&
+            analog_claims[i].channel == channel) {
+            analog_claims[i].in_use = false;
+            *soc_pad_out = analog_claims[i].soc_pad;
+            return true;
+        }
+    }
+    return false;
+}
+
+void iobroker_gpio_pad_quiesce(uint16_t soc_pad) {
+    uint16_t gpio_pad;
+    // Analog-only pads, which no GPIO controller covers, have no digital
+    // configuration to quiesce.
+    if (iobroker_pad_gpio(soc_pad, &gpio_pad) < 0) {
+        return;
+    }
+    const struct device *port;
+    gpio_pin_t number;
+    if (iobroker_gpio_split(gpio_pad, &port, &number) < 0) {
+        return;
+    }
+    gpio_deconfigure(port, number);
 }

@@ -42,7 +42,9 @@ config IOBROKER_PACKAGE_MDBT50Q_1MV2
 	help
 	  Pin map for the Raytac MDBT50Q-1MV2 module, which carries the
 	  nRF52840 aQFN73 inside. 'pin' numbers the module's 61 castellated
-	  pins as the datasheet numbers them.
+	  pins as the datasheet numbers them and 'pad' remaps them to the
+	  aQFN73 ball ids they bond to; 'gpio' carries each pad's global GPIO
+	  number.
 
 config IOBROKER_PACKAGE_NRF52840_AQFN73
 	bool "nRF52840 aQFN73 (NQI73)"
@@ -61,11 +63,31 @@ config IOBROKER_PACKAGE_RP2040_QFN56
 	  numbered as the datasheet numbers the pins. Used by the Feather
 	  RP2040 board.
 
+config IOBROKER_PACKAGE_MCXN947_VDF
+	bool "MCXN947 VFBGA184 (VDF)"
+	depends on SOC_MCXN947
+	help
+	  184-ball VFBGA package (9 x 9 mm, 0.5 mm pitch) pin map for the
+	  MCXN947, which Zephyr orders as MCXN947VDF. Used by the
+	  FRDM-MCXN947 board. 184 balls, 124 routable GPIOs, numbered
+	  sequentially in row-major order (the datasheet only labels the
+	  balls, e.g. A17).
+
+config IOBROKER_PACKAGE_MCXN947_VNL
+	bool "MCXN947 HLQFP100 (VNL)"
+	depends on SOC_MCXN947
+	help
+	  100-pin HLQFP package (0.5 mm pitch) pin map for the MCXN947,
+	  which Zephyr orders as MCXN947VNL. 100 pins, 78 routable GPIOs,
+	  numbered as the datasheet numbers the pins.
+
 choice IOBROKER_PACKAGE
 	default IOBROKER_PACKAGE_NRF54L15_QFN48 if SOC_NRF54L15 || SOC_NRF54L10 || SOC_NRF54L05
 	default IOBROKER_PACKAGE_NRF54LM20_CSP98 if SOC_NRF54LM20A || SOC_NRF54LM20B
 	default IOBROKER_PACKAGE_NRF5340_QKAA if SOC_NRF5340_CPUAPP_QKAA
 	default IOBROKER_PACKAGE_NRF52840_AQFN73 if SOC_NRF52840_QIAA
 	default IOBROKER_PACKAGE_RP2040_QFN56 if SOC_RP2040
+	default IOBROKER_PACKAGE_MCXN947_VDF if SOC_PART_NUMBER_MCXN947VDF
+	default IOBROKER_PACKAGE_MCXN947_VNL if SOC_PART_NUMBER_MCXN947VNL
 	default IOBROKER_PACKAGE_ONE_TO_ONE
 endchoice

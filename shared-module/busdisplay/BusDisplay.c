@@ -224,6 +224,30 @@ static void _send_pixels(busdisplay_busdisplay_obj_t *self, uint8_t *pixels, uin
     self->bus.send(self->bus.bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels, length);
 }
 
+// Whether the bus sends in the background. Always false without async SPI, so that code is
+// left out. Not a local variable: GCC would then compile the refresh loop twice.
+#define SEND_ASYNC(self) (CIRCUITPY_BUSIO_SPI_ASYNC && (self)->bus.send_async != NULL)
+
+// The data half of _send_pixels, handed to the bus without waiting for it to be sent.
+static void _send_pixels_async(busdisplay_busdisplay_obj_t *self, uint8_t *pixels, uint32_t length) {
+    if (!self->bus.data_as_commands) {
+        self->bus.send(self->bus.bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->write_ram_command, 1);
+    }
+    self->bus.send_async(self->bus.bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, pixels, length);
+}
+
+// Call only with the bus transaction closed: a background task may use the same bus.
+static void _run_background_tasks(void) {
+    // Run background tasks so they can run during an explicit refresh.
+    // Auto-refresh won't run background tasks here because it is a background task itself.
+    RUN_BACKGROUND_TASKS;
+
+    // Run USB background tasks so they can run during an implicit refresh.
+    #if CIRCUITPY_TINYUSB
+    usb_background();
+    #endif
+}
+
 static bool _refresh_area(busdisplay_busdisplay_obj_t *self, const displayio_area_t *area) {
     uint16_t buffer_size = CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE / sizeof(uint32_t); // In uint32_ts
 
@@ -272,8 +296,11 @@ static bool _refresh_area(busdisplay_busdisplay_obj_t *self, const displayio_are
     // Allocated and shared as a uint32_t array so the compiler knows the
     // alignment everywhere.
     uint32_t mask_length = (pixels_per_buffer / 32) + 1;
-    uint32_t buffer[buffer_size];
+    // With an asynchronous bus, one buffer is composited while the other is being sent.
+    uint32_t buffers[SEND_ASYNC(self) ? 2 : 1][buffer_size];
     uint32_t mask[mask_length];
+    uint8_t fill_index = 0;
+    bool sending = false;
 
     displayio_area_t subrectangle = clipped;
     subrectangle.next = NULL;
@@ -294,10 +321,19 @@ static bool _refresh_area(busdisplay_busdisplay_obj_t *self, const displayio_are
             subrectangle_size_bytes = displayio_area_size(&subrectangle) / (8 / self->core.colorspace.depth);
         }
 
+        uint32_t *buffer = buffers[fill_index];
         memset(mask, 0, mask_length * sizeof(mask[0]));
         memset(buffer, 0, buffer_size * sizeof(buffer[0]));
 
         displayio_display_core_fill_area(&self->core, &subrectangle, mask, buffer);
+
+        // The previous strip must be sent before the region commands for this one.
+        if (sending) {
+            displayio_display_bus_flush(&self->bus);
+            displayio_display_bus_end_transaction(&self->bus);
+            sending = false;
+            _run_background_tasks();
+        }
 
         displayio_display_bus_set_region_to_update(&self->bus, &self->core, &subrectangle);
 
@@ -305,22 +341,25 @@ static bool _refresh_area(busdisplay_busdisplay_obj_t *self, const displayio_are
         if (!displayio_display_bus_begin_transaction(&self->bus)) {
             return false;
         }
-        _send_pixels(self, (uint8_t *)buffer, subrectangle_size_bytes);
-        displayio_display_bus_end_transaction(&self->bus);
+        if (SEND_ASYNC(self)) {
+            _send_pixels_async(self, (uint8_t *)buffer, subrectangle_size_bytes);
+            sending = true;
+            fill_index ^= 1;
+        } else {
+            _send_pixels(self, (uint8_t *)buffer, subrectangle_size_bytes);
+            displayio_display_bus_end_transaction(&self->bus);
+        }
         subrectangle.y1 = subrectangle.y2;
-
-        // Run background tasks so they can run during an explicit refresh.
-        // Auto-refresh won't run background tasks here because it is a background task itself.
-        RUN_BACKGROUND_TASKS;
-
-        // Run USB background tasks so they can run during an implicit refresh.
-        #if CIRCUITPY_TINYUSB
-        usb_background();
-        #endif
+        if (!sending) {
+            _run_background_tasks();
+        }
     }
 
     // Drain any remaining asynchronous transfers.
     displayio_display_bus_flush(&self->bus);
+    if (sending) {
+        displayio_display_bus_end_transaction(&self->bus);
+    }
 
     return true;
 }

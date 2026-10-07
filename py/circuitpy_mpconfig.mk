@@ -238,6 +238,11 @@ CFLAGS += -DCIRCUITPY_BUSIO_I2C=$(CIRCUITPY_BUSIO_I2C)
 CIRCUITPY_BUSIO_SPI ?= $(CIRCUITPY_BUSIO)
 CFLAGS += -DCIRCUITPY_BUSIO_SPI=$(CIRCUITPY_BUSIO_SPI)
 
+# The port implements common_hal_busio_spi_write_start() and common_hal_busio_spi_end(), so a
+# display on a FourWire bus can send one strip while the next is being composited.
+CIRCUITPY_BUSIO_SPI_ASYNC ?= 0
+CFLAGS += -DCIRCUITPY_BUSIO_SPI_ASYNC=$(CIRCUITPY_BUSIO_SPI_ASYNC)
+
 CIRCUITPY_BUSIO_UART ?= $(CIRCUITPY_BUSIO)
 CFLAGS += -DCIRCUITPY_BUSIO_UART=$(CIRCUITPY_BUSIO_UART)
 
@@ -646,6 +651,12 @@ CFLAGS += -DCIRCUITPY_STORAGE=$(CIRCUITPY_STORAGE)
 
 CIRCUITPY_STORAGE_EXTEND ?= $(CIRCUITPY_DUALBANK)
 CFLAGS += -DCIRCUITPY_STORAGE_EXTEND=$(CIRCUITPY_STORAGE_EXTEND)
+
+# storage.map_file(): read a file straight out of memory-mapped flash. A port whose CIRCUITPY drive
+# is memory-mapped implements port_internal_flash_xip_address() and turns this on; turning it on
+# without that function is a link error, not a silent no-op.
+CIRCUITPY_STORAGE_MAP_FILE ?= 0
+CFLAGS += -DCIRCUITPY_STORAGE_MAP_FILE=$(CIRCUITPY_STORAGE_MAP_FILE)
 
 CIRCUITPY_STRUCT ?= 1
 CFLAGS += -DCIRCUITPY_STRUCT=$(CIRCUITPY_STRUCT)

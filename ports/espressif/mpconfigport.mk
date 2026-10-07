@@ -54,6 +54,7 @@ CIRCUITPY_FULL_BUILD ?= 1
 
 # The 24 KB stack has room for a larger display refresh buffer.
 CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE ?= 2048
+CIRCUITPY_BUSIO_SPI_ASYNC ?= 1
 
 # If SSL is enabled, it's mbedtls
 CIRCUITPY_SSL_MBEDTLS = 1
@@ -227,6 +228,9 @@ CIRCUITPY_PARALLELDISPLAYBUS = 0
 
 # No SDMMC
 CIRCUITPY_SDIOIO = 0
+
+# Fit the 2MB firmware partition
+CIRCUITPY_ULAB_OPTIMIZE_SIZE ?= 1
 
 # Features
 CIRCUITPY_USB_DEVICE = 0
@@ -482,3 +486,6 @@ endif
 
 # Usually lots of flash space available
 CIRCUITPY_MESSAGE_COMPRESSION_LEVEL ?= 1
+
+# The CIRCUITPY partition is mapped into the data address space on first use
+CIRCUITPY_STORAGE_MAP_FILE ?= 1

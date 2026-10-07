@@ -687,6 +687,7 @@ $(filter $(SRC_PATTERNS), \
 	paralleldisplaybus/__init__.c \
 	qrio/PixelPolicy.c \
 	qrio/QRInfo.c \
+	rgbmatrix/RowAddressMode.c \
 	supervisor/RunReason.c \
 	supervisor/Runtime.c \
 	supervisor/StatusBar.c \

@@ -8,158 +8,185 @@ socs = ["SOC_NRF54L15", "SOC_NRF54L10", "SOC_NRF54L05"]
 
 [[pins]]
 pin = 1
-pad = 32
 pad_name = "P1.00"
+gpio = 32
+
 
 [[pins]]
 pin = 2
-pad = 33
 pad_name = "P1.01"
+gpio = 33
+
 
 [[pins]]
 pin = 3
-pad = 34
 pad_name = "P1.02"
+gpio = 34
+
 
 [[pins]]
 pin = 4
-pad = 35
 pad_name = "P1.03"
+gpio = 35
+
 
 [[pins]]
 pin = 5
-pad = 36
 pad_name = "P1.04"
+gpio = 36
+
 
 [[pins]]
 pin = 6
-pad = 37
 pad_name = "P1.05"
+gpio = 37
+
 
 [[pins]]
 pin = 7
-pad = 38
 pad_name = "P1.06"
+gpio = 38
+
 
 [[pins]]
 pin = 8
-pad = 39
 pad_name = "P1.07"
+gpio = 39
+
 
 [[pins]]
 pin = 9
-pad = 40
 pad_name = "P1.08"
+gpio = 40
+
 
 [[pins]]
 pin = 11
-pad = 64
 pad_name = "P2.00"
+gpio = 64
+
 
 [[pins]]
 pin = 12
-pad = 65
 pad_name = "P2.01"
+gpio = 65
+
 
 [[pins]]
 pin = 13
-pad = 66
 pad_name = "P2.02"
+gpio = 66
+
 
 [[pins]]
 pin = 14
-pad = 67
 pad_name = "P2.03"
+gpio = 67
+
 
 [[pins]]
 pin = 15
-pad = 68
 pad_name = "P2.04"
+gpio = 68
+
 
 [[pins]]
 pin = 16
-pad = 69
 pad_name = "P2.05"
+gpio = 69
+
 
 [[pins]]
 pin = 17
-pad = 70
 pad_name = "P2.06"
+gpio = 70
+
 
 [[pins]]
 pin = 18
-pad = 71
 pad_name = "P2.07"
+gpio = 71
+
 
 [[pins]]
 pin = 19
-pad = 72
 pad_name = "P2.08"
+gpio = 72
+
 
 [[pins]]
 pin = 20
-pad = 73
 pad_name = "P2.09"
+gpio = 73
+
 
 [[pins]]
 pin = 21
-pad = 74
 pad_name = "P2.10"
+gpio = 74
+
 
 [[pins]]
 pin = 23
-pad = 0
 pad_name = "P0.00"
+gpio = 0
+
 
 [[pins]]
 pin = 24
-pad = 1
 pad_name = "P0.01"
+gpio = 1
+
 
 [[pins]]
 pin = 27
-pad = 2
 pad_name = "P0.02"
+gpio = 2
+
 
 [[pins]]
 pin = 28
-pad = 3
 pad_name = "P0.03"
+gpio = 3
+
 
 [[pins]]
 pin = 29
-pad = 4
 pad_name = "P0.04"
+gpio = 4
+
 
 [[pins]]
 pin = 37
-pad = 41
 pad_name = "P1.09"
+gpio = 41
+
 
 [[pins]]
 pin = 38
-pad = 42
 pad_name = "P1.10"
+gpio = 42
+
 
 [[pins]]
 pin = 39
-pad = 43
 pad_name = "P1.11"
+gpio = 43
+
 
 [[pins]]
 pin = 40
-pad = 44
 pad_name = "P1.12"
+gpio = 44
+
 
 [[pins]]
 pin = 41
-pad = 45
 pad_name = "P1.13"
+gpio = 45
+
 
 [[pins]]
 pin = 42
-pad = 46
 pad_name = "P1.14"
-
-# Package pins without a GPIO pad (not routable):
-# 10, 22, 25, 26, 30, 31, 32, 33, 34, 35, 36, 43, 44, 45, 46, 47, 48
+gpio = 46
