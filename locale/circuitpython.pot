@@ -2614,6 +2614,10 @@ msgid "invalid micropython decorator"
 msgstr ""
 
 #: py/compile.c
+msgid "native code not supported on this board"
+msgstr ""
+
+#: py/compile.c
 msgid "invalid arch"
 msgstr ""
 
