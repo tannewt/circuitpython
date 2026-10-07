@@ -307,7 +307,7 @@ config ZCP_MBEDTLS_TLS
 	# ECDHE-RSA key exchange, X.509 certificates and PEM parsing. Selecting
 	# Zephyr's MBEDTLS_CIPHERSUITE_* config instead would also force RSA-PSS
 	# and RSA key-pair generation, which a TLS client never needs and which
-	# don't fit flash-tight boards like nordic_nrf7002dk. A board can still
+	# don't fit flash-tight boards. A board can still
 	# enable such cipher-suite extras in its board.conf.
 	select MBEDTLS_SSL_PROTO_TLS1_2
 	select MBEDTLS_X509_CRT_PARSE_C
