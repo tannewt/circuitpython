@@ -66,6 +66,10 @@ size_t usb_msc_descriptor_length(void);
 size_t usb_msc_add_descriptor(uint8_t *descriptor_buf, descriptor_counts_t *descriptor_counts, uint8_t *current_interface_string);
 void usb_msc_mount(void);
 void usb_msc_umount(void);
+// Release the USB MSC lock on CIRCUITPY (LUN 0) if USB MSC holds it, so that
+// Python, workflows, and storage.remount() can lock it again.
+// Does nothing if USB MSC does not hold the lock. Does not raise or allocate.
+void usb_msc_release_circuitpy_lock(void);
 
 #include "extmod/vfs_fat.h"
 void usb_msc_remount(fs_user_mount_t *fs_mount);

@@ -49,6 +49,10 @@ static bool usb_drive_set_enabled(bool enabled) {
         mp_hal_delay_ms(2500);
     }
     filesystem_set_internal_writable_by_usb(enabled);
+    if (!enabled) {
+        // USB MSC may still hold the lock from when it reported the drive writable.
+        usb_msc_release_circuitpy_lock();
+    }
     return true;
 }
 

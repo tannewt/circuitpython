@@ -224,6 +224,19 @@ void usb_msc_umount(void) {
     }
 }
 
+// Release the USB MSC lock on CIRCUITPY (LUN 0), if USB MSC holds it.
+// Locks held by others (Python, workflows) are not touched.
+void usb_msc_release_circuitpy_lock(void) {
+    if (!locked[0]) {
+        return;
+    }
+    fs_user_mount_t *vfs = get_vfs(0);
+    if (vfs != NULL) {
+        blockdev_unlock((supervisor_vfs_t *)vfs);
+    }
+    locked[0] = false;
+}
+
 void usb_msc_remount(fs_user_mount_t *fs_mount) {
     for (uint8_t i = 0; i < LUN_COUNT; i++) {
         fs_user_mount_t *vfs = get_vfs(i);
