@@ -47,6 +47,7 @@ static void serial_cb(const struct device *dev, void *user_data) {
         if (mp_interrupt_char == c) {
             common_hal_busio_uart_clear_rx_buffer(self);
             mp_sched_keyboard_interrupt();
+            port_wake_main_task_from_isr();
         } else if (!self->rx_paused) {
             if (k_msgq_put(&self->msgq, &c, K_NO_WAIT) == 0) {
                 // Wake the main task so it can service the new RX data
@@ -111,6 +112,9 @@ void common_hal_busio_uart_construct(busio_uart_obj_t *self,
         }
         if (ret == -EBUSY) {
             mp_raise_ValueError(MP_ERROR_TEXT("Internal resource(s) in use"));
+        }
+        if (ret == -EINVAL) {
+            raise_ValueError_invalid_pins();
         }
         mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_UART);
     }
