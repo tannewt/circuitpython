@@ -129,6 +129,8 @@ INC += \
 	-isystem esp-idf/components/esp_hal_gpspi/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_dma/include \
 	-isystem esp-idf/components/esp_hal_dma/$(IDF_TARGET)/include \
+	-isystem esp-idf/components/esp_hal_emac/include \
+	-isystem esp-idf/components/esp_hal_emac/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_lcd/include \
 	-isystem esp-idf/components/esp_hal_lcd/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_sd/include \
@@ -955,12 +957,13 @@ endif
 ifneq ($(CIRCUITPY_WIFI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
 endif
-# mdns registers handlers on ETH_EVENT, which is defined by esp_eth.
+# mdns registers handlers on ETH_EVENT, which is defined by esp_eth. esp_hal_emac
+# provides the EMAC symbols esp_eth references.
 ifneq ($(CIRCUITPY_MDNS),0)
-	ESP_IDF_COMPONENTS_LINK += esp_eth
+	ESP_IDF_COMPONENTS_LINK += esp_eth esp_hal_emac
 endif
 ifneq ($(CIRCUITPY_MII),0)
-	ESP_IDF_COMPONENTS_LINK += esp_eth
+	ESP_IDF_COMPONENTS_LINK += esp_eth esp_hal_emac
   ifeq ($(CIRCUITPY_WIFI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_netif lwip mbedtls mdns
   endif
