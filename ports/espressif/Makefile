@@ -501,9 +501,12 @@ endif
 
 
 CHIP_COMPONENTS = \
+	esp_driver_cam \
+	esp_driver_isp \
 	esp_driver_touch_sens \
 	esp_driver_tsens \
 	esp_driver_usb_serial_jtag \
+	esp_hal_cam \
 	esp_hal_dma \
 	esp_hal_i2s \
 	esp_hal_lcd \
@@ -690,6 +693,13 @@ CFLAGS += \
 	-isystem esp-idf/components/esp_lcd/include \
 	-isystem esp-idf/components/esp_lcd/interface \
 	-isystem esp-idf/components/esp_lcd/dsi/include
+endif
+
+ifneq ($(CIRCUITPY_MIPICSI),0)
+CFLAGS += \
+	-isystem esp-idf/components/esp_driver_cam/include \
+	-isystem esp-idf/components/esp_driver_cam/csi/include \
+	-isystem esp-idf/components/esp_hal_cam/include
 endif
 
 ifneq ($(CIRCUITPY_ESPCAMERA),0)
@@ -891,7 +901,7 @@ do-sdkconfig: $(BUILD)/esp-idf/config/sdkconfig.h
 QSTR_GLOBAL_REQUIREMENTS += $(BUILD)/esp-idf/config/sdkconfig.h
 $(BUILD)/esp-idf/config/sdkconfig.h: boards/$(BOARD)/sdkconfig boards/$(BOARD)/mpconfigboard.mk CMakeLists.txt | $(BUILD)/esp-idf
 	$(STEPECHO) "Create $@"
-	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -GNinja
+	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -DCIRCUITPY_MIPICSI=$(CIRCUITPY_MIPICSI) -GNinja
 	$(Q)$(PYTHON) tools/check-sdkconfig.py \
 		CIRCUITPY_DUALBANK=$(CIRCUITPY_DUALBANK) \
 		CIRCUITPY_STORAGE_EXTEND=$(CIRCUITPY_STORAGE_EXTEND) \
@@ -999,6 +1009,9 @@ ifneq ($(CIRCUITPY_DOTCLOCKFRAMEBUFFER),0)
 endif
 ifneq ($(CIRCUITPY_MIPIDSI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_lcd
+endif
+ifneq ($(CIRCUITPY_MIPICSI),0)
+	ESP_IDF_COMPONENTS_LINK += esp_driver_cam esp_driver_isp esp_hal_cam
 endif
 ifneq ($(CIRCUITPY_PARALLELDISPLAYBUS),0)
 	ESP_IDF_COMPONENTS_LINK += esp_lcd

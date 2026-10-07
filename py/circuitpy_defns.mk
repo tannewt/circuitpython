@@ -321,6 +321,9 @@ endif
 ifeq ($(CIRCUITPY_MICROCONTROLLER),1)
 SRC_PATTERNS += microcontroller/%
 endif
+ifeq ($(CIRCUITPY_MIPICSI),1)
+SRC_PATTERNS += mipicsi/%
+endif
 ifeq ($(CIRCUITPY_MIPIDSI),1)
 SRC_PATTERNS += mipidsi/%
 endif
@@ -573,6 +576,8 @@ SRC_COMMON_HAL_ALL = \
 	mdns/__init__.c \
 	mdns/Server.c \
 	mdns/RemoteService.c \
+	mipicsi/__init__.c \
+	mipicsi/Camera.c \
 	mipidsi/Bus.c \
 	mipidsi/Display.c \
 	mipidsi/__init__.c \
