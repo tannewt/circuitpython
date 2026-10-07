@@ -34,8 +34,11 @@ LOG_MODULE_REGISTER(cp_watchdog, CONFIG_WDT_LOG_LEVEL);
 // sample, samples/drivers/watchdog, uses). RAISE mode works on every board via
 // the software timer; only RESET mode needs the hardware device, so the alias
 // is optional and boards without it raise NotImplementedError when RESET is
-// requested.
-#if DT_NODE_EXISTS(DT_ALIAS(watchdog0))
+// requested. Use status-okay rather than node-exists so that boards which
+// deliberately disable the alias target (e.g. Renesas RA boards, where the RA
+// WDT driver doesn't build) still compile; a disabled node has no device
+// struct, so DEVICE_DT_GET would fail for it.
+#if DT_NODE_EXISTS(DT_ALIAS(watchdog0)) && DT_NODE_HAS_STATUS_OKAY(DT_ALIAS(watchdog0))
 #define CP_WDT_HAS_HW 1
 static const struct device *const wdt_dev = DEVICE_DT_GET(DT_ALIAS(watchdog0));
 #else
