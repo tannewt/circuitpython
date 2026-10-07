@@ -98,9 +98,7 @@ mcu_reset_reason_t common_hal_mcu_processor_get_reset_reason(void) {
     } else if (cause & RESET_WATCHDOG) {
         return MCU_RESET_REASON_WATCHDOG;
     } else if (cause & RESET_CPU_LOCKUP) {
-        // No LOCKUP reason in the shared enum; treat it like the watchdog
-        // reset it usually accompanies (upstream CircuitPython's nordic port
-        // doesn't report lockups separately either).
+        // Treat LOCKUP like a WATCHDOG
         return MCU_RESET_REASON_WATCHDOG;
     } else if (cause & RESET_BROWNOUT) {
         return MCU_RESET_REASON_BROWNOUT;
