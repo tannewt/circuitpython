@@ -177,7 +177,9 @@ CFLAGS += \
 	-DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS \
 	-DMBEDTLS_PADLOCK_FILE=\"ports/espressif/esp-idf/components/mbedtls/mbedtls/library/padlock.h\" \
 	-DUNITY_INCLUDE_CONFIG_H -DWITH_POSIX \
-	-DMP3DEC_GENERIC
+	-DMP3DEC_GENERIC \
+	-DSOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE \
+	-DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ
 
 # Make our canary value match FreeRTOS's
 # This define is in FreeRTOS as tskSTACK_FILL_BYTE 0xa5U which we expand out to a full word.
@@ -381,8 +383,6 @@ LDFLAGS += \
 	-Tesp32c2.rom.version.ld \
 	-Trom.systimer.ld \
 	-Trom.wdt.ld
-
-CFLAGS += -DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ
 
 CHIP_COMPONENTS = \
 	esp_driver_tsens \
