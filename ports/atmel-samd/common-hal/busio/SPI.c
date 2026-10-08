@@ -22,17 +22,6 @@
 #include "samd/sercom.h"
 
 
-static void setup_pin(const mcu_pin_obj_t *pin, uint32_t pinmux, const enum gpio_direction direction) {
-    gpio_set_pin_direction(pin->number, direction);
-    gpio_set_pin_pull_mode(pin->number, GPIO_PULL_OFF);
-    gpio_set_pin_function(pin->number, pinmux);
-    if (direction == GPIO_DIRECTION_OUT) {
-        // Use strong drive strength for SPI outputs.
-        hri_port_set_PINCFG_DRVSTR_bit(PORT, (enum gpio_port)GPIO_PORT(pin->number), GPIO_PIN(pin->number));
-    }
-    claim_pin(pin);
-}
-
 void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *clock, const mcu_pin_obj_t *mosi,
     const mcu_pin_obj_t *miso, bool half_duplex) {
@@ -152,8 +141,8 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
         mp_raise_OSError(MP_EIO);
     }
 
-    setup_pin(clock, clock_pinmux, GPIO_DIRECTION_OUT);
-    self->clock_pin = clock->number;
+    // Use strong drive strength for SPI outputs.
+    self->clock_pin = sercom_setup_pin(clock, clock_pinmux, GPIO_DIRECTION_OUT, true);
     #if CIRCUITPY_BUSIO_SPI_ASYNC
     self->async_active = false;
     #endif
@@ -161,15 +150,13 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     if (mosi_none) {
         self->MOSI_pin = NO_PIN;
     } else {
-        setup_pin(mosi, mosi_pinmux, GPIO_DIRECTION_OUT);
-        self->MOSI_pin = mosi->number;
+        self->MOSI_pin = sercom_setup_pin(mosi, mosi_pinmux, GPIO_DIRECTION_OUT, true);
     }
 
     if (miso_none) {
         self->MISO_pin = NO_PIN;
     } else {
-        setup_pin(miso, miso_pinmux, GPIO_DIRECTION_IN);
-        self->MISO_pin = miso->number;
+        self->MISO_pin = sercom_setup_pin(miso, miso_pinmux, GPIO_DIRECTION_IN, false);
     }
 
     spi_m_sync_enable(&self->spi_desc);
