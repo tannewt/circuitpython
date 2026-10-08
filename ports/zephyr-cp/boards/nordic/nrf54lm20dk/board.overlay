@@ -1,4 +1,9 @@
 // nRF54LM20 DK has USB. Include the main app overlay for USB CDC ACM console and data.
+//
+// Enable the SoC watchdog for the watchdog module: the upstream board dtsi
+// already aliases watchdog0 to &wdt31, the node itself is just disabled.
+&wdt31 { status = "okay"; };
+
 #include "../../../app.overlay"
 
 // Enable every free serial peripheral instance so CircuitPython can mux it to

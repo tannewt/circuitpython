@@ -1819,6 +1819,13 @@ MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);
                 "Devicetree has a status-okay 'rtc' alias but CONFIG_RTC is "
                 "not enabled, so the rtc module is disabled."
             )
+    board_info["watchdog"] = True
+    # Watchdog is always enabled: RAISE mode raises the WatchDogTimeout
+    # exception from a software Zephyr k_timer and works on every board.
+    # RESET mode additionally uses the hardware watchdog selected by the
+    # devicetree `watchdog0` alias (the same selection Zephyr's own watchdog
+    # sample uses); boards without the alias support only RAISE mode and
+    # raise NotImplementedError when RESET is requested.
     board_info["usb_num_endpoint_pairs"] = usb_num_endpoint_pairs
 
     # Detect NVM partition size from the device tree.
