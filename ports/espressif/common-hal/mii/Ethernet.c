@@ -113,7 +113,7 @@ void common_hal_mii_ethernet_construct(mii_ethernet_obj_t *self,
     eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
     esp32_emac_config.smi_gpio.mdc_num = rmii->mdc;
     esp32_emac_config.smi_gpio.mdio_num = rmii->mdio;
-    #if SOC_EMAC_USE_MULTI_IO_MUX || SOC_EMAC_MII_USE_GPIO_MATRIX
+    #if (defined(SOC_EMAC_USE_MULTI_IO_MUX) && SOC_EMAC_USE_MULTI_IO_MUX) || (defined(SOC_EMAC_MII_USE_GPIO_MATRIX) && SOC_EMAC_MII_USE_GPIO_MATRIX)
     esp32_emac_config.emac_dataif_gpio.rmii.crs_dv_num = rmii->rx_dv;
     esp32_emac_config.emac_dataif_gpio.rmii.rxd0_num = rmii->rxd0;
     esp32_emac_config.emac_dataif_gpio.rmii.rxd1_num = rmii->rxd1;

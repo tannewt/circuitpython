@@ -20,7 +20,7 @@ void common_hal_mii_rmii_construct(mii_rmii_obj_t *self,
     // Board code constructs board-owned globals that don't go through
     // make_new, so set the type here.
     self->base.type = &mii_rmii_type;
-    #if !(SOC_EMAC_USE_MULTI_IO_MUX || SOC_EMAC_MII_USE_GPIO_MATRIX)
+    #if !((defined(SOC_EMAC_USE_MULTI_IO_MUX) && SOC_EMAC_USE_MULTI_IO_MUX) || (defined(SOC_EMAC_MII_USE_GPIO_MATRIX) && SOC_EMAC_MII_USE_GPIO_MATRIX))
     // The EMAC's RMII signals can't be routed to arbitrary GPIOs.
     mp_raise_NotImplementedError(NULL);
     #else

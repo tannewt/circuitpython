@@ -368,6 +368,7 @@ CFLAGS += -isystem esp-idf/components/esp_driver_touch_sens/hw_ver1/include
 CHIP_COMPONENTS = \
 	esp_driver_dac \
 	esp_driver_touch_sens \
+	esp_hal_emac \
 	esp_hal_i2s \
 	esp_hal_lcd \
 	esp_hal_pcnt \
@@ -508,6 +509,7 @@ CHIP_COMPONENTS = \
 	esp_driver_tsens \
 	esp_driver_usb_serial_jtag \
 	esp_hal_dma \
+	esp_hal_emac \
 	esp_hal_i2s \
 	esp_hal_lcd \
 	esp_hal_pcnt \
@@ -954,18 +956,23 @@ LDFLAGS += -Trom.regi2c.ld
 else
 ESP_IDF_COMPONENTS_LINK += esp_hal_regi2c
 endif
+# Only targets with EMAC support (per SOC_EMAC_SUPPORTED in soc_caps.h) build
+# libesp_hal_emac.a; those targets list it in their CHIP_COMPONENTS above. The
+# component is interface-only elsewhere, so it must not appear in the list of
+# components to link.
 ifneq ($(CIRCUITPY_WIFI),0)
 	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
 endif
-# mdns registers handlers on ETH_EVENT, which is defined by esp_eth. esp_hal_emac
-# provides the EMAC symbols esp_eth references.
+# mdns registers handlers on ETH_EVENT, which is defined by esp_eth. On EMAC-capable
+# targets, esp_eth's compiled EMAC sources reference the esp_hal_emac symbols; that
+# library comes via CHIP_COMPONENTS.
 ifneq ($(CIRCUITPY_MDNS),0)
-	ESP_IDF_COMPONENTS_LINK += esp_eth esp_hal_emac
+	ESP_IDF_COMPONENTS_LINK += esp_eth
 endif
 ifneq ($(CIRCUITPY_MII),0)
-	ESP_IDF_COMPONENTS_LINK += esp_eth esp_hal_emac
+	ESP_IDF_COMPONENTS_LINK += esp_eth
   ifeq ($(CIRCUITPY_WIFI),0)
-	ESP_IDF_COMPONENTS_LINK += esp_netif lwip mbedtls mdns
+	ESP_IDF_COMPONENTS_LINK += esp_netif lwip mbedtls
   endif
 endif
 ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
