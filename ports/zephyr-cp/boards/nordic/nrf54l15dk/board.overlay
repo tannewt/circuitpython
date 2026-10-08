@@ -146,3 +146,9 @@
 		zephyr,code-partition = &slot0_partition;
 	};
 };
+
+// Enable the hardware watchdog for the watchdog module. The Zephyr board dts
+// aliases watchdog0 to wdt31, but the SoC dtsi leaves it disabled.
+&wdt31 {
+	status = "okay";
+};

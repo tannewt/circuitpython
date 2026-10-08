@@ -43,6 +43,20 @@
 	ref-vdd-mv = <3300>;
 };
 
+/* Emulated watchdog for the watchdog module, built on the native_sim counter
+ * like Zephyr's own watchdog tests do (tests/drivers/watchdog). */
+/ {
+	wdt_counter: wdt-counter {
+		compatible = "zephyr,counter-watchdog";
+		status = "okay";
+		counter = <&counter0>;
+	};
+
+	aliases {
+		watchdog0 = &wdt_counter;
+	};
+};
+
 / {
 	dac0: dac {
 		compatible = "vnd,dac";
