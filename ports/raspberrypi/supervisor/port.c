@@ -353,7 +353,7 @@ void *port_realloc(void *ptr, size_t size, bool dma_capable) {
 }
 
 #if !CIRCUITPY_ALL_MEMORY_DMA_CAPABLE
-bool port_buffer_is_dma_capable(const void *ptr) {
+bool port_buffer_is_dma_capable(const void *ptr, size_t len) {
     // For RP2350, DMA can only access SRAM, not PSRAM
     // PSRAM addresses are below SRAM_BASE
     return ptr != NULL && ((size_t)ptr) >= SRAM_BASE;

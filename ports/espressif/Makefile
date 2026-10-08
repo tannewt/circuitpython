@@ -177,7 +177,9 @@ CFLAGS += \
 	-DMBEDTLS_DECLARE_PRIVATE_IDENTIFIERS \
 	-DMBEDTLS_PADLOCK_FILE=\"ports/espressif/esp-idf/components/mbedtls/mbedtls/library/padlock.h\" \
 	-DUNITY_INCLUDE_CONFIG_H -DWITH_POSIX \
-	-DMP3DEC_GENERIC
+	-DMP3DEC_GENERIC \
+	-DSOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE \
+	-DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ
 
 # Make our canary value match FreeRTOS's
 # This define is in FreeRTOS as tskSTACK_FILL_BYTE 0xa5U which we expand out to a full word.
@@ -381,8 +383,6 @@ LDFLAGS += \
 	-Tesp32c2.rom.version.ld \
 	-Trom.systimer.ld \
 	-Trom.wdt.ld
-
-CFLAGS += -DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ
 
 CHIP_COMPONENTS = \
 	esp_driver_tsens \
@@ -661,9 +661,15 @@ SRC_C += peripherals/touch.c
 endif
 
 ifneq ($(CIRCUITPY_USB_DEVICE),0)
-SRC_C += \
-	lib/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c \
-	lib/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c
+SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c
+endif
+
+ifeq ($(CIRCUITPY_USB_HOST),1)
+SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/hcd_dwc2.c
+endif
+
+ifneq ($(filter 1,$(CIRCUITPY_USB_DEVICE) $(CIRCUITPY_USB_HOST)),)
+SRC_C += lib/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c
 endif
 
 ifneq ($(CIRCUITPY_AUDIOBUSIO),0)
