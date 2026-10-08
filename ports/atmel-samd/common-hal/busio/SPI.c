@@ -128,11 +128,16 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     // the prototypical SERCOM.
 
     // Set to SPI host mode and choose pads.
-    // One masked write instead of three read-modify-writes saves space.
+    // Set all the fields at once to save code space.
     hri_sercomspi_wait_for_sync(sercom, SERCOM_SPI_SYNCBUSY_MASK);
-    sercom->SPI.CTRLA.reg = (sercom->SPI.CTRLA.reg &
-        ~(SERCOM_SPI_CTRLA_MODE_Msk | SERCOM_SPI_CTRLA_DOPO_Msk | SERCOM_SPI_CTRLA_DIPO_Msk)) |
-        SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DOPO(dopo) | SERCOM_SPI_CTRLA_DIPO(miso_pad);
+    sercom->SPI.CTRLA.reg =
+        (sercom->SPI.CTRLA.reg &
+            ~(SERCOM_SPI_CTRLA_MODE_Msk |
+                SERCOM_SPI_CTRLA_DOPO_Msk |
+                SERCOM_SPI_CTRLA_DIPO_Msk)) |
+        (SERCOM_SPI_CTRLA_MODE(3) |
+            SERCOM_SPI_CTRLA_DOPO(dopo) |
+            SERCOM_SPI_CTRLA_DIPO(miso_pad));
 
     // Always start at 250khz which is what SD cards need. They are sensitive to
     // SPI bus noise before they are put into SPI mode.
@@ -216,11 +221,17 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self,
     spi_m_sync_disable(&self->spi_desc);
     hri_sercomspi_wait_for_sync(hw, SERCOM_SPI_SYNCBUSY_MASK);
 
-    // Masked register writes instead of one read-modify-write per field save space.
+    // Set all the fields of each register at once to save code space.
     SercomSpi *spi = &((Sercom *)hw)->SPI;
-    spi->CTRLA.reg = (spi->CTRLA.reg & ~(SERCOM_SPI_CTRLA_CPHA | SERCOM_SPI_CTRLA_CPOL)) |
-        (phase ? SERCOM_SPI_CTRLA_CPHA : 0) | (polarity ? SERCOM_SPI_CTRLA_CPOL : 0);
-    spi->CTRLB.reg = (spi->CTRLB.reg & ~SERCOM_SPI_CTRLB_CHSIZE_Msk) | SERCOM_SPI_CTRLB_CHSIZE(bits - 8);
+    spi->CTRLA.reg =
+        (spi->CTRLA.reg &
+            ~(SERCOM_SPI_CTRLA_CPHA |
+                SERCOM_SPI_CTRLA_CPOL)) |
+        ((phase ? SERCOM_SPI_CTRLA_CPHA : 0) |
+            (polarity ? SERCOM_SPI_CTRLA_CPOL : 0));
+    spi->CTRLB.reg =
+        (spi->CTRLB.reg & ~SERCOM_SPI_CTRLB_CHSIZE_Msk) |
+        SERCOM_SPI_CTRLB_CHSIZE(bits - 8);
     spi->BAUD.reg = baud_reg_value;
     hri_sercomspi_wait_for_sync(hw, SERCOM_SPI_SYNCBUSY_MASK);
 
