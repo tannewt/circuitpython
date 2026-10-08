@@ -60,34 +60,6 @@
 // channel argument (ignored in calls below)
 #define IGNORED_CHANNEL 0
 
-void samd_adc_start(struct adc_sync_descriptor *adc, Adc *instance,
-    uint8_t reference, uint8_t gain, uint8_t pos_input) {
-    samd_peripherals_adc_setup(adc, instance);
-    adc_sync_set_reference(adc, reference);
-    #ifdef SAMD21
-    adc_sync_set_channel_gain(adc, IGNORED_CHANNEL, gain);
-    #else
-    (void)gain;
-    #endif
-    adc_sync_set_resolution(adc, ADC_CTRLB_RESSEL_12BIT_Val);
-    // Channel arg is ignored.
-    adc_sync_enable_channel(adc, IGNORED_CHANNEL);
-    adc_sync_set_inputs(adc, pos_input, ADC_INPUTCTRL_MUXNEG_GND_Val, IGNORED_CHANNEL);
-}
-
-uint16_t samd_adc_read(struct adc_sync_descriptor *adc) {
-    // Read twice and discard first result, as recommended in section 14 of
-    // http://www.atmel.com/images/Atmel-42645-ADC-Configurations-with-Examples_ApplicationNote_AT11481.pdf
-    // "Discard the first conversion result whenever there is a change in ADC configuration
-    // like voltage reference / ADC channel change"
-    // Empirical observation shows the first reading is quite different than subsequent ones.
-    uint16_t value;
-    adc_sync_read_channel(adc, IGNORED_CHANNEL, ((uint8_t *)&value), 2);
-    adc_sync_read_channel(adc, IGNORED_CHANNEL, ((uint8_t *)&value), 2);
-    return value;
-}
-
-
 // Extract the production calibration data information from NVM (adapted from ASF sample),
 // then calculate the temperature
 //
@@ -201,7 +173,7 @@ float common_hal_mcu_processor_get_temperature(void) {
     #ifdef SAMD21
     // The parameters chosen here are from the temperature example in:
     // http://www.atmel.com/images/Atmel-42645-ADC-Configurations-with-Examples_ApplicationNote_AT11481.pdf
-    samd_adc_start(&adc, adc_insts[0], ADC_REFCTRL_REFSEL_INT1V_Val, ADC_INPUTCTRL_GAIN_1X_Val,
+    samd_peripherals_adc_start(&adc, adc_insts[0], ADC_REFCTRL_REFSEL_INT1V_Val, ADC_INPUTCTRL_GAIN_1X_Val,
         ADC_INPUTCTRL_MUXPOS_TEMP_Val);
 
     hri_adc_write_CTRLB_PRESCALER_bf(adc.device.hw, ADC_CTRLB_PRESCALER_DIV32_Val);
@@ -213,7 +185,7 @@ float common_hal_mcu_processor_get_temperature(void) {
     hri_adc_write_AVGCTRL_SAMPLENUM_bf(adc.device.hw, ADC_AVGCTRL_SAMPLENUM_4_Val);
     hri_adc_write_AVGCTRL_ADJRES_bf(adc.device.hw, 2);
 
-    uint16_t value = samd_adc_read(&adc);
+    uint16_t value = samd_peripherals_adc_read(&adc);
 
     adc_sync_deinit(&adc);
     return calculate_temperature(value);
@@ -229,17 +201,17 @@ float common_hal_mcu_processor_get_temperature(void) {
     // INTVCC1 seems to read a little high.
     // INTREF doesn't work: ADC hangs BUSY. It's supposed to work, but does not.
     // The SAME54 example from Atmel START implicitly uses INTREF.
-    samd_adc_start(&adc, adc_insts[0], ADC_REFCTRL_REFSEL_INTVCC0_Val, 0, ADC_INPUTCTRL_MUXPOS_PTAT_Val);
+    samd_peripherals_adc_start(&adc, adc_insts[0], ADC_REFCTRL_REFSEL_INTVCC0_Val, 0, ADC_INPUTCTRL_MUXPOS_PTAT_Val);
 
     // Read both temperature sensors.
-    uint16_t ptat = samd_adc_read(&adc);
+    uint16_t ptat = samd_peripherals_adc_read(&adc);
 
     adc_sync_set_inputs(&adc,
         ADC_INPUTCTRL_MUXPOS_CTAT_Val,                   // pos_input
         ADC_INPUTCTRL_MUXNEG_GND_Val,                    // neg_input
         IGNORED_CHANNEL);                                // channel (ignored)
 
-    uint16_t ctat = samd_adc_read(&adc);
+    uint16_t ctat = samd_peripherals_adc_read(&adc);
 
     // Turn off temp sensor.
     hri_supc_clear_VREF_TSEN_bit(SUPC);
@@ -273,8 +245,8 @@ float common_hal_mcu_processor_get_voltage(void) {
     #endif
 
     // IOVCC/4 (nominal 3.3V/4). The gain argument is ignored on SAMD51.
-    samd_adc_start(&adc, adc_insts[0], reference, 0, ADC_INPUTCTRL_MUXPOS_SCALEDIOVCC_Val);
-    uint16_t reading = samd_adc_read(&adc);
+    samd_peripherals_adc_start(&adc, adc_insts[0], reference, 0, ADC_INPUTCTRL_MUXPOS_SCALEDIOVCC_Val);
+    uint16_t reading = samd_peripherals_adc_read(&adc);
 
     adc_sync_deinit(&adc);
     // Multiply by 4 to compensate for SCALEDIOVCC division by 4.

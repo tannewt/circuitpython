@@ -15,7 +15,6 @@
 #include "py/mphal.h"
 
 #include "samd/adc.h"
-#include "common-hal/microcontroller/Processor.h"
 #include "shared-bindings/analogio/AnalogIn.h"
 #include "shared-bindings/microcontroller/Pin.h"
 
@@ -83,8 +82,8 @@ uint16_t common_hal_analogio_analogin_get_value(analogio_analogin_obj_t *self) {
     #else
     const uint8_t gain = 0;  // ignored
     #endif
-    samd_adc_start(&adc, self->instance, ADC_REFCTRL_REFSEL_INTVCC1_Val, gain, self->channel);
-    uint16_t value = samd_adc_read(&adc);
+    samd_peripherals_adc_start(&adc, self->instance, ADC_REFCTRL_REFSEL_INTVCC1_Val, gain, self->channel);
+    uint16_t value = samd_peripherals_adc_read(&adc);
     adc_sync_deinit(&adc);
     // Stretch 12-bit ADC reading to 16-bit range
     return (value << 4) | (value >> 8);
