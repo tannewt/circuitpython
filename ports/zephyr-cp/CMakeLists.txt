@@ -22,7 +22,7 @@ target_sources(app PRIVATE zephyr_main.c)
 
 # Add native_sim test support helpers.
 if(CONFIG_BOARD_NATIVE_SIM)
-    target_sources(app PRIVATE native_sim_i2c_emul_control.c)
+    target_sources(app PRIVATE native_sim_i2c_emul_control.c native_sim_spi_loopback_emul.c)
 endif()
 
 if(CONFIG_TRACING_PERFETTO)
