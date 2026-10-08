@@ -256,6 +256,11 @@ typedef long mp_off_t;
 #define MICROPY_CPYTHON_EXCEPTION_CHAIN       (CIRCUITPY_FULL_BUILD)
 #endif
 
+// Allow %e/%f/%g in mp_printf().
+#ifndef MICROPY_PRINTF_FLOAT
+#define MICROPY_PRINTF_FLOAT                  (CIRCUITPY_FULL_BUILD && MICROPY_PY_BUILTINS_FLOAT)
+#endif
+
 #define MICROPY_PY_BUILTINS_POW3              (CIRCUITPY_BUILTINS_POW3)
 #define MICROPY_PY_FSTRINGS                   (1)
 #define MICROPY_MODULE_WEAK_LINKS             (0)
