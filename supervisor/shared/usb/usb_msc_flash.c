@@ -237,6 +237,16 @@ void usb_msc_release_circuitpy_lock(void) {
     locked[0] = false;
 }
 
+// Whether USB MSC holds the blockdev lock on this mount.
+bool usb_msc_holds_lock(fs_user_mount_t *vfs) {
+    for (uint8_t i = 0; i < LUN_COUNT; i++) {
+        if (locked[i] && get_vfs(i) == vfs) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void usb_msc_remount(fs_user_mount_t *fs_mount) {
     for (uint8_t i = 0; i < LUN_COUNT; i++) {
         fs_user_mount_t *vfs = get_vfs(i);
