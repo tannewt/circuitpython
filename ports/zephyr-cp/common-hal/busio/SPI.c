@@ -160,25 +160,6 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, ui
     return true;
 }
 
-// Run a transfer and wait for it. A driver with no async path is called blocking.
-static bool transceive(busio_spi_obj_t *self, const struct spi_buf_set *tx, const struct spi_buf_set *rx) {
-    const struct spi_config *config = &self->config[self->active_config];
-    if (DEVICE_API_GET(spi, self->spi_device)->transceive_async == NULL) {
-        return spi_transceive(self->spi_device, config, tx, rx) == 0;
-    }
-    k_poll_signal_reset(&self->signal);
-    if (spi_transceive_signal(self->spi_device, config, tx, rx, &self->signal) != 0) {
-        return false;
-    }
-    int signaled = 0;
-    int result = 0;
-    while (!signaled && !mp_hal_is_interrupted()) {
-        RUN_BACKGROUND_TASKS;
-        k_poll_signal_check(&self->signal, &signaled, &result);
-    }
-    return signaled && result == 0;
-}
-
 bool common_hal_busio_spi_write(busio_spi_obj_t *self, const uint8_t *data, size_t len) {
     if (common_hal_busio_spi_deinited(self)) {
         return false;
@@ -197,7 +178,23 @@ bool common_hal_busio_spi_write(busio_spi_obj_t *self, const uint8_t *data, size
         .count = 1
     };
 
-    return transceive(self, &tx, NULL);
+    // Initialize the signal for async operation
+    k_poll_signal_reset(&self->signal);
+
+    int ret = spi_transceive_signal(self->spi_device, &self->config[self->active_config], &tx, NULL, &self->signal);
+    if (ret != 0) {
+        return false;
+    }
+
+    // Wait for the transfer to complete while running background tasks
+    int signaled = 0;
+    int result = 0;
+    while (!signaled && !mp_hal_is_interrupted()) {
+        RUN_BACKGROUND_TASKS;
+        k_poll_signal_check(&self->signal, &signaled, &result);
+    }
+
+    return signaled && result == 0;
 }
 
 bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len, uint8_t write_value) {
@@ -248,8 +245,19 @@ bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len,
         .count = 1
     };
 
-    // A DMA driver reads the fill buffer until the transfer has finished.
-    bool ok = transceive(self, &tx, &rx);
+    // Initialize the signal for async operation
+    k_poll_signal_reset(&self->signal);
+
+    int ret = spi_transceive_signal(self->spi_device, &self->config[self->active_config], &tx, &rx, &self->signal);
+
+    // Wait for the transfer to complete while running background tasks. The driver may read the
+    // fill buffer until then.
+    int signaled = 0;
+    int result = 0;
+    while (ret == 0 && !signaled && !mp_hal_is_interrupted()) {
+        RUN_BACKGROUND_TASKS;
+        k_poll_signal_check(&self->signal, &signaled, &result);
+    }
 
     if (need_free) {
         if (used_port_malloc) {
@@ -258,7 +266,8 @@ bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len,
             m_free(tx_data);
         }
     }
-    return ok;
+
+    return ret == 0 && signaled && result == 0;
 }
 
 bool common_hal_busio_spi_transfer(busio_spi_obj_t *self, const uint8_t *data_out, uint8_t *data_in, size_t len) {
@@ -288,7 +297,23 @@ bool common_hal_busio_spi_transfer(busio_spi_obj_t *self, const uint8_t *data_ou
         .count = 1
     };
 
-    return transceive(self, &tx, &rx);
+    // Initialize the signal for async operation
+    k_poll_signal_reset(&self->signal);
+
+    int ret = spi_transceive_signal(self->spi_device, &self->config[self->active_config], &tx, &rx, &self->signal);
+    if (ret != 0) {
+        return false;
+    }
+
+    // Wait for the transfer to complete while running background tasks
+    int signaled = 0;
+    int result = 0;
+    while (!signaled && !mp_hal_is_interrupted()) {
+        RUN_BACKGROUND_TASKS;
+        k_poll_signal_check(&self->signal, &signaled, &result);
+    }
+
+    return signaled && result == 0;
 }
 
 uint32_t common_hal_busio_spi_get_frequency(busio_spi_obj_t *self) {
