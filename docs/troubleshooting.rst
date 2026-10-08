@@ -64,8 +64,8 @@ then ``foo.<arch>.mpy``, then ``foo.mpy``, where ``<arch>`` is
 ``foo.<arch>.mpy`` built for another architecture or CircuitPython version raises this
 error instead of falling back to ``foo.mpy``.
 
-SyntaxError: native code not supported on this board
------------------------------------------------------
+SyntaxError: invalid micropython decorator
+------------------------------------------
 
 CircuitPython cannot compile ``@micropython.native`` or ``@micropython.viper`` functions from a
 ``.py`` file on the board. Add ``optional=True``, for example ``@micropython.viper(optional=True)``,

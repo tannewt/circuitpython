@@ -834,26 +834,18 @@ static qstr compile_classdef_helper(compiler_t *comp, mp_parse_node_struct_t *pn
     return cscope->simple_name;
 }
 
-// CIRCUITPY-CHANGE: native and viper accept optional=True or optional=False.
-// Returns true for optional=True; any other argument is a syntax error.
-static bool compile_decorator_optional(compiler_t *comp, mp_parse_node_t pn_trailer) {
+// CIRCUITPY-CHANGE: returns true for native or viper with optional=True
+static bool compile_decorator_optional(mp_parse_node_t pn_trailer) {
     if (MP_PARSE_NODE_IS_NULL(pn_trailer)) {
         return false;
     }
     mp_parse_node_t pn_arg = ((mp_parse_node_struct_t *)pn_trailer)->nodes[0];
-    if (MP_PARSE_NODE_IS_STRUCT_KIND(pn_arg, PN_argument)) {
-        mp_parse_node_struct_t *pns_arg = (mp_parse_node_struct_t *)pn_arg;
-        if (MP_PARSE_NODE_IS_ID(pns_arg->nodes[0]) && MP_PARSE_NODE_LEAF_ARG(pns_arg->nodes[0]) == MP_QSTR_optional) {
-            if (MP_PARSE_NODE_IS_TOKEN_KIND(pns_arg->nodes[1], MP_TOKEN_KW_TRUE)) {
-                return true;
-            }
-            if (MP_PARSE_NODE_IS_TOKEN_KIND(pns_arg->nodes[1], MP_TOKEN_KW_FALSE)) {
-                return false;
-            }
-        }
+    if (!MP_PARSE_NODE_IS_STRUCT_KIND(pn_arg, PN_argument)) {
+        return false;
     }
-    compile_syntax_error(comp, pn_trailer, MP_ERROR_TEXT("invalid micropython decorator"));
-    return false;
+    mp_parse_node_struct_t *pns_arg = (mp_parse_node_struct_t *)pn_arg;
+    return MP_PARSE_NODE_IS_ID(pns_arg->nodes[0]) && MP_PARSE_NODE_LEAF_ARG(pns_arg->nodes[0]) == MP_QSTR_optional
+           && MP_PARSE_NODE_IS_TOKEN_KIND(pns_arg->nodes[1], MP_TOKEN_KW_TRUE);
 }
 
 // returns true if it was a built-in decorator (even if the built-in had an error)
@@ -871,7 +863,7 @@ static bool compile_built_in_decorator(compiler_t *comp, size_t name_len, mp_par
     // CIRCUITPY-CHANGE: optional=True compiles as bytecode where native code can't be emitted
     bool optional = false;
     if (attr == MP_QSTR_native || attr == MP_QSTR_viper) {
-        optional = compile_decorator_optional(comp, pn_trailer);
+        optional = compile_decorator_optional(pn_trailer);
     }
     if (attr == MP_QSTR_bytecode) {
         *emit_options = MP_EMIT_OPT_BYTECODE;
@@ -882,11 +874,9 @@ static bool compile_built_in_decorator(compiler_t *comp, size_t name_len, mp_par
         *emit_options = MP_EMIT_OPT_VIPER;
     #else
     } else if (attr == MP_QSTR_native || attr == MP_QSTR_viper) {
-        // CIRCUITPY-CHANGE: no native emitter on the board
-        if (optional) {
-            *emit_options = MP_EMIT_OPT_BYTECODE;
-        } else {
-            compile_syntax_error(comp, name_nodes[1], MP_ERROR_TEXT("native code not supported on this board"));
+        // CIRCUITPY-CHANGE: no native emitter on the board, so optional=True stays bytecode
+        if (!optional) {
+            compile_syntax_error(comp, name_nodes[1], MP_ERROR_TEXT("invalid micropython decorator"));
         }
     #endif
         #if MICROPY_EMIT_INLINE_ASM
