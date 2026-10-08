@@ -36,6 +36,37 @@
 	};
 };
 
+/* Expand ADC channels for analogio tests. */
+&adc0 {
+	nchannels = <4>;
+	ref-internal-mv = <3300>;
+	ref-vdd-mv = <3300>;
+};
+
+/* Emulated watchdog for the watchdog module, built on the native_sim counter
+ * like Zephyr's own watchdog tests do (tests/drivers/watchdog). */
+/ {
+	wdt_counter: wdt-counter {
+		compatible = "zephyr,counter-watchdog";
+		status = "okay";
+		counter = <&counter0>;
+	};
+
+	aliases {
+		watchdog0 = &wdt_counter;
+	};
+};
+
+/ {
+	dac0: dac {
+		compatible = "vnd,dac";
+		status = "okay";
+		#io-channel-cells = <1>;
+		vref-mv = <3300>;
+	};
+};
+
+
 /* An SPI loopback for testing: MOSI wired to MISO. */
 &spi0 {
 	loopback: loopback@0 {

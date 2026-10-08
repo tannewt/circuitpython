@@ -1,8 +1,9 @@
 # iobroker
 
 A Zephyr module for **dynamic peripheral allocation and runtime pin routing**:
-pick a free bus instance (I2C, SPI, UART) enabled in the devicetree, re-route
-it to requested pins at runtime and hand the Zephyr device to the caller.
+pick a free peripheral instance (I2C, SPI, UART, PWM) enabled in the
+devicetree, re-route it to requested pins at runtime and hand the Zephyr
+device to the caller.
 
 Pins are specified using `package_pin_t` and represent a single pin on a package
 or module containing a system-on-a-chip (SoC). This is the most common boundary
@@ -28,6 +29,16 @@ encoding can be computed at runtime and whose peripherals can be routed to
 (almost) any pin via PSEL. On other SoCs the module compiles but the allocate
 functions always return `-ENOSYS`.
 
+Analog pads are allocated through two function pairs, ADC inputs via
+`iobroker_adc_allocate()` and DAC outputs via `iobroker_dac_allocate()`. Both
+have no routing: the pad's analog function is fixed by the SoC, so the call
+resolves it (for example a SAADC AIN number, or the RA's PmnPFS.ASEL analog
+switch) from a per-SoC table, claims the pad and hands out a free channel slot
+on the analog device. Zephyr's ADC API has no channel release, so the release
+implementation unconfigures the slot per SoC (through `nrfx` for the SAADC).
+See `src/nordic/nrf/iobroker_analog.c`, `src/nxp/mcxn/iobroker_analog.c`,
+`src/renesas/ra/iobroker_analog.c` and `src/emul/iobroker_analog.c`.
+
 ## Source layout
 
 The source is organized by vendor and SoC family under `src/`:
@@ -41,8 +52,12 @@ src/
   iobroker_internal.h              # helpers shared between core and
                                       # vendor implementations (private)
   nordic/
-    nrf/                              # every nRF SoC shares one pinctrl
-      iobroker_route.c             # encoding, so the family is one dir
+    nrf/                           # every nRF SoC shares one pinctrl
+      iobroker_route.c            # encoding, so the family is one dir
+  nxp/
+    mcxn/                        # NXP MCX N: LPADC inputs and the LPDAC
+      iobroker_analog.c         # output pad resolve from the pin
+                                   # functions table
 ```
 
 The core compiles on every SoC. Each vendor adds a `src/<vendor>/<soc>/`
@@ -70,6 +85,7 @@ provide per-board tables (the generated `board.c` always emits them):
 const iobroker_instance_t iobroker_i2c_buses[];   // + _states[] and _bus_count
 const iobroker_instance_t iobroker_spi_buses[];   // ...
 const iobroker_instance_t iobroker_uart_buses[];  // ...
+const iobroker_instance_t iobroker_pwm_buses[];   // ...
 const struct device * const iobroker_gpio_port_devices[];  // + _indexes[] and _count
 const iobroker_package_pin_t iobroker_package_pins[];   // + _pin_count
 const uint16_t iobroker_reserved_pads[];   // + _pin_count
@@ -78,17 +94,23 @@ const uint16_t iobroker_reserved_pads[];   // + _pin_count
 The package pin map is selected from the module's reference maps:
 `Kconfig.packages` offers one option per transcribed package
 (`packages/*.toml`), each visible only for the SoCs it applies to and
-preselected for the development kits. SoCs with no reference map fall back to
-`IOBROKER_PACKAGE_ONE_TO_ONE`, an identity map where the package pin number
-is the global pin number (gpio port index * 32 + pin within the port), so
-boards without a transcribed physical package can still resolve their pins.
-`IOBROKER_PACKAGE_NONE` is also available and generates an empty map, making
-package pin lookups fail with `-EINVAL`. The selected TOML (or the empty
-map) is rendered into a build-directory translation unit at build time. The
-identity map needs no rendered table: the core applies it directly.
+preselected for the development kits. The map's SoC pads are numbered by
+the package's own pin ids (row-major ball order, or the datasheet's pin
+number for a QFN/QFP package); each pad carries the global GPIO number
+it bonds to when it sits on a GPIO controller. Analog-only pads (pads no
+GPIO controller covers, e.g. MCX N's ANA pads) carry the datasheet's pad
+name in `pad_name` and become pin objects named by `zephyr2cp.py` from
+that name, so analogio can reach them. SoCs with no reference map fall
+back to `IOBROKER_PACKAGE_ONE_TO_ONE`, an identity map where the package
+pin number is the global pin number (gpio port index * 32 + pin within
+the port), so boards without a transcribed physical package can still
+resolve their pins. `IOBROKER_PACKAGE_NONE` is also available and
+generates an empty map, making package pin lookups fail with `-EINVAL`.
+The selected TOML (or the empty map) is rendered into a build-directory
+translation unit at build time. The identity map needs no rendered
+table: the core applies it directly.
 New maps are transcribed from a SoC datasheet with `tools/gen_package.py`
 (see the script's docstring; the datasheets live in `datasheets/`).
-
 Each instance entry contains the Zephyr device, its `struct
 pinctrl_dev_config` (via `PINCTRL_DT_DEV_CONFIG_DECLARE`/`_GET`) and, when the
 devicetree state has fixed pins, the raw `pinctrl_soc_pin_t` values of the
@@ -138,6 +160,21 @@ quiescent state (disconnected) on release, and GPIO claims conflict with bus
 allocations the same way bus allocations conflict with each other.
 `iobroker_gpio_allocate()` resolves the package pin through the map
 and returns both the GPIO controller device and the pin number within it.
+PWM instances are allocated whole with `iobroker_pwm_allocate()`, for one
+package pin routed to the instance's first output; the caller initializes the
+device and returns it with `iobroker_release()`, as with the buses. Sharing an
+instance between pins with the same base frequency (for pwmio) is not
+supported yet.
+
+Not every instance can reach every pad. On nRF52 and nRF53 the routing is a
+full crossbar, but on nRF54L peripherals and GPIO controllers are grouped in
+power domains and a peripheral can only drive pads of its own domain (the
+domain is encoded in the register addresses, which the instance and GPIO
+controller tables carry). An allocate call whose pins no instance of the
+requested kind can reach fails with `-EINVAL`, like a pin that is not in
+the package map: it is a property of the request, distinct from `-ENODEV`
+for "every instance that could is busy", so callers can report a wrong pin
+choice rather than a busy peripheral.
 `iobroker_gpio_package_pin()` maps a GPIO controller's hardware port index
 and pin number (the two halves of the global pin numbering) back to the
 package pin the pad is bonded to.
