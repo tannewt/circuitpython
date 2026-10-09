@@ -250,6 +250,15 @@ bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len,
 
     int ret = spi_transceive_signal(self->spi_device, &self->config[self->active_config], &tx, &rx, &self->signal);
 
+    // Wait for the transfer to complete while running background tasks. The driver may read the
+    // fill buffer until then.
+    int signaled = 0;
+    int result = 0;
+    while (ret == 0 && !signaled && !mp_hal_is_interrupted()) {
+        RUN_BACKGROUND_TASKS;
+        k_poll_signal_check(&self->signal, &signaled, &result);
+    }
+
     if (need_free) {
         if (used_port_malloc) {
             port_free(tx_data);
@@ -258,19 +267,7 @@ bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len,
         }
     }
 
-    if (ret != 0) {
-        return false;
-    }
-
-    // Wait for the transfer to complete while running background tasks
-    int signaled = 0;
-    int result = 0;
-    while (!signaled && !mp_hal_is_interrupted()) {
-        RUN_BACKGROUND_TASKS;
-        k_poll_signal_check(&self->signal, &signaled, &result);
-    }
-
-    return signaled && result == 0;
+    return ret == 0 && signaled && result == 0;
 }
 
 bool common_hal_busio_spi_transfer(busio_spi_obj_t *self, const uint8_t *data_out, uint8_t *data_in, size_t len) {
