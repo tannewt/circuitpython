@@ -34,9 +34,14 @@
 
 // Is the MSC device enabled?
 static volatile bool storage_usb_is_enabled;
+// CIRCUITPY's USB writability when the drive was disabled. It is restored on enable
+// unless a remount() changed it in the meantime.
+static bool usb_writable_before_disable;
+static bool restore_usb_writable;
 
 void storage_usb_set_defaults(void) {
     storage_usb_is_enabled = CIRCUITPY_USB_MSC_ENABLED_DEFAULT;
+    restore_usb_writable = false;
 }
 
 bool storage_usb_enabled(void) {
@@ -44,6 +49,18 @@ bool storage_usb_enabled(void) {
 }
 
 static bool usb_drive_set_enabled(bool enabled) {
+    if (enabled) {
+        // Set this before the LUN reports ready: the host reads write-protect status when it remounts.
+        if (restore_usb_writable) {
+            filesystem_set_internal_writable_by_usb(usb_writable_before_disable);
+            restore_usb_writable = false;
+        }
+    } else if (storage_usb_is_enabled) {
+        supervisor_vfs_t *circuitpy = filesystem_circuitpy();
+        usb_writable_before_disable = circuitpy != NULL &&
+            (circuitpy->common.blockdev.flags & MP_BLOCKDEV_FLAG_USB_WRITABLE) != 0;
+        restore_usb_writable = true;
+    }
     // We can't change the descriptors once we're connected, but we can make the LUN be ready or not ready.
     storage_usb_is_enabled = enabled;
     if (tud_connected()) {
@@ -54,7 +71,11 @@ static bool usb_drive_set_enabled(bool enabled) {
         // So wait long enough for host to send a TEST UNIT READY and receive a reply.
         mp_hal_delay_ms(2500);
     }
-    filesystem_set_internal_writable_by_usb(enabled);
+    if (!enabled) {
+        filesystem_set_internal_writable_by_usb(false);
+        // USB MSC may still hold the lock from when it reported the drive writable.
+        usb_msc_release_circuitpy_lock();
+    }
     return true;
 }
 
@@ -71,6 +92,13 @@ bool common_hal_storage_unsafe_disable_usb_drive(void) {
 }
 
 bool common_hal_storage_enable_usb_drive(void) {
+    // A file open for writing or a workflow transfer holds the filesystem lock.
+    // The host would then see the drive as read-only, and keep it that way after the lock is released.
+    supervisor_vfs_t *circuitpy = filesystem_circuitpy();
+    if (!storage_usb_is_enabled && circuitpy != NULL &&
+        (circuitpy->common.blockdev.flags & MP_BLOCKDEV_FLAG_LOCKED) != 0) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("File write in progress"));
+    }
     return usb_drive_set_enabled(true);
 }
 #else
@@ -209,7 +237,11 @@ mp_obj_t common_hal_storage_getmount(const char *mount_path) {
 static void remount_vfs(supervisor_vfs_t *fs_mount, bool readonly, bool disable_concurrent_write_protection) {
     #if CIRCUITPY_USB_DEVICE && CIRCUITPY_USB_MSC
     if (!blockdev_lock(fs_mount)) {
-        mp_raise_RuntimeError(MP_ERROR_TEXT("Cannot remount path when visible via USB."));
+        if (usb_msc_holds_lock(&fs_mount->fat)) {
+            mp_raise_RuntimeError(MP_ERROR_TEXT("Cannot remount path when visible via USB."));
+        }
+        // A file open for writing or a workflow transfer holds the lock.
+        mp_raise_RuntimeError(MP_ERROR_TEXT("File write in progress"));
     }
     #endif
 
@@ -218,6 +250,10 @@ static void remount_vfs(supervisor_vfs_t *fs_mount, bool readonly, bool disable_
     blockdev_unlock(fs_mount);
 
     #if CIRCUITPY_USB_DEVICE && CIRCUITPY_USB_MSC
+    if (fs_mount == filesystem_circuitpy()) {
+        // remount() wins over the state saved when the USB drive was disabled.
+        restore_usb_writable = false;
+    }
     usb_msc_remount(&fs_mount->fat);
     #endif
 }
