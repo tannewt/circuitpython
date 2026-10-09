@@ -63,6 +63,8 @@ CIRCUITPY_ALARM ?= 1
 ifeq ($(CHIP_VARIANT),RP2040)
 # Default PICODVI off because it uses RAM to store code run on the second CPU for RP2040.
 CIRCUITPY_PICODVI ?= 0
+# picodvi.AudioOut needs HSTX.
+CIRCUITPY_PICODVI_AUDIOOUT = 0
 
 CIRCUITPY_TOUCHIO ?= 1
 
@@ -76,6 +78,8 @@ CIRCUITPY_ALL_MEMORY_DMA_CAPABLE = 0
 
 # Default PICODVI on because it doesn't require much code in RAM to talk to HSTX.
 CIRCUITPY_PICODVI ?= 1
+# Audio over the DVI cable. Boards without a DVI connector may turn it off.
+CIRCUITPY_PICODVI_AUDIOOUT ?= $(call enable-if-all,$(CIRCUITPY_PICODVI) $(CIRCUITPY_AUDIOCORE))
 
 # delay in ms before calling cyw43_arch_init_with_country
 CIRCUITPY_CYW43_INIT_DELAY ?= 0
