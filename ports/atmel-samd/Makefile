@@ -312,6 +312,7 @@ endif
 
 ifeq ($(CHIP_FAMILY), samd21)
 SRC_S += shared/runtime/gchelper_thumb1.s
+SRC_S += libgcc_thumb1.s
 else
 SRC_S += shared/runtime/gchelper_thumb2.s
 endif
