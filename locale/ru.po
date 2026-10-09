@@ -4777,6 +4777,10 @@ msgid "invalid cert"
 msgstr "Неверный сертификат"
 
 #: shared-module/storage/__init__.c
+msgid "File write in progress"
+msgstr ""
+
+#: shared-module/storage/__init__.c
 msgid "Mount point directory missing"
 msgstr "Отсутствует каталог точки монтирования"
 
