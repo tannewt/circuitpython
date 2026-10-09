@@ -266,6 +266,7 @@ SRC_PERIPHERALS := \
 	peripherals/samd/$(PERIPHERALS_CHIP_FAMILY)/pins.c \
 	peripherals/samd/$(PERIPHERALS_CHIP_FAMILY)/sercom.c \
 	peripherals/samd/$(PERIPHERALS_CHIP_FAMILY)/timers.c \
+	peripherals/samd/adc.c \
 	peripherals/samd/clocks.c \
 	peripherals/samd/dma.c \
 	peripherals/samd/events.c \
