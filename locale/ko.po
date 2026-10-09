@@ -4758,6 +4758,10 @@ msgid "invalid cert"
 msgstr "cert가 유효하지 않습니다"
 
 #: shared-module/storage/__init__.c
+msgid "File write in progress"
+msgstr ""
+
+#: shared-module/storage/__init__.c
 msgid "Mount point directory missing"
 msgstr ""
 
