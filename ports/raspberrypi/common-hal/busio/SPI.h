@@ -7,6 +7,7 @@
 #pragma once
 
 #include "py/obj.h"
+#include "supervisor/shared/async_flag.h"
 #include "peripherals/spi.h"
 
 typedef struct {

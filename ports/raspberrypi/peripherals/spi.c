@@ -20,7 +20,7 @@
 
 #if CIRCUITPY_ASYNC_SPI
 // Done flag of the async transfer on each kept RX channel, set when that channel finishes.
-static circuitpy_async_flag_t *async_flags[NUM_DMA_CHANNELS];
+static volatile bool *async_flags[NUM_DMA_CHANNELS];
 // RX channels with the interrupt enabled.
 static uint32_t async_irq_mask;
 
@@ -30,7 +30,7 @@ static void __not_in_flash_func(spi_dma_irq_handler)(void) {
     dma_hw->ints0 = pending;
     for (uint chan = 0; pending != 0; chan++, pending >>= 1) {
         if ((pending & 1) && async_flags[chan] != NULL) {
-            CIRCUITPY_ASYNC_FLAG_SET(async_flags[chan]);
+            *async_flags[chan] = true;
         }
     }
 }
@@ -142,7 +142,7 @@ void rp2_spi_deinit(rp2_spi_t *self) {
     #if CIRCUITPY_ASYNC_SPI
     if (self->async_active) {
         _abort(self);
-        CIRCUITPY_ASYNC_FLAG_SET(self->async_done);
+        *self->async_done = true;
     }
     _idle(self);
     #else
@@ -205,22 +205,22 @@ static void _idle(rp2_spi_t *self) {
     if (self->idle_done != NULL) {
         _apply(self, self->pending_baudrate, self->pending_polarity, self->pending_phase,
             self->pending_bits);
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
+        *self->idle_done = true;
         self->idle_done = NULL;
     }
 }
 
 void rp2_spi_configure_start(rp2_spi_t *self, uint32_t baudrate, uint8_t polarity, uint8_t phase,
-    uint8_t bits, circuitpy_async_flag_t *done) {
-    CIRCUITPY_ASYNC_FLAG_INIT(done);
+    uint8_t bits, volatile bool *done) {
+    *done = false;
     if (!self->async_active) {
         _apply(self, baudrate, polarity, phase, bits);
-        CIRCUITPY_ASYNC_FLAG_SET(done);
+        *done = true;
         return;
     }
     // A later configure() replaces one still waiting.
     if (self->idle_done != NULL) {
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
+        *self->idle_done = true;
     }
     self->pending_baudrate = baudrate;
     self->pending_polarity = polarity;
@@ -229,7 +229,7 @@ void rp2_spi_configure_start(rp2_spi_t *self, uint32_t baudrate, uint8_t polarit
     self->idle_done = done;
 }
 
-void rp2_spi_configure_cancel(rp2_spi_t *self, circuitpy_async_flag_t *done) {
+void rp2_spi_configure_cancel(rp2_spi_t *self, volatile bool *done) {
     if (self->idle_done == done) {
         self->idle_done = NULL;
     }
@@ -242,7 +242,7 @@ void rp2_spi_configure_cancel(rp2_spi_t *self, circuitpy_async_flag_t *done) {
 // until deinit, for buses that send often. Returns whether DMA is running.
 static bool _start(rp2_spi_t *self,
     const uint8_t *data_out, size_t out_len,
-    uint8_t *data_in, size_t in_len, circuitpy_async_flag_t *done) {
+    uint8_t *data_in, size_t in_len, volatile bool *done) {
     size_t len = MAX(out_len, in_len);
     // Only use DMA if both data buffers are in SRAM. Otherwise, we'll stall the DMA with PSRAM or flash cache misses.
     bool use_dma = len >= 32 && data_in >= (uint8_t *)SRAM_BASE && data_out >= (uint8_t *)SRAM_BASE;
@@ -352,26 +352,26 @@ void rp2_spi_transfer(rp2_spi_t *self, const uint8_t *data_out, size_t out_len,
 
 // Start an async transfer; done is set when it has finished, here if it ran in software.
 static __attribute__((noinline)) void _async_start(rp2_spi_t *self, const uint8_t *data_out, size_t out_len,
-    uint8_t *data_in, size_t in_len, circuitpy_async_flag_t *done) {
-    CIRCUITPY_ASYNC_FLAG_INIT(done);
+    uint8_t *data_in, size_t in_len, volatile bool *done) {
+    *done = false;
     self->async_done = done;
     // An empty data side means there is nothing to send, whatever the one-byte side holds.
     self->async_active = out_len != 0 && in_len != 0 &&
         _start(self, data_out, out_len, data_in, in_len, done);
     if (!self->async_active) {
-        CIRCUITPY_ASYNC_FLAG_SET(done);
+        *done = true;
     }
 }
 
 void rp2_spi_write_start(rp2_spi_t *self, const uint8_t *data, size_t len,
-    circuitpy_async_flag_t *done) {
+    volatile bool *done) {
     rp2_spi_end(self);
     _async_start(self, data, len, &self->one_byte, 1, done);
 }
 
 #if CIRCUITPY_ASYNC_SPI
 void rp2_spi_read_start(rp2_spi_t *self, uint8_t *data, size_t len, uint8_t write_value,
-    circuitpy_async_flag_t *done) {
+    volatile bool *done) {
     // End the previous transfer first: an async write may still be receiving into one_byte.
     rp2_spi_end(self);
     self->one_byte = write_value;
@@ -379,7 +379,7 @@ void rp2_spi_read_start(rp2_spi_t *self, uint8_t *data, size_t len, uint8_t writ
 }
 
 void rp2_spi_transfer_start(rp2_spi_t *self, const uint8_t *data_out, uint8_t *data_in,
-    size_t len, circuitpy_async_flag_t *done) {
+    size_t len, volatile bool *done) {
     rp2_spi_end(self);
     _async_start(self, data_out, len, data_in, len, done);
 }
@@ -402,11 +402,11 @@ static void _abort(rp2_spi_t *self) {
     _idle(self);
 }
 
-void rp2_spi_stop(rp2_spi_t *self, circuitpy_async_flag_t *done) {
+void rp2_spi_stop(rp2_spi_t *self, volatile bool *done) {
     if (!self->async_active || self->async_done != done) {
         return;
     }
-    if (CIRCUITPY_ASYNC_FLAG_IS_SET(done)) {
+    if (*done) {
         rp2_spi_end(self);
         return;
     }
@@ -422,7 +422,7 @@ void rp2_spi_end(rp2_spi_t *self) {
         #if CIRCUITPY_ASYNC_SPI
         async_flags[self->dma_rx] = NULL;
         #endif
-        CIRCUITPY_ASYNC_FLAG_SET(self->async_done);
+        *self->async_done = true;
         #if CIRCUITPY_ASYNC_SPI
         _idle(self);
         #endif
