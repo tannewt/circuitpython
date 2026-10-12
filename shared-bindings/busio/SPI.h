@@ -16,6 +16,13 @@
 // Type object used in Python. Should be shared between ports.
 extern const mp_obj_type_t busio_spi_type;
 
+// Argument tables, also used by async_spi.SPI, which takes the same arguments.
+extern const mp_arg_t busio_spi_make_new_args[4];      // clock, MOSI, MISO, half_duplex
+extern const mp_arg_t busio_spi_configure_args[4];
+extern const mp_arg_t busio_spi_write_args[3];
+extern const mp_arg_t busio_spi_readinto_args[4];
+extern const mp_arg_t busio_spi_write_readinto_args[6];
+
 // Construct an underlying SPI object.
 extern void common_hal_busio_spi_construct(busio_spi_obj_t *self,
     const mcu_pin_obj_t *clock, const mcu_pin_obj_t *mosi,

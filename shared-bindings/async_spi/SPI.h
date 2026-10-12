@@ -14,13 +14,6 @@
 
 extern const mp_obj_type_t async_spi_spi_type;
 
-// Argument tables, shared with busio.SPI, which takes the same arguments.
-extern const mp_arg_t async_spi_spi_make_new_args[4];      // clock, MOSI, MISO, half_duplex
-extern const mp_arg_t async_spi_spi_configure_args[4];
-extern const mp_arg_t async_spi_spi_write_args[3];
-extern const mp_arg_t async_spi_spi_readinto_args[4];
-extern const mp_arg_t async_spi_spi_write_readinto_args[6];
-
 void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin_obj_t *clock,
     const mcu_pin_obj_t *mosi, const mcu_pin_obj_t *miso);
 bool common_hal_async_spi_spi_deinited(async_spi_spi_obj_t *self);

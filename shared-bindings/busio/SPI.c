@@ -14,15 +14,6 @@
 #include "py/runtime.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/busio/SPI.h"
-#if CIRCUITPY_ASYNC_SPI
-// async_spi.SPI takes the same arguments, so its tables are used.
-#include "shared-bindings/async_spi/SPI.h"
-#define busio_spi_make_new_args async_spi_spi_make_new_args
-#define busio_spi_configure_args async_spi_spi_configure_args
-#define busio_spi_write_args async_spi_spi_write_args
-#define busio_spi_readinto_args async_spi_spi_readinto_args
-#define busio_spi_write_readinto_args async_spi_spi_write_readinto_args
-#endif
 #include "shared-bindings/util.h"
 #include "shared/runtime/buffer_helper.h"
 #include "shared/runtime/context_manager_helpers.h"
@@ -93,18 +84,20 @@
 //|
 
 
+#if CIRCUITPY_BUSIO_SPI
+// async_spi.SPI takes the same arguments and uses these tables too.
+const mp_arg_t busio_spi_make_new_args[] = {
+    { MP_QSTR_clock, MP_ARG_REQUIRED | MP_ARG_OBJ },
+    { MP_QSTR_MOSI, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+    { MP_QSTR_MISO, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+    { MP_QSTR_half_duplex, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
+};
+#endif
+
 // TODO(tannewt): Support LSB SPI.
 static mp_obj_t busio_spi_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
     #if CIRCUITPY_BUSIO_SPI
     enum { ARG_clock, ARG_MOSI, ARG_MISO, ARG_half_duplex };
-    #if !CIRCUITPY_ASYNC_SPI
-    static const mp_arg_t busio_spi_make_new_args[] = {
-        { MP_QSTR_clock, MP_ARG_REQUIRED | MP_ARG_OBJ },
-        { MP_QSTR_MOSI, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_MISO, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_half_duplex, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
-    };
-    #endif
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_make_new_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(busio_spi_make_new_args), busio_spi_make_new_args, args);
 
@@ -185,14 +178,12 @@ static void check_for_deinit(busio_spi_obj_t *self) {
 //|         ...
 //|
 
-#if !CIRCUITPY_ASYNC_SPI
-static const mp_arg_t busio_spi_configure_args[] = {
+const mp_arg_t busio_spi_configure_args[] = {
     { MP_QSTR_baudrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 100000} },
     { MP_QSTR_polarity, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
     { MP_QSTR_phase, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
     { MP_QSTR_bits, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 8} },
 };
-#endif
 
 static mp_obj_t busio_spi_configure(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_baudrate, ARG_polarity, ARG_phase, ARG_bits };
@@ -258,13 +249,11 @@ MP_DEFINE_CONST_FUN_OBJ_1(busio_spi_unlock_obj, busio_spi_obj_unlock);
 //|         ...
 //|
 
-#if !CIRCUITPY_ASYNC_SPI
-static const mp_arg_t busio_spi_write_args[] = {
+const mp_arg_t busio_spi_write_args[] = {
     { MP_QSTR_buffer,     MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
     { MP_QSTR_start,      MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
     { MP_QSTR_end,        MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = INT_MAX} },
 };
-#endif
 
 static mp_obj_t busio_spi_write(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_buffer, ARG_start, ARG_end };
@@ -318,14 +307,12 @@ MP_DEFINE_CONST_FUN_OBJ_KW(busio_spi_write_obj, 1, busio_spi_write);
 //|         ...
 //|
 
-#if !CIRCUITPY_ASYNC_SPI
-static const mp_arg_t busio_spi_readinto_args[] = {
+const mp_arg_t busio_spi_readinto_args[] = {
     { MP_QSTR_buffer,     MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
     { MP_QSTR_start,      MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
     { MP_QSTR_end,        MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = INT_MAX} },
     { MP_QSTR_write_value, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
 };
-#endif
 
 static mp_obj_t busio_spi_readinto(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_buffer, ARG_start, ARG_end, ARG_write_value };
@@ -387,8 +374,7 @@ MP_DEFINE_CONST_FUN_OBJ_KW(busio_spi_readinto_obj, 1, busio_spi_readinto);
 //|         ...
 //|
 
-#if !CIRCUITPY_ASYNC_SPI
-static const mp_arg_t busio_spi_write_readinto_args[] = {
+const mp_arg_t busio_spi_write_readinto_args[] = {
     { MP_QSTR_out_buffer,    MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
     { MP_QSTR_in_buffer,     MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
     { MP_QSTR_out_start,     MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
@@ -396,7 +382,6 @@ static const mp_arg_t busio_spi_write_readinto_args[] = {
     { MP_QSTR_in_start,      MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0} },
     { MP_QSTR_in_end,        MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = INT_MAX} },
 };
-#endif
 
 static mp_obj_t busio_spi_write_readinto(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_out_buffer, ARG_in_buffer, ARG_out_start, ARG_out_end, ARG_in_start, ARG_in_end };
