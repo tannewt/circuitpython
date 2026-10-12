@@ -110,8 +110,7 @@ static void *async_spi_spi_configure(circuitpy_async_flag_t *done, size_t n_args
     uint8_t phase = (uint8_t)mp_arg_validate_int_range(args[ARG_phase].u_int, 0, 1, MP_QSTR_phase);
     uint8_t bits = (uint8_t)mp_arg_validate_int_range(args[ARG_bits].u_int, 8, 9, MP_QSTR_bits);
 
-    common_hal_async_spi_spi_configure_start(self, args[ARG_baudrate].u_int, polarity, phase, bits, done);
-    return self;
+    return common_hal_async_spi_spi_configure_start(self, args[ARG_baudrate].u_int, polarity, phase, bits, done);
 }
 static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_configure);
 
@@ -136,8 +135,7 @@ static void *async_spi_spi_write(circuitpy_async_flag_t *done, size_t n_args, co
     size_t len;
     uint8_t *data = buffer_slice(args[ARG_buffer].u_obj, args[ARG_start].u_int, args[ARG_end].u_int,
         MP_BUFFER_READ, &len);
-    common_hal_async_spi_spi_write_start(self, data, len, done);
-    return self;
+    return common_hal_async_spi_spi_write_start(self, data, len, done);
 }
 static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_obj, 1, async_spi_spi_write);
 
@@ -166,8 +164,7 @@ static void *async_spi_spi_readinto(circuitpy_async_flag_t *done, size_t n_args,
     size_t len;
     uint8_t *data = buffer_slice(args[ARG_buffer].u_obj, args[ARG_start].u_int, args[ARG_end].u_int,
         MP_BUFFER_WRITE, &len);
-    common_hal_async_spi_spi_readinto_start(self, data, len, (uint8_t)args[ARG_write_value].u_int, done);
-    return self;
+    return common_hal_async_spi_spi_readinto_start(self, data, len, (uint8_t)args[ARG_write_value].u_int, done);
 }
 static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_readinto_obj, 1, async_spi_spi_readinto);
 
@@ -206,8 +203,7 @@ static void *async_spi_spi_write_readinto(circuitpy_async_flag_t *done, size_t n
     if (out_len != in_len) {
         mp_raise_ValueError(MP_ERROR_TEXT("buffer slices must be of equal length"));
     }
-    common_hal_async_spi_spi_write_readinto_start(self, data_out, data_in, out_len, done);
-    return self;
+    return common_hal_async_spi_spi_write_readinto_start(self, data_out, data_in, out_len, done);
 }
 static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_readinto_obj, 2, async_spi_spi_write_readinto);
 

@@ -116,14 +116,14 @@ static uint16_t operation_of(uint8_t polarity, uint8_t phase, uint8_t bits) {
     return operation;
 }
 
-void common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
+void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done) {
     CIRCUITPY_ASYNC_FLAG_INIT(done);
     uint16_t operation = operation_of(polarity, phase, bits);
     if (self->done == NULL || CIRCUITPY_ASYNC_FLAG_IS_SET(self->done)) {
         apply_config(self, baudrate, operation);
         CIRCUITPY_ASYNC_FLAG_SET(done);
-        return;
+        return self;
     }
     // A later configure() replaces one still waiting.
     if (self->idle_done != NULL) {
@@ -132,6 +132,7 @@ void common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_
     self->pending_frequency = baudrate;
     self->pending_operation = operation;
     self->idle_done = done;
+    return self;
 }
 
 mp_obj_t common_hal_async_spi_spi_configure_end(void *context, circuitpy_async_flag_t *done) {
@@ -182,12 +183,13 @@ static void start(async_spi_spi_obj_t *self, const uint8_t *data_out, uint8_t *d
     }
 }
 
-void common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint8_t *data,
+void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint8_t *data,
     size_t len, circuitpy_async_flag_t *done) {
     start(self, data, NULL, len, done);
+    return self;
 }
 
-void common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
+void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done) {
     wait_done(self);
     // Without a TX buffer Zephyr sends zeros; another value needs a buffer.
@@ -198,11 +200,13 @@ void common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t 
     }
     self->fill = fill;
     start(self, fill, data, len, done);
+    return self;
 }
 
-void common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
+void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
     const uint8_t *data_out, uint8_t *data_in, size_t len, circuitpy_async_flag_t *done) {
     start(self, data_out, data_in, len, done);
+    return self;
 }
 
 // Called once done is set.
