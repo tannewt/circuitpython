@@ -247,11 +247,17 @@ int neopixel_send(package_pin_t pin, const uint8_t *pixels, size_t num_bytes,
         return -EINVAL;
     }
 
+    // An exclusive channel gets a group of its own, which on nRF is a whole
+    // PWM instance: the sequence drives all of the instance's outputs
+    // (NRF_PWM_LOAD_COMMON), and only this pin's output is connected. The
+    // frequency, the 800 kHz bit rate, only matters for sharing, which an
+    // exclusive channel never does.
     const struct device *dev = NULL;
-    int ret = iobroker_pwm_allocate(pin, &dev);
+    uint32_t channel;
+    int ret = iobroker_pwm_channel_allocate(pin, 800000, true, &dev, &channel);
     if (ret == 0) {
         ret = pwm_send_on(dev, pixels, num_bytes, pattern_buffer);
-        (void)iobroker_release(dev);
+        (void)iobroker_pwm_channel_release(dev, channel);
         return ret;
     }
     if (ret == -ENODEV || ret == -EINVAL) {

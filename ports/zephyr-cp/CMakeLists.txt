@@ -10,6 +10,9 @@ set(ZEPHYR_EXTRA_MODULES
     # NeoPixel (WS2812-style) transmit on a runtime-chosen pin (see
     # internal-modules/neopixel/README.md).
     ${CMAKE_CURRENT_SOURCE_DIR}/internal-modules/neopixel
+    # Emulated PWM controller for native_sim tests (see
+    # internal-modules/pwm_emul/src/pwm_emul.c).
+    ${CMAKE_CURRENT_SOURCE_DIR}/internal-modules/pwm_emul
     # Kconfig-only module with defaults that must merge before Zephyr's
     # subsystem Kconfig files (see internal-modules/circuitpython-kconfig/Kconfig).
     ${CMAKE_CURRENT_SOURCE_DIR}/internal-modules/circuitpython-kconfig

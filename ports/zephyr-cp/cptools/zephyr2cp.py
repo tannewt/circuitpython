@@ -1397,6 +1397,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
     # pins match their state.
     pinctrl_nrf = False
     pwm_nrfx = False
+    pwm_emul = False
     if config_present:
         for line in config.read_text().splitlines():
             if line.startswith("CONFIG_PINCTRL_NRF="):
@@ -1406,9 +1407,16 @@ static MP_DEFINE_CONST_FUN_OBJ_0({function_object}, {c_function_name});""".lstri
                 # Without it, PWM nodes have no device to reference, and
                 # neopixel_write (the neopixel module's nRF implementation,
                 # which allocates an instance through iobroker) cannot transmit, so
-                # both the pwm pool and the module follow this symbol.
+                # both the pwm pool and the module follow this symbol. pwmio
+                # allocates its channels through iobroker's nRF implementation
+                # too.
                 pwm_nrfx = line.strip().endswith("=y")
+            elif line.startswith("CONFIG_PWM_ADAFRUIT_EMUL="):
+                # The emulated PWM controllers on native_sim (pwm_emul
+                # module), which iobroker allocates pwmio channels on too.
+                pwm_emul = line.strip().endswith("=y")
     board_info["neopixel_write"] = pwm_nrfx
+    board_info["pwmio"] = pwm_nrfx or pwm_emul
 
     iobroker_includes = """
 #include <zephyr/device.h>

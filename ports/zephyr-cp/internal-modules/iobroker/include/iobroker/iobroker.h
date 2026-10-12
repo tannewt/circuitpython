@@ -59,6 +59,16 @@
 #define IOBROKER_DAC 0
 #endif
 
+// PWM channel allocation (iobroker_pwm_channel_allocate()) is available with
+// nRF runtime routing (src/nordic/nrf/) and with the emulated PWM on
+// native_sim (src/emul/). Without it the PWM channel functions report
+// -ENOSYS.
+#if IOBROKER_ROUTING || defined(CONFIG_PWM_ADAFRUIT_EMUL)
+#define IOBROKER_PWM_CHANNELS 1
+#else
+#define IOBROKER_PWM_CHANNELS 0
+#endif
+
 // Signals needed by the widest bus (UART with tx/rx/rts/cts).
 #define IOBROKER_MAX_PINS 4
 
@@ -166,6 +176,16 @@ typedef struct {
     // Used by iobroker_pin_in_use(); empty while the instance is free.
     package_pin_t pins[IOBROKER_MAX_PINS];
     uint8_t pin_count;
+    // The fields below are used only for PWM instances allocated by channel
+    // (iobroker_pwm_channel_allocate()); buses leave them 0.
+    // Frequency in Hz that the instance's channels were requested at; a
+    // request joins only at exactly this frequency.
+    uint32_t frequency;
+    // True when one caller holds the instance alone, so no other channel
+    // may join it.
+    bool exclusive;
+    // Bit n is set while output n is allocated to a channel.
+    uint8_t channels_used;
 } iobroker_state_t;
 
 // Generated board tables, emitted by the board's generated board.c whenever
@@ -215,14 +235,48 @@ int iobroker_spi_allocate(package_pin_t clock, package_pin_t mosi,
     package_pin_t miso, const struct device **dev_out);
 int iobroker_uart_allocate(package_pin_t tx, package_pin_t rx,
     package_pin_t rts, package_pin_t cts, const struct device **dev_out);
-// Allocate a whole PWM instance for one output pin, routed to the
-// instance's first output (OUT0 on nRF); its other outputs stay
-// disconnected. The instance is not shared, so the caller may program all
-// of it (neopixel_write plays its own sequence). Like the bus allocate
-// functions, the caller initializes the device (device_init()) and returns
-// it with iobroker_release(). Sharing an instance between pins with the same
-// base frequency, as pwmio will want, is not supported yet.
-int iobroker_pwm_allocate(package_pin_t pin, const struct device **dev_out);
+
+// Allocate one PWM output channel for a pin.
+//
+// Channels that share a period form a group. What a group is depends on
+// the SoC:
+//   nRF:   a whole PWM instance (four channels)
+//   RP2:   a slice (channels A and B)
+//   ESP32: an LEDC timer and the channels bound to it
+//   STM32: a timer (up to four channels sharing its auto-reload period)
+//
+// frequency (Hz) is used only to decide sharing; this call does not set the
+// frequency. The caller converts it to a period itself (with
+// pwm_get_cycles_per_sec()) and sets it with pwm_set_cycles(). Requests at
+// the same frequency thus pass identical periods to pwm_set_cycles(), as
+// drivers require of channels in one group.
+//
+// A request joins a running group requested at exactly the same frequency,
+// unless the group or the request is exclusive. Otherwise a free group is
+// taken. An exclusive request gets a group of its own that nobody joins, for
+// a caller that changes the period or programs the group's hardware itself.
+//
+// On success returns 0 and sets *dev_out and *channel_out (the channel number
+// pwm_set_cycles() takes). The caller then calls device_init(), which returns
+// -EALREADY if the group was already running. Joining a running group only
+// connects the new pin; the group's other outputs are not disturbed.
+//
+// Returns a negative errno on failure, with the out parameters untouched:
+//   -EINVAL: the pin is disconnected, not in the package map, has no GPIO,
+//            or no PWM group can reach it
+//   -EBUSY:  the pin is already claimed
+//   -ENODEV: no group with a free channel is compatible with the request
+//   -ENOSYS: PWM channel allocation is unsupported on this SoC
+// Every allocation must be paired with iobroker_pwm_channel_release().
+int iobroker_pwm_channel_allocate(package_pin_t pin, uint32_t frequency,
+    bool exclusive, const struct device **dev_out, uint32_t *channel_out);
+
+// Release a channel allocated with iobroker_pwm_channel_allocate(): its pin
+// is disconnected from the group and left quiescent. Releasing the group's
+// last channel releases the whole group, de-initializing its device. The
+// caller stops the channel's output (pwm_set_cycles() with a zero pulse)
+// first. Returns true when the channel was allocated.
+bool iobroker_pwm_channel_release(const struct device *dev, uint32_t channel);
 
 // Allocate a package pin for the ADC. Analog inputs have no runtime routing:
 // the pad's analog input is fixed by the SoC, so the call resolves and

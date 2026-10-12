@@ -95,6 +95,19 @@
 	};
 };
 
+/* Emulated PWM controller for pwmio tests: one channel per gpio_emul pin
+ * and two period groups that any channel can join, clocked at 16 MHz. */
+/ {
+	pwm_emul: pwm-emul {
+		compatible = "adafruit,pwm-emul";
+		status = "okay";
+		#pwm-cells = <3>;
+		channels = <32>;
+		groups = <2>;
+		clock-frequency = <16000000>;
+	};
+};
+
 
 #include "../../../app.overlay"
 

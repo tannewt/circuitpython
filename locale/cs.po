@@ -923,6 +923,7 @@ msgstr "Všechny UART periferie jsou používány"
 #: ports/mimxrt10xx/common-hal/pwmio/PWMOut.c
 #: ports/raspberrypi/bindings/picodvi/Framebuffer.c
 #: ports/raspberrypi/bindings/rp2pio/StateMachine.c
+#: ports/raspberrypi/common-hal/picodvi/AudioOut.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
 #: ports/raspberrypi/common-hal/usb_host_bulk/InStream.c py/argcheck.c
 #: shared-bindings/digitalio/DigitalInOut.c
@@ -1677,6 +1678,7 @@ msgstr "Program je příliš dlouhý"
 #: ports/espressif/common-hal/qspibus/QSPIBus.c
 #: ports/mimxrt10xx/common-hal/audiobusio/__init__.c
 #: ports/mimxrt10xx/common-hal/usb_host/Port.c
+#: ports/raspberrypi/common-hal/picodvi/AudioOut.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2040.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2350.c
 #: ports/raspberrypi/common-hal/rp2pio/StateMachine.c
@@ -1990,6 +1992,13 @@ msgstr "Konverze audia není implementována"
 #: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr "%q musí být typu %q nebo %q, ne %q"
+
+#: ports/raspberrypi/bindings/picodvi/AudioOut.c
+#: shared-bindings/audiobusio/I2SOut.c shared-bindings/audioio/AudioOut.c
+#: shared-bindings/audiopwmio/PWMAudioOut.c shared-bindings/mcp4822/MCP4822.c
+#: shared-bindings/usb_audio/USBMicrophone.c
+msgid "Not playing"
+msgstr "Nehraje"
 
 #: ports/raspberrypi/bindings/rp2pio/StateMachine.c
 msgid "Program size invalid"
@@ -3928,12 +3937,6 @@ msgstr "Čas je v minulosti."
 msgid "%q must be a bytearray or array of type 'H' or 'B'"
 msgstr "%q musí být bytearray nebo pole typu 'H' nebo 'B'"
 
-#: shared-bindings/audiobusio/I2SOut.c shared-bindings/audioio/AudioOut.c
-#: shared-bindings/audiopwmio/PWMAudioOut.c shared-bindings/mcp4822/MCP4822.c
-#: shared-bindings/usb_audio/USBMicrophone.c
-msgid "Not playing"
-msgstr "Nehraje"
-
 #: shared-bindings/audiobusio/PDMIn.c
 msgid "%q must be multiple of 8."
 msgstr ""
@@ -4710,6 +4713,10 @@ msgstr "špatný klíč"
 #: shared-module/ssl/SSLSocket.c
 msgid "invalid cert"
 msgstr "špatný certifikár"
+
+#: shared-module/storage/__init__.c
+msgid "File write in progress"
+msgstr ""
 
 #: shared-module/storage/__init__.c
 msgid "Mount point directory missing"

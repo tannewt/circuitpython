@@ -119,7 +119,13 @@ void bleio_reset(void) {
     // tables are stale. Signal Service Changed over the whole handle range.
     // Without Service Changed, a bonded host trusts its cache indefinitely and can
     // look up characteristics at stale handles.
-    ble_svc_gatt_changed(0x0001, 0xffff);
+    //
+    // supervisor_start_bluetooth() restarts the stack only when the BLE workflow
+    // is enabled. If it did not, NimBLE is stopped and its GATT server state is
+    // gone, so we can't signal anything, and if we tried, we'd cause a crash.
+    if (common_hal_bleio_adapter_get_enabled(&common_hal_bleio_adapter_obj)) {
+        ble_svc_gatt_changed(0x0001, 0xffff);
+    }
 }
 
 // The singleton _bleio.Adapter object, bound to _bleio.adapter

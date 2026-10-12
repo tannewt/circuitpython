@@ -93,10 +93,13 @@ MP_DEFINE_CONST_FUN_OBJ_1(storage_umount_obj, storage_umount);
 //| ) -> None:
 //|     """Remounts the given path with new parameters.
 //|
-//|     This can always be done from ``boot.py``. After boot, it can only be done when the host computer
-//|     doesn't have write access and CircuitPython isn't currently writing to the filesystem. An
-//|     exception will be raised if this is the case. Some host OSes allow you to eject a drive which
-//|     will allow for remounting.
+//|     This can always be done from ``boot.py``. After boot, `remount()` raises `RuntimeError`
+//|     if the host computer has write access to the filesystem, if a file on the filesystem
+//|     is open for writing, or if a workflow file transfer is in progress.
+//|     Some host OSes allow you to eject a drive which will allow for remounting.
+//|
+//|     If the USB drive has been disabled with `unsafe_disable_usb_drive()`,
+//|     the new settings remain in effect after a later `enable_usb_drive()`.
 //|
 //|     Remounting after USB is active may take a little time because it "ejects" the drive for one
 //|     query from the host. These queries happen every second or so.
@@ -243,7 +246,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(storage_disable_usb_drive_obj, storage_disable_usb_dri
 //|     the **CIRCUITPY** USB drive logical unit (LUN) will report as "not ready",
 //|     causing the host to unmount it.
 //|     The drive can be made ready and available again by calling `enable_usb_drive()`.
-//|     When `disable_usb_drive` is called after ``code.py`` starts or in the REPL,
+//|     When `unsafe_disable_usb_drive()` is called after ``code.py`` starts or in the REPL,
 //|     the call will delay 2.5 seconds before returning,
 //|     so that host has time to detect that the drive is not ready.
 //|     The host polls the device approximately every one or two seconds.
@@ -251,6 +254,8 @@ MP_DEFINE_CONST_FUN_OBJ_0(storage_disable_usb_drive_obj, storage_disable_usb_dri
 //|     When the USB drive is disabled, **CIRCUITPY** becomes read/write, and can be written
 //|     from user code or the REPL. This is easier than arranging for a `remount()` in ``boot.py``.
 //|     Code editors and file uploaders can use this feature to write files via the REPL.
+//|     The host's previous access to **CIRCUITPY** is remembered, and `enable_usb_drive()` restores it,
+//|     unless `remount()` is called in the meantime.
 //|
 //|     If `unsafe_disable_usb_drive()` is called in ``boot.py``, it is identical to calling
 //|     `disable_usb_drive()`.
@@ -277,8 +282,12 @@ MP_DEFINE_CONST_FUN_OBJ_0(storage_unsafe_disable_usb_drive_obj, storage_unsafe_d
 //|
 //|     If you call `enable_usb_drive()` after ``code.py`` starts or in the REPL,
 //|     you can reverse the effect of a previous `unsafe_disable_usb_drive()`.
-//|     The **CIRCUITPY** drive will reappear to the host, and become read-only again
-//|     if it was previously read-only.
+//|     The **CIRCUITPY** drive will reappear to the host with the same read/write access it had
+//|     before it was disabled, or with whatever access was set by a `remount()` done while it was disabled.
+//|
+//|     Close any files opened for writing on **CIRCUITPY** before calling `enable_usb_drive()`.
+//|     If a file is still open for writing, or a workflow file transfer is in progress,
+//|     `RuntimeError` is raised.
 //|
 //|     If you enable too many USB devices at once, you will run out of USB endpoints.
 //|     The number of available endpoints varies by microcontroller.
