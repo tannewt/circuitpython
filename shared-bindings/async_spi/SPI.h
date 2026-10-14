@@ -19,6 +19,9 @@ void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin
 bool common_hal_async_spi_spi_deinited(async_spi_spi_obj_t *self);
 // Stops a running transfer.
 void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self);
+// For busio.SPI built on this implementation (shared-module/busio/SPI.c).
+void common_hal_async_spi_spi_never_reset(async_spi_spi_obj_t *self);
+void common_hal_async_spi_spi_mark_deinit(async_spi_spi_obj_t *self);
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self);
 
 // Each start returns a context for state of that one operation, which end() and cancel() get
@@ -42,6 +45,11 @@ void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done);
 void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
     const uint8_t *data_out, uint8_t *data_in, size_t len, circuitpy_async_flag_t *done);
+// Finishes the transfer started with done, once done is set; false if the driver reported an
+// error. For busio.SPI, which must not raise from a background callback.
+bool common_hal_async_spi_spi_transfer_finish(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done);
+// The same for an await: raises on an error.
 mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
     circuitpy_async_flag_t *done);
 void common_hal_async_spi_spi_transfer_cancel(async_spi_spi_obj_t *self, void *context,

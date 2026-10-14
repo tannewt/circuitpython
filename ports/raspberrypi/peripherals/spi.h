@@ -30,14 +30,12 @@ typedef struct {
     uint8_t dma_rx;
     uint8_t one_byte;           // the one-byte side of an async write (RX) or read (TX)
     volatile bool *async_done;
-    #if CIRCUITPY_ASYNC_SPI
     // A configure() waiting for the transfer to finish, and its settings.
     volatile bool *idle_done;
     uint32_t pending_baudrate;
     uint8_t pending_polarity;
     uint8_t pending_phase;
     uint8_t pending_bits;
-    #endif
 } rp2_spi_t;
 
 typedef enum {
@@ -54,16 +52,9 @@ static inline bool rp2_spi_deinited(rp2_spi_t *self) {
     return self->clock == NULL;
 }
 void rp2_spi_never_reset(rp2_spi_t *self);
-// Waits for a running async transfer first.
-void rp2_spi_configure(rp2_spi_t *self, uint32_t baudrate, uint8_t polarity, uint8_t phase,
-    uint8_t bits);
 
-// A blocking transfer. A one-byte side is sent repeatedly or overwritten.
-void rp2_spi_transfer(rp2_spi_t *self, const uint8_t *data_out, size_t out_len,
-    uint8_t *data_in, size_t in_len);
-
-// Async transfers: done is set once the transfer has finished, by the DMA interrupt with
-// CIRCUITPY_ASYNC_SPI and in any case by rp2_spi_end(). The buffers must stay valid until then.
+// Transfers: done is set once the transfer has finished, by the DMA interrupt or by the
+// software path before the start returns. The buffers must stay valid until then.
 void rp2_spi_write_start(rp2_spi_t *self, const uint8_t *data, size_t len,
     volatile bool *done);
 void rp2_spi_read_start(rp2_spi_t *self, uint8_t *data, size_t len, uint8_t write_value,

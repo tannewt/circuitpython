@@ -8,6 +8,7 @@
 
 #include <string.h>
 
+#include "py/gc.h"
 #include "py/runtime.h"
 #include "supervisor/port.h"
 #include "bindings/zephyr_kernel/__init__.h"
@@ -52,6 +53,35 @@ static void wait_done(async_spi_spi_obj_t *self) {
     self->done = NULL;
 }
 
+// A fixed devicetree device, as for board.SPI(): already initialized, never released.
+void common_hal_async_spi_spi_construct_from_device(async_spi_spi_obj_t *self,
+    const struct device *dev) {
+    self->spi_device = dev;
+    self->dynamic = false;
+    self->clock = NULL;
+    self->mosi = NULL;
+    self->miso = NULL;
+    self->active_config = 0;
+    for (size_t i = 0; i < 2; i++) {
+        self->config[i].frequency = 100000;
+        self->config[i].operation = SPI_OP_MODE_MASTER | SPI_WORD_SET(8) | SPI_LINES_SINGLE;
+    }
+    self->done = NULL;
+    self->fill = NULL;
+    self->fill_len = 0;
+    self->fill_from_port = false;
+    self->idle_done = NULL;
+}
+
+static void free_fill(async_spi_spi_obj_t *self) {
+    if (self->fill_from_port) {
+        port_free(self->fill);
+    }
+    self->fill = NULL;
+    self->fill_len = 0;
+    self->fill_from_port = false;
+}
+
 void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin_obj_t *clock,
     const mcu_pin_obj_t *mosi, const mcu_pin_obj_t *miso) {
     const struct device *dev = NULL;
@@ -68,18 +98,11 @@ void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin
         mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("Use device tree to define %q devices"), MP_QSTR_SPI);
     }
 
-    self->spi_device = dev;
+    common_hal_async_spi_spi_construct_from_device(self, dev);
+    self->dynamic = true;
     self->clock = clock;
     self->mosi = mosi;
     self->miso = miso;
-    self->active_config = 0;
-    for (size_t i = 0; i < 2; i++) {
-        self->config[i].frequency = 100000;
-        self->config[i].operation = SPI_OP_MODE_MASTER | SPI_WORD_SET(8) | SPI_LINES_SINGLE;
-    }
-    self->done = NULL;
-    self->fill = NULL;
-    self->idle_done = NULL;
 
     // A routed device is initialized now; a fixed one already was (-EALREADY).
     int init_ret = device_init(dev);
@@ -98,11 +121,25 @@ void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
         return;
     }
     wait_done(self);
+    free_fill(self);
+    // A fixed devicetree device (board.SPI()) stays usable.
+    if (!self->dynamic) {
+        return;
+    }
     (void)iobroker_release(self->spi_device);
     self->spi_device = NULL;
     self->clock = NULL;
     self->mosi = NULL;
     self->miso = NULL;
+}
+
+void common_hal_async_spi_spi_never_reset(async_spi_spi_obj_t *self) {
+}
+
+void common_hal_async_spi_spi_mark_deinit(async_spi_spi_obj_t *self) {
+    if (self->dynamic) {
+        self->spi_device = NULL;
+    }
 }
 
 static uint16_t operation_of(uint8_t polarity, uint8_t phase, uint8_t bits) {
@@ -178,9 +215,10 @@ static void start(async_spi_spi_obj_t *self, const uint8_t *data_out, uint8_t *d
             transfer_done, self);
     }
     if (ret < 0) {
+        // Reported by transfer_end() or transfer_finish(); nothing raises here, as a
+        // blocking busio call may run from a background callback.
+        self->result = ret;
         CIRCUITPY_ASYNC_FLAG_SET(done);
-        self->done = NULL;
-        raise_zephyr_error(ret);
     }
 }
 
@@ -192,14 +230,32 @@ void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint
 
 void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done) {
+    // Without a TX buffer Zephyr sends zeros; another value needs a buffer, kept for the next
+    // read. The previous transfer must be over before it is touched.
     wait_done(self);
-    // Without a TX buffer Zephyr sends zeros; another value needs a buffer.
     uint8_t *fill = NULL;
-    if (write_value != 0) {
-        fill = m_malloc(len);
+    if (write_value != 0 && len != 0) {
+        if (self->fill_len < len) {
+            free_fill(self);
+            if (gc_alloc_possible()) {
+                self->fill = m_malloc(len);
+            } else {
+                self->fill = port_malloc(len, false);
+                self->fill_from_port = true;
+            }
+            if (self->fill == NULL) {
+                self->fill_from_port = false;
+                self->result = -ENOMEM;
+                CIRCUITPY_ASYNC_FLAG_INIT(done);
+                CIRCUITPY_ASYNC_FLAG_SET(done);
+                self->done = done;
+                return NULL;
+            }
+            self->fill_len = len;
+        }
+        fill = self->fill;
         memset(fill, write_value, len);
     }
-    self->fill = fill;
     start(self, fill, data, len, done);
     return NULL;
 }
@@ -211,13 +267,19 @@ void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
 }
 
 // Called once done is set.
+bool common_hal_async_spi_spi_transfer_finish(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
+    if (self->done != done) {
+        return true;
+    }
+    self->done = NULL;
+    return self->result == 0;
+}
+
 mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
     circuitpy_async_flag_t *done) {
-    if (self->done == done) {
-        self->done = NULL;
-        if (self->result != 0) {
-            raise_zephyr_error(self->result);
-        }
+    if (!common_hal_async_spi_spi_transfer_finish(self, context, done)) {
+        raise_zephyr_error(self->result);
     }
     return mp_const_none;
 }

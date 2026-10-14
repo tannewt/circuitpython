@@ -28,6 +28,14 @@ void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
     rp2_spi_deinit(&self->spi);
 }
 
+void common_hal_async_spi_spi_never_reset(async_spi_spi_obj_t *self) {
+    rp2_spi_never_reset(&self->spi);
+}
+
+void common_hal_async_spi_spi_mark_deinit(async_spi_spi_obj_t *self) {
+    self->spi.clock = NULL;
+}
+
 void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done) {
     rp2_spi_configure_start(&self->spi, baudrate, polarity, phase, bits, done);
@@ -66,9 +74,15 @@ void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
     return NULL;
 }
 
-mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
+bool common_hal_async_spi_spi_transfer_finish(async_spi_spi_obj_t *self, void *context,
     circuitpy_async_flag_t *done) {
     rp2_spi_stop(&self->spi, done);
+    return true;
+}
+
+mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
+    common_hal_async_spi_spi_transfer_finish(self, context, done);
     return mp_const_none;
 }
 

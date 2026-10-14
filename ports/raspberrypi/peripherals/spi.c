@@ -12,13 +12,10 @@
 
 #include "hardware/dma.h"
 #include "hardware/gpio.h"
-#if CIRCUITPY_ASYNC_SPI
 #include "hardware/irq.h"
-#endif
 
 #define NO_INSTANCE 0xff
 
-#if CIRCUITPY_ASYNC_SPI
 // Done flag of the async transfer on each kept RX channel, set when that channel finishes.
 static volatile bool *async_flags[NUM_DMA_CHANNELS];
 // RX channels with the interrupt enabled.
@@ -55,7 +52,6 @@ static void async_irq_disable(uint chan) {
         irq_set_enabled(DMA_IRQ_0, false);
     }
 }
-#endif
 
 rp2_spi_error_t rp2_spi_construct(rp2_spi_t *self, const mcu_pin_obj_t *clock,
     const mcu_pin_obj_t *mosi, const mcu_pin_obj_t *miso) {
@@ -100,9 +96,7 @@ rp2_spi_error_t rp2_spi_construct(rp2_spi_t *self, const mcu_pin_obj_t *clock,
 
     self->async_active = false;
     self->dma_kept = false;
-    #if CIRCUITPY_ASYNC_SPI
     self->idle_done = NULL;
-    #endif
     self->target_frequency = 250000;
     self->real_frequency = spi_init(self->peripheral, self->target_frequency);
 
@@ -130,28 +124,20 @@ void rp2_spi_never_reset(rp2_spi_t *self) {
     common_hal_never_reset_pin(self->MISO);
 }
 
-#if CIRCUITPY_ASYNC_SPI
 static void _abort(rp2_spi_t *self);
 static void _idle(rp2_spi_t *self);
-#endif
 
 void rp2_spi_deinit(rp2_spi_t *self) {
     if (rp2_spi_deinited(self)) {
         return;
     }
-    #if CIRCUITPY_ASYNC_SPI
     if (self->async_active) {
         _abort(self);
         *self->async_done = true;
     }
     _idle(self);
-    #else
-    rp2_spi_end(self);
-    #endif
     if (self->dma_kept) {
-        #if CIRCUITPY_ASYNC_SPI
         async_irq_disable(self->dma_rx);
-        #endif
         dma_channel_unclaim(self->dma_tx);
         dma_channel_unclaim(self->dma_rx);
         self->dma_kept = false;
@@ -192,14 +178,6 @@ static void _apply(rp2_spi_t *self, uint32_t baudrate, uint8_t polarity, uint8_t
     self->real_frequency = spi_set_baudrate(self->peripheral, baudrate);
 }
 
-void rp2_spi_configure(rp2_spi_t *self, uint32_t baudrate, uint8_t polarity, uint8_t phase,
-    uint8_t bits) {
-    // A running async transfer finishes with the old settings.
-    rp2_spi_end(self);
-    _apply(self, baudrate, polarity, phase, bits);
-}
-
-#if CIRCUITPY_ASYNC_SPI
 // The bus is idle: apply the settings of a waiting configure() and wake it.
 static void _idle(rp2_spi_t *self) {
     if (self->idle_done != NULL) {
@@ -234,12 +212,11 @@ void rp2_spi_configure_cancel(rp2_spi_t *self, volatile bool *done) {
         self->idle_done = NULL;
     }
 }
-#endif
 
-// Start a transfer. With DMA it runs in the background and _end() finishes it; otherwise it is
-// done in software before this returns. An out or in buffer shorter than the transfer is one
-// byte repeated or dropped. An async transfer passes its done flag, and keeps the DMA channels
-// until deinit, for buses that send often. Returns whether DMA is running.
+// Start a transfer. With DMA it runs in the background and done is set from the interrupt;
+// otherwise it is done in software before this returns. An out or in buffer shorter than the
+// transfer is one byte repeated or dropped. The DMA channels are kept until deinit, for buses
+// that send often. Returns whether DMA is running.
 static bool _start(rp2_spi_t *self,
     const uint8_t *data_out, size_t out_len,
     uint8_t *data_in, size_t in_len, volatile bool *done) {
@@ -252,12 +229,8 @@ static bool _start(rp2_spi_t *self,
         if (chan_tx >= 0 && chan_rx >= 0) {
             self->dma_tx = chan_tx;
             self->dma_rx = chan_rx;
-            self->dma_kept = done != NULL;
-            #if CIRCUITPY_ASYNC_SPI
-            if (done != NULL) {
-                async_irq_enable(chan_rx);
-            }
-            #endif
+            self->dma_kept = true;
+            async_irq_enable(chan_rx);
         } else {
             // If we have claimed only one channel successfully, release it.
             if (chan_tx >= 0) {
@@ -292,10 +265,8 @@ static bool _start(rp2_spi_t *self,
             len,
             false);
 
-        #if CIRCUITPY_ASYNC_SPI
         // Before the start, so that a short transfer cannot finish unseen.
         async_flags[self->dma_rx] = done;
-        #endif
         dma_start_channel_mask((1u << self->dma_rx) | (1u << self->dma_tx));
         return true;
     }
@@ -330,23 +301,8 @@ static bool _start(rp2_spi_t *self,
 }
 
 // Wait for a DMA transfer started by _start(). The RX channel finishes last.
-static void _end(rp2_spi_t *self, bool background_tasks) {
+static void _end(rp2_spi_t *self) {
     while (dma_channel_is_busy(self->dma_rx)) {
-        if (background_tasks) {
-            RUN_BACKGROUND_TASKS;
-        }
-    }
-    if (!self->dma_kept) {
-        dma_channel_unclaim(self->dma_tx);
-        dma_channel_unclaim(self->dma_rx);
-    }
-}
-
-void rp2_spi_transfer(rp2_spi_t *self, const uint8_t *data_out, size_t out_len,
-    uint8_t *data_in, size_t in_len) {
-    if (_start(self, data_out, out_len, data_in, in_len, NULL)) {
-        // TODO: We should idle here until we get a DMA interrupt or something else.
-        _end(self, true);
     }
 }
 
@@ -369,7 +325,6 @@ void rp2_spi_write_start(rp2_spi_t *self, const uint8_t *data, size_t len,
     _async_start(self, data, len, &self->one_byte, 1, done);
 }
 
-#if CIRCUITPY_ASYNC_SPI
 void rp2_spi_read_start(rp2_spi_t *self, uint8_t *data, size_t len, uint8_t write_value,
     volatile bool *done) {
     // End the previous transfer first: an async write may still be receiving into one_byte.
@@ -412,19 +367,14 @@ void rp2_spi_stop(rp2_spi_t *self, volatile bool *done) {
     }
     _abort(self);
 }
-#endif
 
 void rp2_spi_end(rp2_spi_t *self) {
     if (self->async_active) {
         // No background tasks here: the caller holds the bus, and one of them may want it.
-        _end(self, false);
+        _end(self);
         self->async_active = false;
-        #if CIRCUITPY_ASYNC_SPI
         async_flags[self->dma_rx] = NULL;
-        #endif
         *self->async_done = true;
-        #if CIRCUITPY_ASYNC_SPI
         _idle(self);
-        #endif
     }
 }

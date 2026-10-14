@@ -905,6 +905,14 @@ SRC_SHARED_MODULE_EXPANDED = $(addprefix shared-bindings/, $(SRC_SHARED_MODULE))
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE)) \
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE_INTERNAL))
 
+ifeq ($(CIRCUITPY_BUSIO_SPI_OVER_ASYNC),1)
+# busio.SPI comes from shared-module, on the port's async_spi common-hal, which is then built
+# even without the async_spi module.
+SRC_COMMON_HAL_EXPANDED := $(filter-out common-hal/busio/SPI.c, $(SRC_COMMON_HAL_EXPANDED)) \
+                           common-hal/async_spi/SPI.c
+SRC_SHARED_MODULE_EXPANDED += shared-module/busio/SPI.c
+endif
+
 # There may be duplicates between SRC_COMMON_HAL_EXPANDED and SRC_SHARED_MODULE_EXPANDED,
 # because a few modules have files both in common-hal/ and shared-module/.
 # Doing a $(sort ...) removes duplicates as part of sorting.
