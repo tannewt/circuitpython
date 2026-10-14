@@ -157,7 +157,11 @@ void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32
     uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done) {
     CIRCUITPY_ASYNC_FLAG_INIT(done);
     uint16_t operation = operation_of(polarity, phase, bits);
+    // transfer_done() applies a waiting configure(), so the check and the registration must
+    // not be split by it.
+    unsigned int key = irq_lock();
     if (self->done == NULL || CIRCUITPY_ASYNC_FLAG_IS_SET(self->done)) {
+        irq_unlock(key);
         apply_config(self, baudrate, operation);
         CIRCUITPY_ASYNC_FLAG_SET(done);
         return NULL;
@@ -169,6 +173,7 @@ void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32
     self->pending_frequency = baudrate;
     self->pending_operation = operation;
     self->idle_done = done;
+    irq_unlock(key);
     return NULL;
 }
 
