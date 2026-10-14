@@ -98,7 +98,9 @@ def test_async_spi_loopback(circuitpython):
 
     output = circuitpython.serial.all_output
     assert "differs" not in output
-    assert "ticker ran" in output
+    # 10 transfers of 4 KB at 1 MHz take about 330 ms; the ticker runs many times in that.
+    ticker = int(output.split("ticker ran ")[1].split()[0])
+    assert ticker > 20, ticker
     assert "bad argument raised" in output
     assert "deinit raised" in output
     assert "bad 0" in output
