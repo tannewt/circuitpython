@@ -24,7 +24,7 @@ static void end_sent(busio_spi_obj_t *self) {
     }
     while (!CIRCUITPY_ASYNC_FLAG_IS_SET(self->sent)) {
     }
-    common_hal_async_spi_spi_transfer_finish(&self->spi, self->sent_context, self->sent);
+    common_hal_async_spi_spi_transfer_finish(&self->async_spi, self->sent_context, self->sent);
     self->sent = NULL;
 }
 #endif
@@ -34,7 +34,7 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self, const mcu_pin_obj_t *
     if (half_duplex) {
         mp_raise_NotImplementedError_varg(MP_ERROR_TEXT("%q"), MP_QSTR_half_duplex);
     }
-    common_hal_async_spi_spi_construct(&self->spi, clock, mosi, miso);
+    common_hal_async_spi_spi_construct(&self->async_spi, clock, mosi, miso);
     self->sent = NULL;
     self->has_lock = false;
     self->polarity = 0;
@@ -43,20 +43,20 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self, const mcu_pin_obj_t *
 
 #if CIRCUITPY_BULK_RESET
 void common_hal_busio_spi_never_reset(busio_spi_obj_t *self) {
-    common_hal_async_spi_spi_never_reset(&self->spi);
+    common_hal_async_spi_spi_never_reset(&self->async_spi);
 }
 #endif
 
 bool common_hal_busio_spi_deinited(busio_spi_obj_t *self) {
-    return common_hal_async_spi_spi_deinited(&self->spi);
+    return common_hal_async_spi_spi_deinited(&self->async_spi);
 }
 
 void common_hal_busio_spi_mark_deinit(busio_spi_obj_t *self) {
-    common_hal_async_spi_spi_mark_deinit(&self->spi);
+    common_hal_async_spi_spi_mark_deinit(&self->async_spi);
 }
 
 void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
-    common_hal_async_spi_spi_deinit(&self->spi);
+    common_hal_async_spi_spi_deinit(&self->async_spi);
 }
 
 bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, uint8_t polarity,
@@ -64,10 +64,10 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, ui
     #if CIRCUITPY_BUSIO_SPI_ASYNC
     end_sent(self);
     #endif
-    void *context = common_hal_async_spi_spi_configure_start(&self->spi, baudrate, polarity, phase,
+    void *context = common_hal_async_spi_spi_configure_start(&self->async_spi, baudrate, polarity, phase,
         bits, &self->done);
     wait(&self->done);
-    common_hal_async_spi_spi_configure_end(&self->spi, context, &self->done);
+    common_hal_async_spi_spi_configure_end(&self->async_spi, context, &self->done);
     self->polarity = polarity;
     self->phase = phase;
     return true;
@@ -92,29 +92,29 @@ void common_hal_busio_spi_unlock(busio_spi_obj_t *self) {
 // Finish the transfer started with self->done.
 static bool finish(busio_spi_obj_t *self, void *context) {
     wait(&self->done);
-    return common_hal_async_spi_spi_transfer_finish(&self->spi, context, &self->done);
+    return common_hal_async_spi_spi_transfer_finish(&self->async_spi, context, &self->done);
 }
 
 bool common_hal_busio_spi_write(busio_spi_obj_t *self, const uint8_t *data, size_t len) {
-    return finish(self, common_hal_async_spi_spi_write_start(&self->spi, data, len, &self->done));
+    return finish(self, common_hal_async_spi_spi_write_start(&self->async_spi, data, len, &self->done));
 }
 
 bool common_hal_busio_spi_read(busio_spi_obj_t *self, uint8_t *data, size_t len,
     uint8_t write_value) {
-    return finish(self, common_hal_async_spi_spi_readinto_start(&self->spi, data, len, write_value,
+    return finish(self, common_hal_async_spi_spi_readinto_start(&self->async_spi, data, len, write_value,
         &self->done));
 }
 
 bool common_hal_busio_spi_transfer(busio_spi_obj_t *self, const uint8_t *data_out,
     uint8_t *data_in, size_t len) {
-    return finish(self, common_hal_async_spi_spi_write_readinto_start(&self->spi, data_out, data_in,
+    return finish(self, common_hal_async_spi_spi_write_readinto_start(&self->async_spi, data_out, data_in,
         len, &self->done));
 }
 
 #if CIRCUITPY_BUSIO_SPI_ASYNC
 void common_hal_busio_spi_write_start(busio_spi_obj_t *self, const uint8_t *data, size_t len,
     circuitpy_async_flag_t *done) {
-    self->sent_context = common_hal_async_spi_spi_write_start(&self->spi, data, len, done);
+    self->sent_context = common_hal_async_spi_spi_write_start(&self->async_spi, data, len, done);
     self->sent = done;
 }
 
@@ -124,7 +124,7 @@ void common_hal_busio_spi_end(busio_spi_obj_t *self) {
 #endif
 
 uint32_t common_hal_busio_spi_get_frequency(busio_spi_obj_t *self) {
-    return common_hal_async_spi_spi_get_frequency(&self->spi);
+    return common_hal_async_spi_spi_get_frequency(&self->async_spi);
 }
 
 uint8_t common_hal_busio_spi_get_phase(busio_spi_obj_t *self) {

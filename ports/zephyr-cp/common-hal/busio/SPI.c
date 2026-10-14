@@ -8,7 +8,7 @@
 
 mp_obj_t common_hal_busio_spi_construct_from_device(busio_spi_obj_t *self, const struct device *spi_device) {
     self->base.type = &busio_spi_type;
-    common_hal_async_spi_spi_construct_from_device(&self->spi, spi_device);
+    common_hal_async_spi_spi_construct_from_device(&self->async_spi, spi_device);
     self->sent = NULL;
     self->has_lock = false;
     self->polarity = 0;
