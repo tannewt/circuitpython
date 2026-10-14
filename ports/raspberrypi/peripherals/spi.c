@@ -341,7 +341,13 @@ void rp2_spi_transfer_start(rp2_spi_t *self, const uint8_t *data_out, uint8_t *d
 
 // Stop the running DMA transfer without setting its done flag.
 static void _abort(rp2_spi_t *self) {
+    // A completion interrupt may still come (RP2040-E13); the handler skips a NULL flag.
     async_flags[self->dma_rx] = NULL;
+    #if PICO_RP2350
+    // RP2350-E5: an enabled channel can retrigger after the abort.
+    hw_clear_bits(&dma_hw->ch[self->dma_tx].al1_ctrl, DMA_CH0_CTRL_TRIG_EN_BITS);
+    hw_clear_bits(&dma_hw->ch[self->dma_rx].al1_ctrl, DMA_CH0_CTRL_TRIG_EN_BITS);
+    #endif
     // Both channels at once; as dma_channel_abort(), the busy bits clear once in-flight
     // transfers have retired.
     dma_hw->abort = (1u << self->dma_tx) | (1u << self->dma_rx);
