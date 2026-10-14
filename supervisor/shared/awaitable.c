@@ -62,9 +62,12 @@ MP_DEFINE_CONST_OBJ_TYPE(
 
 // ---- the awaitable -----------------------------------------------------------
 
+// Finishes the awaitable; stops the operation if it has started. A closed awaitable that
+// was never awaited does not start later, as with a closed coroutine.
 static void awaitable_cancel(circuitpy_awaitable_obj_t *self) {
-    if (self->state == CIRCUITPY_AWAITABLE_RUNNING) {
-        self->state = CIRCUITPY_AWAITABLE_FINISHED;
+    uint8_t state = self->state;
+    self->state = CIRCUITPY_AWAITABLE_FINISHED;
+    if (state == CIRCUITPY_AWAITABLE_RUNNING) {
         self->fun->cancel(self->args[0], self->context, &self->done);
     }
 }
