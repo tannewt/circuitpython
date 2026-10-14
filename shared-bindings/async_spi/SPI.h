@@ -21,30 +21,28 @@ bool common_hal_async_spi_spi_deinited(async_spi_spi_obj_t *self);
 void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self);
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self);
 
+// Each start returns a context for state of that one operation, which end() and cancel() get
+// back; NULL when the object holds the state.
+
 // configure(): done is set once the running transfer, if any, has finished and the settings
-// are in place. Returns the context that configure_end() and configure_cancel() get.
+// are in place.
 void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done);
-mp_obj_t common_hal_async_spi_spi_configure_end(void *context, circuitpy_async_flag_t *done);
-void common_hal_async_spi_spi_configure_cancel(void *context, circuitpy_async_flag_t *done);
+mp_obj_t common_hal_async_spi_spi_configure_end(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done);
+void common_hal_async_spi_spi_configure_cancel(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done);
 
-// Each transfer start sets done once the transfer has finished, possibly from an interrupt, and
-// returns the context that transfer_end() and transfer_cancel() get. The buffers must stay valid
-// until done is set. transfer_end() and transfer_cancel() act only on the transfer started with
-// done.
+// Each transfer start sets done once the transfer has finished, possibly from an interrupt. The
+// buffers must stay valid until done is set. transfer_end() and transfer_cancel() act only on
+// the transfer started with done.
 void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint8_t *data,
     size_t len, circuitpy_async_flag_t *done);
 void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done);
 void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
     const uint8_t *data_out, uint8_t *data_in, size_t len, circuitpy_async_flag_t *done);
-mp_obj_t common_hal_async_spi_spi_transfer_end(void *context, circuitpy_async_flag_t *done);
-void common_hal_async_spi_spi_transfer_cancel(void *context, circuitpy_async_flag_t *done);
-
-// The names CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW looks up; all three transfers end the same way.
-#define common_hal_async_spi_spi_write_end common_hal_async_spi_spi_transfer_end
-#define common_hal_async_spi_spi_write_cancel common_hal_async_spi_spi_transfer_cancel
-#define common_hal_async_spi_spi_readinto_end common_hal_async_spi_spi_transfer_end
-#define common_hal_async_spi_spi_readinto_cancel common_hal_async_spi_spi_transfer_cancel
-#define common_hal_async_spi_spi_write_readinto_end common_hal_async_spi_spi_transfer_end
-#define common_hal_async_spi_spi_write_readinto_cancel common_hal_async_spi_spi_transfer_cancel
+mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done);
+void common_hal_async_spi_spi_transfer_cancel(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done);

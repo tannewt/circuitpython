@@ -93,6 +93,20 @@ static MP_DEFINE_CONST_FUN_OBJ_1(async_spi_spi_deinit_obj, async_spi_spi_obj_dei
 //|
 //  Provided by context manager helper.
 
+// The awaitable passes the object as mp_obj_t; the common-hal functions take it typed.
+static mp_obj_t async_spi_spi_configure_end(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    return common_hal_async_spi_spi_configure_end(MP_OBJ_TO_PTR(self_in), context, done);
+}
+static void async_spi_spi_configure_cancel(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    common_hal_async_spi_spi_configure_cancel(MP_OBJ_TO_PTR(self_in), context, done);
+}
+static mp_obj_t async_spi_spi_transfer_end(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    return common_hal_async_spi_spi_transfer_end(MP_OBJ_TO_PTR(self_in), context, done);
+}
+static void async_spi_spi_transfer_cancel(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    common_hal_async_spi_spi_transfer_cancel(MP_OBJ_TO_PTR(self_in), context, done);
+}
+
 //|     async def configure(
 //|         self, *, baudrate: int = 100000, polarity: int = 0, phase: int = 0, bits: int = 8
 //|     ) -> None:
@@ -112,7 +126,8 @@ static void *async_spi_spi_configure(circuitpy_async_flag_t *done, size_t n_args
 
     return common_hal_async_spi_spi_configure_start(self, args[ARG_baudrate].u_int, polarity, phase, bits, done);
 }
-static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_configure);
+static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_configure,
+    async_spi_spi_configure_end, async_spi_spi_configure_cancel);
 
 //|     import sys
 //|
@@ -137,7 +152,8 @@ static void *async_spi_spi_write(circuitpy_async_flag_t *done, size_t n_args, co
         MP_BUFFER_READ, &len);
     return common_hal_async_spi_spi_write_start(self, data, len, done);
 }
-static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_obj, 1, async_spi_spi_write);
+static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_obj, 1, async_spi_spi_write,
+    async_spi_spi_transfer_end, async_spi_spi_transfer_cancel);
 
 //|     async def readinto(
 //|         self,
@@ -166,7 +182,8 @@ static void *async_spi_spi_readinto(circuitpy_async_flag_t *done, size_t n_args,
         MP_BUFFER_WRITE, &len);
     return common_hal_async_spi_spi_readinto_start(self, data, len, (uint8_t)args[ARG_write_value].u_int, done);
 }
-static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_readinto_obj, 1, async_spi_spi_readinto);
+static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_readinto_obj, 1, async_spi_spi_readinto,
+    async_spi_spi_transfer_end, async_spi_spi_transfer_cancel);
 
 //|     async def write_readinto(
 //|         self,
@@ -205,7 +222,8 @@ static void *async_spi_spi_write_readinto(circuitpy_async_flag_t *done, size_t n
     }
     return common_hal_async_spi_spi_write_readinto_start(self, data_out, data_in, out_len, done);
 }
-static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_readinto_obj, 2, async_spi_spi_write_readinto);
+static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_readinto_obj, 2, async_spi_spi_write_readinto,
+    async_spi_spi_transfer_end, async_spi_spi_transfer_cancel);
 
 //|     frequency: int
 //|     """The actual SPI bus frequency. This may not match the frequency requested

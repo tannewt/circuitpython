@@ -65,7 +65,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 static void awaitable_cancel(circuitpy_awaitable_obj_t *self) {
     if (self->state == CIRCUITPY_AWAITABLE_RUNNING) {
         self->state = CIRCUITPY_AWAITABLE_FINISHED;
-        self->fun->cancel(self->context, &self->done);
+        self->fun->cancel(self->args[0], self->context, &self->done);
     }
 }
 
@@ -91,7 +91,7 @@ static mp_obj_t awaitable_iternext(mp_obj_t self_in) {
         return mp_const_none;
     }
     self->state = CIRCUITPY_AWAITABLE_FINISHED;
-    MP_STATE_THREAD(stop_iteration_arg) = self->fun->end(self->context, &self->done);
+    MP_STATE_THREAD(stop_iteration_arg) = self->fun->end(self->args[0], self->context, &self->done);
     return MP_OBJ_STOP_ITERATION;
 }
 

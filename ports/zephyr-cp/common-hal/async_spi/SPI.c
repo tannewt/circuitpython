@@ -123,7 +123,7 @@ void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32
     if (self->done == NULL || CIRCUITPY_ASYNC_FLAG_IS_SET(self->done)) {
         apply_config(self, baudrate, operation);
         CIRCUITPY_ASYNC_FLAG_SET(done);
-        return self;
+        return NULL;
     }
     // A later configure() replaces one still waiting.
     if (self->idle_done != NULL) {
@@ -132,15 +132,16 @@ void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32
     self->pending_frequency = baudrate;
     self->pending_operation = operation;
     self->idle_done = done;
-    return self;
+    return NULL;
 }
 
-mp_obj_t common_hal_async_spi_spi_configure_end(void *context, circuitpy_async_flag_t *done) {
+mp_obj_t common_hal_async_spi_spi_configure_end(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
     return mp_const_none;
 }
 
-void common_hal_async_spi_spi_configure_cancel(void *context, circuitpy_async_flag_t *done) {
-    async_spi_spi_obj_t *self = context;
+void common_hal_async_spi_spi_configure_cancel(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
     if (self->idle_done == done) {
         self->idle_done = NULL;
     }
@@ -186,7 +187,7 @@ static void start(async_spi_spi_obj_t *self, const uint8_t *data_out, uint8_t *d
 void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint8_t *data,
     size_t len, circuitpy_async_flag_t *done) {
     start(self, data, NULL, len, done);
-    return self;
+    return NULL;
 }
 
 void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
@@ -200,18 +201,18 @@ void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t
     }
     self->fill = fill;
     start(self, fill, data, len, done);
-    return self;
+    return NULL;
 }
 
 void *common_hal_async_spi_spi_write_readinto_start(async_spi_spi_obj_t *self,
     const uint8_t *data_out, uint8_t *data_in, size_t len, circuitpy_async_flag_t *done) {
     start(self, data_out, data_in, len, done);
-    return self;
+    return NULL;
 }
 
 // Called once done is set.
-mp_obj_t common_hal_async_spi_spi_transfer_end(void *context, circuitpy_async_flag_t *done) {
-    async_spi_spi_obj_t *self = context;
+mp_obj_t common_hal_async_spi_spi_transfer_end(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
     if (self->done == done) {
         self->done = NULL;
         if (self->result != 0) {
@@ -221,8 +222,8 @@ mp_obj_t common_hal_async_spi_spi_transfer_end(void *context, circuitpy_async_fl
     return mp_const_none;
 }
 
-void common_hal_async_spi_spi_transfer_cancel(void *context, circuitpy_async_flag_t *done) {
-    async_spi_spi_obj_t *self = context;
+void common_hal_async_spi_spi_transfer_cancel(async_spi_spi_obj_t *self, void *context,
+    circuitpy_async_flag_t *done) {
     if (self->done == done) {
         wait_done(self);
     }
