@@ -230,11 +230,12 @@ void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint
 
 void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done) {
-    // Without a TX buffer Zephyr sends zeros; another value needs a buffer, kept for the next
-    // read. The previous transfer must be over before it is touched.
+    // Without a TX buffer a driver sends its own idle value (0xFF on nRF), so the read sends
+    // write_value from a buffer, kept for the next read. The previous transfer must be over
+    // before it is touched.
     wait_done(self);
     uint8_t *fill = NULL;
-    if (write_value != 0 && len != 0) {
+    if (len != 0) {
         if (self->fill_len < len) {
             free_fill(self);
             if (gc_alloc_possible()) {
