@@ -638,12 +638,6 @@ SRC_COMMON_HAL_ALL = \
 	wifi/ScannedNetworks.c \
 	wifi/__init__.c \
 
-# The fast Display backend is the only common-hal picogame source; include it
-# only on ports that provide it (others use the portable bus.send renderer).
-ifeq ($(CIRCUITPY_PICOGAME_FAST_DISPLAY),1)
-SRC_COMMON_HAL_ALL += picogame/Display.c
-endif
-
 SRC_COMMON_HAL = $(filter $(SRC_PATTERNS), $(SRC_COMMON_HAL_ALL))
 
 ifeq ($(CIRCUITPY_BLEIO_HCI),1)
@@ -932,6 +926,16 @@ else
 SRC_SHARED_MODULE_ALL += \
 	touchio/TouchIn.c \
 	touchio/__init__.c
+endif
+
+# The fast Display backend: shared code on a port with async busio SPI, the port's own DMA
+# code otherwise. Ports without it use the portable bus.send renderer.
+ifeq ($(CIRCUITPY_PICOGAME_FAST_DISPLAY),1)
+ifeq ($(CIRCUITPY_BUSIO_SPI_ASYNC),1)
+SRC_SHARED_MODULE_ALL += picogame/Display.c
+else
+SRC_COMMON_HAL_ALL += picogame/Display.c
+endif
 endif
 
 # On a port with async SPI, busio.SPI is shared code on top of common-hal/async_spi.
