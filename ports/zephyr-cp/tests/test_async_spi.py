@@ -31,7 +31,7 @@ async def ticker(count):
 
 async def main():
     spi = async_spi.SPI(microcontroller.pin.P_02, MOSI=microcontroller.pin.P_03, MISO=microcontroller.pin.P_00)
-    await spi.configure(baudrate=1_000_000)
+    spi.configure(baudrate=1_000_000)
     print("frequency", spi.frequency)
     bad = 0
     for n in (1, 32, 4096):

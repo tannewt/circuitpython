@@ -32,12 +32,6 @@ static void transfer_done(const struct device *dev, int result, void *userdata) 
     async_spi_spi_obj_t *self = userdata;
     self->result = result;
     CIRCUITPY_ASYNC_FLAG_SET(self->done);
-    // A configure() that waited for this transfer.
-    if (self->idle_done != NULL) {
-        apply_config(self, self->pending_frequency, self->pending_operation);
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
-        self->idle_done = NULL;
-    }
     port_wake_main_task_from_isr();
 }
 
@@ -70,7 +64,6 @@ void common_hal_async_spi_spi_construct_from_device(async_spi_spi_obj_t *self,
     self->fill = NULL;
     self->fill_len = 0;
     self->fill_from_port = false;
-    self->idle_done = NULL;
 }
 
 static void free_fill(async_spi_spi_obj_t *self) {
@@ -153,40 +146,10 @@ static uint16_t operation_of(uint8_t polarity, uint8_t phase, uint8_t bits) {
     return operation;
 }
 
-void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
-    uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done) {
-    CIRCUITPY_ASYNC_FLAG_INIT(done);
-    uint16_t operation = operation_of(polarity, phase, bits);
-    // transfer_done() applies a waiting configure(), so the check and the registration must
-    // not be split by it.
-    unsigned int key = irq_lock();
-    if (self->done == NULL || CIRCUITPY_ASYNC_FLAG_IS_SET(self->done)) {
-        irq_unlock(key);
-        apply_config(self, baudrate, operation);
-        CIRCUITPY_ASYNC_FLAG_SET(done);
-        return NULL;
-    }
-    // A later configure() replaces one still waiting.
-    if (self->idle_done != NULL) {
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
-    }
-    self->pending_frequency = baudrate;
-    self->pending_operation = operation;
-    self->idle_done = done;
-    irq_unlock(key);
-    return NULL;
-}
-
-mp_obj_t common_hal_async_spi_spi_configure_end(async_spi_spi_obj_t *self, void *context,
-    circuitpy_async_flag_t *done) {
-    return mp_const_none;
-}
-
-void common_hal_async_spi_spi_configure_cancel(async_spi_spi_obj_t *self, void *context,
-    circuitpy_async_flag_t *done) {
-    if (self->idle_done == done) {
-        self->idle_done = NULL;
-    }
+void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baudrate,
+    uint8_t polarity, uint8_t phase, uint8_t bits) {
+    wait_done(self);
+    apply_config(self, baudrate, operation_of(polarity, phase, bits));
 }
 
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {

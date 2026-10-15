@@ -32,9 +32,6 @@ typedef struct {
     uint8_t *fill;                      // the bytes a read sends, when not zero
     size_t fill_len;
     bool fill_from_port;                // fill came from port_malloc, not the heap
-    circuitpy_async_flag_t *idle_done;  // a configure() waiting for the transfer to finish
-    uint32_t pending_frequency;
-    uint16_t pending_operation;
 } async_spi_spi_obj_t;
 
 void common_hal_async_spi_spi_construct_from_device(async_spi_spi_obj_t *self,

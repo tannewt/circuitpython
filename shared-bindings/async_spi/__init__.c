@@ -22,7 +22,7 @@
 //|
 //|     async def main():
 //|         spi = async_spi.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-//|         await spi.configure(baudrate=8_000_000)
+//|         spi.configure(baudrate=8_000_000)
 //|         data = bytearray(512)
 //|         await spi.readinto(data)
 //|

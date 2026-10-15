@@ -94,12 +94,6 @@ static MP_DEFINE_CONST_FUN_OBJ_1(async_spi_spi_deinit_obj, async_spi_spi_obj_dei
 //  Provided by context manager helper.
 
 // The awaitable passes the object as mp_obj_t; the common-hal functions take it typed.
-static mp_obj_t async_spi_spi_configure_end(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
-    return common_hal_async_spi_spi_configure_end(MP_OBJ_TO_PTR(self_in), context, done);
-}
-static void async_spi_spi_configure_cancel(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
-    common_hal_async_spi_spi_configure_cancel(MP_OBJ_TO_PTR(self_in), context, done);
-}
 static mp_obj_t async_spi_spi_transfer_end(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
     return common_hal_async_spi_spi_transfer_end(MP_OBJ_TO_PTR(self_in), context, done);
 }
@@ -107,14 +101,15 @@ static void async_spi_spi_transfer_cancel(mp_obj_t self_in, void *context, circu
     common_hal_async_spi_spi_transfer_cancel(MP_OBJ_TO_PTR(self_in), context, done);
 }
 
-//|     async def configure(
+//|     def configure(
 //|         self, *, baudrate: int = 100000, polarity: int = 0, phase: int = 0, bits: int = 8
 //|     ) -> None:
 //|         """Configure the SPI bus, as `busio.SPI.configure`. A transfer still running finishes
-//|         first, with the old settings."""
+//|         first, with the old settings. Tasks sharing a bus serialize their transfers, for
+//|         example with an `asyncio.Lock` around configure() and the transfer."""
 //|         ...
 //|
-static void *async_spi_spi_configure(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t async_spi_spi_configure(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_baudrate, ARG_polarity, ARG_phase, ARG_bits };
     async_spi_spi_obj_t *self = checked_spi(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_configure_args)];
@@ -124,10 +119,10 @@ static void *async_spi_spi_configure(circuitpy_async_flag_t *done, size_t n_args
     uint8_t phase = (uint8_t)mp_arg_validate_int_range(args[ARG_phase].u_int, 0, 1, MP_QSTR_phase);
     uint8_t bits = (uint8_t)mp_arg_validate_int_range(args[ARG_bits].u_int, 8, 9, MP_QSTR_bits);
 
-    return common_hal_async_spi_spi_configure_start(self, args[ARG_baudrate].u_int, polarity, phase, bits, done);
+    common_hal_async_spi_spi_configure(self, args[ARG_baudrate].u_int, polarity, phase, bits);
+    return mp_const_none;
 }
-static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_configure,
-    async_spi_spi_configure_end, async_spi_spi_configure_cancel);
+static MP_DEFINE_CONST_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_configure);
 
 //|     import sys
 //|

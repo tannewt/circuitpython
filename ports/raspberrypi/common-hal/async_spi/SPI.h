@@ -29,10 +29,4 @@ typedef struct {
     uint8_t dma_rx;
     uint8_t one_byte;                   // the one-byte side of an async write (RX) or read (TX)
     circuitpy_async_flag_t *async_done;
-    // A configure() waiting for the transfer to finish, and its settings.
-    circuitpy_async_flag_t *idle_done;
-    uint32_t pending_baudrate;
-    uint8_t pending_polarity;
-    uint8_t pending_phase;
-    uint8_t pending_bits;
 } async_spi_spi_obj_t;

@@ -96,7 +96,6 @@ void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin
 
     self->async_active = false;
     self->dma_kept = false;
-    self->idle_done = NULL;
     self->target_frequency = 250000;
     self->real_frequency = spi_init(self->peripheral, self->target_frequency);
 
@@ -132,7 +131,6 @@ void common_hal_async_spi_spi_mark_deinit(async_spi_spi_obj_t *self) {
 }
 
 static void _abort(async_spi_spi_obj_t *self);
-static void _idle(async_spi_spi_obj_t *self);
 
 void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
     if (common_hal_async_spi_spi_deinited(self)) {
@@ -142,7 +140,6 @@ void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
         _abort(self);
         CIRCUITPY_ASYNC_FLAG_SET(self->async_done);
     }
-    _idle(self);
     if (self->dma_kept) {
         async_irq_disable(self->dma_rx);
         dma_channel_unclaim(self->dma_tx);
@@ -185,47 +182,12 @@ static void _apply(async_spi_spi_obj_t *self, uint32_t baudrate, uint8_t polarit
     self->real_frequency = spi_set_baudrate(self->peripheral, baudrate);
 }
 
-// The bus is idle: apply the settings of a waiting configure() and wake it.
-static void _idle(async_spi_spi_obj_t *self) {
-    if (self->idle_done != NULL) {
-        _apply(self, self->pending_baudrate, self->pending_polarity, self->pending_phase,
-            self->pending_bits);
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
-        self->idle_done = NULL;
-    }
-}
+static void _end(async_spi_spi_obj_t *self);
 
-// Configures the bus once the running transfer, if any, has finished, and sets done then.
-void *common_hal_async_spi_spi_configure_start(async_spi_spi_obj_t *self, uint32_t baudrate,
-    uint8_t polarity, uint8_t phase, uint8_t bits, circuitpy_async_flag_t *done) {
-    CIRCUITPY_ASYNC_FLAG_INIT(done);
-    if (!self->async_active) {
-        _apply(self, baudrate, polarity, phase, bits);
-        CIRCUITPY_ASYNC_FLAG_SET(done);
-        return NULL;
-    }
-    // A later configure() replaces one still waiting.
-    if (self->idle_done != NULL) {
-        CIRCUITPY_ASYNC_FLAG_SET(self->idle_done);
-    }
-    self->pending_baudrate = baudrate;
-    self->pending_polarity = polarity;
-    self->pending_phase = phase;
-    self->pending_bits = bits;
-    self->idle_done = done;
-    return NULL;
-}
-
-mp_obj_t common_hal_async_spi_spi_configure_end(async_spi_spi_obj_t *self, void *context,
-    circuitpy_async_flag_t *done) {
-    return mp_const_none;
-}
-
-void common_hal_async_spi_spi_configure_cancel(async_spi_spi_obj_t *self, void *context,
-    circuitpy_async_flag_t *done) {
-    if (self->idle_done == done) {
-        self->idle_done = NULL;
-    }
+void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baudrate,
+    uint8_t polarity, uint8_t phase, uint8_t bits) {
+    _end(self);
+    _apply(self, baudrate, polarity, phase, bits);
 }
 
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {
@@ -331,7 +293,6 @@ static void _end(async_spi_spi_obj_t *self) {
     self->async_active = false;
     async_flags[self->dma_rx] = NULL;
     CIRCUITPY_ASYNC_FLAG_SET(self->async_done);
-    _idle(self);
 }
 
 // Start an async transfer after the previous one; done is set when it has finished, here if
@@ -391,7 +352,6 @@ static void _abort(async_spi_spi_obj_t *self) {
         (void)spi_get_hw(self->peripheral)->dr;
     }
     spi_get_hw(self->peripheral)->icr = SPI_SSPICR_RORIC_BITS;
-    _idle(self);
 }
 
 // Stops the transfer started with done, or finishes it if done is set. Does nothing for an

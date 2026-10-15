@@ -70,14 +70,7 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, ui
     #if CIRCUITPY_BUSIO_SPI_ASYNC
     end_sent(self);
     #endif
-    void *context = common_hal_async_spi_spi_configure_start(&self->async_spi, baudrate, polarity, phase,
-        bits, &self->done);
-    if (!wait(&self->done)) {
-        common_hal_async_spi_spi_configure_cancel(&self->async_spi, context, &self->done);
-        mp_handle_pending(true);  // raises the KeyboardInterrupt
-        return false;
-    }
-    common_hal_async_spi_spi_configure_end(&self->async_spi, context, &self->done);
+    common_hal_async_spi_spi_configure(&self->async_spi, baudrate, polarity, phase, bits);
     self->polarity = polarity;
     self->phase = phase;
     return true;
