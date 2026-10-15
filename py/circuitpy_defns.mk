@@ -542,7 +542,6 @@ SRC_COMMON_HAL_ALL = \
 	audiopwmio/__init__.c \
 	board/__init__.c \
 	busio/I2C.c \
-	busio/SPI.c \
 	busio/UART.c \
 	busio/__init__.c \
 	camera/__init__.c \
@@ -905,13 +904,6 @@ SRC_SHARED_MODULE_EXPANDED = $(addprefix shared-bindings/, $(SRC_SHARED_MODULE))
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE)) \
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE_INTERNAL))
 
-ifeq ($(CIRCUITPY_ASYNC_SPI),1)
-# busio.SPI comes from shared-module, on the port's async_spi common-hal.
-SRC_COMMON_HAL_EXPANDED := $(filter-out common-hal/busio/SPI.c, $(SRC_COMMON_HAL_EXPANDED)) \
-                           common-hal/async_spi/SPI.c
-SRC_SHARED_MODULE_EXPANDED += shared-module/busio/SPI.c
-endif
-
 # There may be duplicates between SRC_COMMON_HAL_EXPANDED and SRC_SHARED_MODULE_EXPANDED,
 # because a few modules have files both in common-hal/ and shared-module/.
 # Doing a $(sort ...) removes duplicates as part of sorting.
@@ -928,6 +920,15 @@ else
 SRC_SHARED_MODULE_ALL += \
 	touchio/TouchIn.c \
 	touchio/__init__.c
+endif
+
+# On a port with async SPI, busio.SPI is shared code on top of common-hal/async_spi.
+ifeq ($(CIRCUITPY_ASYNC_SPI),1)
+SRC_SHARED_MODULE_ALL += \
+	busio/SPI.c
+else
+SRC_COMMON_HAL_ALL += \
+	busio/SPI.c
 endif
 
 ifeq ($(CIRCUITPY_SSL_MBEDTLS),0)
