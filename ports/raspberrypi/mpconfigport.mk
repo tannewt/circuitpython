@@ -6,10 +6,8 @@ CIRCUITPY_OPTIMIZE_PROPERTY_FLASH_SIZE ?= 1
 CIRCUITPY_WIFI_RADIO_SETTABLE_MAC_ADDRESS = 0
 
 CIRCUITPY_RP2PIO ?= 1
-CIRCUITPY_BUSIO_SPI_ASYNC ?= 1
-# busio.SPI is built on the port's async_spi implementation; the async_spi module needs asyncio.
-CIRCUITPY_BUSIO_SPI_OVER_ASYNC = 1
-CIRCUITPY_ASYNC_SPI ?= $(call enable-if-all,$(MICROPY_PY_ASYNCIO) $(CIRCUITPY_BUSIO_SPI))
+# SPI is async on this port; busio.SPI is built on it.
+CIRCUITPY_ASYNC_SPI ?= 1
 # The 24 KB stack has room for a larger display refresh buffer.
 CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE ?= 2048
 CIRCUITPY_NEOPIXEL_WRITE ?= $(CIRCUITPY_RP2PIO)

@@ -125,13 +125,9 @@ CFLAGS += -DCIRCUITPY_ANALOGIO=$(CIRCUITPY_ANALOGIO)
 CIRCUITPY_ARRAY ?= 1
 CFLAGS += -DCIRCUITPY_ARRAY=$(CIRCUITPY_ARRAY)
 
-# async_spi needs asyncio and a port with the async busio SPI reads (raspberrypi).
+# A port with async SPI: the async_spi module, and busio.SPI built on the same implementation.
 CIRCUITPY_ASYNC_SPI ?= 0
 CFLAGS += -DCIRCUITPY_ASYNC_SPI=$(CIRCUITPY_ASYNC_SPI)
-
-# busio.SPI from shared-module/busio/SPI.c, on the port's common-hal/async_spi. Used by the
-# build only.
-CIRCUITPY_BUSIO_SPI_OVER_ASYNC ?= 0
 
 CIRCUITPY_ATEXIT ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_ATEXIT=$(CIRCUITPY_ATEXIT)
@@ -248,7 +244,7 @@ CFLAGS += -DCIRCUITPY_BUSIO_SPI=$(CIRCUITPY_BUSIO_SPI)
 
 # The port implements common_hal_busio_spi_write_start() and common_hal_busio_spi_end(), so a
 # display on a FourWire bus can send one strip while the next is being composited.
-CIRCUITPY_BUSIO_SPI_ASYNC ?= 0
+CIRCUITPY_BUSIO_SPI_ASYNC ?= $(CIRCUITPY_ASYNC_SPI)
 CFLAGS += -DCIRCUITPY_BUSIO_SPI_ASYNC=$(CIRCUITPY_BUSIO_SPI_ASYNC)
 
 CIRCUITPY_BUSIO_UART ?= $(CIRCUITPY_BUSIO)

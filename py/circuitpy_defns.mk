@@ -905,9 +905,8 @@ SRC_SHARED_MODULE_EXPANDED = $(addprefix shared-bindings/, $(SRC_SHARED_MODULE))
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE)) \
                              $(addprefix shared-module/, $(SRC_SHARED_MODULE_INTERNAL))
 
-ifeq ($(CIRCUITPY_BUSIO_SPI_OVER_ASYNC),1)
-# busio.SPI comes from shared-module, on the port's async_spi common-hal, which is then built
-# even without the async_spi module.
+ifeq ($(CIRCUITPY_ASYNC_SPI),1)
+# busio.SPI comes from shared-module, on the port's async_spi common-hal.
 SRC_COMMON_HAL_EXPANDED := $(filter-out common-hal/busio/SPI.c, $(SRC_COMMON_HAL_EXPANDED)) \
                            common-hal/async_spi/SPI.c
 SRC_SHARED_MODULE_EXPANDED += shared-module/busio/SPI.c

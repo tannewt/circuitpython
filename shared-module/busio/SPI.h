@@ -6,7 +6,7 @@
 
 // busio.SPI built on a port's async_spi implementation: every blocking call starts an async
 // transfer and waits for it. A port that has async_spi includes this header from its
-// common-hal/busio/SPI.h and sets CIRCUITPY_BUSIO_SPI_OVER_ASYNC = 1 in its mpconfigport.mk.
+// common-hal/busio/SPI.h and sets CIRCUITPY_ASYNC_SPI = 1 in its mpconfigport.mk.
 
 #pragma once
 
