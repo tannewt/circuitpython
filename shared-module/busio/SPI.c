@@ -8,11 +8,17 @@
 
 #include "py/runtime.h"
 #include "supervisor/background_callback.h"
+#include "shared/runtime/interrupt_char.h"
 
-static void wait(circuitpy_async_flag_t *done) {
+// False when interrupted (Ctrl-C); the operation is then still running.
+static bool wait(circuitpy_async_flag_t *done) {
     while (!CIRCUITPY_ASYNC_FLAG_IS_SET(done)) {
         RUN_BACKGROUND_TASKS;
+        if (mp_hal_is_interrupted()) {
+            return false;
+        }
     }
+    return true;
 }
 
 #if CIRCUITPY_BUSIO_SPI_ASYNC
@@ -66,7 +72,11 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, ui
     #endif
     void *context = common_hal_async_spi_spi_configure_start(&self->async_spi, baudrate, polarity, phase,
         bits, &self->done);
-    wait(&self->done);
+    if (!wait(&self->done)) {
+        common_hal_async_spi_spi_configure_cancel(&self->async_spi, context, &self->done);
+        mp_handle_pending(true);  // raises the KeyboardInterrupt
+        return false;
+    }
     common_hal_async_spi_spi_configure_end(&self->async_spi, context, &self->done);
     self->polarity = polarity;
     self->phase = phase;
@@ -91,7 +101,11 @@ void common_hal_busio_spi_unlock(busio_spi_obj_t *self) {
 
 // Finish the transfer started with self->done.
 static bool finish(busio_spi_obj_t *self, void *context) {
-    wait(&self->done);
+    if (!wait(&self->done)) {
+        common_hal_async_spi_spi_transfer_cancel(&self->async_spi, context, &self->done);
+        mp_handle_pending(true);  // raises the KeyboardInterrupt
+        return false;
+    }
     return common_hal_async_spi_spi_transfer_finish(&self->async_spi, context, &self->done);
 }
 
