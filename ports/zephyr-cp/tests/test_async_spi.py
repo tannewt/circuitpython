@@ -31,6 +31,7 @@ async def ticker(count):
 
 async def main():
     spi = async_spi.SPI(microcontroller.pin.P_02, MOSI=microcontroller.pin.P_03, MISO=microcontroller.pin.P_00)
+    await spi.lock.__aenter__()   # held for the whole test, as busio's try_lock would be
     spi.configure(baudrate=1_000_000)
     print("frequency", spi.frequency)
     bad = 0
@@ -79,7 +80,12 @@ async def main():
     except ValueError:
         print("deinit raised")
     with async_spi.SPI(microcontroller.pin.P_02, MOSI=microcontroller.pin.P_03, MISO=microcontroller.pin.P_00) as spi2:
-        await spi2.readinto(inb, end=8, write_value=0x5A)
+        try:
+            await spi2.readinto(inb, end=8)
+        except RuntimeError:
+            print("no lock raised")
+        async with spi2.lock:
+            await spi2.readinto(inb, end=8, write_value=0x5A)
         if inb[:8] != b"\\x5a" * 8:
             bad += 1
             print("second bus differs")

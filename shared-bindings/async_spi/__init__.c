@@ -8,6 +8,7 @@
 #include "py/runtime.h"
 
 #include "shared-bindings/async_spi/SPI.h"
+#include "supervisor/shared/awaitable.h"
 
 //| """SPI transfers for asyncio
 //|
@@ -22,16 +23,31 @@
 //|
 //|     async def main():
 //|         spi = async_spi.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-//|         spi.configure(baudrate=8_000_000)
 //|         data = bytearray(512)
-//|         await spi.readinto(data)
+//|         async with spi.lock:
+//|             spi.configure(baudrate=8_000_000)
+//|             await spi.readinto(data)
 //|
 //|     asyncio.run(main())
 //| """
+//|
+//| class Lock:
+//|     """A bus lock for asyncio code, used as ``async with bus.lock:``. Tasks waiting for it
+//|     get it in the order they asked; a task cancelled while waiting leaves the line."""
+//|
+//|     async def __aenter__(self) -> Lock:
+//|         """Waits for the lock and takes it."""
+//|         ...
+//|
+//|     def __aexit__(self) -> None:
+//|         """Hands the lock to the next task waiting, or releases it."""
+//|         ...
+//|
 
 static const mp_rom_map_elem_t async_spi_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_async_spi) },
     { MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&async_spi_spi_type) },
+    { MP_ROM_QSTR(MP_QSTR_Lock), MP_ROM_PTR(&circuitpy_async_lock_type) },
 };
 
 static MP_DEFINE_CONST_DICT(async_spi_module_globals, async_spi_module_globals_table);

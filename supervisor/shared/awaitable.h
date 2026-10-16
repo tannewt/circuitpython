@@ -30,6 +30,8 @@
 
 #pragma once
 
+#include <stddef.h>
+
 #include "py/obj.h"
 #include "supervisor/shared/async_flag.h"
 
@@ -53,7 +55,7 @@ typedef struct {
 
 extern const mp_obj_type_t circuitpy_async_fun_type;
 
-typedef struct {
+typedef struct _circuitpy_awaitable_obj_t {
     mp_obj_base_t base;
     const circuitpy_async_fun_obj_t *fun;
     void *context;                  // returned by start()
@@ -61,10 +63,35 @@ typedef struct {
     uint8_t state;                  // CIRCUITPY_AWAITABLE_NEW, _RUNNING or _FINISHED
     uint16_t n_args;
     uint16_t n_kw;
+    struct _circuitpy_awaitable_obj_t *next;   // the next one waiting for the same lock
     mp_obj_t args[];                // positional arguments, then keyword name/value pairs
 } circuitpy_awaitable_obj_t;
 
 extern const mp_obj_type_t circuitpy_awaitable_type;
+
+// The awaitable that owns a done flag passed to start(), end() or cancel().
+#define CIRCUITPY_AWAITABLE_OF(done_ptr) \
+    ((circuitpy_awaitable_obj_t *)((char *)(done_ptr) - offsetof(circuitpy_awaitable_obj_t, done)))
+
+// A lock for asyncio code: `async with lock:`. __aenter__ is an awaitable that takes the lock
+// or waits in line for it; __aexit__ hands the lock to the next in line. Embed it in the
+// object it guards; it allocates nothing.
+typedef struct {
+    mp_obj_base_t base;
+    bool held;
+    circuitpy_awaitable_obj_t *waiting;     // first in line, linked through next
+} circuitpy_async_lock_obj_t;
+
+extern const mp_obj_type_t circuitpy_async_lock_type;
+
+void circuitpy_async_lock_init(circuitpy_async_lock_obj_t *lock);
+static inline bool circuitpy_async_lock_held(circuitpy_async_lock_obj_t *lock) {
+    return lock->held;
+}
+// For C code: takes the lock if it is free.
+bool circuitpy_async_lock_try(circuitpy_async_lock_obj_t *lock);
+// Hands the lock to the next in line, or frees it.
+void circuitpy_async_lock_release(circuitpy_async_lock_obj_t *lock);
 
 enum { CIRCUITPY_AWAITABLE_NEW, CIRCUITPY_AWAITABLE_RUNNING, CIRCUITPY_AWAITABLE_FINISHED };
 

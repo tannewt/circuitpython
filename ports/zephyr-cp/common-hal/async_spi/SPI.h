@@ -9,6 +9,7 @@
 #include "py/obj.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "supervisor/shared/async_flag.h"
+#include "supervisor/shared/awaitable.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/spi.h>
@@ -16,6 +17,7 @@
 
 typedef struct {
     mp_obj_base_t base;
+    circuitpy_async_lock_obj_t lock;
     const struct device *spi_device;    // NULL once deinited
     bool dynamic;                       // routed to pins at construction, released at deinit
     struct spi_config config[2];        // two slots: a driver sees a change by the pointer

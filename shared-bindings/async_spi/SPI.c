@@ -27,8 +27,8 @@
 //|     ``write``, ``readinto`` and ``write_readinto`` return awaitables: the transfer runs while
 //|     other asyncio tasks run. Short transfers, and transfers that cannot use DMA (for example
 //|     from a buffer in flash), block other tasks until they finish. A transfer's arguments are
-//|     checked when the result is awaited. To share the bus between tasks, hold an
-//|     `asyncio.Lock` around each use."""
+//|     checked when the result is awaited. A transfer or ``configure()`` needs the bus's `lock`
+//|     held, so that a transaction of several transfers is not interleaved with another task's."""
 //|
 //|     def __init__(
 //|         self,
@@ -58,6 +58,7 @@ static mp_obj_t async_spi_spi_make_new(const mp_obj_type_t *type, size_t n_args,
 
     async_spi_spi_obj_t *self = mp_obj_malloc_with_finaliser(async_spi_spi_obj_t, &async_spi_spi_type);
     common_hal_async_spi_spi_construct(self, clock, mosi, miso);
+    circuitpy_async_lock_init(&self->lock);
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -65,6 +66,15 @@ static MP_NOINLINE async_spi_spi_obj_t *checked_spi(mp_obj_t self_in) {
     async_spi_spi_obj_t *self = MP_OBJ_TO_PTR(mp_arg_validate_type(self_in, &async_spi_spi_type, MP_QSTR_self));
     if (common_hal_async_spi_spi_deinited(self)) {
         raise_deinited_error();
+    }
+    return self;
+}
+
+// For the calls that use the bus.
+static MP_NOINLINE async_spi_spi_obj_t *locked_spi(mp_obj_t self_in) {
+    async_spi_spi_obj_t *self = checked_spi(self_in);
+    if (!circuitpy_async_lock_held(&self->lock)) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("Function requires lock"));
     }
     return self;
 }
@@ -105,13 +115,12 @@ static void async_spi_spi_transfer_cancel(mp_obj_t self_in, void *context, circu
 //|         self, *, baudrate: int = 100000, polarity: int = 0, phase: int = 0, bits: int = 8
 //|     ) -> None:
 //|         """Configure the SPI bus, as `busio.SPI.configure`. A transfer still running finishes
-//|         first, with the old settings. Tasks sharing a bus serialize their transfers, for
-//|         example with an `asyncio.Lock` around configure() and the transfer."""
+//|         first, with the old settings. Needs the `lock`."""
 //|         ...
 //|
 static mp_obj_t async_spi_spi_configure(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_baudrate, ARG_polarity, ARG_phase, ARG_bits };
-    async_spi_spi_obj_t *self = checked_spi(pos_args[0]);
+    async_spi_spi_obj_t *self = locked_spi(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_configure_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(busio_spi_configure_args), busio_spi_configure_args, args);
 
@@ -138,7 +147,7 @@ static MP_DEFINE_CONST_FUN_OBJ_KW(async_spi_spi_configure_obj, 1, async_spi_spi_
 //|
 static void *async_spi_spi_write(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_buffer, ARG_start, ARG_end };
-    async_spi_spi_obj_t *self = checked_spi(pos_args[0]);
+    async_spi_spi_obj_t *self = locked_spi(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_write_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(busio_spi_write_args), busio_spi_write_args, args);
 
@@ -168,7 +177,7 @@ static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_write_obj, 1, async_spi_s
 //|
 static void *async_spi_spi_readinto(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_buffer, ARG_start, ARG_end, ARG_write_value };
-    async_spi_spi_obj_t *self = checked_spi(pos_args[0]);
+    async_spi_spi_obj_t *self = locked_spi(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_readinto_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(busio_spi_readinto_args), busio_spi_readinto_args, args);
 
@@ -203,7 +212,7 @@ static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(async_spi_spi_readinto_obj, 1, async_sp
 //|
 static void *async_spi_spi_write_readinto(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_out_buffer, ARG_in_buffer, ARG_out_start, ARG_out_end, ARG_in_start, ARG_in_end };
-    async_spi_spi_obj_t *self = checked_spi(pos_args[0]);
+    async_spi_spi_obj_t *self = locked_spi(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(busio_spi_write_readinto_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(busio_spi_write_readinto_args), busio_spi_write_readinto_args, args);
 
@@ -234,6 +243,24 @@ MP_DEFINE_CONST_FUN_OBJ_1(async_spi_spi_get_frequency_obj, async_spi_spi_get_fre
 MP_PROPERTY_GETTER(async_spi_spi_frequency_obj,
     (mp_obj_t)&async_spi_spi_get_frequency_obj);
 
+//|     lock: Lock
+//|     """The bus's lock. Hold it around a transaction::
+//|
+//|         async with spi.lock:
+//|             spi.configure(baudrate=8_000_000)
+//|             await spi.write(command)
+//|             await spi.readinto(reply)
+//|     """
+//|
+static mp_obj_t async_spi_spi_get_lock(mp_obj_t self_in) {
+    async_spi_spi_obj_t *self = checked_spi(self_in);
+    return MP_OBJ_FROM_PTR(&self->lock);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(async_spi_spi_get_lock_obj, async_spi_spi_get_lock);
+
+MP_PROPERTY_GETTER(async_spi_spi_lock_obj,
+    (mp_obj_t)&async_spi_spi_get_lock_obj);
+
 static const mp_rom_map_elem_t async_spi_spi_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&async_spi_spi_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&async_spi_spi_deinit_obj) },
@@ -247,6 +274,7 @@ static const mp_rom_map_elem_t async_spi_spi_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_write_readinto), MP_ROM_PTR(&async_spi_spi_write_readinto_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_frequency), MP_ROM_PTR(&async_spi_spi_frequency_obj) },
+    { MP_ROM_QSTR(MP_QSTR_lock), MP_ROM_PTR(&async_spi_spi_lock_obj) },
 };
 static MP_DEFINE_CONST_DICT(async_spi_spi_locals_dict, async_spi_spi_locals_dict_table);
 

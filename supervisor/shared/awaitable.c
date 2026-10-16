@@ -49,6 +49,7 @@ static mp_obj_t async_fun_call(mp_obj_t self_in, size_t n_args, size_t n_kw, con
     aw->state = CIRCUITPY_AWAITABLE_NEW;
     aw->n_args = n_args;
     aw->n_kw = n_kw;
+    aw->next = NULL;
     memcpy(aw->args, args, n * sizeof(mp_obj_t));
     return MP_OBJ_FROM_PTR(aw);
 }
@@ -152,6 +153,98 @@ MP_DEFINE_CONST_OBJ_TYPE(
     iter, awaitable_iternext,
     protocol, &awaitable_stream_p,
     locals_dict, &awaitable_locals_dict
+    );
+
+// ---- the lock ----------------------------------------------------------------
+
+void circuitpy_async_lock_init(circuitpy_async_lock_obj_t *lock) {
+    lock->base.type = &circuitpy_async_lock_type;
+    lock->held = false;
+    lock->waiting = NULL;
+}
+
+bool circuitpy_async_lock_try(circuitpy_async_lock_obj_t *lock) {
+    if (lock->held) {
+        return false;
+    }
+    lock->held = true;
+    return true;
+}
+
+void circuitpy_async_lock_release(circuitpy_async_lock_obj_t *lock) {
+    circuitpy_awaitable_obj_t *next = lock->waiting;
+    if (next == NULL) {
+        lock->held = false;
+        return;
+    }
+    // The lock stays held; it is the next one's now.
+    lock->waiting = next->next;
+    CIRCUITPY_ASYNC_FLAG_SET(&next->done);
+}
+
+// __aenter__: take the lock, or join the end of the line. done is set when it is ours.
+static void *lock_enter_start(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    circuitpy_async_lock_obj_t *lock = MP_OBJ_TO_PTR(pos_args[0]);
+    if (circuitpy_async_lock_try(lock)) {
+        CIRCUITPY_ASYNC_FLAG_SET(done);
+        return NULL;
+    }
+    circuitpy_awaitable_obj_t *aw = CIRCUITPY_AWAITABLE_OF(done);
+    circuitpy_awaitable_obj_t **p = &lock->waiting;
+    while (*p != NULL) {
+        p = &(*p)->next;
+    }
+    *p = aw;
+    return NULL;
+}
+
+static mp_obj_t lock_enter_end(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    return self_in;
+}
+
+// Cancelled while waiting: leave the line. Cancelled after the lock was handed over but before
+// the task ran: pass it on.
+static void lock_enter_cancel(mp_obj_t self_in, void *context, circuitpy_async_flag_t *done) {
+    circuitpy_async_lock_obj_t *lock = MP_OBJ_TO_PTR(self_in);
+    if (CIRCUITPY_ASYNC_FLAG_IS_SET(done)) {
+        circuitpy_async_lock_release(lock);
+        return;
+    }
+    circuitpy_awaitable_obj_t *aw = CIRCUITPY_AWAITABLE_OF(done);
+    for (circuitpy_awaitable_obj_t **p = &lock->waiting; *p != NULL; p = &(*p)->next) {
+        if (*p == aw) {
+            *p = aw->next;
+            return;
+        }
+    }
+}
+static CIRCUITPY_DEFINE_ASYNC_FUN_OBJ_KW(lock_enter_obj, 1, lock_enter_start, lock_enter_end, lock_enter_cancel);
+
+// __aexit__ returns the lock itself: awaiting it finishes at once with None, so an exception
+// in the block is not swallowed.
+static mp_obj_t lock_exit(size_t n_args, const mp_obj_t *args) {
+    circuitpy_async_lock_release(MP_OBJ_TO_PTR(args[0]));
+    return args[0];
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lock_exit_obj, 4, 4, lock_exit);
+
+static mp_obj_t lock_iternext(mp_obj_t self_in) {
+    MP_STATE_THREAD(stop_iteration_arg) = mp_const_none;
+    return MP_OBJ_STOP_ITERATION;
+}
+
+static const mp_rom_map_elem_t lock_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___aenter__), MP_ROM_PTR(&lock_enter_obj) },
+    { MP_ROM_QSTR(MP_QSTR___aexit__), MP_ROM_PTR(&lock_exit_obj) },
+};
+static MP_DEFINE_CONST_DICT(lock_locals_dict, lock_locals_dict_table);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    circuitpy_async_lock_type,
+    MP_QSTR_Lock,
+    MP_TYPE_FLAG_ITER_IS_ITERNEXT,
+    iter, lock_iternext,
+    locals_dict, &lock_locals_dict
     );
 
 #endif // MICROPY_PY_ASYNC_AWAIT

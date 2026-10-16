@@ -9,11 +9,13 @@
 #include "py/obj.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "supervisor/shared/async_flag.h"
+#include "supervisor/shared/awaitable.h"
 
 #include "hardware/spi.h"
 
 typedef struct {
     mp_obj_base_t base;
+    circuitpy_async_lock_obj_t lock;
     spi_inst_t *peripheral;
     const mcu_pin_obj_t *clock;         // NULL once deinited
     const mcu_pin_obj_t *mosi;
