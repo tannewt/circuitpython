@@ -155,16 +155,16 @@ void common_hal_mipicsi_camera_construct(
     self->phy_ldo = NULL;
     self->isp_proc = NULL;
     self->spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
-    // No receiver hardware yet: it is created in the videosample play step,
+    // No receiver hardware yet: it is created in the videosource play step,
     // where the sensor's current mode is known.
 }
 
-// Videosample protocol play step: create the LDO, ISP and CSI controller for
+// Videosource protocol play step: create the LDO, ISP and CSI controller for
 // the given (freshly read) sensor parameters and start the sensor streaming.
 // Raises when the camera is already streaming for someone else. Not a user
-// facing method: it is driven by the videosample protocol (from
+// facing method: it is driven by the videosource protocol (from
 // VideoBuffer.play), so it may raise.
-void common_hal_mipicsi_camera_videosample_play(
+void common_hal_mipicsi_camera_videosource_play(
     mipicsi_camera_obj_t *self,
     const mipicsi_sensor_params_t *params) {
 
@@ -361,11 +361,11 @@ void common_hal_mipicsi_camera_deinit(mipicsi_camera_obj_t *self) {
     mipicsi_camera_teardown(self);
     self->sensor = mp_const_none;
 }
-// Videosample protocol stop step: tear down the receiver hardware and stop
+// Videosource protocol stop step: tear down the receiver hardware and stop
 // the sensor so its settings can be changed. Not a user facing method: it is
-// driven by the videosample protocol (from VideoBuffer.stop), so it may
+// driven by the videosource protocol (from VideoBuffer.stop), so it may
 // raise; exceptions from the sensor's stop() propagate.
-void common_hal_mipicsi_camera_videosample_stop(mipicsi_camera_obj_t *self) {
+void common_hal_mipicsi_camera_videosource_stop(mipicsi_camera_obj_t *self) {
     if (self->handle == NULL) {
         return; // Not playing.
     }
@@ -396,7 +396,7 @@ bool common_hal_mipicsi_camera_set_destination(
     const size_t row_bytes = ((size_t)self->width * mipicsi_bits_per_pixel_for(self->output_format) + 7) / 8;
     const size_t frame_bytes = (size_t)self->height * row_bytes;
 
-    // There is no stop value on the destination: stopping is the videosample
+    // There is no stop value on the destination: stopping is the videosource
     // stop step's job. The protocol never passes NULL,
     // so this guard is only about internal misuse.
     assert(base != NULL);

@@ -24,18 +24,18 @@ void common_hal_mipicsi_camera_construct(
 // itself (its finaliser does), never the receiver.
 void common_hal_mipicsi_camera_set_sensor(mipicsi_camera_obj_t *self, mp_obj_t sensor);
 
-// Videosample protocol play step: create the receiver hardware for the
+// Videosource protocol play step: create the receiver hardware for the
 // sensor's current mode and start the sensor streaming. Not a user facing
-// method: it is driven by the videosample protocol (from VideoBuffer.play),
+// method: it is driven by the videosource protocol (from VideoBuffer.play),
 // so it may raise.
-void common_hal_mipicsi_camera_videosample_play(
+void common_hal_mipicsi_camera_videosource_play(
     mipicsi_camera_obj_t *self,
     const mipicsi_sensor_params_t *params);
 
-// Videosample protocol stop step: stop the stream and the sensor. Not a user
-// facing method: it is driven by the videosample protocol (from
+// Videosource protocol stop step: stop the stream and the sensor. Not a user
+// facing method: it is driven by the videosource protocol (from
 // VideoBuffer.stop), so it may raise.
-void common_hal_mipicsi_camera_videosample_stop(mipicsi_camera_obj_t *self);
+void common_hal_mipicsi_camera_videosource_stop(mipicsi_camera_obj_t *self);
 
 void common_hal_mipicsi_camera_deinit(mipicsi_camera_obj_t *self);
 bool common_hal_mipicsi_camera_deinited(mipicsi_camera_obj_t *self);

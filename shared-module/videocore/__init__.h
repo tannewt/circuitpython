@@ -40,8 +40,8 @@ typedef void (*videocore_on_frame_fun)(void *ctx);
 // This is the video equivalent of the audiosample protocol in the audiocore
 // module, inverted: instead of the target pulling frames, the source writes
 // where it is told to.
-typedef struct _videosample_p_t {
-    MP_PROTOCOL_HEAD // MP_QSTR_protocol_videosample
+typedef struct _videosource_p_t {
+    MP_PROTOCOL_HEAD // MP_QSTR_protocol_videosource
 
     // Create whatever streaming hardware the source needs and start it (e.g.
     // start a sensor streaming). Called once before the first
@@ -71,23 +71,23 @@ typedef struct _videosample_p_t {
     mp_int_t (*get_height)(mp_obj_t self);
     // Bits per pixel of the frames the source streams.
     mp_int_t (*get_bits_per_pixel)(mp_obj_t self);
-} videosample_p_t;
+} videosource_p_t;
 
-// Protocol function helpers. videosample_play/stop are no-ops for sources
+// Protocol function helpers. videosource_play/stop are no-ops for sources
 // whose protocol doesn't implement them.
-void videosample_play(mp_obj_t source);
-void videosample_stop(mp_obj_t source);
+void videosource_play(mp_obj_t source);
+void videosource_stop(mp_obj_t source);
 
-// Return the videosample protocol of obj or raise TypeError.
-const videosample_p_t *videosample_check(mp_obj_t obj);
+// Return the videosource protocol of obj or raise TypeError.
+const videosource_p_t *videosource_check(mp_obj_t obj);
 
-// Dispatch helpers mirroring the audiosample_* functions. videosample_play
+// Dispatch helpers mirroring the audiosample_* functions. videosource_play
 // is a no-op for sources whose protocol has no play.
-bool videosample_set_destination(mp_obj_t source, const videocore_destination_t *dest,
+bool videosource_set_destination(mp_obj_t source, const videocore_destination_t *dest,
     videocore_on_frame_fun on_frame, void *ctx);
-mp_int_t videosample_get_width(mp_obj_t source);
-mp_int_t videosample_get_height(mp_obj_t source);
-mp_int_t videosample_get_bits_per_pixel(mp_obj_t source);
+mp_int_t videosource_get_width(mp_obj_t source);
+mp_int_t videosource_get_height(mp_obj_t source);
+mp_int_t videosource_get_bits_per_pixel(mp_obj_t source);
 
 // Raise when the group tree contains a VideoBuffer that streams into a
 // framebuffer other than the one this display renders. Called when a group

@@ -15,7 +15,7 @@
 //| This module provides the video pipeline shared between video sources and
 //| video outputs. It is the video equivalent of the `audiocore` module.
 //|
-//| Video sources, such as `mipicsi.Camera`, implement the internal videosample
+//| Video sources, such as `mipicsi.Camera`, implement the internal videosource
 //| protocol. A `VideoBuffer` tells a video source where to put its frames in a
 //| framebuffer, such as `mipidsi.Display`, and can move it as needed.
 //|

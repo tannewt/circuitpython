@@ -157,7 +157,7 @@ static void videocore_videobuffer_move_dest(
     // returning false (e.g. a mid-row shift isn't DMA-aligned) and the
     // stream continues where it was. on_frame points at the old destination
     // until then, which keeps the last-known-good frame.
-    if (videosample_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self)) {
+    if (videosource_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self)) {
         self->stream_base = dest.base;
     }
 }
@@ -205,11 +205,11 @@ void common_hal_videocore_videobuffer_play(videocore_videobuffer_obj_t *self, mp
     if (self->playing) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("already playing"));
     }
-    const videosample_p_t *protocol = videosample_check(source);
+    const videosource_p_t *protocol = videosource_check(source);
 
     // Prepare and start the source first: it may reconfigure itself (e.g. a
     // sensor picks its mode), which fixes what get_* report from here on.
-    videosample_play(source);
+    videosource_play(source);
 
     mp_int_t bits_per_pixel = protocol->get_bits_per_pixel(source);
     if (bits_per_pixel % 8 != 0) {
@@ -243,7 +243,7 @@ void common_hal_videocore_videobuffer_play(videocore_videobuffer_obj_t *self, mp
     // on; on_frame tells us when a new frame has landed. It is the
     // displayio group tree (and this object's Python references) that keep
     // the VideoBuffer alive; a GC'd buffer's finaliser stops the stream.
-    if (!videosample_set_destination(source, &dest, videocore_videobuffer_on_frame, self)) {
+    if (!videosource_set_destination(source, &dest, videocore_videobuffer_on_frame, self)) {
         mp_raise_ValueError(MP_ERROR_TEXT("video source rejected the destination"));
     }
     self->stream_base = dest.base;
@@ -268,7 +268,7 @@ void common_hal_videocore_videobuffer_set_position(videocore_videobuffer_obj_t *
     // The source's frame size was fixed when play() was called. Reject
     // sources that changed it (e.g. a sensor mode change) rather than
     // blitting at stale geometry.
-    const videosample_p_t *protocol = videosample_check(self->source);
+    const videosource_p_t *protocol = videosource_check(self->source);
     mp_int_t width = protocol->get_width(self->source);
     mp_int_t height = protocol->get_height(self->source);
     mp_int_t bits_per_pixel = protocol->get_bits_per_pixel(self->source);
@@ -281,7 +281,7 @@ void common_hal_videocore_videobuffer_set_position(videocore_videobuffer_obj_t *
     // destination by returning false; the stream continues where it was).
     videocore_destination_t dest;
     videocore_videobuffer_compute_destination(self, &dest);
-    (void)videosample_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self);
+    (void)videosource_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self);
     self->stream_base = dest.base;
 }
 
@@ -299,7 +299,7 @@ void common_hal_videocore_videobuffer_stop(videocore_videobuffer_obj_t *self) {
     if (self->source != mp_const_none) {
         nlr_buf_t nlr;
         if (nlr_push(&nlr) == 0) {
-            videosample_stop(self->source);
+            videosource_stop(self->source);
             nlr_pop();
         } else {
             videocore_videobuffer_clear(self);
@@ -315,7 +315,7 @@ void videocore_videobuffer_stop_quiet(videocore_videobuffer_obj_t *self) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         if (self->source != mp_const_none) {
-            videosample_stop(self->source);
+            videosource_stop(self->source);
         }
         nlr_pop();
     }
@@ -469,7 +469,7 @@ static void videocore_videobuffer_draw_set_hidden(mp_obj_t self_in, bool hidden)
         // The source is free to reconfigure while hidden. Validate its
         // sizing again but quietly: if it no longer matches, don't raise;
         // simply stop showing the stream until stop and play again.
-        const videosample_p_t *protocol = mp_proto_get(MP_QSTR_protocol_videosample, self->source);
+        const videosource_p_t *protocol = mp_proto_get(MP_QSTR_protocol_videosource, self->source);
         if (protocol != NULL &&
             (protocol->get_width(self->source) != self->source_width ||
              protocol->get_height(self->source) != self->source_height ||

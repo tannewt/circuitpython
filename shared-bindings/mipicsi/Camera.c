@@ -48,7 +48,7 @@
 //|     their own finaliser, and have a new Camera made when the mode
 //|     changes.
 //|
-//|     Camera objects implement the internal videosample protocol, so a
+//|     Camera objects implement the internal videosource protocol, so a
 //|     `videocore.VideoBuffer` can stream their frames into a framebuffer.
 //|     """
 //|
@@ -122,7 +122,7 @@ static mp_obj_t mipicsi_camera_make_new(const mp_obj_type_t *type, size_t n_args
     common_hal_mipicsi_camera_construct(self, output_format);
     // Keep the sensor alive while receiving from it. It is only started
     // streaming when a videocore.VideoBuffer starts playing (see the
-    // videosample play step): until then nothing captures or transmits.
+    // videosource play step): until then nothing captures or transmits.
     common_hal_mipicsi_camera_set_sensor(self, sensor);
     return MP_OBJ_FROM_PTR(self);
 }
@@ -159,7 +159,7 @@ static const mp_rom_map_elem_t mipicsi_camera_locals_dict_table[] = {
 static MP_DEFINE_CONST_DICT(mipicsi_camera_locals_dict, mipicsi_camera_locals_dict_table);
 
 #if CIRCUITPY_VIDEOCORE
-// Implementation of the videocore videosample protocol so a VideoBuffer can
+// Implementation of the videocore videosource protocol so a VideoBuffer can
 // tell the Camera where to put frames.
 static void mipicsi_camera_play(mp_obj_t self_in) {
     mipicsi_camera_obj_t *self = MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
@@ -174,12 +174,12 @@ static void mipicsi_camera_play(mp_obj_t self_in) {
     // sensor refuses it itself).
     mipicsi_sensor_params_t params;
     self->pixel_format = mipicsi_camera_load_sensor_params(self->sensor, &params);
-    common_hal_mipicsi_camera_videosample_play(self, &params);
+    common_hal_mipicsi_camera_videosource_play(self, &params);
 }
 
 static void mipicsi_camera_stop(mp_obj_t self_in) {
     mipicsi_camera_obj_t *self = MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
-    common_hal_mipicsi_camera_videosample_stop(self);
+    common_hal_mipicsi_camera_videosource_stop(self);
 }
 
 static bool mipicsi_camera_set_destination(mp_obj_t self_in, const videocore_destination_t *dest,
@@ -202,8 +202,8 @@ static mp_int_t mipicsi_camera_get_bits_per_pixel(mp_obj_t self_in) {
     return common_hal_mipicsi_camera_get_bits_per_pixel(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
 }
 
-static const videosample_p_t mipicsi_camera_videosample_protocol = {
-    MP_PROTO_IMPLEMENT(MP_QSTR_protocol_videosample)
+static const videosource_p_t mipicsi_camera_videosource_protocol = {
+    MP_PROTO_IMPLEMENT(MP_QSTR_protocol_videosource)
     .play = mipicsi_camera_play,
     .stop = mipicsi_camera_stop,
     .set_destination = mipicsi_camera_set_destination,
@@ -218,7 +218,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
     make_new, mipicsi_camera_make_new,
     locals_dict, &mipicsi_camera_locals_dict,
-    protocol, &mipicsi_camera_videosample_protocol
+    protocol, &mipicsi_camera_videosource_protocol
     );
 #else
 MP_DEFINE_CONST_OBJ_TYPE(

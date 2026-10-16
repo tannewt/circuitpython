@@ -19,7 +19,7 @@
 //|     but may have size and position limitations.
 //|
 //|     A VideoBuffer connects a video source (an object implementing the
-//|     videosample protocol, such as `mipicsi.Camera`) to a target: either a
+//|     videosource protocol, such as `mipicsi.Camera`) to a target: either a
 //|     framebuffer (an object implementing the framebuffer protocol, such as
 //|     `mipidsi.Display`) or a writable buffer such as a ``bytearray`` or
 //|     ``memoryview``. It is the video counterpart of `audioio.AudioOut`.
@@ -75,7 +75,7 @@ static mp_obj_t videocore_videobuffer_make_new(const mp_obj_type_t *type, size_t
     return MP_OBJ_FROM_PTR(self);
 }
 
-//|     def play(self, source: circuitpython_typing.VideoSample) -> None:
+//|     def play(self, source: circuitpython_typing.VideoSource) -> None:
 //|         """Begin streaming the given video source into the target.
 //|
 //|         The source streams continuously, writing each new frame where the
@@ -90,7 +90,7 @@ static mp_obj_t videocore_videobuffer_make_new(const mp_obj_type_t *type, size_t
 //|         play. Sources that change them require ``stop`` and a new
 //|         ``play``.
 //|
-//|         :param ~circuitpython_typing.VideoSample source: The video source to
+//|         :param ~circuitpython_typing.VideoSource source: The video source to
 //|             play, such as `mipicsi.Camera`
 //|         """
 //|
@@ -123,7 +123,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(videocore_videobuffer_get_playing_obj, videocor
 MP_PROPERTY_GETTER(videocore_videobuffer_playing_obj,
     (mp_obj_t)&videocore_videobuffer_get_playing_obj);
 
-//|     source: Optional[circuitpython_typing.VideoSample]
+//|     source: Optional[circuitpython_typing.VideoSource]
 //|     """The video source being played, or None when not playing. (read-only)"""
 //|
 static mp_obj_t videocore_videobuffer_get_source(mp_obj_t self_in) {
