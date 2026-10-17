@@ -244,12 +244,14 @@ MP_PROPERTY_GETTER(async_spi_spi_frequency_obj,
     (mp_obj_t)&async_spi_spi_get_frequency_obj);
 
 //|     lock: Lock
-//|     """The bus's lock. Hold it around a transaction::
+//|     """The bus's lock. Hold it around a transaction.
 //|
-//|         async with spi.lock:
-//|             spi.configure(baudrate=8_000_000)
-//|             await spi.write(command)
-//|             await spi.readinto(reply)
+//|     For example::
+//|
+//|       async with spi.lock:
+//|           spi.configure(baudrate=8_000_000)
+//|           await spi.write(command)
+//|           await spi.readinto(reply)
 //|     """
 //|
 static mp_obj_t async_spi_spi_get_lock(mp_obj_t self_in) {
