@@ -229,6 +229,13 @@ REGISTRATION_FUNCTIONS = \
 	-u esp_security_init_include_impl \
 	-u mbedtls_psa_crypto_init_include_impl
 
+# JPEG engine DMA destinations come from the Python heap (Bitmaps), and
+# the cache line is 64 bytes on the P4 and S31, so make GC blocks 64 bytes as well.
+# supervisor/port.c aligns the PSRAM heap areas to the same value.
+ifneq ($(filter esp32p4 esp32s31,$(IDF_TARGET)),)
+CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
+endif
+
 # RISC-V picolibc ships optimized memcpy/memset/etc. that need forcing
 # (gated by CONFIG_LIBC_OPTIMIZED_MISALIGNED_ACCESS in IDF's esp_libc CMake).
 ifeq ($(IDF_TARGET_ARCH),riscv)

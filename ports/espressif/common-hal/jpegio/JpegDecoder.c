@@ -33,12 +33,12 @@ void espressif_jpegio_reset(void) {
     }
 }
 
-// Bitmap pixels must start on a cache line for the engine to write them directly.
+// GC blocks start on a cache line, so the engine can write Bitmap pixels directly.
 #ifdef CONFIG_CACHE_L2_CACHE_LINE_SIZE
-_Static_assert(CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT % CONFIG_CACHE_L2_CACHE_LINE_SIZE == 0, "Bitmap alignment is not a cache line");
+_Static_assert(MICROPY_BYTES_PER_GC_BLOCK % CONFIG_CACHE_L2_CACHE_LINE_SIZE == 0, "GC block is not a cache line");
 #endif
 #ifdef CONFIG_CACHE_L1_DCACHE_LINE_SIZE
-_Static_assert(CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT % CONFIG_CACHE_L1_DCACHE_LINE_SIZE == 0, "Bitmap alignment is not a cache line");
+_Static_assert(MICROPY_BYTES_PER_GC_BLOCK % CONFIG_CACHE_L1_DCACHE_LINE_SIZE == 0, "GC block is not a cache line");
 #endif
 
 // True if the hardware may write `size` bytes at `buf` directly: the start and
