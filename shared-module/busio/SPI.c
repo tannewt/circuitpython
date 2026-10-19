@@ -42,7 +42,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self, const mcu_pin_obj_t *
     }
     common_hal_async_spi_spi_construct(&self->async_spi, clock, mosi, miso);
     self->sent = NULL;
-    self->has_lock = false;
     self->polarity = 0;
     self->phase = 0;
 }
@@ -76,20 +75,20 @@ bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, ui
     return true;
 }
 
+// The same lock as async_spi's, so C code and async code share the bus the same way.
 bool common_hal_busio_spi_try_lock(busio_spi_obj_t *self) {
-    if (common_hal_busio_spi_deinited(self) || self->has_lock) {
+    if (common_hal_busio_spi_deinited(self)) {
         return false;
     }
-    self->has_lock = true;
-    return true;
+    return circuitpy_async_lock_try(common_hal_async_spi_spi_get_lock(&self->async_spi));
 }
 
 bool common_hal_busio_spi_has_lock(busio_spi_obj_t *self) {
-    return self->has_lock;
+    return circuitpy_async_lock_held(common_hal_async_spi_spi_get_lock(&self->async_spi));
 }
 
 void common_hal_busio_spi_unlock(busio_spi_obj_t *self) {
-    self->has_lock = false;
+    circuitpy_async_lock_release(common_hal_async_spi_spi_get_lock(&self->async_spi));
 }
 
 // Finish the transfer started with self->done.

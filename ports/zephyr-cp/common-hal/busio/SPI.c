@@ -10,8 +10,5 @@ mp_obj_t common_hal_busio_spi_construct_from_device(busio_spi_obj_t *self, const
     self->base.type = &busio_spi_type;
     common_hal_async_spi_spi_construct_from_device(&self->async_spi, spi_device);
     self->sent = NULL;
-    self->has_lock = false;
-    self->polarity = 0;
-    self->phase = 0;
     return MP_OBJ_FROM_PTR(self);
 }
