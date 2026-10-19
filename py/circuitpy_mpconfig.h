@@ -431,6 +431,12 @@ typedef long mp_off_t;
 #define CIRCUITPY_DISPLAY_LIMIT (0)
 #endif
 
+// Byte alignment of the pixel memory a Bitmap allocates. Ports raise it when hardware
+// writes Bitmap pixels directly and needs them to start on a cache line.
+#ifndef CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT
+#define CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT (4)
+#endif
+
 // This is not a top-level module; it's microcontroller.nvm.
 #if CIRCUITPY_NVM
 extern const struct _mp_obj_module_t nvm_module;

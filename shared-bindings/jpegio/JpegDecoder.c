@@ -124,6 +124,14 @@ MP_DEFINE_CONST_FUN_OBJ_2(jpegio_jpegdecoder_open_obj, jpegio_jpegdecoder_open);
 //|         possible to repeatedly ``decode`` the same jpeg data, even if it is to
 //|         select different scales or crop regions from it.
 //|
+//|         On chips with a JPEG decoder peripheral (ESP32-P4 and ESP32-S31), ``decode``
+//|         uses the peripheral for baseline color JPEGs when the data was opened from a
+//|         buffer in DMA-capable memory, ``scale`` is 0, ``bitmap`` holds 16-bit values,
+//|         and no skip index is given. It is fastest when ``bitmap`` is exactly the image
+//|         size and the whole image is decoded at 0,0. Colors may differ slightly from the
+//|         software decoder's. Other images, and data opened from a file or stream, use
+//|         the software decoder.
+//|
 //|         :param Bitmap bitmap: Optional output buffer
 //|         :param int scale: Scale factor from 0 to 3, inclusive.
 //|         :param int x: Horizontal pixel location in bitmap where source_bitmap upper-left

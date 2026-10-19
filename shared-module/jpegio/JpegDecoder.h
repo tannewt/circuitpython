@@ -25,3 +25,13 @@ typedef struct jpegio_jpegdecoder_obj {
     bool skip_source_index_none, skip_dest_index_none;
     uint8_t scale;
 } jpegio_jpegdecoder_obj_t;
+
+#if CIRCUITPY_JPEGIO_HW
+// Ports with JPEG decode hardware provide this. It is called by decode() only when the
+// source passed to open() is an in-memory buffer; `jpeg` is that whole buffer. The decode
+// arguments (x, y, lim, skip indices) are already stored in `self`, and `self->dest` is
+// the target bitmap.
+// Returns true if the port decoded the image into `self->dest`. Returns false to decode
+// with TJpgDec instead, which rewrites every pixel the image covers. Must not raise.
+bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale);
+#endif

@@ -31,7 +31,19 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
     self->stride = stride(width, bits_per_value);
     self->data_alloc = false;
     if (!data) {
-        data = m_malloc_without_collect(self->stride * height * sizeof(uint32_t));
+        size_t size = self->stride * height * sizeof(uint32_t);
+        #if CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT > 4
+        // Pad the allocation so data can start on an alignment boundary, and round the size
+        // up so data ends on one too and shares no alignment unit with other memory.
+        const uintptr_t alignment = CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT;
+        size = (size + alignment - 1) & ~(alignment - 1);
+        const size_t padding = alignment > MICROPY_BYTES_PER_GC_BLOCK ? alignment - MICROPY_BYTES_PER_GC_BLOCK : 0;
+        uint8_t *allocation = m_malloc_without_collect(size + padding);
+        self->data_allocation = allocation;
+        data = (uint32_t *)(((uintptr_t)allocation + alignment - 1) & ~(alignment - 1));
+        #else
+        data = m_malloc_without_collect(size);
+        #endif
         self->data_alloc = true;
     }
     self->data = data;
@@ -64,7 +76,11 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
 
 void common_hal_displayio_bitmap_deinit(displayio_bitmap_t *self) {
     if (self->data_alloc && self->data != NULL) {
+        #if CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT > 4
+        gc_free(self->data_allocation);
+        #else
         gc_free(self->data);
+        #endif
     }
     self->data = NULL;
 }

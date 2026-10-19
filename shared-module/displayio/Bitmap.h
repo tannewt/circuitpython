@@ -25,6 +25,10 @@ typedef struct {
     uint16_t bitmask;
     bool read_only;
     bool data_alloc; // did bitmap allocate data or someone else
+    #if CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT > 4
+    // The GC allocation that holds data. data may start partway into it.
+    void *data_allocation;
+    #endif
 } displayio_bitmap_t;
 
 void displayio_bitmap_finish_refresh(displayio_bitmap_t *self);

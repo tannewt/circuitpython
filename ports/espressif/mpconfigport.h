@@ -17,6 +17,11 @@
 
 #define CIRCUITPY_DIGITALIO_HAVE_INPUT_ONLY (1)
 
+#if CIRCUITPY_JPEGIO_HW
+// The JPEG engine decodes straight into Bitmaps whose pixels start on a cache line.
+#define CIRCUITPY_DISPLAYIO_BITMAP_DATA_ALIGNMENT (64)
+#endif
+
 #include "py/circuitpy_mpconfig.h"
 
 #define MICROPY_NLR_SETJMP                  (1)

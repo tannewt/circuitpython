@@ -65,6 +65,7 @@ INC += \
 	-isystem esp-idf/components/esp_driver_gptimer/include \
 	-isystem esp-idf/components/esp_driver_i2c/include \
 	-isystem esp-idf/components/esp_driver_i2s/include \
+	-isystem esp-idf/components/esp_driver_jpeg/include \
 	-isystem esp-idf/components/esp_driver_ledc/include \
 	-isystem esp-idf/components/esp_driver_parlio/include \
 	-isystem esp-idf/components/esp_driver_pcnt/include \
@@ -119,6 +120,8 @@ INC += \
 	-isystem esp-idf/components/esp_hal_i2c/include \
 	-isystem esp-idf/components/esp_hal_i2s/include \
 	-isystem esp-idf/components/esp_hal_i2s/$(IDF_TARGET)/include \
+	-isystem esp-idf/components/esp_hal_jpeg/include \
+	-isystem esp-idf/components/esp_hal_jpeg/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_ledc/include \
 	-isystem esp-idf/components/esp_hal_pcnt/include \
 	-isystem esp-idf/components/esp_hal_rmt/include \
@@ -813,6 +816,11 @@ SRC_ULP := \
 	$(wildcard common-hal/espulp/*.c) \
 	$(wildcard bindings/espulp/*.c)
 SRC_C += $(SRC_ULP)
+endif
+
+ifneq ($(CIRCUITPY_JPEGIO_HW),0)
+SRC_C += common-hal/jpegio/JpegDecoder.c
+CHIP_COMPONENTS += esp_driver_jpeg esp_hal_jpeg
 endif
 
 ifneq ($(CIRCUITPY_NEOPIXEL_WRITE),0)

@@ -204,6 +204,17 @@ void common_hal_jpegio_jpegdecoder_decode_into(
     self->skip_dest_index_none = skip_dest_index_none;
 
     self->dest = bitmap;
+
+    #if CIRCUITPY_JPEGIO_HW
+    mp_buffer_info_t jpeg;
+    if (self->decoder.infunc == buffer_input &&
+        mp_get_buffer(self->data_obj, &jpeg, MP_BUFFER_READ) &&
+        jpegio_jpegdecoder_decode_hw(self, &jpeg, scale)) {
+        common_hal_jpegio_jpegdecoder_close(self);
+        return;
+    }
+    #endif
+
     JRESULT result = jd_decomp(&self->decoder, bitmap_output, scale);
     common_hal_jpegio_jpegdecoder_close(self);
     if (result != JDR_INTR) {
