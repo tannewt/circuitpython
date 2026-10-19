@@ -54,6 +54,7 @@ static void check_jresult(JRESULT j) {
 
 void common_hal_jpegio_jpegdecoder_construct(jpegio_jpegdecoder_obj_t *self) {
     self->data_obj = MP_OBJ_NULL;
+    self->used_hardware = false;
     #if CIRCUITPY_JPEGIO_HW
     self->hw_decoder = NULL;
     #endif
@@ -63,6 +64,10 @@ void common_hal_jpegio_jpegdecoder_deinit(jpegio_jpegdecoder_obj_t *self) {
     #if CIRCUITPY_JPEGIO_HW
     jpegio_jpegdecoder_deinit_hw(self);
     #endif
+}
+
+bool common_hal_jpegio_jpegdecoder_get_used_hardware(jpegio_jpegdecoder_obj_t *self) {
+    return self->used_hardware;
 }
 
 void common_hal_jpegio_jpegdecoder_close(jpegio_jpegdecoder_obj_t *self) {
@@ -213,12 +218,14 @@ void common_hal_jpegio_jpegdecoder_decode_into(
     self->skip_dest_index_none = skip_dest_index_none;
 
     self->dest = bitmap;
+    self->used_hardware = false;
 
     #if CIRCUITPY_JPEGIO_HW
     mp_buffer_info_t jpeg;
     if (self->decoder.infunc == buffer_input &&
         mp_get_buffer(self->data_obj, &jpeg, MP_BUFFER_READ) &&
         jpegio_jpegdecoder_decode_hw(self, &jpeg, scale)) {
+        self->used_hardware = true;
         common_hal_jpegio_jpegdecoder_close(self);
         return;
     }
