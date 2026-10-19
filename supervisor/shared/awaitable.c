@@ -182,6 +182,14 @@ void circuitpy_async_lock_release(circuitpy_async_lock_obj_t *lock) {
     CIRCUITPY_ASYNC_FLAG_SET(&next->done);
 }
 
+// Each one woken gets the lock in turn and passes it on from its __aexit__; what it does with the
+// deinited object raises.
+void circuitpy_async_lock_deinit(circuitpy_async_lock_obj_t *lock) {
+    while (lock->waiting != NULL) {
+        circuitpy_async_lock_release(lock);
+    }
+}
+
 // __aenter__: take the lock, or join the end of the line. done is set when it is ours.
 static void *lock_enter_start(circuitpy_async_flag_t *done, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     circuitpy_async_lock_obj_t *lock = MP_OBJ_TO_PTR(pos_args[0]);

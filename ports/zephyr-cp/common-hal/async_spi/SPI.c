@@ -114,6 +114,7 @@ void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
     if (common_hal_async_spi_spi_deinited(self)) {
         return;
     }
+    circuitpy_async_lock_deinit(&self->lock);
     wait_done(self);
     free_fill(self);
     // A fixed devicetree device (board.SPI()) stays usable.

@@ -141,6 +141,7 @@ void common_hal_async_spi_spi_deinit(async_spi_spi_obj_t *self) {
     if (common_hal_async_spi_spi_deinited(self)) {
         return;
     }
+    circuitpy_async_lock_deinit(&self->lock);
     if (self->async_active) {
         _abort(self);
         CIRCUITPY_ASYNC_FLAG_SET(self->async_done);

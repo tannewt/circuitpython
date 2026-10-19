@@ -92,6 +92,8 @@ static inline bool circuitpy_async_lock_held(circuitpy_async_lock_obj_t *lock) {
 bool circuitpy_async_lock_try(circuitpy_async_lock_obj_t *lock);
 // Hands the lock to the next in line, or frees it.
 void circuitpy_async_lock_release(circuitpy_async_lock_obj_t *lock);
+// Wakes everyone in line, for the deinit of the object the lock guards.
+void circuitpy_async_lock_deinit(circuitpy_async_lock_obj_t *lock);
 
 enum { CIRCUITPY_AWAITABLE_NEW, CIRCUITPY_AWAITABLE_RUNNING, CIRCUITPY_AWAITABLE_FINISHED };
 
