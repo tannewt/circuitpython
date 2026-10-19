@@ -42,8 +42,6 @@ void common_hal_busio_spi_construct(busio_spi_obj_t *self, const mcu_pin_obj_t *
     }
     common_hal_async_spi_spi_construct(&self->async_spi, clock, mosi, miso);
     self->sent = NULL;
-    self->polarity = 0;
-    self->phase = 0;
 }
 
 #if CIRCUITPY_BULK_RESET
@@ -67,8 +65,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
 bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, uint8_t polarity,
     uint8_t phase, uint8_t bits) {
     common_hal_async_spi_spi_configure(&self->async_spi, baudrate, polarity, phase, bits);
-    self->polarity = polarity;
-    self->phase = phase;
     return true;
 }
 
@@ -131,9 +127,9 @@ uint32_t common_hal_busio_spi_get_frequency(busio_spi_obj_t *self) {
 }
 
 uint8_t common_hal_busio_spi_get_phase(busio_spi_obj_t *self) {
-    return self->phase;
+    return common_hal_async_spi_spi_get_phase(&self->async_spi);
 }
 
 uint8_t common_hal_busio_spi_get_polarity(busio_spi_obj_t *self) {
-    return self->polarity;
+    return common_hal_async_spi_spi_get_polarity(&self->async_spi);
 }

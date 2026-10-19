@@ -161,6 +161,14 @@ circuitpy_async_lock_obj_t *common_hal_async_spi_spi_get_lock(async_spi_spi_obj_
     return &self->lock;
 }
 
+uint8_t common_hal_async_spi_spi_get_polarity(async_spi_spi_obj_t *self) {
+    return (self->config[self->active_config].operation & SPI_MODE_CPOL) != 0;
+}
+
+uint8_t common_hal_async_spi_spi_get_phase(async_spi_spi_obj_t *self) {
+    return (self->config[self->active_config].operation & SPI_MODE_CPHA) != 0;
+}
+
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {
     return self->config[self->active_config].frequency;
 }

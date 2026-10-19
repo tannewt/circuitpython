@@ -24,6 +24,8 @@ void common_hal_async_spi_spi_never_reset(async_spi_spi_obj_t *self);
 void common_hal_async_spi_spi_mark_deinit(async_spi_spi_obj_t *self);
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self);
 circuitpy_async_lock_obj_t *common_hal_async_spi_spi_get_lock(async_spi_spi_obj_t *self);
+uint8_t common_hal_async_spi_spi_get_polarity(async_spi_spi_obj_t *self);
+uint8_t common_hal_async_spi_spi_get_phase(async_spi_spi_obj_t *self);
 
 // Each start returns a context for state of that one operation, which end() and cancel() get
 // back; NULL when the object holds the state.

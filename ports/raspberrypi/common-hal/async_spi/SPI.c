@@ -99,7 +99,10 @@ void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin
     self->async_active = false;
     self->dma_kept = false;
     self->target_frequency = 250000;
-    self->real_frequency = spi_init(self->peripheral, self->target_frequency);
+    self->real_frequency = spi_init(self->peripheral, self->target_frequency);   // mode 0, 8 bits
+    self->polarity = 0;
+    self->phase = 0;
+    self->bits = 8;
 
     gpio_set_function(clock->number, GPIO_FUNC_SPI);
     claim_pin(clock);
@@ -196,6 +199,14 @@ void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baud
 
 circuitpy_async_lock_obj_t *common_hal_async_spi_spi_get_lock(async_spi_spi_obj_t *self) {
     return &self->lock;
+}
+
+uint8_t common_hal_async_spi_spi_get_polarity(async_spi_spi_obj_t *self) {
+    return self->polarity;
+}
+
+uint8_t common_hal_async_spi_spi_get_phase(async_spi_spi_obj_t *self) {
+    return self->phase;
 }
 
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {

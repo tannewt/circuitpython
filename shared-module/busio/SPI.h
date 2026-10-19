@@ -18,6 +18,4 @@ typedef struct {
     circuitpy_async_flag_t done;        // of the blocking transfer in progress
     circuitpy_async_flag_t *sent;       // of a write_start() not yet ended, NULL otherwise
     void *sent_context;
-    uint8_t polarity;
-    uint8_t phase;
 } busio_spi_obj_t;
