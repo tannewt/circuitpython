@@ -63,10 +63,6 @@
 #include "common-hal/espcamera/Camera.h"
 #endif
 
-#if CIRCUITPY_JPEGIO_HW
-#include "common-hal/jpegio/JpegDecoder.h"
-#endif
-
 #if CIRCUITPY_RCLCPY
 #include "common-hal/rclcpy/__init__.h"
 #endif
@@ -488,10 +484,6 @@ void reset_port(void) {
 
     #if CIRCUITPY_RCLCPY
     rclcpy_reset();
-    #endif
-
-    #if CIRCUITPY_JPEGIO_HW
-    espressif_jpegio_reset();
     #endif
 
     #if CIRCUITPY_RTC

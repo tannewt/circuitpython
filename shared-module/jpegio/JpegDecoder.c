@@ -54,6 +54,15 @@ static void check_jresult(JRESULT j) {
 
 void common_hal_jpegio_jpegdecoder_construct(jpegio_jpegdecoder_obj_t *self) {
     self->data_obj = MP_OBJ_NULL;
+    #if CIRCUITPY_JPEGIO_HW
+    self->hw_decoder = NULL;
+    #endif
+}
+
+void common_hal_jpegio_jpegdecoder_deinit(jpegio_jpegdecoder_obj_t *self) {
+    #if CIRCUITPY_JPEGIO_HW
+    jpegio_jpegdecoder_deinit_hw(self);
+    #endif
 }
 
 void common_hal_jpegio_jpegdecoder_close(jpegio_jpegdecoder_obj_t *self) {

@@ -11,7 +11,6 @@
 
 #include "py/runtime.h"
 
-#include "common-hal/jpegio/JpegDecoder.h"
 #include "shared-bindings/bitmaptools/__init__.h"
 #include "shared-module/displayio/Bitmap.h"
 #include "shared-module/jpegio/JpegDecoder.h"
@@ -24,12 +23,10 @@
 // A bad image blocks the engine for at most this long.
 #define JPEG_DECODE_TIMEOUT_MS (1000)
 
-static jpeg_decoder_handle_t decoder_engine;
-
-void espressif_jpegio_reset(void) {
-    if (decoder_engine != NULL) {
-        jpeg_del_decoder_engine(decoder_engine);
-        decoder_engine = NULL;
+void jpegio_jpegdecoder_deinit_hw(jpegio_jpegdecoder_obj_t *self) {
+    if (self->hw_decoder != NULL) {
+        jpeg_del_decoder_engine(self->hw_decoder);
+        self->hw_decoder = NULL;
     }
 }
 
@@ -108,14 +105,15 @@ bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffe
         self->lim.x2 >= (int)width && self->lim.y2 >= (int)height &&
         output_aligned(bitmap->data, output_size);
 
-    if (decoder_engine == NULL) {
+    if (self->hw_decoder == NULL) {
         jpeg_decode_engine_cfg_t engine_config = {
             .timeout_ms = JPEG_DECODE_TIMEOUT_MS,
         };
-        if (jpeg_new_decoder_engine(&engine_config, &decoder_engine) != ESP_OK) {
-            decoder_engine = NULL;
+        jpeg_decoder_handle_t engine;
+        if (jpeg_new_decoder_engine(&engine_config, &engine) != ESP_OK) {
             return false;
         }
+        self->hw_decoder = engine;
     }
 
     // Otherwise decode into a temporary buffer and copy the visible part out of it.
@@ -146,7 +144,7 @@ bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffe
         .yuv_range = COLOR_RANGE_FULL,
     };
     uint32_t decoded_size;
-    if (jpeg_decoder_process(decoder_engine, &decode_config, jpeg->buf, jpeg->len,
+    if (jpeg_decoder_process(self->hw_decoder, &decode_config, jpeg->buf, jpeg->len,
         output, output_buffer_size, &decoded_size) != ESP_OK) {
         // A failed direct decode may have written part of the Bitmap. TJpgDec
         // then decodes the whole image over it.

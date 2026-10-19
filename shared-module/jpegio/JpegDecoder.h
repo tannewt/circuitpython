@@ -24,6 +24,9 @@ typedef struct jpegio_jpegdecoder_obj {
     uint32_t skip_source_index, skip_dest_index;
     bool skip_source_index_none, skip_dest_index_none;
     uint8_t scale;
+    #if CIRCUITPY_JPEGIO_HW
+    void *hw_decoder; // port state for the hardware decoder, NULL until first used
+    #endif
 } jpegio_jpegdecoder_obj_t;
 
 #if CIRCUITPY_JPEGIO_HW
@@ -34,4 +37,8 @@ typedef struct jpegio_jpegdecoder_obj {
 // Returns true if the port decoded the image into `self->dest`. Returns false to decode
 // with TJpgDec instead, which rewrites every pixel the image covers. Must not raise.
 bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale);
+
+// Ports with JPEG decode hardware provide this. It releases `self->hw_decoder`, if set,
+// and sets it to NULL. Called when the decoder object is collected. Must not raise.
+void jpegio_jpegdecoder_deinit_hw(jpegio_jpegdecoder_obj_t *self);
 #endif

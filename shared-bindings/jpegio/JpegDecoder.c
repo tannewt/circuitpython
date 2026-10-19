@@ -47,7 +47,7 @@ static mp_obj_t jpegio_jpegdecoder_make_new(const mp_obj_type_t *type, size_t n_
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    jpegio_jpegdecoder_obj_t *self = mp_obj_malloc(jpegio_jpegdecoder_obj_t, &jpegio_jpegdecoder_type);
+    jpegio_jpegdecoder_obj_t *self = mp_obj_malloc_with_finaliser(jpegio_jpegdecoder_obj_t, &jpegio_jpegdecoder_type);
     common_hal_jpegio_jpegdecoder_construct(self);
 
     return MP_OBJ_FROM_PTR(self);
@@ -203,9 +203,18 @@ static mp_obj_t jpegio_jpegdecoder_decode(size_t n_args, const mp_obj_t *pos_arg
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(jpegio_jpegdecoder_decode_obj, 1, jpegio_jpegdecoder_decode);
 
+// Releases any hardware decoder the object holds when it is collected.
+static mp_obj_t jpegio_jpegdecoder_del(mp_obj_t self_in) {
+    jpegio_jpegdecoder_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    common_hal_jpegio_jpegdecoder_deinit(self);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(jpegio_jpegdecoder_del_obj, jpegio_jpegdecoder_del);
+
 static const mp_rom_map_elem_t jpegio_jpegdecoder_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&jpegio_jpegdecoder_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_decode), MP_ROM_PTR(&jpegio_jpegdecoder_decode_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&jpegio_jpegdecoder_del_obj) },
 };
 static MP_DEFINE_CONST_DICT(jpegio_jpegdecoder_locals_dict, jpegio_jpegdecoder_locals_dict_table);
 
