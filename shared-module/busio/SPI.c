@@ -66,9 +66,6 @@ void common_hal_busio_spi_deinit(busio_spi_obj_t *self) {
 
 bool common_hal_busio_spi_configure(busio_spi_obj_t *self, uint32_t baudrate, uint8_t polarity,
     uint8_t phase, uint8_t bits) {
-    #if CIRCUITPY_BUSIO_SPI_ASYNC
-    end_sent(self);
-    #endif
     common_hal_async_spi_spi_configure(&self->async_spi, baudrate, polarity, phase, bits);
     self->polarity = polarity;
     self->phase = phase;
