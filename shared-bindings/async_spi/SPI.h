@@ -27,7 +27,8 @@ uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self);
 // Each start returns a context for state of that one operation, which end() and cancel() get
 // back; NULL when the object holds the state.
 
-// Waits for the running transfer, if any, then applies the settings.
+// Applies the settings. Raises OSError (EBUSY) while a transfer is running: only the lock holder
+// transfers, and only while it awaits the transfer.
 void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits);
 
