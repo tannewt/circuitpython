@@ -50,6 +50,7 @@ static void wait_done(async_spi_spi_obj_t *self) {
 // A fixed devicetree device, as for board.SPI(): already initialized, never released.
 void common_hal_async_spi_spi_construct_from_device(async_spi_spi_obj_t *self,
     const struct device *dev) {
+    circuitpy_async_lock_init(&self->lock);
     self->spi_device = dev;
     self->dynamic = false;
     self->clock = NULL;
@@ -154,6 +155,10 @@ void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baud
         raise_zephyr_error(-EBUSY);
     }
     apply_config(self, baudrate, operation_of(polarity, phase, bits));
+}
+
+circuitpy_async_lock_obj_t *common_hal_async_spi_spi_get_lock(async_spi_spi_obj_t *self) {
+    return &self->lock;
 }
 
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {

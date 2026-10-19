@@ -58,7 +58,6 @@ static mp_obj_t async_spi_spi_make_new(const mp_obj_type_t *type, size_t n_args,
 
     async_spi_spi_obj_t *self = mp_obj_malloc_with_finaliser(async_spi_spi_obj_t, &async_spi_spi_type);
     common_hal_async_spi_spi_construct(self, clock, mosi, miso);
-    circuitpy_async_lock_init(&self->lock);
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -73,7 +72,7 @@ static MP_NOINLINE async_spi_spi_obj_t *checked_spi(mp_obj_t self_in) {
 // For the calls that use the bus.
 static MP_NOINLINE async_spi_spi_obj_t *locked_spi(mp_obj_t self_in) {
     async_spi_spi_obj_t *self = checked_spi(self_in);
-    if (!circuitpy_async_lock_held(&self->lock)) {
+    if (!circuitpy_async_lock_held(common_hal_async_spi_spi_get_lock(self))) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("Function requires lock"));
     }
     return self;
@@ -257,7 +256,7 @@ MP_PROPERTY_GETTER(async_spi_spi_frequency_obj,
 //|
 static mp_obj_t async_spi_spi_get_lock(mp_obj_t self_in) {
     async_spi_spi_obj_t *self = checked_spi(self_in);
-    return MP_OBJ_FROM_PTR(&self->lock);
+    return MP_OBJ_FROM_PTR(common_hal_async_spi_spi_get_lock(self));
 }
 MP_DEFINE_CONST_FUN_OBJ_1(async_spi_spi_get_lock_obj, async_spi_spi_get_lock);
 

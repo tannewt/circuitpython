@@ -95,6 +95,7 @@ void common_hal_async_spi_spi_construct(async_spi_spi_obj_t *self, const mcu_pin
         mp_raise_ValueError(MP_ERROR_TEXT("SPI peripheral in use"));
     }
 
+    circuitpy_async_lock_init(&self->lock);
     self->async_active = false;
     self->dma_kept = false;
     self->target_frequency = 250000;
@@ -191,6 +192,10 @@ void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baud
         mp_raise_OSError(MP_EBUSY);
     }
     _apply(self, baudrate, polarity, phase, bits);
+}
+
+circuitpy_async_lock_obj_t *common_hal_async_spi_spi_get_lock(async_spi_spi_obj_t *self) {
+    return &self->lock;
 }
 
 uint32_t common_hal_async_spi_spi_get_frequency(async_spi_spi_obj_t *self) {
