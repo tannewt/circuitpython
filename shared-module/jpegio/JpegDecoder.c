@@ -52,8 +52,9 @@ static void check_jresult(JRESULT j) {
     mp_raise_RuntimeError(msg);
 }
 
-void common_hal_jpegio_jpegdecoder_construct(jpegio_jpegdecoder_obj_t *self) {
+void common_hal_jpegio_jpegdecoder_construct(jpegio_jpegdecoder_obj_t *self, bool software_ok) {
     self->data_obj = MP_OBJ_NULL;
+    self->software_ok = software_ok;
     #if CIRCUITPY_JPEGIO_HW
     jpegio_jpegdecoder_hw_init(self);
     #endif
@@ -217,10 +218,17 @@ void common_hal_jpegio_jpegdecoder_decode_into(
     #if CIRCUITPY_JPEGIO_HW
     mp_buffer_info_t jpeg;
     if (self->decoder.infunc == buffer_input &&
-        mp_get_buffer(self->data_obj, &jpeg, MP_BUFFER_READ) &&
-        jpegio_jpegdecoder_hw_decode(self, &jpeg, scale)) {
-        common_hal_jpegio_jpegdecoder_close(self);
-        return;
+        mp_get_buffer(self->data_obj, &jpeg, MP_BUFFER_READ)) {
+        if (jpegio_jpegdecoder_hw_decode(self, &jpeg, scale)) {
+            common_hal_jpegio_jpegdecoder_close(self);
+            return;
+        }
+    } else if (!self->software_ok) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q"), MP_QSTR_data_source);
+    }
+    #else
+    if (!self->software_ok) {
+        mp_raise_ValueError(MP_ERROR_TEXT("Operation or feature not supported"));
     }
     #endif
 

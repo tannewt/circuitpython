@@ -59,26 +59,48 @@ static bool output_aligned(const void *buf, size_t size) {
     return ((uintptr_t)buf & (align - 1)) == 0 && (size & (align - 1)) == 0;
 }
 
+// These return false so decode() uses TJpgDec, or raise ValueError if
+// software decoding is not allowed.
+static bool use_software(jpegio_jpegdecoder_obj_t *self, mp_rom_error_text_t msg) {
+    if (!self->software_ok) {
+        mp_raise_ValueError(msg);
+    }
+    return false;
+}
+
+static bool use_software_for_arg(jpegio_jpegdecoder_obj_t *self, qstr arg_name) {
+    if (!self->software_ok) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("Invalid %q"), arg_name);
+    }
+    return false;
+}
+
 bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale) {
     if (self->hw_decoder == NULL) {
-        return false;
+        return use_software(self, MP_ERROR_TEXT("Operation or feature not supported"));
     }
     displayio_bitmap_t *bitmap = self->dest;
-    if (scale != 0 || bitmap->bits_per_value != 16 || bitmap->read_only) {
-        return false;
+    if (scale != 0) {
+        return use_software_for_arg(self, MP_QSTR_scale);
+    }
+    if (bitmap->bits_per_value != 16 || bitmap->read_only) {
+        return use_software_for_arg(self, MP_QSTR_bitmap);
     }
     // Skip indices are slower on this path than in TJpgDec.
-    if (!self->skip_source_index_none || !self->skip_dest_index_none) {
-        return false;
+    if (!self->skip_source_index_none) {
+        return use_software_for_arg(self, MP_QSTR_skip_source_index);
+    }
+    if (!self->skip_dest_index_none) {
+        return use_software_for_arg(self, MP_QSTR_skip_dest_index);
     }
     // The engine reads the input by DMA, so it must be in DMA-capable memory.
     if (!esp_ptr_dma_capable(jpeg->buf) && !esp_ptr_dma_ext_capable(jpeg->buf)) {
-        return false;
+        return use_software_for_arg(self, MP_QSTR_data_source);
     }
 
     jpeg_decode_picture_info_t info;
     if (jpeg_decoder_get_info(jpeg->buf, jpeg->len, &info) != ESP_OK) {
-        return false;
+        return use_software(self, MP_ERROR_TEXT("Format not supported"));
     }
 
     // The engine pads its output to whole MCUs: 8x8 for 4:4:4, 16x8 for 4:2:2
@@ -98,13 +120,13 @@ bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffe
             mcu_height = 16;
             break;
         default:
-            return false;
+            return use_software(self, MP_ERROR_TEXT("Format not supported"));
     }
     uint32_t width = info.width;
     uint32_t height = info.height;
     // The driver rejects images whose pixel count is not a multiple of 8.
     if ((width * height) % 8 != 0) {
-        return false;
+        return use_software(self, MP_ERROR_TEXT("Format not supported"));
     }
     uint32_t output_width = (width + mcu_width - 1) / mcu_width * mcu_width;
     uint32_t output_height = (height + mcu_height - 1) / mcu_height * mcu_height;
@@ -132,7 +154,7 @@ bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffe
         };
         scratch = jpeg_alloc_decoder_mem(output_size, &mem_config, &output_buffer_size);
         if (scratch == NULL) {
-            return false;
+            return use_software(self, MP_ERROR_TEXT("Operation or feature not supported"));
         }
         output = scratch;
     }
@@ -152,7 +174,7 @@ bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffe
         // A failed direct decode may have written part of the Bitmap. TJpgDec
         // then decodes the whole image over it.
         heap_caps_free(scratch);
-        return false;
+        return use_software(self, MP_ERROR_TEXT("Format not supported"));
     }
 
     if (direct) {

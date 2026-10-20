@@ -37,18 +37,25 @@
 //|
 //|     """
 //|
-//|     def __init__(self) -> None:
-//|         """Create a JpegDecoder"""
+//|     def __init__(self, *, software_ok: bool = True) -> None:
+//|         """Create a JpegDecoder
+//|
+//|         :param bool software_ok: If True, `decode` uses the software decoder when the JPEG
+//|           decoder peripheral cannot decode the image. If False, `decode` raises `ValueError`
+//|           instead, including on chips without the peripheral.
+//|         """
 //|         ...
 //|
 static mp_obj_t jpegio_jpegdecoder_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
+    enum { ARG_software_ok };
     static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_software_ok, MP_ARG_KW_ONLY | MP_ARG_BOOL, {.u_bool = true} },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     jpegio_jpegdecoder_obj_t *self = mp_obj_malloc_with_finaliser(jpegio_jpegdecoder_obj_t, &jpegio_jpegdecoder_type);
-    common_hal_jpegio_jpegdecoder_construct(self);
+    common_hal_jpegio_jpegdecoder_construct(self, args[ARG_software_ok].u_bool);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -130,7 +137,7 @@ MP_DEFINE_CONST_FUN_OBJ_2(jpegio_jpegdecoder_open_obj, jpegio_jpegdecoder_open);
 //|         and no skip index is given. It is fastest when ``bitmap`` is exactly the image
 //|         size and the whole image is decoded at 0,0. Colors may differ slightly from the
 //|         software decoder's. Other images, and data opened from a file or stream, use
-//|         the software decoder.
+//|         the software decoder, or raise `ValueError` if ``software_ok`` is False.
 //|
 //|         :param Bitmap bitmap: Optional output buffer
 //|         :param int scale: Scale factor from 0 to 3, inclusive.
