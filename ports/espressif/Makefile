@@ -229,13 +229,6 @@ REGISTRATION_FUNCTIONS = \
 	-u esp_security_init_include_impl \
 	-u mbedtls_psa_crypto_init_include_impl
 
-# JPEG engine DMA destinations come from the Python heap (Bitmaps), and
-# the cache line is 64 bytes on the P4 and S31, so make GC blocks 64 bytes as well.
-# supervisor/port.c aligns the PSRAM heap areas to the same value.
-ifneq ($(filter esp32p4 esp32s31,$(IDF_TARGET)),)
-CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
-endif
-
 # RISC-V picolibc ships optimized memcpy/memset/etc. that need forcing
 # (gated by CONFIG_LIBC_OPTIMIZED_MISALIGNED_ACCESS in IDF's esp_libc CMake).
 ifeq ($(IDF_TARGET_ARCH),riscv)
@@ -495,6 +488,9 @@ CFLAGS += \
 	-isystem esp-idf/components/esp_hw_support/ldo/include \
 	-isystem esp-idf/components/esp_driver_touch_sens/hw_ver3/include
 
+# JPEG engine DMA writes into GC blocks, so make them one 64-byte cache line.
+CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
+
 ifeq ($(CIRCUITPY_ESP32P4_REV),3)
 IDF_TARGET_ROM_FLOAT_LD = esp32p4.rom.rvfp.ld
 LDFLAGS += \
@@ -530,6 +526,9 @@ CHIP_COMPONENTS = \
 
 else ifeq ($(IDF_TARGET),esp32s31)
 CFLAGS += -isystem esp-idf/components/esp_hw_support/ldo/include
+
+# JPEG engine DMA writes into GC blocks, so make them one 64-byte cache line.
+CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
 
 IDF_TARGET_ROM_FLOAT_LD = esp32s31.rom.rvfp.ld
 LDFLAGS += \
