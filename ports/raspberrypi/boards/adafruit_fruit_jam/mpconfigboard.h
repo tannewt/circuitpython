@@ -44,10 +44,10 @@
 
 // The ESP32-C6 running nina-fw, on board.SPI(). nina-fw raises ESP_IRQ when a
 // socket has data, so web workflow polls only then.
-#define CIRCUITPY_NINA_CS (&pin_GPIO46)
-#define CIRCUITPY_NINA_BUSY (&pin_GPIO3)
-#define CIRCUITPY_NINA_RESET (&pin_GPIO22)
-#define CIRCUITPY_NINA_GPIO0 (&pin_GPIO23)
+#define CIRCUITPY_AIRLIFT_CS (&pin_GPIO46)
+#define CIRCUITPY_AIRLIFT_BUSY (&pin_GPIO3)
+#define CIRCUITPY_AIRLIFT_RESET (&pin_GPIO22)
+#define CIRCUITPY_AIRLIFT_GPIO0 (&pin_GPIO23)
 
 // #define CIRCUITPY_CONSOLE_UART_TX (&pin_GPIO44)
 // #define CIRCUITPY_CONSOLE_UART_RX (&pin_GPIO45)

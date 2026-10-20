@@ -6,7 +6,7 @@
 
 #pragma once
 
-#if !CIRCUITPY_NINA
+#if !CIRCUITPY_AIRLIFT
 #include "lwip/ip_addr.h"
 
 mp_obj_t socketpool_ip_addr_to_str(const ip_addr_t *addr);

@@ -10,9 +10,9 @@
 
 #include <string.h>
 
-#include "shared-module/_nina/socketpool.h"
-#include "shared-module/_nina/network.h"
-#include "shared-module/_nina/transport.h"
+#include "shared-module/_airlift/socketpool.h"
+#include "shared-module/_airlift/network.h"
+#include "shared-module/_airlift/transport.h"
 
 #include "py/mperrno.h"
 #include "py/runtime.h"
@@ -47,17 +47,17 @@
 #define SOCKET_CLOSED (0)
 #define SOCKET_ESTABLISHED (4)
 
-const mp_obj_base_t nina_socketpool_interface = { &mp_type_object };
+const mp_obj_base_t airlift_socketpool_interface = { &mp_type_object };
 
 // The open socket object for each ESP32 socket number.
-static socketpool_socket_obj_t *by_num[CIRCUITPY_NINA_MAX_SOCKETS];
+static socketpool_socket_obj_t *by_num[CIRCUITPY_AIRLIFT_MAX_SOCKETS];
 // Sockets closed when the ESP32 couldn't be reached. They are stopped in the
 // next background pass.
 static uint8_t stop_pending;
 static uint32_t stop_pending_generation;
 // A listener the core closed. nina-fw can't stop a listener, so it is left
 // running and handed back to the next listen() on the same port.
-static uint8_t parked_num = NINA_NO_SOCKET;
+static uint8_t parked_num = AIRLIFT_NO_SOCKET;
 static uint16_t parked_port;
 static uint32_t parked_generation;
 
@@ -68,33 +68,33 @@ static bool last_data_ready;
 static bool tick_enabled;
 
 static bool is_open(const socketpool_socket_obj_t *self) {
-    return self->num != NINA_NO_SOCKET && nina_transport_active() &&
-           self->generation == nina_transport_generation();
+    return self->num != AIRLIFT_NO_SOCKET && airlift_transport_active() &&
+           self->generation == airlift_transport_generation();
 }
 
 // A command can be sent now. It can't while another one is in flight, which
 // happens when this is called from a background task run during its waits.
 static bool can_transact(void) {
-    return nina_transport_active() && !nina_transport_busy();
+    return airlift_transport_active() && !airlift_transport_busy();
 }
 
 static void set_num(socketpool_socket_obj_t *self, uint8_t num) {
     self->num = num;
-    self->generation = nina_transport_generation();
+    self->generation = airlift_transport_generation();
     by_num[num] = self;
-    nina_transport_set_owned(num, true);
+    airlift_transport_set_owned(num, true);
 }
 
 // Forgets the socket number without telling the ESP32.
 static void forget(socketpool_socket_obj_t *self) {
-    if (self->num < CIRCUITPY_NINA_MAX_SOCKETS && by_num[self->num] == self) {
+    if (self->num < CIRCUITPY_AIRLIFT_MAX_SOCKETS && by_num[self->num] == self) {
         by_num[self->num] = NULL;
         // After a hard reset the number may belong to someone else.
-        if (self->generation == nina_transport_generation()) {
-            nina_transport_set_owned(self->num, false);
+        if (self->generation == airlift_transport_generation()) {
+            airlift_transport_set_owned(self->num, false);
         }
     }
-    self->num = NINA_NO_SOCKET;
+    self->num = AIRLIFT_NO_SOCKET;
     self->listening = false;
     self->connected = false;
     self->connected_valid = false;
@@ -105,19 +105,19 @@ static void forget(socketpool_socket_obj_t *self) {
 
 // Sends a command about one socket and reads its one-parameter reply. *reply_len
 // is the reply's length.
-static nina_result_t command(uint8_t cmd, const nina_param_t *params, size_t n_params,
+static airlift_result_t command(uint8_t cmd, const airlift_param_t *params, size_t n_params,
     bool param_len_16, uint8_t *buf, size_t buf_len, bool reply_len_16, size_t *reply_len) {
     uint16_t lens[1];
-    nina_reply_t reply = { .buf = buf, .buf_len = buf_len, .lens = lens, .max_count = 1 };
-    nina_result_t result = nina_transact(cmd, params, n_params, param_len_16, &reply, 1,
+    airlift_reply_t reply = { .buf = buf, .buf_len = buf_len, .lens = lens, .max_count = 1 };
+    airlift_result_t result = airlift_transact(cmd, params, n_params, param_len_16, &reply, 1,
         reply_len_16, false);
     *reply_len = reply.count == 1 ? lens[0] : 0;
     return result;
 }
 
-static nina_result_t socket_command(uint8_t cmd, uint8_t num, uint8_t *buf, size_t buf_len,
+static airlift_result_t socket_command(uint8_t cmd, uint8_t num, uint8_t *buf, size_t buf_len,
     size_t *reply_len) {
-    nina_param_t param = { .buf = &num, .len = 1 };
+    airlift_param_t param = { .buf = &num, .len = 1 };
     return command(cmd, &param, 1, false, buf, buf_len, false, reply_len);
 }
 
@@ -128,7 +128,7 @@ static uint16_t le16(const uint8_t *buf, size_t len) {
 static bool stop(uint8_t num) {
     uint8_t buf[1];
     size_t len;
-    return socket_command(NINA_STOP_CLIENT_TCP, num, buf, sizeof(buf), &len) == NINA_OK;
+    return socket_command(AIRLIFT_STOP_CLIENT_TCP, num, buf, sizeof(buf), &len) == AIRLIFT_OK;
 }
 
 // Stops the connection and forgets the number. If the ESP32 can't be reached,
@@ -138,11 +138,11 @@ static void stop_and_forget(socketpool_socket_obj_t *self) {
     bool stopped = can_transact() && stop(num);
     forget(self);
     if (!stopped) {
-        // Until then it stays the core's, so nina_user_reset() doesn't stop it
+        // Until then it stays the core's, so airlift_user_reset() doesn't stop it
         // after someone else is given it.
-        nina_transport_set_owned(num, true);
+        airlift_transport_set_owned(num, true);
         if (stop_pending == 0) {
-            stop_pending_generation = nina_transport_generation();
+            stop_pending_generation = airlift_transport_generation();
         }
         stop_pending |= 1 << num;
     }
@@ -159,19 +159,19 @@ static int flush(socketpool_socket_obj_t *self) {
     if (!can_transact()) {
         return -MP_EAGAIN;
     }
-    nina_param_t params[2] = {
+    airlift_param_t params[2] = {
         { .buf = &self->num, .len = 1 },
         { .buf = self->tx, .len = self->tx_len },
     };
     uint8_t buf[2];
     size_t len;
-    nina_result_t result = command(NINA_SEND_DATA_TCP, params, 2, true, buf, sizeof(buf), false, &len);
-    if (result == NINA_BUSY) {
+    airlift_result_t result = command(AIRLIFT_SEND_DATA_TCP, params, 2, true, buf, sizeof(buf), false, &len);
+    if (result == AIRLIFT_BUSY) {
         return -MP_EAGAIN;
     }
     // The reply is the count sent. DATA_SENT_TCP isn't asked: it says yes even
     // when nothing went out.
-    size_t sent = result == NINA_OK ? MIN(le16(buf, len), self->tx_len) : 0;
+    size_t sent = result == AIRLIFT_OK ? MIN(le16(buf, len), self->tx_len) : 0;
     if (sent == self->tx_len) {
         self->tx_len = 0;
         return 0;
@@ -182,7 +182,7 @@ static int flush(socketpool_socket_obj_t *self) {
         self->tx_len -= sent;
         return -MP_ENOBUFS;
     }
-    if (result != NINA_OK) {
+    if (result != AIRLIFT_OK) {
         // Whether the ESP32 sent any of it is unknown, so the stream may have a
         // hole now. End the connection rather than carry on.
         self->tx_len = 0;
@@ -215,7 +215,7 @@ static void drain(socketpool_socket_obj_t *self) {
 }
 
 static void flush_all(void) {
-    for (uint8_t num = 0; num < CIRCUITPY_NINA_MAX_SOCKETS; num++) {
+    for (uint8_t num = 0; num < CIRCUITPY_AIRLIFT_MAX_SOCKETS; num++) {
         socketpool_socket_obj_t *sock = by_num[num];
         if (sock != NULL && is_open(sock) && sock->tx_len > 0) {
             flush(sock);
@@ -224,7 +224,7 @@ static void flush_all(void) {
 }
 
 static bool any_client_open(void) {
-    for (size_t i = 0; i < CIRCUITPY_NINA_MAX_SOCKETS; i++) {
+    for (size_t i = 0; i < CIRCUITPY_AIRLIFT_MAX_SOCKETS; i++) {
         if (by_num[i] != NULL && is_open(by_num[i]) && !by_num[i]->listening) {
             return true;
         }
@@ -232,14 +232,14 @@ static bool any_client_open(void) {
     return false;
 }
 
-void nina_socketpool_poll_resume(void) {
+void airlift_socketpool_poll_resume(void) {
     if (!tick_enabled) {
         supervisor_enable_tick();
         tick_enabled = true;
     }
     if (any_client_open()) {
         poll_countdown = POLL_ACTIVE_MS;
-    } else if (nina_transport_has_data_ready()) {
+    } else if (airlift_transport_has_data_ready()) {
         poll_countdown = POLL_IDLE_DATA_READY_MS;
     } else {
         poll_countdown = POLL_IDLE_MS;
@@ -248,16 +248,16 @@ void nina_socketpool_poll_resume(void) {
     poll_wanted = true;
 }
 
-void nina_socketpool_tick(void) {
+void airlift_socketpool_tick(void) {
     if (!poll_wanted) {
         return;
     }
     ms_since_pass++;
-    if (nina_transport_has_data_ready()) {
+    if (airlift_transport_has_data_ready()) {
         // A pass runs soon after data ready rises. While it stays high, for
         // example because user code hasn't read its socket, the usual intervals
         // apply, but never the long idle one.
-        bool ready = nina_transport_data_ready();
+        bool ready = airlift_transport_data_ready();
         if (ready && !last_data_ready) {
             uint32_t soonest = ms_since_pass >= POLL_MIN_MS ? 1 : POLL_MIN_MS - ms_since_pass;
             poll_countdown = MIN(poll_countdown, soonest);
@@ -272,18 +272,18 @@ void nina_socketpool_tick(void) {
     }
 }
 
-bool nina_socketpool_background(void) {
-    if (!can_transact() || !nina_transport_bus_free()) {
+bool airlift_socketpool_background(void) {
+    if (!can_transact() || !airlift_transport_bus_free()) {
         return false;
     }
-    nina_network_maintain();
-    if (stop_pending_generation != nina_transport_generation()) {
+    airlift_network_maintain();
+    if (stop_pending_generation != airlift_transport_generation()) {
         stop_pending = 0;
     }
-    for (uint8_t num = 0; num < CIRCUITPY_NINA_MAX_SOCKETS; num++) {
+    for (uint8_t num = 0; num < CIRCUITPY_AIRLIFT_MAX_SOCKETS; num++) {
         if ((stop_pending & (1 << num)) && stop(num)) {
             stop_pending &= ~(1 << num);
-            nina_transport_set_owned(num, false);
+            airlift_transport_set_owned(num, false);
         }
     }
     // Serial output written by the VM since the last pass.
@@ -291,7 +291,7 @@ bool nina_socketpool_background(void) {
     return true;
 }
 
-void nina_socketpool_background_done(void) {
+void airlift_socketpool_background_done(void) {
     // TCP_NODELAY doesn't send right away (most replies would go out in many
     // small pieces), so this sends what the pass left.
     if (can_transact()) {
@@ -300,11 +300,11 @@ void nina_socketpool_background_done(void) {
 }
 
 void socketpool_user_reset(void) {
-    // Python can't make NINA sockets yet, so there are none to close.
+    // Python can't make AirLift sockets yet, so there are none to close.
 }
 
 void common_hal_socketpool_socketpool_construct(socketpool_socketpool_obj_t *self, mp_obj_t network_interface) {
-    if (network_interface != MP_OBJ_FROM_PTR(&nina_socketpool_interface)) {
+    if (network_interface != MP_OBJ_FROM_PTR(&airlift_socketpool_interface)) {
         mp_arg_error_invalid(MP_QSTR_radio);
     }
 }
@@ -317,7 +317,7 @@ bool socketpool_socket(socketpool_socketpool_obj_t *self,
     }
     sock->base.type = &socketpool_socket_type;
     sock->pool = self;
-    sock->num = NINA_NO_SOCKET;
+    sock->num = AIRLIFT_NO_SOCKET;
     sock->type = type;
     sock->timeout_ms = (uint32_t)-1;
     sock->port = 0;
@@ -354,18 +354,18 @@ static bool keep_waiting(const socketpool_socket_obj_t *self, uint64_t start) {
 static int try_accept(socketpool_socket_obj_t *self, socketpool_socket_obj_t *accepted) {
     // A VM GET_SOCKET is about to use the lowest free number, which is the one
     // nina-fw would give a new client.
-    if (!can_transact() || nina_transport_vm_allocating()) {
+    if (!can_transact() || airlift_transport_vm_allocating()) {
         return -MP_EAGAIN;
     }
     uint8_t buf[2];
     size_t len;
     // On a listening socket, AVAIL_DATA_TCP accepts a waiting client, and
     // replies with its socket number.
-    if (socket_command(NINA_AVAIL_DATA_TCP, self->num, buf, sizeof(buf), &len) != NINA_OK) {
+    if (socket_command(AIRLIFT_AVAIL_DATA_TCP, self->num, buf, sizeof(buf), &len) != AIRLIFT_OK) {
         return -MP_EAGAIN;
     }
     uint16_t num = le16(buf, len);
-    if (num >= CIRCUITPY_NINA_MAX_SOCKETS) {
+    if (num >= CIRCUITPY_AIRLIFT_MAX_SOCKETS) {
         return -MP_EAGAIN;
     }
     if (!common_hal_socketpool_socket_get_closed(accepted)) {
@@ -402,7 +402,7 @@ int socketpool_socket_accept(socketpool_socket_obj_t *self, mp_obj_t *peer_out, 
 
 socketpool_socket_obj_t *common_hal_socketpool_socket_accept(socketpool_socket_obj_t *self, mp_obj_t *peer_out) {
     socketpool_socket_obj_t *accepted = mp_obj_malloc_with_finaliser(socketpool_socket_obj_t, &socketpool_socket_type);
-    accepted->num = NINA_NO_SOCKET;
+    accepted->num = AIRLIFT_NO_SOCKET;
     int result = socketpool_socket_accept(self, peer_out, accepted);
     if (result < 0) {
         m_del_obj(socketpool_socket_obj_t, accepted);
@@ -426,16 +426,16 @@ void socketpool_socket_close(socketpool_socket_obj_t *self) {
     if (self->listening) {
         // STOP_CLIENT_TCP would free the number but leave the listener
         // running, so keep it, still owned, for the next listen() on this port.
-        if (parked_num != NINA_NO_SOCKET && parked_generation == nina_transport_generation()) {
+        if (parked_num != AIRLIFT_NO_SOCKET && parked_generation == airlift_transport_generation()) {
             // Only one is kept. The other is stopped at the end of the VM run.
-            nina_transport_set_owned(parked_num, false);
-            nina_transport_leaked_listener(parked_num);
+            airlift_transport_set_owned(parked_num, false);
+            airlift_transport_leaked_listener(parked_num);
         }
         parked_num = num;
         parked_port = self->port;
-        parked_generation = nina_transport_generation();
+        parked_generation = airlift_transport_generation();
         by_num[num] = NULL;
-        self->num = NINA_NO_SOCKET;
+        self->num = AIRLIFT_NO_SOCKET;
         self->listening = false;
         return;
     }
@@ -470,7 +470,7 @@ bool common_hal_socketpool_socket_get_connected(socketpool_socket_obj_t *self) {
     }
     uint8_t buf[1];
     size_t len;
-    if (socket_command(NINA_GET_CLIENT_STATE_TCP, self->num, buf, sizeof(buf), &len) != NINA_OK ||
+    if (socket_command(AIRLIFT_GET_CLIENT_STATE_TCP, self->num, buf, sizeof(buf), &len) != AIRLIFT_OK ||
         len != 1) {
         return self->connected;
     }
@@ -495,39 +495,39 @@ mp_int_t common_hal_socketpool_socket_get_type(socketpool_socket_obj_t *self) {
 
 bool common_hal_socketpool_socket_listen(socketpool_socket_obj_t *self, int backlog) {
     if (self->type != SOCKETPOOL_SOCK_STREAM || is_open(self) || !can_transact() ||
-        nina_transport_vm_allocating()) {
+        airlift_transport_vm_allocating()) {
         return false;
     }
-    if (parked_num != NINA_NO_SOCKET && parked_generation == nina_transport_generation() &&
+    if (parked_num != AIRLIFT_NO_SOCKET && parked_generation == airlift_transport_generation() &&
         parked_port == self->port) {
         // Still listening.
         set_num(self, parked_num);
         self->listening = true;
-        parked_num = NINA_NO_SOCKET;
+        parked_num = AIRLIFT_NO_SOCKET;
         return true;
     }
     // START_SERVER_TCP before WiFi is up hangs nina-fw until a hard reset.
-    nina_network_refresh(false);
-    if (nina_network_status() != NINA_WL_CONNECTED) {
+    airlift_network_refresh(false);
+    if (airlift_network_status() != AIRLIFT_WL_CONNECTED) {
         return false;
     }
     // GET_SOCKET doesn't reserve the number. START_SERVER_TCP does.
     uint8_t buf[1];
     size_t len;
-    if (command(NINA_GET_SOCKET, NULL, 0, false, buf, sizeof(buf), false, &len) != NINA_OK ||
-        len != 1 || buf[0] >= CIRCUITPY_NINA_MAX_SOCKETS) {
+    if (command(AIRLIFT_GET_SOCKET, NULL, 0, false, buf, sizeof(buf), false, &len) != AIRLIFT_OK ||
+        len != 1 || buf[0] >= CIRCUITPY_AIRLIFT_MAX_SOCKETS) {
         return false;
     }
     uint8_t num = buf[0];
     uint8_t port[2] = { self->port >> 8, self->port & 0xff };
     uint8_t mode = TCP_MODE;
-    nina_param_t params[3] = {
+    airlift_param_t params[3] = {
         { .buf = port, .len = 2 },
         { .buf = &num, .len = 1 },
         { .buf = &mode, .len = 1 },
     };
     // A reply of 0 means the port is in use.
-    if (command(NINA_START_SERVER_TCP, params, 3, false, buf, sizeof(buf), false, &len) != NINA_OK ||
+    if (command(AIRLIFT_START_SERVER_TCP, params, 3, false, buf, sizeof(buf), false, &len) != AIRLIFT_OK ||
         len != 1 || buf[0] != 1) {
         return false;
     }
@@ -544,8 +544,8 @@ mp_uint_t common_hal_socketpool_socket_recvfrom_into(socketpool_socket_obj_t *se
 // What a read returns when a command fails. Only a busy transport is worth
 // trying again; other failures would repeat, and once they reset the ESP32 the
 // socket is gone.
-static int recv_failed(socketpool_socket_obj_t *self, nina_result_t result) {
-    if (result == NINA_BUSY || result == NINA_INTERRUPTED) {
+static int recv_failed(socketpool_socket_obj_t *self, airlift_result_t result) {
+    if (result == AIRLIFT_BUSY || result == AIRLIFT_INTERRUPTED) {
         return -MP_EAGAIN;
     }
     return is_open(self) ? -MP_EIO : -MP_ENOTCONN;
@@ -572,8 +572,8 @@ static int try_recv(socketpool_socket_obj_t *self, uint8_t *buf, uint32_t len) {
     }
     uint8_t avail_buf[2];
     size_t reply_len;
-    nina_result_t result = socket_command(NINA_AVAIL_DATA_TCP, self->num, avail_buf, sizeof(avail_buf), &reply_len);
-    if (result != NINA_OK) {
+    airlift_result_t result = socket_command(AIRLIFT_AVAIL_DATA_TCP, self->num, avail_buf, sizeof(avail_buf), &reply_len);
+    if (result != AIRLIFT_OK) {
         return recv_failed(self, result);
     }
     uint16_t avail = le16(avail_buf, reply_len);
@@ -581,16 +581,16 @@ static int try_recv(socketpool_socket_obj_t *self, uint8_t *buf, uint32_t len) {
         self->next_avail_ms = now + AVAIL_RETRY_MS;
         return common_hal_socketpool_socket_get_connected(self) ? -MP_EAGAIN : -MP_ENOTCONN;
     }
-    bool direct = len >= NINA_SOCKET_RX_SIZE;
+    bool direct = len >= AIRLIFT_SOCKET_RX_SIZE;
     uint8_t *dest = direct ? buf : self->rx;
-    uint16_t want = MIN(avail, direct ? MIN(len, NINA_MAX_READ) : NINA_SOCKET_RX_SIZE);
+    uint16_t want = MIN(avail, direct ? MIN(len, AIRLIFT_MAX_READ) : AIRLIFT_SOCKET_RX_SIZE);
     uint8_t want_le[2] = { want & 0xff, want >> 8 };
-    nina_param_t params[2] = {
+    airlift_param_t params[2] = {
         { .buf = &self->num, .len = 1 },
         { .buf = want_le, .len = 2 },
     };
-    result = command(NINA_GET_DATABUF_TCP, params, 2, true, dest, want, true, &reply_len);
-    if (result != NINA_OK) {
+    result = command(AIRLIFT_GET_DATABUF_TCP, params, 2, true, dest, want, true, &reply_len);
+    if (result != AIRLIFT_OK) {
         return recv_failed(self, result);
     }
     if (reply_len == 0) {
@@ -632,7 +632,7 @@ int socketpool_socket_send(socketpool_socket_obj_t *self, const uint8_t *buf, ui
     }
     size_t total = 0;
     while (total < len) {
-        if (self->tx_len == NINA_SOCKET_TX_SIZE) {
+        if (self->tx_len == AIRLIFT_SOCKET_TX_SIZE) {
             int result = flush(self);
             if (result == -MP_EAGAIN) {
                 // Another command is in flight (this is a background task run
@@ -643,12 +643,12 @@ int socketpool_socket_send(socketpool_socket_obj_t *self, const uint8_t *buf, ui
             if (result == -MP_ENOTCONN) {
                 return result;
             }
-            if (self->tx_len == NINA_SOCKET_TX_SIZE) {
+            if (self->tx_len == AIRLIFT_SOCKET_TX_SIZE) {
                 // The ESP32 has no room yet. The caller tries again.
                 return total > 0 ? (int)total : -MP_EAGAIN;
             }
         }
-        size_t n = MIN(len - total, NINA_SOCKET_TX_SIZE - self->tx_len);
+        size_t n = MIN(len - total, AIRLIFT_SOCKET_TX_SIZE - self->tx_len);
         memcpy(self->tx + self->tx_len, buf + total, n);
         self->tx_len += n;
         total += n;
@@ -693,7 +693,7 @@ bool common_hal_socketpool_readable(socketpool_socket_obj_t *self) {
     uint8_t buf[2];
     size_t len;
     return can_transact() &&
-           socket_command(NINA_AVAIL_DATA_TCP, self->num, buf, sizeof(buf), &len) == NINA_OK &&
+           socket_command(AIRLIFT_AVAIL_DATA_TCP, self->num, buf, sizeof(buf), &len) == AIRLIFT_OK &&
            le16(buf, len) > 0;
 }
 
@@ -703,10 +703,10 @@ bool common_hal_socketpool_writable(socketpool_socket_obj_t *self) {
 
 void socketpool_socket_move(socketpool_socket_obj_t *self, socketpool_socket_obj_t *sock) {
     *sock = *self;
-    if (sock->num < CIRCUITPY_NINA_MAX_SOCKETS && by_num[sock->num] == self) {
+    if (sock->num < CIRCUITPY_AIRLIFT_MAX_SOCKETS && by_num[sock->num] == self) {
         by_num[sock->num] = sock;
     }
-    self->num = NINA_NO_SOCKET;
+    self->num = AIRLIFT_NO_SOCKET;
     self->tx_len = 0;
     self->rx_len = 0;
 }
@@ -716,7 +716,7 @@ void socketpool_socket_reset(socketpool_socket_obj_t *self) {
         return;
     }
     self->base.type = &socketpool_socket_type;
-    self->num = NINA_NO_SOCKET;
+    self->num = AIRLIFT_NO_SOCKET;
     self->listening = false;
     self->connected = false;
     self->connected_valid = false;

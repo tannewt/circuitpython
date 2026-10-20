@@ -7,11 +7,11 @@
 #include "py/obj.h"
 #include "py/runtime.h"
 
-#include "shared-bindings/_nina/__init__.h"
+#include "shared-bindings/_airlift/__init__.h"
 
 //| """Shared access to an ESP32 co-processor running nina-fw
 //|
-//| The `_nina` module lets libraries send commands to the ESP32 that the core
+//| The `_airlift` module lets libraries send commands to the ESP32 that the core
 //| also uses, so that user code and the core can use the same co-processor.
 //| It is meant for libraries such as ESP32SPI, not for user code.
 //| """
@@ -34,42 +34,42 @@
 //|     Temporary: the core will claim the ESP32 itself when web workflow is configured."""
 //|     ...
 //|
-static mp_obj_t _nina_init(void) {
-    common_hal__nina_init();
+static mp_obj_t _airlift_init(void) {
+    common_hal__airlift_init();
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(_nina_init_obj, _nina_init);
+static MP_DEFINE_CONST_FUN_OBJ_0(_airlift_init_obj, _airlift_init);
 
 //| def active() -> bool:
 //|     """True if the core has claimed the ESP32 and `transact` can be used."""
 //|     ...
 //|
-static mp_obj_t _nina_active(void) {
-    return mp_obj_new_bool(common_hal__nina_active());
+static mp_obj_t _airlift_active(void) {
+    return mp_obj_new_bool(common_hal__airlift_active());
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(_nina_active_obj, _nina_active);
+static MP_DEFINE_CONST_FUN_OBJ_0(_airlift_active_obj, _airlift_active);
 
 //| def reset() -> None:
 //|     """Hard-reset the ESP32 through its reset pin. This closes every socket and
 //|     disconnects from WiFi. Takes about 0.75 seconds."""
 //|     ...
 //|
-static mp_obj_t _nina_reset(void) {
-    common_hal__nina_reset();
+static mp_obj_t _airlift_reset(void) {
+    common_hal__airlift_reset();
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(_nina_reset_obj, _nina_reset);
+static MP_DEFINE_CONST_FUN_OBJ_0(_airlift_reset_obj, _airlift_reset);
 
 //| def release() -> None:
 //|     """Give up the ESP32's pins, so that code can drive them directly. Does
 //|     nothing if they aren't claimed."""
 //|     ...
 //|
-static mp_obj_t _nina_release(void) {
-    common_hal__nina_release();
+static mp_obj_t _airlift_release(void) {
+    common_hal__airlift_release();
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(_nina_release_obj, _nina_release);
+static MP_DEFINE_CONST_FUN_OBJ_0(_airlift_release_obj, _airlift_release);
 
 //| def transact(
 //|     cmd: int,
@@ -91,7 +91,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(_nina_release_obj, _nina_release);
 //|     """
 //|     ...
 //|
-static mp_obj_t _nina_transact(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t _airlift_transact(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_cmd, ARG_params, ARG_reply_params, ARG_sent_param_len_16, ARG_recv_param_len_16 };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_cmd, MP_ARG_REQUIRED | MP_ARG_INT },
@@ -116,7 +116,7 @@ static mp_obj_t _nina_transact(size_t n_args, const mp_obj_t *pos_args, mp_map_t
         mp_obj_get_array(args[ARG_params].u_obj, &n_params, &items);
     }
     // ESP32SPI sends at most 5 parameters.
-    nina_param_t params[16];
+    airlift_param_t params[16];
     mp_arg_validate_length_max(n_params, MP_ARRAY_SIZE(params), MP_QSTR_params);
     // Parameters given as sequences of ints, such as (socket,), are packed here.
     uint8_t packed[64];
@@ -139,28 +139,28 @@ static mp_obj_t _nina_transact(size_t n_args, const mp_obj_t *pos_args, mp_map_t
         }
     }
 
-    return common_hal__nina_transact(cmd, params, n_params, args[ARG_sent_param_len_16].u_bool,
+    return common_hal__airlift_transact(cmd, params, n_params, args[ARG_sent_param_len_16].u_bool,
         expected_replies, args[ARG_recv_param_len_16].u_bool);
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(_nina_transact_obj, 1, _nina_transact);
+static MP_DEFINE_CONST_FUN_OBJ_KW(_airlift_transact_obj, 1, _airlift_transact);
 
-static const mp_rom_map_elem_t _nina_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__nina) },
-    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&_nina_init_obj) },
-    { MP_ROM_QSTR(MP_QSTR_active), MP_ROM_PTR(&_nina_active_obj) },
-    { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&_nina_reset_obj) },
-    { MP_ROM_QSTR(MP_QSTR_release), MP_ROM_PTR(&_nina_release_obj) },
-    { MP_ROM_QSTR(MP_QSTR_transact), MP_ROM_PTR(&_nina_transact_obj) },
-    { MP_ROM_QSTR(MP_QSTR_MAX_SOCKETS), MP_ROM_INT(CIRCUITPY_NINA_MAX_SOCKETS) },
-    { MP_ROM_QSTR(MP_QSTR_MAX_TRANSFER), MP_ROM_INT(NINA_MAX_TRANSFER) },
-    { MP_ROM_QSTR(MP_QSTR_MAX_READ), MP_ROM_INT(NINA_MAX_READ) },
+static const mp_rom_map_elem_t _airlift_module_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__airlift) },
+    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&_airlift_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_active), MP_ROM_PTR(&_airlift_active_obj) },
+    { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&_airlift_reset_obj) },
+    { MP_ROM_QSTR(MP_QSTR_release), MP_ROM_PTR(&_airlift_release_obj) },
+    { MP_ROM_QSTR(MP_QSTR_transact), MP_ROM_PTR(&_airlift_transact_obj) },
+    { MP_ROM_QSTR(MP_QSTR_MAX_SOCKETS), MP_ROM_INT(CIRCUITPY_AIRLIFT_MAX_SOCKETS) },
+    { MP_ROM_QSTR(MP_QSTR_MAX_TRANSFER), MP_ROM_INT(AIRLIFT_MAX_TRANSFER) },
+    { MP_ROM_QSTR(MP_QSTR_MAX_READ), MP_ROM_INT(AIRLIFT_MAX_READ) },
 };
 
-static MP_DEFINE_CONST_DICT(_nina_module_globals, _nina_module_globals_table);
+static MP_DEFINE_CONST_DICT(_airlift_module_globals, _airlift_module_globals_table);
 
-const mp_obj_module_t _nina_module = {
+const mp_obj_module_t _airlift_module = {
     .base = { &mp_type_module },
-    .globals = (mp_obj_dict_t *)&_nina_module_globals,
+    .globals = (mp_obj_dict_t *)&_airlift_module_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR__nina, _nina_module);
+MP_REGISTER_MODULE(MP_QSTR__airlift, _airlift_module);

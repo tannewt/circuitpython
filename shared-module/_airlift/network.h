@@ -13,27 +13,27 @@
 #include <stdint.h>
 
 // nina-fw connection status values, as in ESP32SPI.
-#define NINA_WL_IDLE_STATUS (0)
-#define NINA_WL_NO_SSID_AVAIL (1)
-#define NINA_WL_CONNECTED (3)
-#define NINA_WL_CONNECT_FAILED (4)
-#define NINA_WL_DISCONNECTED (6)
-#define NINA_WL_STOPPED (254)
-#define NINA_WL_NO_SHIELD (255)
+#define AIRLIFT_WL_IDLE_STATUS (0)
+#define AIRLIFT_WL_NO_SSID_AVAIL (1)
+#define AIRLIFT_WL_CONNECTED (3)
+#define AIRLIFT_WL_CONNECT_FAILED (4)
+#define AIRLIFT_WL_DISCONNECTED (6)
+#define AIRLIFT_WL_STOPPED (254)
+#define AIRLIFT_WL_NO_SHIELD (255)
 
 // Sets the network the core keeps the ESP32 on. Called at each VM start. Joins
 // it unless already connected, waiting up to 10 seconds the first time since
-// the last hard reset; after that, nina_network_maintain() keeps trying in the
+// the last hard reset; after that, airlift_network_maintain() keeps trying in the
 // background. Returns true when connected. Never raises.
-bool nina_network_join(const char *ssid, const char *password);
+bool airlift_network_join(const char *ssid, const char *password);
 // Called from the background. Rejoins without waiting after a hard reset, and
 // every 30 seconds while disconnected, unless VM code has joined or left a
 // network itself since the core last tried.
-void nina_network_maintain(void);
+void airlift_network_maintain(void);
 // Re-reads the status and address, at most once a second unless forced. Call it
 // only where an SPI command may run.
-void nina_network_refresh(bool force);
-// The cached status. NINA_WL_NO_SHIELD when the core doesn't own the ESP32.
-uint8_t nina_network_status(void);
+void airlift_network_refresh(bool force);
+// The cached status. AIRLIFT_WL_NO_SHIELD when the core doesn't own the ESP32.
+uint8_t airlift_network_status(void);
 // The cached IPv4 address in network byte order, or 0 when not connected.
-uint32_t nina_network_ipv4_address(void);
+uint32_t airlift_network_ipv4_address(void);

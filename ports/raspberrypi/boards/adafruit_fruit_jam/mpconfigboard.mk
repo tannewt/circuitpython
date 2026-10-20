@@ -34,7 +34,7 @@ CIRCUITPY_USB_HOST_AUDIO = 1
 # The ESP32-C6 co-processor, shared by the core and ESP32SPI. The core uses it
 # for web workflow. The flags are set one by one, because CIRCUITPY_NETWORK
 # would also turn on ssl, ipaddress and so on.
-CIRCUITPY_NINA = 1
+CIRCUITPY_AIRLIFT = 1
 CIRCUITPY_SOCKETPOOL = 1
 CIRCUITPY_WEB_WORKFLOW = 1
 CIRCUITPY_MDNS = 0

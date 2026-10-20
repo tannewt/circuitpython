@@ -31,8 +31,8 @@
 #include "shared-module/audiofilewriter/AudioFileWriter.h"
 #endif
 
-#if CIRCUITPY_NINA && CIRCUITPY_SOCKETPOOL
-#include "shared-module/_nina/socketpool.h"
+#if CIRCUITPY_AIRLIFT && CIRCUITPY_SOCKETPOOL
+#include "shared-module/_airlift/socketpool.h"
 #endif
 
 #include "shared-bindings/microcontroller/__init__.h"
@@ -94,8 +94,8 @@ void supervisor_tick(void) {
     keypad_tick();
     #endif
 
-    #if CIRCUITPY_NINA && CIRCUITPY_SOCKETPOOL
-    nina_socketpool_tick();
+    #if CIRCUITPY_AIRLIFT && CIRCUITPY_SOCKETPOOL
+    airlift_socketpool_tick();
     #endif
 
     background_callback_add(&tick_callback, supervisor_background_tick, NULL);

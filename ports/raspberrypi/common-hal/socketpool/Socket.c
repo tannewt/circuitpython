@@ -10,8 +10,8 @@
 
 #include "py/mpconfig.h"
 
-// With CIRCUITPY_NINA, shared-module/_nina/socketpool.c is used instead.
-#if !CIRCUITPY_NINA
+// With CIRCUITPY_AIRLIFT, shared-module/_airlift/socketpool.c is used instead.
+#if !CIRCUITPY_AIRLIFT
 
 #include "shared-bindings/socketpool/Socket.h"
 
@@ -1344,4 +1344,4 @@ void socketpool_socket_reset(socketpool_socket_obj_t *self) {
     self->state = _ERR_BADF;
 }
 
-#endif // !CIRCUITPY_NINA
+#endif // !CIRCUITPY_AIRLIFT

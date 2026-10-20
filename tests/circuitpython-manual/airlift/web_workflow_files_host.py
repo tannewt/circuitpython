@@ -56,7 +56,7 @@ same = open(local, "rb").read() == body if os.path.exists(local) else None
 print("get boot_out.txt: %d, %d bytes, %.2f s, matches local: %s" % (code, len(body), dt, same))
 results.append(code == 200 and same is not False)
 
-path = "/fs" + upload_dir + "nina_upload_test.bin"
+path = "/fs" + upload_dir + "airlift_upload_test.bin"
 payload = bytes((i * 7 + (i >> 8)) & 0xFF for i in range(20000))
 code, body, dt = req(
     "PUT", path, data=payload, headers={"X-Timestamp": str(int(time.time() * 1000))}

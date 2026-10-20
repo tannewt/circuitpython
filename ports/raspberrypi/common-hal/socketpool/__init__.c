@@ -6,8 +6,8 @@
 
 #include "py/mpconfig.h"
 
-// With CIRCUITPY_NINA, shared-module/_nina/socketpool.c is used instead.
-#if !CIRCUITPY_NINA
+// With CIRCUITPY_AIRLIFT, shared-module/_airlift/socketpool.c is used instead.
+#if !CIRCUITPY_AIRLIFT
 
 #include "py/runtime.h"
 #include "shared/runtime/interrupt_char.h"
@@ -85,4 +85,4 @@ void socketpool_resolve_host_raise(const char *host, ip_addr_t *addr) {
     }
 }
 
-#endif // !CIRCUITPY_NINA
+#endif // !CIRCUITPY_AIRLIFT

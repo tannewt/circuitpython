@@ -42,12 +42,12 @@ def req(method, path, body=None):
     return r.status, b
 
 
-print("PUT", req("PUT", "/fs/saves/nina_download_test.bin", data)[0], flush=True)
+print("PUT", req("PUT", "/fs/saves/airlift_download_test.bin", data)[0], flush=True)
 bad = 0
 for i in range(n):
     t = time.time()
     try:
-        code, b = req("GET", "/fs/saves/nina_download_test.bin")
+        code, b = req("GET", "/fs/saves/airlift_download_test.bin")
     except Exception as e:
         print("%d %.3f %s %s" % (i, t, type(e).__name__, e), flush=True)
         bad += 1
@@ -71,4 +71,4 @@ for i in range(n):
         bad += 1
 print("%d of %d bad" % (bad, n), flush=True)
 print("PASS" if bad == 0 else "FAIL")
-req("DELETE", "/fs/saves/nina_download_test.bin")
+req("DELETE", "/fs/saves/airlift_download_test.bin")

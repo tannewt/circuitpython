@@ -6,14 +6,14 @@ ESP32 alone, so ESP32SPI code that passes its own pins works as before.
 Remove the password, reset the board, then run this with run_on_board.py
 (or as code.py). Expected: "core owns the ESP32: False" and a firmware version."""
 
-import _nina
+import _airlift
 import board
 import busio
 from digitalio import DigitalInOut
 
 from adafruit_esp32spi import adafruit_esp32spi
 
-print("core owns the ESP32:", _nina.active())
+print("core owns the ESP32:", _airlift.active())
 esp = adafruit_esp32spi.ESP_SPIcontrol(
     busio.SPI(board.SCK, board.MOSI, board.MISO),
     DigitalInOut(board.ESP_CS),

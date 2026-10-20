@@ -13,9 +13,9 @@
 
 #include "common-hal/socketpool/SocketPool.h"
 
-#if CIRCUITPY_NINA
+#if CIRCUITPY_AIRLIFT
 // The sockets live on the ESP32 co-processor (nina-fw).
-#include "shared-module/_nina/socketpool.h"
+#include "shared-module/_airlift/socketpool.h"
 #else
 
 typedef struct _lwip_socket_obj_t {

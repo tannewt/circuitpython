@@ -105,8 +105,8 @@
 #include "shared-module/memorymonitor/__init__.h"
 #endif
 
-#if CIRCUITPY_NINA
-#include "shared-module/_nina/transport.h"
+#if CIRCUITPY_AIRLIFT
+#include "shared-module/_airlift/transport.h"
 #endif
 
 #if CIRCUITPY_SOCKETPOOL
@@ -438,8 +438,8 @@ static void cleanup_after_vm(mp_obj_t exception) {
     #endif
 
     // Close sockets that user code left open on the ESP32 co-processor.
-    #if CIRCUITPY_NINA
-    nina_user_reset();
+    #if CIRCUITPY_AIRLIFT
+    airlift_user_reset();
     #endif
 
     // Turn off user initiated WiFi connections.

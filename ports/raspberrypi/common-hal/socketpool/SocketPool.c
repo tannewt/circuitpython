@@ -6,8 +6,8 @@
 
 #include "py/mpconfig.h"
 
-// With CIRCUITPY_NINA, shared-module/_nina/socketpool.c is used instead.
-#if !CIRCUITPY_NINA
+// With CIRCUITPY_AIRLIFT, shared-module/_airlift/socketpool.c is used instead.
+#if !CIRCUITPY_AIRLIFT
 
 #include "shared-bindings/socketpool/SocketPool.h"
 #include "common-hal/socketpool/__init__.h"
@@ -60,4 +60,4 @@ mp_obj_t common_hal_socketpool_getaddrinfo_raise(socketpool_socketpool_obj_t *se
     return mp_obj_new_list(1, (mp_obj_t *)&tuple);
 }
 
-#endif // !CIRCUITPY_NINA
+#endif // !CIRCUITPY_AIRLIFT

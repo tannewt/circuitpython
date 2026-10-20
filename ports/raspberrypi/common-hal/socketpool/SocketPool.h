@@ -8,8 +8,8 @@
 
 #include "py/obj.h"
 
-#if CIRCUITPY_NINA
-#include "shared-module/_nina/socketpool.h"
+#if CIRCUITPY_AIRLIFT
+#include "shared-module/_airlift/socketpool.h"
 #else
 
 #include "lwip/ip_addr.h"

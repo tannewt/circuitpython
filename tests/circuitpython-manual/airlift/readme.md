@@ -1,4 +1,4 @@
-# Web workflow over an ESP32 co-processor (`_nina`)
+# Web workflow over an ESP32 co-processor (`_airlift`)
 
 Manual tests for web workflow on boards whose WiFi is an ESP32 co-processor
 running nina-fw, such as the Adafruit Fruit Jam. They run on a host computer
@@ -12,7 +12,7 @@ on the same network as the board.
   mounted CIRCUITPY drive).
 - Python 3 on the host. `run_on_board.py` and `esp_wedge_host.py` also need
   `pyserial` and the board's USB serial port. The port defaults to the first
-  Fruit Jam in `/dev/serial/by-id`; set `NINA_TEST_SERIAL` to use another one.
+  Fruit Jam in `/dev/serial/by-id`; set `AIRLIFT_TEST_SERIAL` to use another one.
 - Find the board's IP address in the serial console's title bar, or in
   `http://circuitpython.local/cp/version.json`.
 

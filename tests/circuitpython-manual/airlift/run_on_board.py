@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 """Run a local .py file on the board through the raw REPL and stream its output.
-Usage: run_on_board.py <script> [timeout_s]. Set NINA_TEST_SERIAL to pick the port;
+Usage: run_on_board.py <script> [timeout_s]. Set AIRLIFT_TEST_SERIAL to pick the port;
 the default is the first Fruit Jam in /dev/serial/by-id. Needs pyserial."""
 
 import glob
@@ -13,7 +13,8 @@ import time
 import serial
 
 PORT = (
-    os.getenv("NINA_TEST_SERIAL") or (sorted(glob.glob("/dev/serial/by-id/*Fruit_Jam*")) + [""])[0]
+    os.getenv("AIRLIFT_TEST_SERIAL")
+    or (sorted(glob.glob("/dev/serial/by-id/*Fruit_Jam*")) + [""])[0]
 )
 
 

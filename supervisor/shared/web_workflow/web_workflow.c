@@ -57,9 +57,9 @@
 #include "shared-bindings/mii/Ethernet.h"
 #endif
 
-#if CIRCUITPY_NINA
-#include "shared-module/_nina/network.h"
-#include "shared-module/_nina/transport.h"
+#if CIRCUITPY_AIRLIFT
+#include "shared-module/_airlift/network.h"
+#include "shared-module/_airlift/transport.h"
 #include "supervisor/shared/tick.h"
 #endif
 
@@ -104,7 +104,7 @@ typedef struct {
 static wifi_radio_error_t _wifi_status = WIFI_RADIO_ERROR_NONE;
 #endif
 
-#if CIRCUITPY_STATUS_BAR && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_NINA)
+#if CIRCUITPY_STATUS_BAR && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT)
 // Store various last states to compute if status bar needs an update.
 static bool _last_enabled = false;
 static uint32_t _last_ip = 0;
@@ -115,8 +115,8 @@ static mp_int_t _last_web_api_port = 80;
 static wifi_radio_error_t _last_wifi_status = WIFI_RADIO_ERROR_NONE;
 #endif
 
-#if CIRCUITPY_STATUS_BAR && CIRCUITPY_NINA
-static uint8_t _last_nina_status = NINA_WL_NO_SHIELD;
+#if CIRCUITPY_STATUS_BAR && CIRCUITPY_AIRLIFT
+static uint8_t _last_airlift_status = AIRLIFT_WL_NO_SHIELD;
 #endif
 
 #if CIRCUITPY_MDNS
@@ -224,12 +224,12 @@ static bool _get_web_workflow_ip(uint32_t *ipv4_address) {
     }
     *ipv4_address = mii_get_ipv4_address();
     return true;
-    #elif CIRCUITPY_NINA
+    #elif CIRCUITPY_AIRLIFT
     // Cached, so the status bar doesn't cause SPI traffic.
-    if (!nina_transport_active()) {
+    if (!airlift_transport_active()) {
         return false;
     }
-    *ipv4_address = nina_network_ipv4_address();
+    *ipv4_address = airlift_network_ipv4_address();
     return true;
     #else
     return false;
@@ -278,7 +278,7 @@ mdns_server_obj_t *supervisor_web_workflow_mdns(mp_obj_t network_interface) {
 
 #if CIRCUITPY_STATUS_BAR
 bool supervisor_web_workflow_status_dirty(void) {
-    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_NINA
+    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT
     uint32_t ipv4_address = 0;
     bool enabled = _get_web_workflow_ip(&ipv4_address);
     if (enabled != _last_enabled || ipv4_address != _last_ip || web_api_port != _last_web_api_port) {
@@ -289,8 +289,8 @@ bool supervisor_web_workflow_status_dirty(void) {
         return true;
     }
     #endif
-    #if CIRCUITPY_NINA
-    if (_last_nina_status != nina_network_status()) {
+    #if CIRCUITPY_AIRLIFT
+    if (_last_airlift_status != airlift_network_status()) {
         return true;
     }
     #endif
@@ -303,7 +303,7 @@ bool supervisor_web_workflow_status_dirty(void) {
 
 #if CIRCUITPY_STATUS_BAR
 void supervisor_web_workflow_status(void) {
-    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_NINA
+    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT
     uint32_t ipv4_address = 0;
     _last_enabled = _get_web_workflow_ip(&ipv4_address);
     _last_web_api_port = web_api_port;
@@ -336,12 +336,12 @@ void supervisor_web_workflow_status(void) {
     #elif CIRCUITPY_MII
     _last_ip = 0;
     serial_write_compressed(MP_ERROR_TEXT("No IP"));
-    #elif CIRCUITPY_NINA
+    #elif CIRCUITPY_AIRLIFT
     serial_write_compressed(MP_ERROR_TEXT("Wi-Fi: "));
-    _last_nina_status = nina_network_status();
+    _last_airlift_status = airlift_network_status();
     if (!_last_enabled) {
         serial_write_compressed(MP_ERROR_TEXT("off"));
-    } else if (_last_nina_status == NINA_WL_CONNECT_FAILED) {
+    } else if (_last_airlift_status == AIRLIFT_WL_CONNECT_FAILED) {
         serial_write_compressed(MP_ERROR_TEXT("Authentication failure"));
     } else {
         _last_ip = 0;
@@ -354,7 +354,7 @@ void supervisor_web_workflow_status(void) {
 }
 #endif
 
-#if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_NINA)
+#if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT)
 static bool _open_listening(void) {
     #if CIRCUITPY_SOCKETPOOL_IPV6
     bool opened = socketpool_socket(&pool, SOCKETPOOL_AF_INET6, SOCKETPOOL_SOCK_STREAM, 0, &listening);
@@ -371,8 +371,8 @@ static bool _open_listening(void) {
     // callback never re-enters this function, so the next attempt is
     // the next supervisor_workflow_reset(), i.e. a VM restart. A board
     // that only gets an address after boot will not bring the workflow
-    // up on its own until then. (NINA boards do retry; see
-    // _nina_retry_listening().)
+    // up on its own until then. (AirLift boards do retry; see
+    // _airlift_retry_listening().)
     if (!opened) {
         return false;
     }
@@ -389,30 +389,30 @@ static bool _open_listening(void) {
 }
 #endif
 
-#if CIRCUITPY_NINA
+#if CIRCUITPY_AIRLIFT
 // User code may reset the ESP32 or change its network, which closes the
 // listening socket, and nothing calls back when the network comes back. So the
 // background pass reopens it: right away after a reset, otherwise at most every
 // 5 seconds. It is never closed to reopen it; nina-fw can't stop a listener.
-static void _nina_retry_listening(void) {
+static void _airlift_retry_listening(void) {
     static uint64_t last_try_ms;
     static uint32_t last_try_generation;
     if (!common_hal_socketpool_socket_get_closed(&listening) ||
-        nina_network_status() != NINA_WL_CONNECTED) {
+        airlift_network_status() != AIRLIFT_WL_CONNECTED) {
         return;
     }
     uint64_t now = supervisor_ticks_ms64();
-    if (last_try_generation == nina_transport_generation() && now - last_try_ms < 5000) {
+    if (last_try_generation == airlift_transport_generation() && now - last_try_ms < 5000) {
         return;
     }
     last_try_ms = now;
-    last_try_generation = nina_transport_generation();
+    last_try_generation = airlift_transport_generation();
     _open_listening();
 }
 #endif
 
 bool supervisor_start_web_workflow(void) {
-    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_NINA)
+    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT)
 
     #if CIRCUITPY_WIFI
     mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj);
@@ -422,8 +422,8 @@ bool supervisor_start_web_workflow(void) {
         // The board never registered its ethernet instance.
         return false;
     }
-    #elif CIRCUITPY_NINA
-    mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&nina_socketpool_interface);
+    #elif CIRCUITPY_AIRLIFT
+    mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&airlift_socketpool_interface);
     #else
     mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_hostnetwork_obj);
     #endif
@@ -469,7 +469,7 @@ bool supervisor_start_web_workflow(void) {
     }
     #endif
 
-    #if CIRCUITPY_NINA
+    #if CIRCUITPY_AIRLIFT
     char ssid[33];
     char password[64];
 
@@ -494,13 +494,13 @@ bool supervisor_start_web_workflow(void) {
         return false;
     }
 
-    if (!nina_transport_init()) {
+    if (!airlift_transport_init()) {
         return false;
     }
 
     // Returns early if already connected to this network, so the open
     // connections survive. If it fails, the background keeps trying.
-    nina_network_join(ssid, password);
+    airlift_network_join(ssid, password);
     #endif
 
     #if CIRCUITPY_MII && !CIRCUITPY_WIFI
@@ -578,9 +578,9 @@ bool supervisor_start_web_workflow(void) {
         #endif
 
         if (common_hal_socketpool_socket_get_closed(&listening) && !_open_listening()) {
-            #if CIRCUITPY_NINA
+            #if CIRCUITPY_AIRLIFT
             // Report success anyway, so the background callback is installed:
-            // it keeps trying (_nina_retry_listening()).
+            // it keeps trying (_airlift_retry_listening()).
             #else
             return false;
             #endif
@@ -1795,14 +1795,14 @@ static bool supervisor_filesystem_access_could_block(void) {
 }
 
 void supervisor_web_workflow_background(void *data) {
-    #if CIRCUITPY_NINA
+    #if CIRCUITPY_AIRLIFT
     // Skip this pass while a command is in flight or the bus is in use, so
     // nothing here waits for something that can't finish until it returns.
-    if (!nina_socketpool_background()) {
+    if (!airlift_socketpool_background()) {
         socketpool_socket_poll_resume();
         return;
     }
-    _nina_retry_listening();
+    _airlift_retry_listening();
     #endif
 
     // If "/sd" is mounted AND shared with a display, access could block.
@@ -1852,8 +1852,8 @@ void supervisor_web_workflow_background(void *data) {
     // Let the websocket code run.
     websocket_background();
 
-    #if CIRCUITPY_NINA
-    nina_socketpool_background_done();
+    #if CIRCUITPY_AIRLIFT
+    airlift_socketpool_background_done();
     #endif
 
     // Resume polling
