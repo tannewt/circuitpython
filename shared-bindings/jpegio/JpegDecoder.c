@@ -6,7 +6,6 @@
 
 #include "py/obj.h"
 #include "py/builtin.h"
-#include "py/objproperty.h"
 #include "py/runtime.h"
 
 #include "shared-bindings/bitmaptools/__init__.h"
@@ -204,19 +203,6 @@ static mp_obj_t jpegio_jpegdecoder_decode(size_t n_args, const mp_obj_t *pos_arg
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(jpegio_jpegdecoder_decode_obj, 1, jpegio_jpegdecoder_decode);
 
-//|     used_hardware: bool
-//|     """True if the last `decode` used the chip's JPEG decoder peripheral, False if it
-//|     used the software decoder. (read only)"""
-//|
-static mp_obj_t jpegio_jpegdecoder_obj_get_used_hardware(mp_obj_t self_in) {
-    jpegio_jpegdecoder_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    return mp_obj_new_bool(common_hal_jpegio_jpegdecoder_get_used_hardware(self));
-}
-MP_DEFINE_CONST_FUN_OBJ_1(jpegio_jpegdecoder_get_used_hardware_obj, jpegio_jpegdecoder_obj_get_used_hardware);
-
-MP_PROPERTY_GETTER(jpegio_jpegdecoder_used_hardware_obj,
-    (mp_obj_t)&jpegio_jpegdecoder_get_used_hardware_obj);
-
 // Releases any hardware decoder the object holds when it is collected.
 static mp_obj_t jpegio_jpegdecoder_del(mp_obj_t self_in) {
     jpegio_jpegdecoder_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -228,7 +214,6 @@ static MP_DEFINE_CONST_FUN_OBJ_1(jpegio_jpegdecoder_del_obj, jpegio_jpegdecoder_
 static const mp_rom_map_elem_t jpegio_jpegdecoder_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&jpegio_jpegdecoder_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_decode), MP_ROM_PTR(&jpegio_jpegdecoder_decode_obj) },
-    { MP_ROM_QSTR(MP_QSTR_used_hardware), MP_ROM_PTR(&jpegio_jpegdecoder_used_hardware_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&jpegio_jpegdecoder_del_obj) },
 };
 static MP_DEFINE_CONST_DICT(jpegio_jpegdecoder_locals_dict, jpegio_jpegdecoder_locals_dict_table);

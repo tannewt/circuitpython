@@ -24,7 +24,6 @@ typedef struct jpegio_jpegdecoder_obj {
     uint32_t skip_source_index, skip_dest_index;
     bool skip_source_index_none, skip_dest_index_none;
     uint8_t scale;
-    bool used_hardware;
     #if CIRCUITPY_JPEGIO_HW
     void *hw_decoder; // port state for the hardware decoder, NULL until first used
     #endif
