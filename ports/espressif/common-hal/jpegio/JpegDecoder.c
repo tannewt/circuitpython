@@ -23,7 +23,7 @@
 // A bad image blocks the engine for at most this long.
 #define JPEG_DECODE_TIMEOUT_MS (1000)
 
-void jpegio_jpegdecoder_deinit_hw(jpegio_jpegdecoder_obj_t *self) {
+void jpegio_jpegdecoder_hw_deinit(jpegio_jpegdecoder_obj_t *self) {
     if (self->hw_decoder != NULL) {
         jpeg_del_decoder_engine(self->hw_decoder);
         self->hw_decoder = NULL;
@@ -48,7 +48,7 @@ static bool output_aligned(const void *buf, size_t size) {
     return ((uintptr_t)buf & (align - 1)) == 0 && (size & (align - 1)) == 0;
 }
 
-bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale) {
+bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale) {
     displayio_bitmap_t *bitmap = self->dest;
     if (scale != 0 || bitmap->bits_per_value != 16 || bitmap->read_only) {
         return false;

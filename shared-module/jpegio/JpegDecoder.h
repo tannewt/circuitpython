@@ -36,9 +36,9 @@ typedef struct jpegio_jpegdecoder_obj {
 // the target bitmap.
 // Returns true if the port decoded the image into `self->dest`. Returns false to decode
 // with TJpgDec instead, which rewrites every pixel the image covers. Must not raise.
-bool jpegio_jpegdecoder_decode_hw(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale);
+bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale);
 
 // Ports with JPEG decode hardware provide this. It releases `self->hw_decoder`, if set,
 // and sets it to NULL. Called when the decoder object is collected. Must not raise.
-void jpegio_jpegdecoder_deinit_hw(jpegio_jpegdecoder_obj_t *self);
+void jpegio_jpegdecoder_hw_deinit(jpegio_jpegdecoder_obj_t *self);
 #endif
