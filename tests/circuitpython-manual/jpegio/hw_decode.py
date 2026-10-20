@@ -5,6 +5,8 @@
 # Copy baseline JPEGs into /jpegtest/ first, for example 720p at 4:2:0, 4:2:2 and 4:4:4,
 # a size that is not a multiple of 16, a grayscale and a progressive file.
 # Opening a filename always uses TJpgDec; opening bytes uses the hardware when it can.
+# The last section checks that software_ok=False raises ValueError instead of using TJpgDec.
+# On chips without JPEG hardware, every case in that section should raise.
 # Expect small differences, since the two IDCTs round differently.
 
 import os
@@ -72,3 +74,23 @@ for name in sorted(os.listdir(DIR)):
             median_ms(path, sw, 3),
         )
     )
+
+
+strict = jpegio.JpegDecoder(software_ok=False)
+
+
+def strict_decode(source, **kwargs):
+    try:
+        width, height = strict.open(source)
+        strict.decode(displayio.Bitmap(width, height, 65535), **kwargs)
+        return "decoded"
+    except (ValueError, RuntimeError) as e:
+        return "%s: %s" % (type(e).__name__, e)
+
+
+for name in sorted(os.listdir(DIR)):
+    path = DIR + name
+    data = open(path, "rb").read()
+    print("software_ok=False", name, "bytes:", strict_decode(data))
+    print("software_ok=False", name, "scale=1:", strict_decode(data, scale=1))
+    print("software_ok=False", name, "file:", strict_decode(path))
