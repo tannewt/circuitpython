@@ -6,7 +6,6 @@
 
 #include "shared-bindings/async_spi/SPI.h"
 
-#include "py/mperrno.h"
 #include "py/runtime.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "supervisor/background_callback.h"
@@ -188,13 +187,9 @@ static void _apply(async_spi_spi_obj_t *self, uint32_t baudrate, uint8_t polarit
     self->real_frequency = spi_set_baudrate(self->peripheral, baudrate);
 }
 
-// Only the lock holder transfers, and only while it awaits; a transfer here means another task
-// skipped the lock.
+// The caller holds the lock, so no transfer is running.
 void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits) {
-    if (self->async_active) {
-        mp_raise_OSError(MP_EBUSY);
-    }
     _apply(self, baudrate, polarity, phase, bits);
 }
 

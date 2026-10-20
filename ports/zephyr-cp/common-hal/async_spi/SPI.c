@@ -148,13 +148,9 @@ static uint16_t operation_of(uint8_t polarity, uint8_t phase, uint8_t bits) {
     return operation;
 }
 
-// Only the lock holder transfers, and only while it awaits; a transfer here means another task
-// skipped the lock.
+// The caller holds the lock, so no transfer is running.
 void common_hal_async_spi_spi_configure(async_spi_spi_obj_t *self, uint32_t baudrate,
     uint8_t polarity, uint8_t phase, uint8_t bits) {
-    if (self->done != NULL && !CIRCUITPY_ASYNC_FLAG_IS_SET(self->done)) {
-        raise_zephyr_error(-EBUSY);
-    }
     apply_config(self, baudrate, operation_of(polarity, phase, bits));
 }
 

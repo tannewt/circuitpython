@@ -113,9 +113,7 @@ static void async_spi_spi_transfer_cancel(mp_obj_t self_in, void *context, circu
 //|     def configure(
 //|         self, *, baudrate: int = 100000, polarity: int = 0, phase: int = 0, bits: int = 8
 //|     ) -> None:
-//|         """Configure the SPI bus, as `busio.SPI.configure`. Needs the `lock`.
-//|
-//|         :raises OSError: while a transfer is running (``EBUSY``)"""
+//|         """Configure the SPI bus, as `busio.SPI.configure`. Needs the `lock`."""
 //|         ...
 //|
 static mp_obj_t async_spi_spi_configure(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
