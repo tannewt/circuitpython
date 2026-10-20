@@ -25,11 +25,16 @@ typedef struct jpegio_jpegdecoder_obj {
     bool skip_source_index_none, skip_dest_index_none;
     uint8_t scale;
     #if CIRCUITPY_JPEGIO_HW
-    void *hw_decoder; // port state for the hardware decoder, NULL until first used
+    void *hw_decoder; // port state for the hardware decoder, NULL if unavailable
     #endif
 } jpegio_jpegdecoder_obj_t;
 
 #if CIRCUITPY_JPEGIO_HW
+// Ports with JPEG decode hardware provide this. Called when the decoder object is
+// constructed. Sets `self->hw_decoder`, or NULL if the hardware is unavailable, in which
+// case decode() uses TJpgDec. Must not raise.
+void jpegio_jpegdecoder_hw_init(jpegio_jpegdecoder_obj_t *self);
+
 // Ports with JPEG decode hardware provide this. It is called by decode() only when the
 // source passed to open() is an in-memory buffer; `jpeg` is that whole buffer. The decode
 // arguments (x, y, lim, skip indices) are already stored in `self`, and `self->dest` is

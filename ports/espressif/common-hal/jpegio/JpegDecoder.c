@@ -23,6 +23,17 @@
 // A bad image blocks the engine for at most this long.
 #define JPEG_DECODE_TIMEOUT_MS (1000)
 
+void jpegio_jpegdecoder_hw_init(jpegio_jpegdecoder_obj_t *self) {
+    jpeg_decode_engine_cfg_t engine_config = {
+        .timeout_ms = JPEG_DECODE_TIMEOUT_MS,
+    };
+    jpeg_decoder_handle_t engine;
+    if (jpeg_new_decoder_engine(&engine_config, &engine) != ESP_OK) {
+        engine = NULL;
+    }
+    self->hw_decoder = engine;
+}
+
 void jpegio_jpegdecoder_hw_deinit(jpegio_jpegdecoder_obj_t *self) {
     if (self->hw_decoder != NULL) {
         jpeg_del_decoder_engine(self->hw_decoder);
@@ -49,6 +60,9 @@ static bool output_aligned(const void *buf, size_t size) {
 }
 
 bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffer_info_t *jpeg, int scale) {
+    if (self->hw_decoder == NULL) {
+        return false;
+    }
     displayio_bitmap_t *bitmap = self->dest;
     if (scale != 0 || bitmap->bits_per_value != 16 || bitmap->read_only) {
         return false;
@@ -104,17 +118,6 @@ bool jpegio_jpegdecoder_hw_decode(jpegio_jpegdecoder_obj_t *self, const mp_buffe
         self->lim.x1 <= 0 && self->lim.y1 <= 0 &&
         self->lim.x2 >= (int)width && self->lim.y2 >= (int)height &&
         output_aligned(bitmap->data, output_size);
-
-    if (self->hw_decoder == NULL) {
-        jpeg_decode_engine_cfg_t engine_config = {
-            .timeout_ms = JPEG_DECODE_TIMEOUT_MS,
-        };
-        jpeg_decoder_handle_t engine;
-        if (jpeg_new_decoder_engine(&engine_config, &engine) != ESP_OK) {
-            return false;
-        }
-        self->hw_decoder = engine;
-    }
 
     // Otherwise decode into a temporary buffer and copy the visible part out of it.
     uint8_t *output;
