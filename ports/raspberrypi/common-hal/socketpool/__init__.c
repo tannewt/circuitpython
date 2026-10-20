@@ -4,6 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include "py/mpconfig.h"
+
+// With CIRCUITPY_NINA, shared-module/_nina/socketpool.c is used instead.
+#if !CIRCUITPY_NINA
+
 #include "py/runtime.h"
 #include "shared/runtime/interrupt_char.h"
 
@@ -79,3 +84,5 @@ void socketpool_resolve_host_raise(const char *host, ip_addr_t *addr) {
         mp_raise_OSError(-result);
     }
 }
+
+#endif // !CIRCUITPY_NINA

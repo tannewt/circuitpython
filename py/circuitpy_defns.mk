@@ -333,6 +333,9 @@ endif
 ifeq ($(CIRCUITPY_NEOPIXEL_WRITE),1)
 SRC_PATTERNS += neopixel_write/%
 endif
+ifeq ($(CIRCUITPY_NINA),1)
+SRC_PATTERNS += _nina/%
+endif
 ifeq ($(CIRCUITPY_NVM),1)
 SRC_PATTERNS += nvm/%
 endif
@@ -737,6 +740,7 @@ SRC_SHARED_MODULE_ALL = \
 	_bleio/ScanEntry.c \
 	_bleio/ScanResults.c \
 	_eve/__init__.c \
+	_nina/__init__.c \
 	adafruit_pixelbuf/PixelBuf.c \
 	adafruit_pixelbuf/__init__.c \
 	_pixelmap/PixelMap.c \
@@ -1091,6 +1095,9 @@ SRC_SHARED_MODULE_INTERNAL = \
 $(filter $(SRC_PATTERNS), \
 	displayio/bus_core.c \
 	displayio/display_core.c \
+	_nina/network.c \
+	_nina/socketpool.c \
+	_nina/transport.c \
 	usb/utf16le.c \
 )
 

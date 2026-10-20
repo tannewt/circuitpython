@@ -4,6 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include "py/mpconfig.h"
+
+// With CIRCUITPY_NINA, shared-module/_nina/socketpool.c is used instead.
+#if !CIRCUITPY_NINA
+
 #include "shared-bindings/socketpool/SocketPool.h"
 #include "common-hal/socketpool/__init__.h"
 #include "common-hal/socketpool/Socket.h"
@@ -54,3 +59,5 @@ mp_obj_t common_hal_socketpool_getaddrinfo_raise(socketpool_socketpool_obj_t *se
     tuple->items[4] = MP_OBJ_FROM_PTR(sockaddr);
     return mp_obj_new_list(1, (mp_obj_t *)&tuple);
 }
+
+#endif // !CIRCUITPY_NINA
