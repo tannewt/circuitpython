@@ -6,6 +6,9 @@
 
 include ../../py/circuitpy_mkenv.mk
 
+# Keep dependency selection identical during automatic CMake reconfiguration.
+export IDF_COMPONENT_MANAGER = 0
+
 ifeq ($(IDF_TARGET),esp32s3)
 BT_IDF_TARGET = esp32c3
 else ifeq ($(IDF_TARGET),esp32c61)
@@ -268,7 +271,9 @@ endif
 
 ifneq ($(CIRCUITPY_WIFI),0)
 ifeq ($(filter $(IDF_TARGET),esp32s2 esp32p4),)
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
 REGISTRATION_FUNCTIONS += -u esp_coex_init_include_func
+endif
 endif
 endif
 
@@ -954,7 +959,7 @@ do-sdkconfig: $(BUILD)/esp-idf/config/sdkconfig.h
 QSTR_GLOBAL_REQUIREMENTS += $(BUILD)/esp-idf/config/sdkconfig.h
 $(BUILD)/esp-idf/config/sdkconfig.h: boards/$(BOARD)/sdkconfig boards/$(BOARD)/mpconfigboard.mk CMakeLists.txt | $(BUILD)/esp-idf
 	$(STEPECHO) "Create $@"
-	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -DCIRCUITPY_MIPICSI=$(CIRCUITPY_MIPICSI) -GNinja
+	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -DCIRCUITPY_MIPICSI=$(CIRCUITPY_MIPICSI) -DCIRCUITPY_ESP_HOSTED=$(CIRCUITPY_ESP_HOSTED) -GNinja
 	$(Q)$(PYTHON) tools/check-sdkconfig.py \
 		CIRCUITPY_DUALBANK=$(CIRCUITPY_DUALBANK) \
 		CIRCUITPY_STORAGE_EXTEND=$(CIRCUITPY_STORAGE_EXTEND) \
@@ -992,12 +997,15 @@ BINARY_WIFI_BLOBS = libcore.a libespnow.a libnet80211.a libpp.a libsmartconfig.a
 ifneq ($(IDF_TARGET),esp32p4)
 	BINARY_BLOBS = esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libphy.a
 endif
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
 ifneq ($(CIRCUITPY_WIFI),0)
 	BINARY_BLOBS += $(addprefix esp-idf/components/esp_wifi/lib/$(IDF_TARGET)/, $(BINARY_WIFI_BLOBS))
 	BINARY_BLOBS += esp-idf/components/esp_coex/lib/$(IDF_TARGET)/libcoexist.a
 	ifneq ($(IDF_TARGET),esp32c2)
 	BINARY_BLOBS += $(addprefix esp-idf/components/esp_wifi/lib/$(IDF_TARGET)/, libmesh.a libwapi.a)
 	endif
+endif
+
 endif
 
 ifeq ($(IDF_TARGET),esp32)
@@ -1055,7 +1063,17 @@ endif
 # component is interface-only elsewhere, so it must not appear in the list of
 # components to link.
 ifneq ($(CIRCUITPY_WIFI),0)
-	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
+	ESP_IDF_COMPONENTS_LINK += esp_netif esp_security esp-tls esp_wifi lwip mbedtls mdns
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
+ESP_IDF_COMPONENTS_LINK += esp_coex esp_phy wpa_supplicant
+endif
+endif
+ifeq ($(CIRCUITPY_ESP_HOSTED),1)
+# ESP-IDF v6.1+ has remote Wi-Fi support built into esp_wifi, so no separate
+# esp_wifi_remote component is needed.
+INC := -isystem esp-hosted/host/api/include -isystem esp-hosted/host $(INC)
+ESP_IDF_COMPONENTS_LINK += esp-hosted esp_http_client http_parser console
+REGISTRATION_FUNCTIONS += -u esp_hosted_init
 endif
 # mdns registers handlers on ETH_EVENT, which is defined by esp_eth. On EMAC-capable
 # targets, esp_eth's compiled EMAC sources reference the esp_hal_emac symbols; that

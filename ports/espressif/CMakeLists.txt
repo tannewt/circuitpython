@@ -23,7 +23,13 @@ endif()
 
 set(EXTRA_COMPONENT_DIRS "esp-protocols/components/mdns" "esp-camera")
 
+if(CIRCUITPY_ESP_HOSTED)
+    list(APPEND EXTRA_COMPONENT_DIRS "esp-hosted")
+    list(APPEND COMPONENTS esp-hosted)
+endif()
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+set(ENV{ESP_IDF_VERSION} "${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}")
 project(circuitpython)
 
 idf_build_set_property(__OUTPUT_SDKCONFIG 0)

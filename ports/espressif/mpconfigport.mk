@@ -371,10 +371,12 @@ CIRCUITPY_AUDIOIO = 0
 # MII is available on these targets with EMAC hardware.
 CIRCUITPY_MII ?= 1
 
-# No wifi
-# TODO: Support ESP32-C6 coprocessor on some boards.
+# Optional ESP-Hosted Wi-Fi coprocessor.
+CIRCUITPY_ESP_HOSTED ?= 0
+CIRCUITPY_ESPNOW = 0
 CIRCUITPY_BLEIO_NATIVE = 0
-CIRCUITPY_WIFI = 0
+CIRCUITPY_WIFI = $(CIRCUITPY_ESP_HOSTED)
+CIRCUITPY_SSL = $(CIRCUITPY_ESP_HOSTED)
 
 # Second stage bootloader doesn't work when the factory partition is empty due to
 # UF2 missing.
