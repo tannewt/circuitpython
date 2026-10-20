@@ -1670,11 +1670,13 @@ msgid "Requested resource not found"
 msgstr ""
 
 #: ports/espressif/common-hal/espidf/__init__.c
-#: ports/espressif/common-hal/qspibus/QSPIBus.c shared-module/_nina/__init__.c
+#: ports/espressif/common-hal/qspibus/QSPIBus.c
+#: shared-module/_airlift/__init__.c
 msgid "Operation timed out"
 msgstr ""
 
-#: ports/espressif/common-hal/espidf/__init__.c shared-module/_nina/__init__.c
+#: ports/espressif/common-hal/espidf/__init__.c
+#: shared-module/_airlift/__init__.c
 msgid "Received response was invalid"
 msgstr ""
 
@@ -1711,7 +1713,7 @@ msgstr ""
 #: ports/raspberrypi/common-hal/usb_host/Port.c
 #: shared-bindings/digitalio/DigitalInOut.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/i2cioexpander/IOPin.c shared-bindings/microcontroller/Pin.c
-#: shared-module/_nina/__init__.c shared-module/max3421e/Max3421E.c
+#: shared-module/_airlift/__init__.c shared-module/max3421e/Max3421E.c
 #: shared-module/usb/core/Device.c shared-module/usb_host_audio/USBIn.c
 msgid "%q in use"
 msgstr ""
@@ -2513,7 +2515,7 @@ msgid "%q must be >= %d"
 msgstr ""
 
 #: py/argcheck.c shared-bindings/gifio/GifWriter.c
-#: shared-module/_nina/__init__.c shared-module/gifio/OnDiskGif.c
+#: shared-module/_airlift/__init__.c shared-module/gifio/OnDiskGif.c
 msgid "%q must be <= %d"
 msgstr ""
 
@@ -2525,7 +2527,7 @@ msgstr ""
 msgid "%q length must be >= %d"
 msgstr ""
 
-#: py/argcheck.c shared-module/_nina/__init__.c
+#: py/argcheck.c shared-module/_airlift/__init__.c
 msgid "%q length must be <= %d"
 msgstr ""
 
