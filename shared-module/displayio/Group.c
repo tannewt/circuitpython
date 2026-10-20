@@ -153,8 +153,10 @@ static void _update_child_transforms(displayio_group_t *self) {
     // display. TileGrids and nested Groups also need a transform to preserve
     // their group membership, so pass the (zeroed-out when inactive)
     // transform to them.
+    #if CIRCUITPY_VECTORIO || CIRCUITPY_VIDEOCORE
     displayio_buffer_transform_t *draw_transform =
         self->active ? &self->absolute_transform : NULL;
+    #endif
     for (size_t i = 0; i < self->members->len; i++) {
         mp_obj_t layer;
         #if CIRCUITPY_VECTORIO || CIRCUITPY_VIDEOCORE
