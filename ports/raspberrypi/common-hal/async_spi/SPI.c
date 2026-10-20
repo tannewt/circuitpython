@@ -333,8 +333,6 @@ void *common_hal_async_spi_spi_write_start(async_spi_spi_obj_t *self, const uint
 
 void *common_hal_async_spi_spi_readinto_start(async_spi_spi_obj_t *self, uint8_t *data,
     size_t len, uint8_t write_value, circuitpy_async_flag_t *done) {
-    // End the previous transfer first: an async write may still be receiving into one_byte.
-    _end(self);
     self->one_byte = write_value;
     _async_start(self, &self->one_byte, 1, data, len, done);
     return NULL;
