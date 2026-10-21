@@ -14,11 +14,13 @@ extern const mp_obj_type_t audiotap_tap_type;
 typedef struct {
     audiosample_base_t base;
 
-    // Double buffer handed to whatever plays the tap, as in the effects.
-    int8_t *buffer[2];
-    uint8_t last_buf_idx;
-    uint32_t buffer_len; // in bytes
+    // Played while there is no audio to pass through. Allocated, like the
+    // ring, when the first sample is played, which also sets the format.
+    int8_t *silence;
+    uint32_t silence_len; // in bytes
 
+    // The part of the source's buffer not passed through yet. It stays the
+    // source's until the source is asked for its next buffer.
     uint8_t *sample_remaining_buffer;
     uint32_t sample_buffer_length; // in samples
 
@@ -31,6 +33,7 @@ typedef struct {
     // the tap writes it, from a background task or an interrupt, and the VM
     // reads it, so each side moves only its own position. Both positions run
     // from 0 to 2 * capacity, which tells a full ring from an empty one.
+    uint32_t capacity_ms;
     uint8_t *ring;
     uint32_t capacity; // in samples, a whole number of frames
     volatile uint32_t write_pos;
@@ -38,12 +41,13 @@ typedef struct {
     // Audio was dropped because the ring was full. Cleared when read.
     volatile bool overflow;
 
-    // Levels of the audio since levels() was last called. levels() asks for
-    // the reset, and the writer does it, so that only the writer changes them.
+    // Levels of the audio since each was last read. Reading one asks for its
+    // reset, and the writer does it, so that only the writer changes them.
     volatile uint32_t peak; // largest magnitude, 0 to 32768
+    volatile bool peak_reset;
     volatile float sum_squares; // of samples scaled to -1.0 to 1.0
     volatile uint32_t level_count; // samples summed
-    volatile bool levels_reset;
+    volatile bool rms_reset;
 } audiotap_tap_obj_t;
 
 void audiotap_tap_reset_buffer(audiotap_tap_obj_t *self,

@@ -12,27 +12,19 @@
 
 #include "py/runtime.h"
 
-void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capacity,
-    uint32_t buffer_size, uint8_t bits_per_sample, bool samples_signed,
-    uint8_t channel_count, uint32_t sample_rate) {
-
-    self->base.bits_per_sample = bits_per_sample;
-    self->base.samples_signed = samples_signed;
-    self->base.channel_count = channel_count;
-    self->base.sample_rate = sample_rate;
+void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capacity_ms) {
+    // The format comes from the first sample played. Until then the tap is
+    // 16 bit mono at 0 Hz, which nothing plays: a channel count of 0 would
+    // mark it deinitialized.
+    self->base.bits_per_sample = 16;
+    self->base.samples_signed = true;
+    self->base.channel_count = 1;
+    self->base.sample_rate = 0;
     self->base.single_buffer = false;
+    self->base.max_buffer_length = 0;
 
-    // Whole frames only, so that a stereo pair is never split between buffers
-    // or between the ring's end and its start.
-    const uint32_t frame_bytes = (bits_per_sample / 8) * channel_count;
-    self->buffer_len = MAX(frame_bytes, buffer_size - buffer_size % frame_bytes);
-    self->base.max_buffer_length = self->buffer_len;
-
-    self->buffer[0] = m_malloc_without_collect(self->buffer_len);
-    memset(self->buffer[0], 0, self->buffer_len);
-    self->buffer[1] = m_malloc_without_collect(self->buffer_len);
-    memset(self->buffer[1], 0, self->buffer_len);
-    self->last_buf_idx = 1;
+    self->silence = NULL;
+    self->silence_len = 0;
 
     self->sample = NULL;
     self->sample_remaining_buffer = NULL;
@@ -40,26 +32,24 @@ void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capaci
     self->loop = false;
     self->more_data = false;
 
-    self->capacity = capacity - capacity % channel_count;
+    self->capacity_ms = capacity_ms;
     self->ring = NULL;
-    if (self->capacity > 0) {
-        self->ring = m_malloc_without_collect(self->capacity * (bits_per_sample / 8));
-    }
+    self->capacity = 0;
     self->write_pos = 0;
     self->read_pos = 0;
     self->overflow = false;
 
     self->peak = 0;
+    self->peak_reset = false;
     self->sum_squares = 0;
     self->level_count = 0;
-    self->levels_reset = false;
+    self->rms_reset = false;
 }
 
 void common_hal_audiotap_tap_deinit(audiotap_tap_obj_t *self) {
     audiosample_mark_deinit(&self->base);
     self->sample = NULL;
-    self->buffer[0] = NULL;
-    self->buffer[1] = NULL;
+    self->silence = NULL;
     self->ring = NULL;
     self->capacity = 0;
 }
@@ -67,40 +57,82 @@ void common_hal_audiotap_tap_deinit(audiotap_tap_obj_t *self) {
 void audiotap_tap_reset_buffer(audiotap_tap_obj_t *self,
     bool single_channel_output,
     uint8_t channel) {
+    (void)self;
     (void)single_channel_output;
     (void)channel;
-    if (self->buffer[0] == NULL) {
-        return;
-    }
-    // The ring belongs to the reader; what it holds stays readable.
-    memset(self->buffer[0], 0, self->buffer_len);
-    memset(self->buffer[1], 0, self->buffer_len);
+    // Nothing to reset: the tap passes on the source's buffers, and the ring
+    // belongs to the reader, so what it holds stays readable.
 }
 
 bool common_hal_audiotap_tap_get_playing(audiotap_tap_obj_t *self) {
     return self->sample != NULL;
 }
 
+// Takes the format of the first sample played and allocates for it.
+static void take_format(audiotap_tap_obj_t *self, mp_obj_t sample) {
+    const audiosample_base_t *source = audiosample_check(sample);
+    audiosample_check_for_deinit(source);
+    if (source->bits_per_sample != 8 && source->bits_per_sample != 16) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bits_per_sample must be 8 or 16"));
+    }
+    const uint32_t sample_bytes = source->bits_per_sample / 8;
+    const uint32_t frame_bytes = sample_bytes * source->channel_count;
+
+    // Silence for when the source has no audio, no longer than the source's
+    // buffers and in whole frames.
+    uint32_t silence_len = MIN(MAX(source->max_buffer_length, frame_bytes), 512);
+    silence_len -= silence_len % frame_bytes;
+    int8_t *silence = m_malloc_without_collect(silence_len);
+    if (source->samples_signed) {
+        memset(silence, 0, silence_len);
+    } else if (sample_bytes == 2) {
+        uint16_t *words = (uint16_t *)silence;
+        for (uint32_t i = 0; i < silence_len / 2; i++) {
+            words[i] = 0x8000;
+        }
+    } else {
+        memset(silence, 0x80, silence_len);
+    }
+
+    uint32_t capacity = (uint32_t)((uint64_t)self->capacity_ms * source->sample_rate / 1000) * source->channel_count;
+    uint8_t *ring = NULL;
+    if (capacity > 0) {
+        ring = m_malloc_without_collect(capacity * sample_bytes);
+    }
+
+    // Nothing plays the tap before it has a format, so the reader is the
+    // only one using these yet.
+    self->silence = silence;
+    self->silence_len = silence_len;
+    self->ring = ring;
+    self->capacity = capacity;
+    self->write_pos = 0;
+    self->read_pos = 0;
+
+    self->base.bits_per_sample = source->bits_per_sample;
+    self->base.samples_signed = source->samples_signed;
+    self->base.channel_count = source->channel_count;
+    self->base.sample_rate = source->sample_rate;
+    self->base.max_buffer_length = MAX(source->max_buffer_length, silence_len);
+}
+
 void common_hal_audiotap_tap_play(audiotap_tap_obj_t *self, mp_obj_t sample, bool loop) {
-    audiosample_must_match(&self->base, sample, false);
+    if (self->silence == NULL) {
+        take_format(self, sample);
+    } else {
+        audiosample_must_match(&self->base, sample, false);
+    }
 
-    self->sample = sample;
+    audiosample_reset_buffer(sample, false, 0);
     self->loop = loop;
-
-    audiosample_reset_buffer(self->sample, false, 0);
-    audioio_get_buffer_result_t result = audiosample_get_buffer(self->sample, false, 0,
-        (uint8_t **)&self->sample_remaining_buffer, &self->sample_buffer_length);
-    // Track the remaining length in samples.
-    self->sample_buffer_length /= (self->base.bits_per_sample / 8);
-    self->more_data = result == GET_BUFFER_MORE_DATA;
+    self->sample_buffer_length = 0;
+    // Ask the source for its first buffer.
+    self->more_data = true;
+    self->sample = sample;
 }
 
 void common_hal_audiotap_tap_stop(audiotap_tap_obj_t *self) {
     self->sample = NULL;
-}
-
-uint32_t common_hal_audiotap_tap_get_capacity(audiotap_tap_obj_t *self) {
-    return self->capacity;
 }
 
 // Positions run from 0 to 2 * capacity.
@@ -135,11 +167,14 @@ static void tap_capture(audiotap_tap_obj_t *self, const uint8_t *data, uint32_t 
         return;
     }
 
-    if (self->levels_reset) {
+    if (self->peak_reset) {
         self->peak = 0;
+        self->peak_reset = false;
+    }
+    if (self->rms_reset) {
         self->sum_squares = 0;
         self->level_count = 0;
-        self->levels_reset = false;
+        self->rms_reset = false;
     }
     uint32_t peak = self->peak;
     uint64_t sum = 0;
@@ -223,31 +258,25 @@ bool common_hal_audiotap_tap_get_overflow(audiotap_tap_obj_t *self) {
     return overflow;
 }
 
-void common_hal_audiotap_tap_get_levels(audiotap_tap_obj_t *self, mp_float_t *peak, mp_float_t *rms) {
-    if (self->levels_reset) {
-        // No audio passed since the last call.
-        *peak = 0;
-        *rms = 0;
-        return;
+mp_float_t common_hal_audiotap_tap_get_peak(audiotap_tap_obj_t *self) {
+    if (self->peak_reset) {
+        // No audio passed since the last read.
+        return 0;
+    }
+    mp_float_t peak = (mp_float_t)self->peak / MICROPY_FLOAT_CONST(32768.0);
+    self->peak_reset = true;
+    return peak;
+}
+
+mp_float_t common_hal_audiotap_tap_get_rms(audiotap_tap_obj_t *self) {
+    if (self->rms_reset) {
+        // No audio passed since the last read.
+        return 0;
     }
     uint32_t count = self->level_count;
     float sum_squares = self->sum_squares;
-    *peak = (mp_float_t)self->peak / MICROPY_FLOAT_CONST(32768.0);
-    self->levels_reset = true;
-    *rms = count > 0 ? MICROPY_FLOAT_C_FUN(sqrt)((mp_float_t)sum_squares / count) : 0;
-}
-
-static void fill_silence(audiotap_tap_obj_t *self, uint8_t *out, uint32_t samples) {
-    if (self->base.samples_signed) {
-        memset(out, 0, samples * (self->base.bits_per_sample / 8));
-    } else if (self->base.bits_per_sample == 16) {
-        uint16_t *words = (uint16_t *)out;
-        while (samples--) {
-            *words++ = 0x8000;
-        }
-    } else {
-        memset(out, 0x80, samples);
-    }
+    self->rms_reset = true;
+    return count > 0 ? MICROPY_FLOAT_C_FUN(sqrt)((mp_float_t)sum_squares / count) : 0;
 }
 
 audioio_get_buffer_result_t audiotap_tap_get_buffer(audiotap_tap_obj_t *self, bool single_channel_output, uint8_t channel,
@@ -255,63 +284,53 @@ audioio_get_buffer_result_t audiotap_tap_get_buffer(audiotap_tap_obj_t *self, bo
     (void)single_channel_output;
     (void)channel;
 
-    if (self->buffer[0] == NULL) {
+    if (self->silence == NULL) {
         // Deinitialized while something still plays it.
         *buffer = NULL;
         *buffer_length = 0;
         return GET_BUFFER_DONE;
     }
 
-    self->last_buf_idx = !self->last_buf_idx;
-    uint8_t *out = (uint8_t *)self->buffer[self->last_buf_idx];
     const uint32_t sample_bytes = self->base.bits_per_sample / 8;
-    uint32_t length = self->buffer_len / sample_bytes;
-
-    while (length != 0) {
-        if (self->sample_buffer_length == 0) {
-            if (!self->more_data) {
-                if (self->loop && self->sample) {
-                    audiosample_reset_buffer(self->sample, false, 0);
-                } else {
-                    self->sample = NULL;
-                }
-            }
-            if (self->sample) {
-                audioio_get_buffer_result_t result = audiosample_get_buffer(self->sample, false, 0,
-                    (uint8_t **)&self->sample_remaining_buffer, &self->sample_buffer_length);
-                if (result == GET_BUFFER_ERROR) {
-                    self->sample = NULL;
-                    self->sample_buffer_length = 0;
-                    self->more_data = false;
-                } else {
-                    self->sample_buffer_length /= sample_bytes;
-                    self->more_data = result == GET_BUFFER_MORE_DATA;
-                    if (self->sample_buffer_length == 0 && self->more_data) {
-                        // The source has nothing yet. Play silence rather
-                        // than ask again in a loop.
-                        fill_silence(self, out, length);
-                        break;
-                    }
-                }
+    if (self->sample_buffer_length == 0 && self->sample != NULL) {
+        if (!self->more_data) {
+            if (self->loop) {
+                audiosample_reset_buffer(self->sample, false, 0);
+            } else {
+                self->sample = NULL;
             }
         }
-
-        if (self->sample == NULL) {
-            fill_silence(self, out, length);
-            length = 0;
-        } else {
-            uint32_t n = MIN(self->sample_buffer_length, length);
-            memcpy(out, self->sample_remaining_buffer, n * sample_bytes);
-            tap_capture(self, out, n);
-            out += n * sample_bytes;
-            length -= n;
-            self->sample_remaining_buffer += n * sample_bytes;
-            self->sample_buffer_length -= n;
+        if (self->sample != NULL) {
+            audioio_get_buffer_result_t result = audiosample_get_buffer(self->sample, false, 0,
+                (uint8_t **)&self->sample_remaining_buffer, &self->sample_buffer_length);
+            if (result == GET_BUFFER_ERROR) {
+                self->sample = NULL;
+                self->sample_buffer_length = 0;
+                self->more_data = false;
+            } else {
+                self->sample_buffer_length /= sample_bytes;
+                self->more_data = result == GET_BUFFER_MORE_DATA;
+            }
         }
     }
 
-    *buffer = (uint8_t *)self->buffer[self->last_buf_idx];
-    *buffer_length = self->buffer_len;
-    // Like the effects, a tap plays silence after its sample ends.
+    if (self->sample == NULL || self->sample_buffer_length == 0) {
+        // Like the effects, a tap plays silence when it has no audio, and
+        // rather than ask a source that has nothing yet again in a loop.
+        *buffer = (uint8_t *)self->silence;
+        *buffer_length = self->silence_len;
+        return GET_BUFFER_MORE_DATA;
+    }
+
+    // Pass on the source's own buffer, in whole frames no longer than what
+    // the player expects, which a later sample's buffers may be.
+    const uint32_t channel_count = self->base.channel_count;
+    const uint32_t max_samples = self->base.max_buffer_length / sample_bytes / channel_count * channel_count;
+    uint32_t n = MIN(self->sample_buffer_length, max_samples);
+    tap_capture(self, self->sample_remaining_buffer, n);
+    *buffer = self->sample_remaining_buffer;
+    *buffer_length = n * sample_bytes;
+    self->sample_remaining_buffer += n * sample_bytes;
+    self->sample_buffer_length -= n;
     return GET_BUFFER_MORE_DATA;
 }
