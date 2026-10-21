@@ -193,6 +193,12 @@ void common_hal_wifi_radio_stop_station(wifi_radio_obj_t *self) {
             break;
         }
     }
+    // Drop the DHCP address so the next connect() waits for a lease from the new network.
+    MICROPY_PY_LWIP_ENTER
+    if (dhcp_supplied_address(NETIF_STA)) {
+        netif_set_ipaddr(NETIF_STA, IP4_ADDR_ANY4);
+    }
+    MICROPY_PY_LWIP_EXIT
     bindings_cyw43_wifi_enforce_pm();
 }
 
