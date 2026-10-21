@@ -14,6 +14,10 @@
 #include "shared-module/_airlift/transport.h"
 
 void common_hal__airlift_init(void);
+// objs holds the VM objects so the GC keeps them while the core uses them.
+void common_hal__airlift_init_pins(mp_obj_t objs, busio_spi_obj_t *spi,
+    digitalio_digitalinout_obj_t *cs, digitalio_digitalinout_obj_t *ready,
+    digitalio_digitalinout_obj_t *reset, digitalio_digitalinout_obj_t *gpio0);
 bool common_hal__airlift_active(void);
 void common_hal__airlift_reset(void);
 void common_hal__airlift_release(void);

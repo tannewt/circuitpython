@@ -9,6 +9,7 @@
 #include "shared-module/_airlift/transport.h"
 
 #include "py/mpconfig.h"
+#include "py/mpstate.h"
 #include "py/obj.h"
 #include "shared/runtime/interrupt_char.h"
 #include "shared-bindings/board/__init__.h"
@@ -47,13 +48,24 @@
 #define COMMAND_TRIES (2)
 
 static busio_spi_obj_t *spi;
-static digitalio_digitalinout_obj_t cs;
-static digitalio_digitalinout_obj_t ready;
-static digitalio_digitalinout_obj_t reset;
+static digitalio_digitalinout_obj_t *cs;
+static digitalio_digitalinout_obj_t *ready;
+static digitalio_digitalinout_obj_t *reset;
+// NULL when GPIO0 isn't connected.
+static digitalio_digitalinout_obj_t *gpio0;
+#ifdef CIRCUITPY_AIRLIFT_CS
+// The board's own ESP32, which the core claims.
+static digitalio_digitalinout_obj_t board_cs;
+static digitalio_digitalinout_obj_t board_ready;
+static digitalio_digitalinout_obj_t board_reset;
 #ifdef CIRCUITPY_AIRLIFT_GPIO0
-static digitalio_digitalinout_obj_t gpio0;
+static digitalio_digitalinout_obj_t board_gpio0;
+#endif
 #endif
 static bool active;
+// The bus and pins are VM objects passed to _airlift.init(). They are dropped
+// at the end of the VM run.
+static bool vm_owned;
 static volatile bool busy;
 static uint32_t generation;
 // Sockets that VM code started a server on since the last hard reset.
@@ -93,7 +105,7 @@ static void pause_ms(uint32_t ms) {
 static bool wait_ready(bool level, uint32_t timeout_ms, bool interruptible, bool *interrupted) {
     uint64_t start = supervisor_ticks_ms64();
     uint64_t last = start;
-    while (common_hal_digitalio_digitalinout_get_value(&ready) != level) {
+    while (common_hal_digitalio_digitalinout_get_value(ready) != level) {
         uint64_t now = supervisor_ticks_ms64();
         if (now - start >= timeout_ms) {
             return false;
@@ -108,6 +120,19 @@ static bool wait_ready(bool level, uint32_t timeout_ms, bool interruptible, bool
         }
     }
     return true;
+}
+
+// VM code can deinit the pins it gave to _airlift.init().
+static bool pins_usable(void) {
+    if (!vm_owned) {
+        return true;
+    }
+    if (common_hal_digitalio_digitalinout_deinited(cs) ||
+        common_hal_digitalio_digitalinout_deinited(ready) ||
+        common_hal_digitalio_digitalinout_deinited(reset)) {
+        return false;
+    }
+    return gpio0 == NULL || !common_hal_digitalio_digitalinout_deinited(gpio0);
 }
 
 static airlift_result_t lock_bus(bool wait, bool interruptible) {
@@ -126,12 +151,12 @@ static airlift_result_t lock_bus(bool wait, bool interruptible) {
     }
     // Other devices on the bus may have changed its settings.
     common_hal_busio_spi_configure(spi, SPI_BAUDRATE, 0, 0, 8);
-    common_hal_digitalio_digitalinout_set_value(&cs, false);
+    common_hal_digitalio_digitalinout_set_value(cs, false);
     return AIRLIFT_OK;
 }
 
 static void unlock_bus(void) {
-    common_hal_digitalio_digitalinout_set_value(&cs, true);
+    common_hal_digitalio_digitalinout_set_value(cs, true);
     common_hal_busio_spi_unlock(spi);
 }
 
@@ -386,7 +411,7 @@ static void check_core_result(airlift_result_t result) {
 airlift_result_t airlift_transact(uint8_t cmd, const airlift_param_t *params, size_t n_params,
     bool param_len_16, airlift_reply_t *reply, int expected_replies, bool reply_len_16,
     bool from_vm) {
-    if (!active) {
+    if (!active || !pins_usable()) {
         return AIRLIFT_NOT_ACTIVE;
     }
     if (busy) {
@@ -476,6 +501,7 @@ void airlift_transport_leaked_listener(uint8_t sock) {
     }
 }
 
+#ifdef CIRCUITPY_AIRLIFT_CS
 static bool claim_esp_pin(digitalio_digitalinout_obj_t *dio, const mcu_pin_obj_t *pin) {
     dio->base.type = &digitalio_digitalinout_type;
     if (common_hal_digitalio_digitalinout_construct(dio, pin) != DIGITALINOUT_OK) {
@@ -490,10 +516,12 @@ typedef struct {
     const mcu_pin_obj_t *mosi;
     const mcu_pin_obj_t *miso;
 } spi_pins_t;
+#endif
 
 bool airlift_transport_init(void) {
+    #ifdef CIRCUITPY_AIRLIFT_CS
     if (active) {
-        return true;
+        return !vm_owned;
     }
     // board.SPI() may already exist; then the ESP shares it with user code.
     mp_obj_t board_spi = common_hal_board_get_spi(CIRCUITPY_AIRLIFT_SPI_INDEX);
@@ -518,14 +546,47 @@ bool airlift_transport_init(void) {
 
     spi = MP_OBJ_TO_PTR(common_hal_board_create_spi(CIRCUITPY_AIRLIFT_SPI_INDEX));
     common_hal_busio_spi_never_reset(spi);
-    claim_esp_pin(&cs, CIRCUITPY_AIRLIFT_CS);
-    common_hal_digitalio_digitalinout_switch_to_output(&cs, true, DRIVE_MODE_PUSH_PULL);
-    claim_esp_pin(&ready, CIRCUITPY_AIRLIFT_BUSY);
-    claim_esp_pin(&reset, CIRCUITPY_AIRLIFT_RESET);
-    common_hal_digitalio_digitalinout_switch_to_output(&reset, true, DRIVE_MODE_PUSH_PULL);
+    cs = &board_cs;
+    claim_esp_pin(cs, CIRCUITPY_AIRLIFT_CS);
+    common_hal_digitalio_digitalinout_switch_to_output(cs, true, DRIVE_MODE_PUSH_PULL);
+    ready = &board_ready;
+    claim_esp_pin(ready, CIRCUITPY_AIRLIFT_BUSY);
+    reset = &board_reset;
+    claim_esp_pin(reset, CIRCUITPY_AIRLIFT_RESET);
+    common_hal_digitalio_digitalinout_switch_to_output(reset, true, DRIVE_MODE_PUSH_PULL);
     #ifdef CIRCUITPY_AIRLIFT_GPIO0
-    claim_esp_pin(&gpio0, CIRCUITPY_AIRLIFT_GPIO0);
+    gpio0 = &board_gpio0;
+    claim_esp_pin(gpio0, CIRCUITPY_AIRLIFT_GPIO0);
+    #else
+    gpio0 = NULL;
     #endif
+    active = true;
+    airlift_transport_reset();
+    return true;
+    #else
+    return false;
+    #endif
+}
+
+bool airlift_transport_init_vm(busio_spi_obj_t *vm_spi, digitalio_digitalinout_obj_t *vm_cs,
+    digitalio_digitalinout_obj_t *vm_ready, digitalio_digitalinout_obj_t *vm_reset,
+    digitalio_digitalinout_obj_t *vm_gpio0) {
+    if (active && !vm_owned) {
+        return false;
+    }
+    // A second init() replaces the first.
+    spi = vm_spi;
+    cs = vm_cs;
+    ready = vm_ready;
+    reset = vm_reset;
+    gpio0 = vm_gpio0;
+    vm_owned = true;
+    common_hal_digitalio_digitalinout_switch_to_output(cs, true, DRIVE_MODE_PUSH_PULL);
+    common_hal_digitalio_digitalinout_switch_to_input(ready, PULL_NONE);
+    common_hal_digitalio_digitalinout_switch_to_output(reset, true, DRIVE_MODE_PUSH_PULL);
+    if (gpio0 != NULL) {
+        common_hal_digitalio_digitalinout_switch_to_input(gpio0, PULL_NONE);
+    }
     active = true;
     airlift_transport_reset();
     return true;
@@ -536,40 +597,47 @@ void airlift_transport_deinit(void) {
         return;
     }
     active = false;
-    common_hal_digitalio_digitalinout_deinit(&cs);
-    common_hal_digitalio_digitalinout_deinit(&ready);
-    common_hal_digitalio_digitalinout_deinit(&reset);
-    #ifdef CIRCUITPY_AIRLIFT_GPIO0
-    common_hal_digitalio_digitalinout_deinit(&gpio0);
-    #endif
+    if (vm_owned) {
+        // The bus and pins are VM code's, and stay usable by it.
+        vm_owned = false;
+        MP_STATE_VM(airlift_vm_objs) = MP_OBJ_NULL;
+    } else {
+        common_hal_digitalio_digitalinout_deinit(cs);
+        common_hal_digitalio_digitalinout_deinit(ready);
+        common_hal_digitalio_digitalinout_deinit(reset);
+        if (gpio0 != NULL) {
+            common_hal_digitalio_digitalinout_deinit(gpio0);
+        }
+    }
     // The bus stays as board.SPI(). It is released at the next soft reset,
     // because airlift_transport_using_spi() no longer claims it.
     spi = NULL;
+    cs = ready = reset = gpio0 = NULL;
     // The core's sockets can't be used any more.
     generation++;
     core_owned = 0;
 }
 
 void airlift_transport_reset(void) {
-    if (!active) {
+    if (!active || !pins_usable()) {
         return;
     }
     // A command started from a background task during the reset would see an ESP
     // that isn't running yet.
     bool was_busy = busy;
     busy = true;
-    #ifdef CIRCUITPY_AIRLIFT_GPIO0
-    // High selects a normal boot rather than the bootloader.
-    common_hal_digitalio_digitalinout_switch_to_output(&gpio0, true, DRIVE_MODE_PUSH_PULL);
-    #endif
-    common_hal_digitalio_digitalinout_set_value(&cs, true);
-    common_hal_digitalio_digitalinout_set_value(&reset, false);
+    if (gpio0 != NULL) {
+        // High selects a normal boot rather than the bootloader.
+        common_hal_digitalio_digitalinout_switch_to_output(gpio0, true, DRIVE_MODE_PUSH_PULL);
+    }
+    common_hal_digitalio_digitalinout_set_value(cs, true);
+    common_hal_digitalio_digitalinout_set_value(reset, false);
     pause_ms(10);
-    common_hal_digitalio_digitalinout_set_value(&reset, true);
+    common_hal_digitalio_digitalinout_set_value(reset, true);
     pause_ms(750);
-    #ifdef CIRCUITPY_AIRLIFT_GPIO0
-    common_hal_digitalio_digitalinout_switch_to_input(&gpio0, PULL_NONE);
-    #endif
+    if (gpio0 != NULL) {
+        common_hal_digitalio_digitalinout_switch_to_input(gpio0, PULL_NONE);
+    }
     generation++;
     vm_listening = 0;
     core_owned = 0;
@@ -580,6 +648,11 @@ void airlift_transport_reset(void) {
 
 void airlift_user_reset(void) {
     if (!active) {
+        return;
+    }
+    // The VM's bus and pins are about to go away.
+    if (vm_owned) {
+        airlift_transport_deinit();
         return;
     }
     // User code may have exited holding the bus lock.
@@ -606,7 +679,11 @@ void airlift_user_reset(void) {
 }
 
 bool airlift_transport_active(void) {
-    return active;
+    return active && !vm_owned;
+}
+
+bool airlift_transport_claimed(void) {
+    return active && pins_usable();
 }
 
 bool airlift_transport_busy(void) {
@@ -614,7 +691,7 @@ bool airlift_transport_busy(void) {
 }
 
 bool airlift_transport_bus_free(void) {
-    if (!active || busy || common_hal_busio_spi_deinited(spi) || !common_hal_busio_spi_try_lock(spi)) {
+    if (!airlift_transport_active() || busy || common_hal_busio_spi_deinited(spi) || !common_hal_busio_spi_try_lock(spi)) {
         return false;
     }
     common_hal_busio_spi_unlock(spi);
@@ -622,20 +699,12 @@ bool airlift_transport_bus_free(void) {
 }
 
 bool airlift_transport_has_data_ready(void) {
-    #ifdef CIRCUITPY_AIRLIFT_GPIO0
-    return active;
-    #else
-    return false;
-    #endif
+    return airlift_transport_active() && gpio0 != NULL;
 }
 
 bool airlift_transport_data_ready(void) {
-    #ifdef CIRCUITPY_AIRLIFT_GPIO0
     // During a reset GPIO0 is an output, held high.
-    return !active || common_hal_digitalio_digitalinout_get_value(&gpio0);
-    #else
-    return true;
-    #endif
+    return !airlift_transport_active() || gpio0 == NULL || common_hal_digitalio_digitalinout_get_value(gpio0);
 }
 
 uint32_t airlift_transport_generation(void) {
@@ -643,5 +712,7 @@ uint32_t airlift_transport_generation(void) {
 }
 
 bool airlift_transport_using_spi(const busio_spi_obj_t *bus) {
-    return active && bus == spi;
+    return airlift_transport_active() && bus == spi;
 }
+
+MP_REGISTER_ROOT_POINTER(mp_obj_t airlift_vm_objs);

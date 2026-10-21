@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "shared-bindings/busio/SPI.h"
+#include "shared-bindings/digitalio/DigitalInOut.h"
 
 // Number of sockets in nina-fw (CONFIG_LWIP_MAX_SOCKETS). A command naming a
 // higher socket hangs nina-fw 3.1.0 until a hard reset.
@@ -94,11 +95,22 @@ typedef enum {
 // Claims the ESP pins and the board SPI bus, then hard-resets the ESP32.
 // Returns false if a pin or the bus is already in use. Never raises.
 bool airlift_transport_init(void);
+// Uses a bus and pins that VM code made, for an ESP32 the core doesn't manage,
+// and hard-resets the ESP32. gpio0 may be NULL. The caller keeps the objects
+// alive through MP_STATE_VM(airlift_vm_objs). They are dropped at the end of the
+// VM run. Returns false if the core has claimed its own ESP32.
+bool airlift_transport_init_vm(busio_spi_obj_t *spi, digitalio_digitalinout_obj_t *cs,
+    digitalio_digitalinout_obj_t *ready, digitalio_digitalinout_obj_t *reset,
+    digitalio_digitalinout_obj_t *gpio0);
 // Releases the pins. The board SPI bus is left to board.SPI().
 void airlift_transport_deinit(void);
 // Hard reset through ESP_RESET. Takes about 760 ms. Changes the generation.
 void airlift_transport_reset(void);
+// True when the core has claimed its own ESP32, which web workflow can use.
 bool airlift_transport_active(void);
+// True when either the core or VM code has set up the transport, and VM code
+// hasn't deinited the pins it gave.
+bool airlift_transport_claimed(void);
 // True from the start of a command's send to the end of its reply.
 bool airlift_transport_busy(void);
 // False while someone else holds the SPI bus lock. Background callers don't
