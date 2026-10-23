@@ -257,7 +257,7 @@ test-build-$(1):
 endef
 $(foreach board,$(TEST_BOARDS),$(eval $(call test_board_rule,$(board))))
 
-# CI runs this as three jobs, one per board family, narrowing TEST_BOARDS and
+# CI splits this into several jobs, one board each, narrowing TEST_BOARDS and
 # PYTEST_ARGS; see .github/workflows/run-zephyr-tests.yml.
 PYTEST_ARGS ?= tests/
 
