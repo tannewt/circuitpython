@@ -26,16 +26,20 @@ static bool need_bytes(synthio_miditrack_obj_t *self, size_t count) {
     return true;
 }
 
-static mp_obj_t parse_note(synthio_miditrack_obj_t *self) {
+// Returns the note in the low 8 bits and the velocity in the next 8, or -1
+// if the pair could not be read.
+static int parse_note(synthio_miditrack_obj_t *self) {
     uint8_t *buffer = self->track.buf;
     if (!need_bytes(self, 2)) {
-        return MP_OBJ_NEW_SMALL_INT(0);
+        return -1;
     }
-    uint8_t note = buffer[(self->pos)++];
-    if (note > 127 || buffer[(self->pos)++] > 127) {
+    uint8_t note = buffer[self->pos++];
+    uint8_t velocity = buffer[self->pos++];
+    if (note > 127 || velocity > 127) {
         record_midi_stream_error(self);
+        return -1;
     }
-    return MP_OBJ_NEW_SMALL_INT(note);
+    return note | (velocity << 8);
 }
 
 // MIDI variable-length quantity: up to 4 bytes of 7 bits each.
@@ -115,14 +119,17 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
             }
         }
         switch (status >> 4) {
-            case 8: { // Note Off
-                mp_obj_t note = parse_note(self);
-                synthio_span_change_note(&self->synth, note, SYNTHIO_SILENCE);
-                break;
-            }
-            case 9: { // Note On
-                mp_obj_t note = parse_note(self);
-                synthio_span_change_note(&self->synth, SYNTHIO_SILENCE, note);
+            case 8:   // Note Off
+            case 9: { // Note On, but a velocity of zero means Note Off
+                int parsed = parse_note(self);
+                if (parsed >= 0) {
+                    mp_obj_t note = MP_OBJ_NEW_SMALL_INT(parsed & 0xff);
+                    if ((status >> 4) == 9 && (parsed >> 8) != 0) {
+                        synthio_span_change_note(&self->synth, SYNTHIO_SILENCE, note);
+                    } else {
+                        synthio_span_change_note(&self->synth, note, SYNTHIO_SILENCE);
+                    }
+                }
                 break;
             }
             case 10:
