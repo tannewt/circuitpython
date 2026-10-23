@@ -96,7 +96,9 @@ PORT_DEPS = {
         "data/nvm.toml/",
     ],
     "zephyr-cp": [
+        "extmod/ulab/",
         "lib/certificates/",
+        "lib/mp3/",
         "lib/tinyusb/",
         "lib/tlsf",
     ],
