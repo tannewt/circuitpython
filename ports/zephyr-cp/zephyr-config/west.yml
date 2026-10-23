@@ -10,11 +10,11 @@ manifest:
       path: modules/bsim_hw_models/nrf_hw_models
     - name: mcuboot
       url: https://github.com/adafruit/adaboot
-      revision: refs/pull/13/head
+      revision: ba4851fb048c4593d886ffa7936fb708fbf4cb38
       path: bootloader/mcuboot
     - name: zephyr
       url: https://github.com/adafruit/zephyr
-      revision: refs/pull/9/head
+      revision: 3567aee7fc2caa322fd534fbf4ed0c705d6c5a62
       clone-depth: 100
       import:
         # Skip what no CircuitPython board can use, so west update fetches 37
