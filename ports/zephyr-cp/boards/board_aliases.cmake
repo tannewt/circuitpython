@@ -26,6 +26,7 @@ macro(cp_board_alias alias target)
   endif()
 endmacro()
 
+cp_board_alias(adafruit_circuitplayground_bluefruit_zephyr adafruit_circuitplayground_bluefruit/nrf52840/uf2)
 cp_board_alias(adafruit_clue_nrf52840_zephyr adafruit_clue_nrf52840/nrf52840/uf2)
 cp_board_alias(adafruit_feather_nrf52840_zephyr adafruit_feather_nrf52840/nrf52840/uf2)
 cp_board_alias(adafruit_feather_nrf52840_sense_zephyr adafruit_feather_nrf52840/nrf52840/sense/uf2)
