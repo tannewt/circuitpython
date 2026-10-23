@@ -224,7 +224,7 @@ jobs:
         [ -z "$TWINE_USERNAME" ] || twine upload circuitpython-stubs/dist/*
 
   ports:
-    needs: [scheduler, mpy-cross, tests]
+    needs: [scheduler, tests]
     if: needs.scheduler.outputs.ports != '{}'
     uses: ./.github/workflows/build-boards.yml
     secrets: inherit
