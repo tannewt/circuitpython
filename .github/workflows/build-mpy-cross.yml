@@ -45,14 +45,14 @@ jobs:
 
     - name: Install toolchain (aarch64)
       if: matrix.mpy-cross == 'static-aarch64'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+      uses: ./.github/actions/deps/apt_packages
+      with:
+        packages: gcc-aarch64-linux-gnu
     - name: Install toolchain (mingw)
       if: matrix.mpy-cross == 'static-mingw'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-mingw-w64-x86-64-win32
+      uses: ./.github/actions/deps/apt_packages
+      with:
+        packages: gcc-mingw-w64-x86-64-win32
 
     - name: Build mpy-cross.${{ matrix.mpy-cross }}
       run: make -C mpy-cross -j$(nproc) -f Makefile.${{ matrix.mpy-cross }}

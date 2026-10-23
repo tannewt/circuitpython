@@ -1,0 +1,46 @@
+name: Install apt packages, caching the downloaded files
+
+inputs:
+  packages:
+    description: 'The apt packages to install, separated by spaces'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Name the cache
+      id: cache-name
+      run: echo "prefix=apt-$ImageOS-$(echo "$PACKAGES" | sha256sum | cut -c1-16)-" >> $GITHUB_OUTPUT
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+    - name: Restore downloaded packages
+      id: restore
+      uses: actions/cache/restore@v5
+      with:
+        path: ~/apt-archives
+        key: ${{ steps.cache-name.outputs.prefix }}
+        restore-keys: ${{ steps.cache-name.outputs.prefix }}
+    - name: Install packages
+      id: install
+      # apt only downloads the packages that are not already in ~/apt-archives, and
+      # autoclean drops versions the mirror no longer has. The cache key names the
+      # .deb files kept, so it changes whenever a package is updated.
+      run: |
+        mkdir -p ~/apt-archives/partial
+        sudo apt-get update
+        sudo apt-get install -y -o Dir::Cache::Archives="$HOME/apt-archives" $PACKAGES
+        sudo apt-get autoclean -o Dir::Cache::Archives="$HOME/apt-archives"
+        sudo rm -rf ~/apt-archives/partial ~/apt-archives/lock
+        sudo chown -R "$(id -un)" ~/apt-archives
+        echo "key=$PREFIX$(ls ~/apt-archives | sha256sum | cut -c1-16)" >> $GITHUB_OUTPUT
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        PREFIX: ${{ steps.cache-name.outputs.prefix }}
+    - name: Save downloaded packages
+      if: github.event_name == 'push' && steps.restore.outputs.cache-matched-key != steps.install.outputs.key
+      uses: actions/cache/save@v5
+      with:
+        path: ~/apt-archives
+        key: ${{ steps.install.outputs.key }}
