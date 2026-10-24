@@ -92,6 +92,16 @@ static void decode_system_event(synthio_miditrack_obj_t *self, uint8_t status) {
             self->pos = self->track.len;
             return;
         }
+        if (type == 0x51 && length == 3 && self->ticks_per_beat != 0) { // Set Tempo
+            uint32_t us_per_beat = (buffer[self->pos] << 16) |
+                (buffer[self->pos + 1] << 8) | buffer[self->pos + 2];
+            if (us_per_beat != 0) {
+                uint32_t ticks = (uint32_t)(((uint64_t)self->ticks_per_beat * 1000000) / us_per_beat);
+                if (ticks != 0) {
+                    self->tempo = ticks;
+                }
+            }
+        }
         self->pos += length;
     } else if (status == 0xF0 || status == 0xF7) {
         uint32_t length = decode_varint(self);
@@ -165,8 +175,10 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
 static void start_parse(synthio_miditrack_obj_t *self) {
     self->pos = 0;
     self->error_location = -1;
-    self->running_status = 0;
     self->pending = 0;
+    self->running_status = 0;
+    // a tempo map applies from the top of the track, so rewind it too
+    self->tempo = self->base_tempo;
     decode_duration(self);
     if (self->synth.span.dur == 0 && self->pending == 0) {
         // the usual case: the file starts with some MIDI event, not a delay
@@ -175,10 +187,12 @@ static void start_parse(synthio_miditrack_obj_t *self) {
 }
 
 void common_hal_synthio_miditrack_construct(synthio_miditrack_obj_t *self,
-    const uint8_t *buffer, uint32_t len, uint32_t tempo, uint32_t sample_rate,
-    mp_obj_t waveform_obj, mp_obj_t filter_obj, mp_obj_t envelope_obj) {
+    const uint8_t *buffer, uint32_t len, uint32_t tempo, uint32_t ticks_per_beat,
+    uint32_t sample_rate, mp_obj_t waveform_obj, mp_obj_t filter_obj,
+    mp_obj_t envelope_obj) {
 
-    self->tempo = tempo;
+    self->tempo = self->base_tempo = tempo;
+    self->ticks_per_beat = ticks_per_beat;
     self->track.buf = (void *)buffer;
     self->track.len = len;
 
@@ -204,7 +218,8 @@ void common_hal_synthio_miditrack_set_tempo(synthio_miditrack_obj_t *self, mp_in
     uint64_t remaining = (uint64_t)self->synth.span.dur + self->pending;
     remaining = remaining * self->tempo / val;
     set_remaining(self, remaining > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining);
-    self->tempo = val;
+    // becomes the new baseline, so that looping does not undo it
+    self->tempo = self->base_tempo = val;
 }
 
 void synthio_miditrack_reset_buffer(synthio_miditrack_obj_t *self,
@@ -223,7 +238,7 @@ audioio_get_buffer_result_t synthio_miditrack_get_buffer(synthio_miditrack_obj_t
     synthio_synth_synthesize(&self->synth, buffer, buffer_length, single_channel_output ? 0 : channel);
     if (self->synth.span.dur == 0) {
         if (self->pending != 0) {
-            // still inside a delay too long for a single span
+            // still inside a gap too long for a single span
             set_remaining(self, self->pending);
         } else if (self->pos == self->track.len) {
             return GET_BUFFER_DONE;

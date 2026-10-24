@@ -177,6 +177,9 @@ const mp_obj_namedtuple_type_t synthio_envelope_type_obj = {
 //|     """Create an AudioSample from an already opened MIDI file.
 //|     Currently, only single-track MIDI (type 0) is supported.
 //|
+//|     The file's tempo map is followed: the track starts at the MIDI default of 120 BPM and
+//|     each "Set Tempo" event changes the rate from that point on.
+//|
 //|     :param typing.BinaryIO file: Already opened MIDI file
 //|     :param int sample_rate: The desired playback sample rate; higher sample rate requires more memory
 //|     :param ReadableBuffer waveform: A single-cycle waveform. Default is a 50% duty cycle square wave. If specified, must be a ReadableBuffer of type 'h' (signed 16 bit)
@@ -233,11 +236,18 @@ static mp_obj_t synthio_from_file(size_t n_args, const mp_obj_t *pos_args, mp_ma
         // TODO: for a multi-track MIDI (type 1), return an AudioMixer
     }
 
-    uint16_t tempo;
+    uint32_t tempo;
+    uint32_t ticks_per_beat;
     if (chunk_header[12] & 0x80) {
+        // SMPTE: frames per second times ticks per frame is already an
+        // absolute rate, so Set Tempo events do not apply to it
         tempo = -(int8_t)chunk_header[12] * chunk_header[13];
+        ticks_per_beat = 0;
     } else {
-        tempo = 2 * ((chunk_header[12] << 8) | chunk_header[13]);
+        ticks_per_beat = (chunk_header[12] << 8) | chunk_header[13];
+        // until a Set Tempo event says otherwise, MIDI defaults to 120 BPM,
+        // i.e. two quarter notes per second
+        tempo = 2 * ticks_per_beat;
     }
 
     bytes_read = mp_stream_rw(file_obj, chunk_header, 8, &errcode, MP_STREAM_RW_READ);
@@ -260,7 +270,7 @@ static mp_obj_t synthio_from_file(size_t n_args, const mp_obj_t *pos_args, mp_ma
 
     synthio_miditrack_obj_t *result = mp_obj_malloc_with_finaliser(synthio_miditrack_obj_t, &synthio_miditrack_type);
     common_hal_synthio_miditrack_construct(result, buffer, track_size,
-        tempo, args[ARG_sample_rate].u_int, args[ARG_waveform].u_obj,
+        tempo, ticks_per_beat, args[ARG_sample_rate].u_int, args[ARG_waveform].u_obj,
         mp_const_none,
         args[ARG_envelope].u_obj
         );

@@ -23,16 +23,25 @@
 //|         buffer: ReadableBuffer,
 //|         tempo: int,
 //|         *,
+//|         ticks_per_beat: int = 0,
 //|         sample_rate: int = 11025,
 //|         waveform: Optional[ReadableBuffer] = None,
 //|         envelope: Optional[Envelope] = None,
 //|     ) -> None:
-//|         """Create a MidiTrack from the given stream of MIDI events. Only "Note On" and "Note Off" events
-//|         are supported; channel numbers and key velocities are ignored. Up to two notes may be on at the
-//|         same time.
+//|         """Create a MidiTrack from the given stream of MIDI events.
+//|
+//|         "Note On" and "Note Off" events are played; a "Note On" with a velocity of zero is
+//|         treated as a "Note Off", as the MIDI specification allows. Other channel events are
+//|         skipped, as are System Exclusive and meta events, except that "End of Track" stops
+//|         playback and "Set Tempo" adjusts it when ``ticks_per_beat`` is known. Events that omit
+//|         a repeated status byte ("running status") are understood. Channel numbers and key
+//|         velocities are otherwise ignored.
 //|
 //|         :param ~circuitpython_typing.ReadableBuffer buffer: Stream of MIDI events, as stored in a MIDI file track chunk
 //|         :param int tempo: Tempo of the streamed events, in MIDI ticks per second
+//|         :param int ticks_per_beat: Ticks per quarter note, from the MIDI file header. When this
+//|           is 0 (the default) any "Set Tempo" event in the stream is ignored, because its
+//|           microseconds-per-quarter-note value cannot be converted without it.
 //|         :param int sample_rate: The desired playback sample rate; higher sample rate requires more memory
 //|         :param ReadableBuffer waveform: A single-cycle waveform. Default is a 50% duty cycle square wave. If specified, must be a ReadableBuffer of type 'h' (signed 16 bit)
 //|         :param Envelope envelope: An object that defines the loudness of a note over time. The default envelope provides no ramping, voices turn instantly on and off.
@@ -55,10 +64,11 @@
 //|         ...
 //|
 static mp_obj_t synthio_miditrack_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    enum { ARG_buffer, ARG_tempo, ARG_sample_rate, ARG_waveform, ARG_envelope };
+    enum { ARG_buffer, ARG_tempo, ARG_ticks_per_beat, ARG_sample_rate, ARG_waveform, ARG_envelope };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_buffer, MP_ARG_OBJ | MP_ARG_REQUIRED, {} },
         { MP_QSTR_tempo, MP_ARG_INT | MP_ARG_REQUIRED, {} },
+        { MP_QSTR_ticks_per_beat, MP_ARG_INT | MP_ARG_KW_ONLY, {.u_int = 0} },
         { MP_QSTR_sample_rate, MP_ARG_INT | MP_ARG_KW_ONLY, {.u_int = 11025} },
         { MP_QSTR_waveform, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = mp_const_none } },
         { MP_QSTR_envelope, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = mp_const_none } },
@@ -73,6 +83,7 @@ static mp_obj_t synthio_miditrack_make_new(const mp_obj_type_t *type, size_t n_a
     common_hal_synthio_miditrack_construct(self,
         (uint8_t *)bufinfo.buf, bufinfo.len,
         mp_arg_validate_int_min(args[ARG_tempo].u_int, 1, MP_QSTR_tempo),
+        args[ARG_ticks_per_beat].u_int,
         args[ARG_sample_rate].u_int,
         args[ARG_waveform].u_obj,
         mp_const_none,
