@@ -13,19 +13,31 @@ jobs:
     name: ${{ matrix.shard }}
     strategy:
       fail-fast: ${{ github.event_name == 'merge_group' }}
-      # One job per board family, so the bsim suites, which take the longest, run
-      # side by side instead of after each other.
+      # One job per board, so each job builds one firmware. Each bsim suite is also split
+      # by the zephyr_sample marker, so the tests that build Zephyr samples get their own job.
       matrix:
         include:
           - shard: native_sim
-            boards: native_native_sim native_native_sim_asan native_native_sim_lfs
-            pytest_args: tests/ --ignore=tests/bsim -n $(nproc) --dist loadfile
+            boards: native_native_sim
+            pytest_args: tests/ --ignore=tests/bsim -k 'not native_native_sim_asan and not native_native_sim_lfs' -n $(nproc) --dist loadfile
+          - shard: native_sim_asan
+            boards: native_native_sim_asan
+            pytest_args: tests/ --ignore=tests/bsim -k native_native_sim_asan -n $(nproc) --dist loadfile
+          - shard: native_sim_lfs
+            boards: native_native_sim_lfs
+            pytest_args: tests/ --ignore=tests/bsim -k native_native_sim_lfs -n $(nproc) --dist loadfile
           - shard: nrf5340bsim
             boards: native_nrf5340bsim
-            pytest_args: tests/bsim -k native_nrf5340bsim -n $(nproc) --dist loadfile
+            pytest_args: tests/bsim -k native_nrf5340bsim -m 'not zephyr_sample' -n $(nproc) --dist loadfile
+          - shard: nrf5340bsim-samples
+            boards: native_nrf5340bsim
+            pytest_args: tests/bsim -k native_nrf5340bsim -m zephyr_sample -n $(nproc) --dist loadfile
           - shard: nrf54lm20bsim
             boards: native_nrf54lm20bsim
-            pytest_args: tests/bsim -k native_nrf54lm20bsim -n $(nproc) --dist loadfile
+            pytest_args: tests/bsim -k native_nrf54lm20bsim -m 'not zephyr_sample' -n $(nproc) --dist loadfile
+          - shard: nrf54lm20bsim-samples
+            boards: native_nrf54lm20bsim
+            pytest_args: tests/bsim -k native_nrf54lm20bsim -m zephyr_sample -n $(nproc) --dist loadfile
     env:
       CP_VERSION: ${{ inputs.cp-version }}
     steps:
