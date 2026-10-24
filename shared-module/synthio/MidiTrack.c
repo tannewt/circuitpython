@@ -26,6 +26,14 @@ static bool need_bytes(synthio_miditrack_obj_t *self, size_t count) {
     return true;
 }
 
+// A duration can be longer than span.dur (a uint16_t) can hold, so the
+// remainder is kept in `pending` and handed over a chunk at a time.
+static void set_remaining(synthio_miditrack_obj_t *self, uint32_t samples) {
+    uint16_t chunk = samples > UINT16_MAX ? UINT16_MAX : (uint16_t)samples;
+    self->synth.span.dur = chunk;
+    self->pending = samples - chunk;
+}
+
 // Returns the note in the low 8 bits and the velocity in the next 8, or -1
 // if the pair could not be read.
 static int parse_note(synthio_miditrack_obj_t *self) {
@@ -61,9 +69,10 @@ static uint32_t decode_varint(synthio_miditrack_obj_t *self) {
     return 0;
 }
 
-static int decode_duration(synthio_miditrack_obj_t *self) {
+static void decode_duration(synthio_miditrack_obj_t *self) {
     uint32_t delta = decode_varint(self);
-    return delta * self->synth.base.sample_rate / self->tempo;
+    uint64_t samples = (uint64_t)delta * self->synth.base.sample_rate / self->tempo;
+    set_remaining(self, samples > UINT32_MAX ? UINT32_MAX : (uint32_t)samples);
 }
 
 // Meta (0xFF) and system exclusive (0xF0/0xF7) events both carry an explicit
@@ -148,17 +157,18 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
                 break;
         }
         if (self->pos < len) {
-            self->synth.span.dur = decode_duration(self);
+            decode_duration(self);
         }
-    } while (self->pos < len && self->synth.span.dur == 0);
+    } while (self->pos < len && self->synth.span.dur == 0 && self->pending == 0);
 }
 
 static void start_parse(synthio_miditrack_obj_t *self) {
     self->pos = 0;
     self->error_location = -1;
     self->running_status = 0;
-    self->synth.span.dur = decode_duration(self);
-    if (self->synth.span.dur == 0) {
+    self->pending = 0;
+    decode_duration(self);
+    if (self->synth.span.dur == 0 && self->pending == 0) {
         // the usual case: the file starts with some MIDI event, not a delay
         decode_until_pause(self);
     }
@@ -191,7 +201,9 @@ mp_int_t common_hal_synthio_miditrack_get_tempo(synthio_miditrack_obj_t *self) {
 
 void common_hal_synthio_miditrack_set_tempo(synthio_miditrack_obj_t *self, mp_int_t value) {
     mp_int_t val = mp_arg_validate_int_min(value, 1, MP_QSTR_tempo);
-    self->synth.span.dur = (uint32_t)self->synth.span.dur * self->tempo / val;
+    uint64_t remaining = (uint64_t)self->synth.span.dur + self->pending;
+    remaining = remaining * self->tempo / val;
+    set_remaining(self, remaining > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining);
     self->tempo = val;
 }
 
@@ -210,7 +222,10 @@ audioio_get_buffer_result_t synthio_miditrack_get_buffer(synthio_miditrack_obj_t
 
     synthio_synth_synthesize(&self->synth, buffer, buffer_length, single_channel_output ? 0 : channel);
     if (self->synth.span.dur == 0) {
-        if (self->pos == self->track.len) {
+        if (self->pending != 0) {
+            // still inside a delay too long for a single span
+            set_remaining(self, self->pending);
+        } else if (self->pos == self->track.len) {
             return GET_BUFFER_DONE;
         } else {
             decode_until_pause(self);
