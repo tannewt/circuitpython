@@ -17,6 +17,8 @@ typedef struct {
     size_t pos;
     mp_int_t error_location;
     uint32_t tempo;
+    // last channel status byte, for events that omit it (running status)
+    uint8_t running_status;
 } synthio_miditrack_obj_t;
 
 

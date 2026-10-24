@@ -100,7 +100,20 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
         if (self->pos >= len) {
             break;
         }
-        uint8_t status = buffer[self->pos++];
+        uint8_t status = buffer[self->pos];
+        if (status & 0x80) {
+            self->pos++;
+            // a channel message arms running status; a system one cancels it
+            self->running_status = (status < 0xF0) ? status : 0;
+        } else {
+            // running status: the status byte is omitted and the previous
+            // channel message is implied
+            status = self->running_status;
+            if (status == 0) {
+                record_midi_stream_error(self);
+                break;
+            }
+        }
         switch (status >> 4) {
             case 8: { // Note Off
                 mp_obj_t note = parse_note(self);
@@ -136,6 +149,7 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
 static void start_parse(synthio_miditrack_obj_t *self) {
     self->pos = 0;
     self->error_location = -1;
+    self->running_status = 0;
     self->synth.span.dur = decode_duration(self);
     if (self->synth.span.dur == 0) {
         // the usual case: the file starts with some MIDI event, not a delay
