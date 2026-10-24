@@ -10,15 +10,25 @@
 
 
 static void record_midi_stream_error(synthio_miditrack_obj_t *self) {
-    self->error_location = self->pos;
+    // keep the first error; later ones are usually fallout from this one
+    if (self->error_location < 0) {
+        self->error_location = self->pos;
+    }
     self->pos = self->track.len;
+}
+
+// Check that `count` more bytes are available, ending the track if not.
+static bool need_bytes(synthio_miditrack_obj_t *self, size_t count) {
+    if (count > self->track.len - self->pos) {
+        record_midi_stream_error(self);
+        return false;
+    }
+    return true;
 }
 
 static mp_obj_t parse_note(synthio_miditrack_obj_t *self) {
     uint8_t *buffer = self->track.buf;
-    size_t len = self->track.len;
-    if (self->pos + 1 >= len) {
-        record_midi_stream_error(self);
+    if (!need_bytes(self, 2)) {
         return MP_OBJ_NEW_SMALL_INT(0);
     }
     uint8_t note = buffer[(self->pos)++];
@@ -28,23 +38,58 @@ static mp_obj_t parse_note(synthio_miditrack_obj_t *self) {
     return MP_OBJ_NEW_SMALL_INT(note);
 }
 
-static int decode_duration(synthio_miditrack_obj_t *self) {
+// MIDI variable-length quantity: up to 4 bytes of 7 bits each.
+static uint32_t decode_varint(synthio_miditrack_obj_t *self) {
     uint8_t *buffer = self->track.buf;
-    size_t len = self->track.len;
-    uint8_t c;
-    uint32_t delta = 0;
-    do {
-        c = buffer[self->pos++];
-        delta <<= 7;
-        delta |= c & 0x7f;
-    } while ((c & 0x80) && (self->pos < len));
+    uint32_t value = 0;
+    for (size_t i = 0; i < 4; i++) {
+        if (!need_bytes(self, 1)) {
+            return 0;
+        }
+        uint8_t c = buffer[self->pos++];
+        value = (value << 7) | (c & 0x7f);
+        if (!(c & 0x80)) {
+            return value;
+        }
+    }
+    // a fifth continuation byte cannot be part of a valid quantity
+    record_midi_stream_error(self);
+    return 0;
+}
 
-    // errors cannot be raised from the background task, so simply end the track.
-    if (c & 0x80) {
-        self->pos = self->track.len;
+static int decode_duration(synthio_miditrack_obj_t *self) {
+    uint32_t delta = decode_varint(self);
+    return delta * self->synth.base.sample_rate / self->tempo;
+}
+
+// Meta (0xFF) and system exclusive (0xF0/0xF7) events both carry an explicit
+// length, so they can be skipped exactly rather than guessed at.
+static void decode_system_event(synthio_miditrack_obj_t *self, uint8_t status) {
+    uint8_t *buffer = self->track.buf;
+    if (status == 0xFF) {
+        if (!need_bytes(self, 1)) {
+            return;
+        }
+        uint8_t type = buffer[self->pos++];
+        uint32_t length = decode_varint(self);
+        if (!need_bytes(self, length)) {
+            return;
+        }
+        if (type == 0x2F) { // End of Track
+            self->pos = self->track.len;
+            return;
+        }
+        self->pos += length;
+    } else if (status == 0xF0 || status == 0xF7) {
+        uint32_t length = decode_varint(self);
+        if (!need_bytes(self, length)) {
+            return;
+        }
+        self->pos += length;
+    } else {
+        // system common and real-time bytes have no meaning in a file
         record_midi_stream_error(self);
     }
-    return delta * self->synth.base.sample_rate / self->tempo;
 }
 
 // invariant: pointing at a MIDI message
@@ -55,7 +100,8 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
         if (self->pos >= len) {
             break;
         }
-        switch (buffer[self->pos++] >> 4) {
+        uint8_t status = buffer[self->pos++];
+        switch (status >> 4) {
             case 8: { // Note Off
                 mp_obj_t note = parse_note(self);
                 synthio_span_change_note(&self->synth, note, SYNTHIO_SILENCE);
@@ -73,15 +119,13 @@ static void decode_until_pause(synthio_miditrack_obj_t *self) {
                 break;
             case 12:
             case 13: // one data byte to ignore
-                if (self->pos >= len || buffer[self->pos++] > 127) {
+                if (need_bytes(self, 1) && buffer[self->pos++] > 127) {
                     record_midi_stream_error(self);
                 }
                 break;
-            case 15: // the full syntax is too complicated, just assume it's "End of Track" event
-                self->pos = len;
+            default: // 15: meta or system exclusive
+                decode_system_event(self, status);
                 break;
-            default: // invalid event
-                record_midi_stream_error(self);
         }
         if (self->pos < len) {
             self->synth.span.dur = decode_duration(self);
