@@ -9,24 +9,29 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Show CPU model
+      if: runner.os == 'Linux'
+      run: grep "model name" /proc/cpuinfo | head -1
+      shell: bash
     - name: Get Linux build dependencies
       if: runner.os == 'Linux'
-      run: |
-        echo "--- cpu model ---"
-        grep "model name" /proc/cpuinfo | head -1
-        sudo apt-get update
-        sudo apt-get install -y libusb-1.0-0-dev libudev-dev pkg-config mtools
-      shell: bash
-    - name: Get SDL2 for native_sim
+      uses: ./.github/actions/deps/apt_packages
+      with:
+        # The last four are the packages action-zephyr-setup@v1 installs, so its apt-get has nothing to download.
+        packages: libusb-1.0-0-dev libudev-dev pkg-config mtools ccache gperf libc6-dev-i386 g++-multilib
+    - name: Prepare for 32-bit SDL2
       if: runner.os == 'Linux' && inputs.sdl == 'true'
       run: |
         sudo dpkg --add-architecture i386
-        sudo apt-get update
         # We have to hold python3 so the following install works. See https://github.com/actions/runner-images/issues/13803
         sudo apt-mark hold python3
-        sudo apt-get install -y libsdl2-dev:i386 libsdl2-image-dev:i386
         echo "PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
       shell: bash
+    - name: Get SDL2 for native_sim
+      if: runner.os == 'Linux' && inputs.sdl == 'true'
+      uses: ./.github/actions/deps/apt_packages
+      with:
+        packages: libsdl2-dev:i386 libsdl2-image-dev:i386
     - name: Setup Zephyr project
       uses: zephyrproject-rtos/action-zephyr-setup@v1
       with:
