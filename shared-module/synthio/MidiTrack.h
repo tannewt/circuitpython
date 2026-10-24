@@ -16,7 +16,16 @@ typedef struct {
     // invariant: after initial startup, pos always points just after an encoded duration, i.e., at a midi message (or at EOF)
     size_t pos;
     mp_int_t error_location;
+    // current tempo in ticks per second, and the value to rewind it to
     uint32_t tempo;
+    uint32_t base_tempo;
+    // samples of the current delay that did not fit in span.dur
+    uint32_t pending;
+    // ticks per quarter note (15 bits in the file header), or 0 when the
+    // timing is absolute (SMPTE) and Set Tempo events do not apply
+    uint16_t ticks_per_beat;
+    // last channel status byte, for events that omit it (running status)
+    uint8_t running_status;
 } synthio_miditrack_obj_t;
 
 
