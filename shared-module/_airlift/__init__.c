@@ -21,21 +21,12 @@ void common_hal__airlift_init(void) {
     }
 }
 
-void common_hal__airlift_init_pins(mp_obj_t objs, busio_spi_obj_t *spi,
-    digitalio_digitalinout_obj_t *cs, digitalio_digitalinout_obj_t *ready,
-    digitalio_digitalinout_obj_t *reset, digitalio_digitalinout_obj_t *gpio0) {
-    if (!airlift_transport_init_vm(spi, cs, ready, reset, gpio0)) {
-        mp_raise_ValueError_varg(MP_ERROR_TEXT("%q in use"), MP_QSTR_ESP32);
-    }
-    MP_STATE_VM(airlift_vm_objs) = objs;
-}
-
 bool common_hal__airlift_active(void) {
     return airlift_transport_active();
 }
 
 static void check_active(void) {
-    if (!airlift_transport_claimed()) {
+    if (!airlift_transport_active()) {
         mp_raise_OSError(MP_ENODEV);
     }
 }

@@ -12,10 +12,8 @@
 //| """Shared access to an ESP32 co-processor running nina-fw
 //|
 //| The `_airlift` module lets libraries send commands to the ESP32 that the core
-//| also uses, so that user code and the core can use the same co-processor. It
-//| can also drive an ESP32 the core doesn't use, such as an AirLift breakout,
-//| through pins given to `init`. It is meant for libraries such as ESP32SPI, not
-//| for user code.
+//| also uses, so that user code and the core can use the same co-processor.
+//| It is meant for libraries such as ESP32SPI, not for user code.
 //| """
 //|
 //| MAX_SOCKETS: int
@@ -28,71 +26,22 @@
 //| """The largest ``GET_DATABUF_TCP`` read the ESP32 can reply to."""
 //|
 
-//| def init(
-//|     spi: Optional[busio.SPI] = None,
-//|     cs: Optional[digitalio.DigitalInOut] = None,
-//|     ready: Optional[digitalio.DigitalInOut] = None,
-//|     reset: Optional[digitalio.DigitalInOut] = None,
-//|     gpio0: Optional[digitalio.DigitalInOut] = None,
-//| ) -> None:
-//|     """With no arguments, claim the board's own ESP32 pins and the board SPI bus,
-//|     and hard-reset the ESP32. That ESP32 stays claimed across soft reloads. Does
-//|     nothing if it is already claimed. Raises `ValueError` if a pin is in use.
+//| def init() -> None:
+//|     """Claim the ESP32's pins and the board SPI bus, and hard-reset the ESP32.
+//|     The ESP32 stays claimed across soft reloads. Does nothing if it is already
+//|     claimed. Raises `ValueError` if a pin is in use.
 //|
-//|     With a bus and pins, talk to an ESP32 that the core doesn't manage, such as
-//|     an AirLift breakout, and hard-reset it. They are used until `release` or the
-//|     end of the program. Calling it again replaces them. Raises `ValueError` if
-//|     the core has claimed the board's own ESP32.
-//|
-//|     :param busio.SPI spi: the bus the ESP32 is on
-//|     :param digitalio.DigitalInOut cs: the ESP32's chip select
-//|     :param digitalio.DigitalInOut ready: the ESP32's BUSY/READY output
-//|     :param digitalio.DigitalInOut reset: the ESP32's reset input
-//|     :param digitalio.DigitalInOut gpio0: the ESP32's GPIO0, if connected"""
+//|     Temporary: the core will claim the ESP32 itself when web workflow is configured."""
 //|     ...
 //|
-static mp_obj_t _airlift_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_spi, ARG_cs, ARG_ready, ARG_reset, ARG_gpio0 };
-    static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_spi, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_cs, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_ready, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_reset, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-        { MP_QSTR_gpio0, MP_ARG_OBJ, {.u_obj = mp_const_none} },
-    };
-    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
-
-    if (args[ARG_spi].u_obj == mp_const_none && args[ARG_cs].u_obj == mp_const_none &&
-        args[ARG_ready].u_obj == mp_const_none && args[ARG_reset].u_obj == mp_const_none) {
-        common_hal__airlift_init();
-        return mp_const_none;
-    }
-    busio_spi_obj_t *spi = MP_OBJ_TO_PTR(mp_arg_validate_type(args[ARG_spi].u_obj, &busio_spi_type, MP_QSTR_spi));
-    digitalio_digitalinout_obj_t *cs = MP_OBJ_TO_PTR(
-        mp_arg_validate_type(args[ARG_cs].u_obj, &digitalio_digitalinout_type, MP_QSTR_cs));
-    digitalio_digitalinout_obj_t *ready = MP_OBJ_TO_PTR(
-        mp_arg_validate_type(args[ARG_ready].u_obj, &digitalio_digitalinout_type, MP_QSTR_ready));
-    digitalio_digitalinout_obj_t *reset = MP_OBJ_TO_PTR(
-        mp_arg_validate_type(args[ARG_reset].u_obj, &digitalio_digitalinout_type, MP_QSTR_reset));
-    digitalio_digitalinout_obj_t *gpio0 = NULL;
-    if (args[ARG_gpio0].u_obj != mp_const_none) {
-        gpio0 = MP_OBJ_TO_PTR(
-            mp_arg_validate_type(args[ARG_gpio0].u_obj, &digitalio_digitalinout_type, MP_QSTR_gpio0));
-    }
-    // Keeps them alive while the core uses them.
-    mp_obj_t objs = mp_obj_new_tuple(5, (mp_obj_t[]) {
-        args[ARG_spi].u_obj, args[ARG_cs].u_obj, args[ARG_ready].u_obj, args[ARG_reset].u_obj,
-        args[ARG_gpio0].u_obj
-    });
-    common_hal__airlift_init_pins(objs, spi, cs, ready, reset, gpio0);
+static mp_obj_t _airlift_init(void) {
+    common_hal__airlift_init();
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(_airlift_init_obj, 0, _airlift_init);
+static MP_DEFINE_CONST_FUN_OBJ_0(_airlift_init_obj, _airlift_init);
 
 //| def active() -> bool:
-//|     """True if the core has claimed the board's own ESP32, as it does for web
-//|     workflow. `transact` can then be used without calling `init`."""
+//|     """True if the core has claimed the ESP32 and `transact` can be used."""
 //|     ...
 //|
 static mp_obj_t _airlift_active(void) {

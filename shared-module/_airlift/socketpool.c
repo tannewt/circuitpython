@@ -648,7 +648,7 @@ int socketpool_socket_send(socketpool_socket_obj_t *self, const uint8_t *buf, ui
                 return total > 0 ? (int)total : -MP_EAGAIN;
             }
         }
-        size_t n = MIN(len - total, AIRLIFT_SOCKET_TX_SIZE - self->tx_len);
+        size_t n = MIN(len - total, (size_t)(AIRLIFT_SOCKET_TX_SIZE - self->tx_len));
         memcpy(self->tx + self->tx_len, buf + total, n);
         self->tx_len += n;
         total += n;
