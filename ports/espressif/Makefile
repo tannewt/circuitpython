@@ -1252,7 +1252,7 @@ endif
 
 UF2_FAMILY_ID_esp32s2 = 0xbfdd4eee
 UF2_FAMILY_ID_esp32s3 = 0xc47e5767
-UF2_FAMILY_ID_esp32p4 = 0x540ddf62
+UF2_FAMILY_ID_esp32p4 = 0x3d308e94
 
 $(BUILD)/firmware.uf2: $(BUILD)/circuitpython-firmware.bin
 	$(STEPECHO) "Create $@"
