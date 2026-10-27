@@ -11,6 +11,26 @@
 #include "shared-bindings/vectorio/__init__.h" // draw protocol
 #include "shared-module/displayio/area.h"
 
+// VideoBuffer is part of the legacy draw protocol, which uses linked-list areas even
+// when the LVGL compositor is built. Keep the link in a wrapper so displayio_area_t
+// itself can stay just lv_area_t for LVGL.
+typedef struct _videocore_area_t {
+    displayio_area_t area;
+    const struct _videocore_area_t *next;
+} videocore_area_t;
+
+// Chain node's area in front of tail and return the new list head. The scanline compositor
+// walks displayio_area_t.next, which LVGL's lv_area_t doesn't have, so the link lives in the
+// wrapper there. Nothing walks the list in the LVGL build; it just has to compile.
+static inline displayio_area_t *videocore_area_link(videocore_area_t *node, displayio_area_t *tail) {
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    node->next = (const videocore_area_t *)tail;
+    #else
+    node->area.next = tail;
+    #endif
+    return &node->area;
+}
+
 #include "shared-module/framebufferio/FramebufferDisplay.h" // framebuffer protocol
 #include "shared-module/videocore/__init__.h"
 
@@ -40,17 +60,17 @@ typedef struct {
     volatile bool frame_ready;
     // What changed in the frames landed since the last refresh, in source
     // coordinates. Grown with frame_ready and cleared with it.
-    displayio_area_t frame_changed_area;
+    videocore_area_t frame_changed_area;
     // The last frame landed passed NULL, so the next one repaints everything.
     volatile bool frame_replaceable;
     // frame_changed_area in screen coordinates, as handed to the refresh.
-    displayio_area_t frame_dirty_area;
+    videocore_area_t frame_dirty_area;
     // Screen area of frames that landed where the video used to be: the frame
     // in flight when the destination moves or the source pauses still lands
     // at the old destination, possibly after that area was repainted. Grown
     // by on_frame in interrupt context; the refresh moves it into
     // ephemeral_dirty_area with interrupts disabled.
-    displayio_area_t vacated_area;
+    videocore_area_t vacated_area;
     // Framebuffer geometry cached for on_frame, which can't call the
     // framebuffer protocol from interrupt context. fb_pixels is NULL for
     // plain buffer targets.
@@ -60,8 +80,8 @@ typedef struct {
     mp_int_t fb_width;
     // displayio draw protocol state: the rect currently rendered (in screen
     // coordinates) and the rect that changed since the last refresh.
-    displayio_area_t current_area;
-    displayio_area_t ephemeral_dirty_area;
+    videocore_area_t current_area;
+    videocore_area_t ephemeral_dirty_area;
     displayio_buffer_transform_t absolute_transform;
     bool in_group;
     // Set by the group when hidden; while hidden the video doesn't show and

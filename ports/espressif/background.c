@@ -16,10 +16,18 @@
 #include "tusb.h"
 #endif
 
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "supervisor/lvgl_port.h"
+#endif
+
+#include "py/mpconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 void port_background_tick(void) {
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    espressif_lvgl_background();
+    #endif
     #if CIRCUITPY_USB_HOST
     // Enumeration delays need polling even when no new USB IRQ arrives.
     if (tuh_task_event_ready()) {

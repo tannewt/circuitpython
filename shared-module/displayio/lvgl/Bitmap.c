@@ -10,6 +10,7 @@
 
 #include "py/runtime.h"
 #include "py/gc.h"
+#include "shared-module/displayio/lvgl/lvgl_internal.h"
 
 enum { ALIGN_BITS = 8 * sizeof(uint32_t) };
 
@@ -26,6 +27,10 @@ void common_hal_displayio_bitmap_construct(displayio_bitmap_t *self, uint32_t wi
 
 void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self, uint32_t width,
     uint32_t height, uint32_t bits_per_value, uint32_t *data, bool read_only) {
+    if (bits_per_value > 8 && bits_per_value != 16 && bits_per_value != 32) {
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("Invalid bits per value"));
+    }
+
     self->width = width;
     self->height = height;
     self->stride = stride(width, bits_per_value);
@@ -37,10 +42,6 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
     self->data = data;
     self->read_only = read_only;
     self->bits_per_value = bits_per_value;
-
-    if (bits_per_value > 8 && bits_per_value != 16 && bits_per_value != 32) {
-        mp_raise_NotImplementedError(MP_ERROR_TEXT("Invalid bits per value"));
-    }
 
     // Division and modulus can be slow because it has to handle any integer. We know bits_per_value
     // is a power of two. We divide and mod by bits_per_value to compute the offset into the byte
@@ -56,13 +57,11 @@ void common_hal_displayio_bitmap_construct_from_buffer(displayio_bitmap_t *self,
     self->x_mask = (1u << self->x_shift) - 1u; // Used as a modulus on the x value
     self->bitmask = (1u << bits_per_value) - 1u;
 
-    self->dirty_area.x1 = 0;
-    self->dirty_area.x2 = width;
-    self->dirty_area.y1 = 0;
-    self->dirty_area.y2 = height;
 }
 
 void common_hal_displayio_bitmap_deinit(displayio_bitmap_t *self) {
+    // The TileGrids drawing this bitmap keep their composed pixels; it just stops changing.
+    displayio_lvgl_tilegrid_bitmap_changed(self, 0, 0, self->width, self->height);
     if (self->data_alloc && self->data != NULL) {
         gc_free(self->data);
     }
@@ -109,16 +108,11 @@ uint32_t common_hal_displayio_bitmap_get_pixel(displayio_bitmap_t *self, int16_t
     return 0;
 }
 
-void displayio_bitmap_set_dirty_area(displayio_bitmap_t *self, const displayio_area_t *dirty_area) {
-    if (self->read_only) {
-        mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
+void displayio_bitmap_set_dirty(displayio_bitmap_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+    if (self->data == NULL) {
+        return;
     }
-
-    displayio_area_t area = *dirty_area;
-    displayio_area_canon(&area);
-    displayio_area_union(&area, &self->dirty_area, &area);
-    displayio_area_t bitmap_area = {0, 0, self->width, self->height, NULL};
-    displayio_area_compute_overlap(&area, &bitmap_area, &self->dirty_area);
+    displayio_lvgl_tilegrid_bitmap_changed(self, x1, y1, x2, y2);
 }
 
 void displayio_bitmap_write_pixel(displayio_bitmap_t *self, int16_t x, int16_t y, uint32_t value) {
@@ -160,36 +154,18 @@ void common_hal_displayio_bitmap_set_pixel(displayio_bitmap_t *self, int16_t x, 
         mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
     }
     // update the dirty region
-    displayio_area_t a = {x, y, x + 1, y + 1, NULL};
-    displayio_bitmap_set_dirty_area(self, &a);
+    displayio_bitmap_set_dirty(self, x, y, x + 1, y + 1);
 
     // write the pixel
     displayio_bitmap_write_pixel(self, x, y, value);
 
 }
 
-displayio_area_t *displayio_bitmap_get_refresh_areas(displayio_bitmap_t *self, displayio_area_t *tail) {
-    if (self->dirty_area.x1 == self->dirty_area.x2 || self->read_only) {
-        return tail;
-    }
-    self->dirty_area.next = tail;
-    return &self->dirty_area;
-}
-
-void displayio_bitmap_finish_refresh(displayio_bitmap_t *self) {
-    if (self->read_only) {
-        return;
-    }
-    self->dirty_area.x1 = 0;
-    self->dirty_area.x2 = 0;
-}
-
 void common_hal_displayio_bitmap_fill(displayio_bitmap_t *self, uint32_t value) {
     if (self->read_only) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
     }
-    displayio_area_t a = {0, 0, self->width, self->height, NULL};
-    displayio_bitmap_set_dirty_area(self, &a);
+    displayio_bitmap_set_dirty(self, 0, 0, self->width, self->height);
 
     // build the packed word
     uint32_t word = 0;

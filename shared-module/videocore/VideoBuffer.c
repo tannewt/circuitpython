@@ -52,7 +52,7 @@ static void videocore_videobuffer_add_vacated_frame(videocore_videobuffer_obj_t 
         area.x2 = self->fb_width;
         area.y2 += 1;
     }
-    displayio_area_union(&self->vacated_area, &area, &self->vacated_area);
+    displayio_area_union(&self->vacated_area.area, &area, &self->vacated_area.area);
 }
 
 // Called from interrupt context or a background task when the source lands a
@@ -65,7 +65,7 @@ static void videocore_videobuffer_on_frame(void *ctx, const void *frame, const d
             .y2 = self->source_height,
         };
         if (changed == NULL) {
-            self->frame_changed_area = whole_frame;
+            self->frame_changed_area.area = whole_frame;
             self->frame_replaceable = true;
         } else {
             // Keep a bad source rect from dirtying other layers.
@@ -73,7 +73,7 @@ static void videocore_videobuffer_on_frame(void *ctx, const void *frame, const d
             if (!displayio_area_compute_overlap(changed, &whole_frame, &clipped)) {
                 return;
             }
-            displayio_area_union(&self->frame_changed_area, &clipped, &self->frame_changed_area);
+            displayio_area_union(&self->frame_changed_area.area, &clipped, &self->frame_changed_area.area);
             self->frame_replaceable = false;
         }
         self->frame_ready = true;
@@ -98,7 +98,7 @@ static void videocore_videobuffer_forget_frame(videocore_videobuffer_obj_t *self
     displayio_area_t empty = {};
     common_hal_mcu_disable_interrupts();
     self->frame_ready = false;
-    self->frame_changed_area = empty;
+    self->frame_changed_area.area = empty;
     common_hal_mcu_enable_interrupts();
 }
 
@@ -119,7 +119,7 @@ static void videocore_videobuffer_dirty_current_area(videocore_videobuffer_obj_t
         return;
     }
     displayio_area_union(
-        &self->ephemeral_dirty_area, &self->current_area, &self->ephemeral_dirty_area);
+        &self->ephemeral_dirty_area.area, &self->current_area.area, &self->ephemeral_dirty_area.area);
 }
 
 // Recompute the rendered rect (screen coordinates) of the video from the
@@ -128,10 +128,10 @@ static void videocore_videobuffer_dirty_current_area(videocore_videobuffer_obj_t
 // size translated into place.
 static void videocore_videobuffer_update_area(videocore_videobuffer_obj_t *self) {
     const displayio_buffer_transform_t *t = &self->absolute_transform;
-    self->current_area.x1 = self->x + t->x;
-    self->current_area.y1 = self->y + t->y;
-    self->current_area.x2 = self->current_area.x1 + self->source_width;
-    self->current_area.y2 = self->current_area.y1 + self->source_height;
+    self->current_area.area.x1 = self->x + t->x;
+    self->current_area.area.y1 = self->y + t->y;
+    self->current_area.area.x2 = self->current_area.area.x1 + self->source_width;
+    self->current_area.area.y2 = self->current_area.area.y1 + self->source_height;
     self->current_area.next = NULL;
 }
 
@@ -299,12 +299,17 @@ void common_hal_videocore_videobuffer_construct(videocore_videobuffer_obj_t *sel
     self->stale_size = false;
     self->source_ended = false;
     displayio_area_t empty = {};
-    self->current_area = empty;
-    self->ephemeral_dirty_area = empty;
-    self->vacated_area = empty;
-    self->frame_changed_area = empty;
+    self->current_area.area = empty;
+    self->current_area.next = NULL;
+    self->ephemeral_dirty_area.area = empty;
+    self->ephemeral_dirty_area.next = NULL;
+    self->vacated_area.area = empty;
+    self->vacated_area.next = NULL;
+    self->frame_changed_area.area = empty;
+    self->frame_changed_area.next = NULL;
     self->frame_replaceable = false;
-    self->frame_dirty_area = empty;
+    self->frame_dirty_area.area = empty;
+    self->frame_dirty_area.next = NULL;
     displayio_buffer_transform_t empty_transform = {};
     self->absolute_transform = empty_transform;
     // Nothing is shown until a Group attached to a display updates our
@@ -591,7 +596,7 @@ static bool videocore_videobuffer_draw_fill_area(mp_obj_t self_in, const _displa
     }
 
     displayio_area_t overlap;
-    if (!displayio_area_compute_overlap(area, &self->current_area, &overlap)) {
+    if (!displayio_area_compute_overlap(area, &self->current_area.area, &overlap)) {
         return false;
     }
     const bool full_coverage = displayio_area_equal(area, &overlap);
@@ -631,9 +636,9 @@ static bool videocore_videobuffer_draw_fill_area(mp_obj_t self_in, const _displa
 
         for (int16_t y = overlap.y1; y < overlap.y2; y++) {
             const size_t px = (size_t)(y - area->y1) * span_px + (overlap.x1 - area->x1);
-            const int16_t fy = y - self->current_area.y1;
+            const int16_t fy = y - self->current_area.area.y1;
             const uint8_t *row = frame + (size_t)fy * row_stride +
-                (size_t)(overlap.x1 - self->current_area.x1) * bytes_per_pixel;
+                (size_t)(overlap.x1 - self->current_area.area.x1) * bytes_per_pixel;
             size_t i = 0;
             while (i < overlap_width) {
                 // Skip pixels a higher layer already claimed or drew.
@@ -676,9 +681,9 @@ static bool videocore_videobuffer_draw_fill_area(mp_obj_t self_in, const _displa
 
     for (int16_t y = overlap.y1; y < overlap.y2; y++) {
         const size_t px = (size_t)(y - area->y1) * span_px + (overlap.x1 - area->x1);
-        const int16_t fy = y - self->current_area.y1;
+        const int16_t fy = y - self->current_area.area.y1;
         uint16_t *out = (uint16_t *)buffer + px;
-        const uint8_t *in = frame + (size_t)fy * row_bytes + (size_t)(overlap.x1 - self->current_area.x1) * bytes_per_pixel;
+        const uint8_t *in = frame + (size_t)fy * row_bytes + (size_t)(overlap.x1 - self->current_area.area.x1) * bytes_per_pixel;
         memcpy(out, in, overlap_width * bytes_per_pixel);
         if (colorspace->reverse_bytes_in_word) {
             for (size_t i = 0; i < overlap_width; i++) {
@@ -692,7 +697,7 @@ static bool videocore_videobuffer_draw_fill_area(mp_obj_t self_in, const _displa
 static bool videocore_videobuffer_draw_get_dirty_area(mp_obj_t self_in, displayio_area_t *out_area) {
     videocore_videobuffer_obj_t *self = MP_OBJ_TO_PTR(self_in);
     out_area->x1 = out_area->x2;
-    displayio_area_union(&self->ephemeral_dirty_area, &self->current_area, out_area);
+    displayio_area_union(&self->ephemeral_dirty_area.area, &self->current_area.area, out_area);
     return true;
 }
 
@@ -701,7 +706,7 @@ static void videocore_videobuffer_draw_update_transform(mp_obj_t self_in, displa
     // Remember where the video was so a move can repaint the pixels it
     // vacates. The area is only valid while the video is shown; a layer being
     // attached or detached is handled by the display's full refresh.
-    displayio_area_t previous_area = self->current_area;
+    displayio_area_t previous_area = self->current_area.area;
     const bool was_shown = self->absolute_transform.scale != 0 && !self->hidden;
     // A group that isn't attached to a display has no transform, and its
     // update_transform clears the absolute transform we receive. A real
@@ -733,9 +738,9 @@ static void videocore_videobuffer_draw_update_transform(mp_obj_t self_in, displa
     // used to occupy so the refresh repaints those pixels instead of leaving
     // the previous frame there.
     if (was_shown && self->absolute_transform.scale != 0 &&
-        !displayio_area_equal(&previous_area, &self->current_area)) {
+        !displayio_area_equal(&previous_area, &self->current_area.area)) {
         displayio_area_union(
-            &self->ephemeral_dirty_area, &previous_area, &self->ephemeral_dirty_area);
+            &self->ephemeral_dirty_area.area, &previous_area, &self->ephemeral_dirty_area.area);
         if (self->framebuffer_protocol == NULL) {
             // Draw the last frame at its new position.
             videocore_videobuffer_dirty_current_area(self);
@@ -760,7 +765,8 @@ static void videocore_videobuffer_draw_update_transform(mp_obj_t self_in, displa
 static void videocore_videobuffer_draw_finish_refresh(mp_obj_t self_in) {
     videocore_videobuffer_obj_t *self = MP_OBJ_TO_PTR(self_in);
     displayio_area_t empty = {};
-    self->ephemeral_dirty_area = empty;
+    self->ephemeral_dirty_area.area = empty;
+    self->ephemeral_dirty_area.next = NULL;
     // A frame that landed during the refresh waits for the next one, unless its
     // successor repaints everything anyway.
     if (self->frame_replaceable) {
@@ -775,31 +781,30 @@ static displayio_area_t *videocore_videobuffer_draw_get_refresh_areas(mp_obj_t s
     // for the next refresh.
     displayio_area_t empty = {};
     common_hal_mcu_disable_interrupts();
-    displayio_area_t vacated = self->vacated_area;
+    displayio_area_t vacated = self->vacated_area.area;
     const bool frame_ready = self->frame_ready;
-    self->frame_dirty_area = self->frame_changed_area;
-    self->vacated_area = empty;
+    self->frame_dirty_area.area = self->frame_changed_area.area;
+    self->vacated_area.area = empty;
+    self->vacated_area.next = NULL;
     self->frame_ready = false;
-    self->frame_changed_area = empty;
+    self->frame_changed_area.area = empty;
     common_hal_mcu_enable_interrupts();
     // Frames that landed where the video used to be, possibly over the repaint
     // of that area: repaint there again.
-    displayio_area_union(&self->ephemeral_dirty_area, &vacated, &self->ephemeral_dirty_area);
+    displayio_area_union(&self->ephemeral_dirty_area.area, &vacated, &self->ephemeral_dirty_area.area);
     // Always repaint the area the video vacated, even once it is hidden or
     // stopped, so its last frame doesn't stay on the target.
-    if (!displayio_area_empty(&self->ephemeral_dirty_area)) {
+    if (!displayio_area_empty(&self->ephemeral_dirty_area.area)) {
         // The video moved or was hidden: repaint with the lower layers.
-        self->ephemeral_dirty_area.next = tail;
-        tail = &self->ephemeral_dirty_area;
+        tail = videocore_area_link(&self->ephemeral_dirty_area, tail);
     }
     if (self->stream_base == NULL || self->paused || self->hidden || self->stale_size) {
         return tail;
     }
     if (frame_ready) {
         // New frame: bulk copy in the part that changed.
-        displayio_area_shift(&self->frame_dirty_area, self->current_area.x1, self->current_area.y1);
-        self->frame_dirty_area.next = tail;
-        tail = &self->frame_dirty_area;
+        displayio_area_shift(&self->frame_dirty_area.area, self->current_area.area.x1, self->current_area.area.y1);
+        tail = videocore_area_link(&self->frame_dirty_area, tail);
     }
     return tail;
 }

@@ -839,7 +839,7 @@ msgstr ""
 #: ports/analog/common-hal/busio/SPI.c ports/analog/common-hal/busio/UART.c
 #: ports/stm/common-hal/audioio/AudioOut.c
 #: shared-bindings/digitalio/DigitalInOutProtocol.c
-#: shared-module/busdisplay/BusDisplay.c shared-module/ssl/SSLContext.c
+#: shared-module/displayio/bus_core.c shared-module/ssl/SSLContext.c
 msgid "%q init failed"
 msgstr ""
 
@@ -1210,7 +1210,7 @@ msgstr ""
 
 #: ports/cxd56/common-hal/camera/Camera.c
 #: ports/espressif/common-hal/jpegio/JpegDecoder.c
-#: shared-module/audiocore/WaveFile.c
+#: shared-module/audiocore/WaveFile.c shared-module/displayio/lvgl/TileGrid.c
 msgid "Format not supported"
 msgstr ""
 
@@ -1686,6 +1686,8 @@ msgstr ""
 #: ports/espressif/common-hal/espidf/__init__.c
 #: ports/espressif/common-hal/jpegio/JpegDecoder.c
 #: ports/raspberrypi/common-hal/usb_host_bulk/InStream.c
+#: shared-bindings/busdisplay/BusDisplay.c
+#: shared-bindings/framebufferio/FramebufferDisplay.c
 #: shared-bindings/picogame/Canvas.c shared-bindings/picogame/__init__.c
 #: shared-module/jpegio/JpegDecoder.c shared-module/picogame/Display.c
 msgid "Operation or feature not supported"
@@ -2037,8 +2039,8 @@ msgstr ""
 #: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
 #: shared-bindings/digitalio/Pull.c shared-bindings/picogame/Sprite.c
 #: shared-bindings/supervisor/__init__.c shared-module/audiofilters/__init__.c
-#: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
-#: shared-module/videocore/VideoBuffer.c
+#: shared-module/displayio/legacy/__init__.c
+#: shared-module/synthio/Synthesizer.c shared-module/videocore/VideoBuffer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr ""
 
@@ -2469,8 +2471,9 @@ msgstr ""
 
 #: ports/zephyr-cp/bindings/zephyr_display/Display.c
 #: shared-bindings/framebufferio/FramebufferDisplay.c
-#: shared-module/busdisplay/BusDisplay.c
-#: shared-module/framebufferio/FramebufferDisplay.c
+#: shared-module/busdisplay/legacy/BusDisplay.c
+#: shared-module/framebufferio/legacy/FramebufferDisplay.c
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
 msgid "Group already used"
 msgstr ""
 
@@ -2501,9 +2504,11 @@ msgstr ""
 msgid "Failed to set hostname"
 msgstr ""
 
-#: ports/zephyr-cp/common-hal/zephyr_display/Display.c
-#: shared-module/busdisplay/BusDisplay.c
-#: shared-module/framebufferio/FramebufferDisplay.c
+#: ports/zephyr-cp/common-hal/zephyr_display/legacy/Display.c
+#: ports/zephyr-cp/common-hal/zephyr_display/lvgl/Display.c
+#: shared-module/busdisplay/legacy/BusDisplay.c
+#: shared-module/framebufferio/legacy/FramebufferDisplay.c
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
 msgid "Below minimum frame rate"
 msgstr ""
 
@@ -3902,7 +3907,9 @@ msgstr ""
 #: shared-bindings/_bleio/__init__.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c shared-module/bitmaptools/__init__.c
-#: shared-module/displayio/Bitmap.c shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Bitmap.c
+#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Bitmap.c
+#: shared-module/displayio/lvgl/Group.c
 msgid "Read-only"
 msgstr ""
 
@@ -4277,7 +4284,8 @@ msgstr ""
 
 #: shared-bindings/displayio/TileGrid.c
 #: shared-bindings/tilepalettemapper/TilePaletteMapper.c
-#: shared-module/displayio/TileGrid.c
+#: shared-module/displayio/legacy/TileGrid.c
+#: shared-module/displayio/lvgl/TileGrid.c
 msgid "Tile index out of bounds"
 msgstr ""
 
@@ -4576,50 +4584,85 @@ msgstr ""
 msgid "unsupported bitmap depth"
 msgstr ""
 
+#: shared-module/busdisplay/lvgl/BusDisplay.c
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
+msgid "LVGL display create failed"
+msgstr ""
+
+#: shared-module/busdisplay/lvgl/BusDisplay.c
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
+msgid "LVGL buffer alloc failed"
+msgstr ""
+
 #: shared-module/cryptography/hazmat/primitives/asymmetric/rsa/DigitalSignatureKey.c
 msgid "OAEP requires this build to enable TLS 1.3 support"
 msgstr ""
 
-#: shared-module/displayio/Bitmap.c
+#: shared-module/displayio/bus_core.c
+msgid "Unsupported display bus type"
+msgstr ""
+
+#: shared-module/displayio/legacy/Bitmap.c
+#: shared-module/displayio/lvgl/Bitmap.c
 msgid "Invalid bits per value"
 msgstr ""
 
-#: shared-module/displayio/ColorConverter.c
+#: shared-module/displayio/legacy/ColorConverter.c
+#: shared-module/displayio/lvgl/ColorConverter.c
 msgid "Only one color can be transparent at a time"
 msgstr ""
 
-#: shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Group.c
 msgid "Layer already in a group"
 msgstr ""
 
-#: shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Group.c
 msgid "Layer must be a Group or TileGrid subclass"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 #, c-format
 msgid ""
 "Only Windows format, uncompressed BMP supported: given header size is %d"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 msgid "RLE-compressed BMP not supported"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 msgid "Unable to read color palette data"
 msgstr ""
 
-#: shared-module/displayio/__init__.c
+#: shared-module/displayio/legacy/__init__.c
 msgid "Too many displays"
 msgstr ""
 
-#: shared-module/displayio/__init__.c
+#: shared-module/displayio/legacy/__init__.c
 msgid "Too many display busses; forgot displayio.release_displays() ?"
 msgstr ""
 
-#: shared-module/displayio/bus_core.c
-msgid "Unsupported display bus type"
+#: shared-module/displayio/lvgl/Group.c
+msgid "Layer does not support scaling"
+msgstr ""
+
+#: shared-module/displayio/lvgl/Group.c
+msgid "Layer must be a Group, TileGrid or vector shape"
+msgstr ""
+
+#: shared-module/displayio/lvgl/TileGrid.c
+msgid "LVGL displayio backend does not support flips/transpose yet"
+msgstr ""
+
+#: shared-module/displayio/lvgl/TileGrid.c
+msgid "OnDiskBitmap requires its own pixel_shader"
+msgstr ""
+
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
+msgid "LVGL dirty row alloc failed"
 msgstr ""
 
 #: shared-module/gifio/GifWriter.c
