@@ -210,18 +210,22 @@ static mp_obj_t jpegio_jpegdecoder_decode(size_t n_args, const mp_obj_t *pos_arg
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(jpegio_jpegdecoder_decode_obj, 1, jpegio_jpegdecoder_decode);
 
-// Releases any hardware decoder the object holds when it is collected.
-static mp_obj_t jpegio_jpegdecoder_del(mp_obj_t self_in) {
+//|     def deinit(self) -> None:
+//|         """Release any hardware decoder this object holds. Also called when the object is collected."""
+//|         ...
+//|
+static mp_obj_t jpegio_jpegdecoder_deinit(mp_obj_t self_in) {
     jpegio_jpegdecoder_obj_t *self = MP_OBJ_TO_PTR(self_in);
     common_hal_jpegio_jpegdecoder_deinit(self);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(jpegio_jpegdecoder_del_obj, jpegio_jpegdecoder_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(jpegio_jpegdecoder_deinit_obj, jpegio_jpegdecoder_deinit);
 
 static const mp_rom_map_elem_t jpegio_jpegdecoder_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&jpegio_jpegdecoder_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_decode), MP_ROM_PTR(&jpegio_jpegdecoder_decode_obj) },
-    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&jpegio_jpegdecoder_del_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&jpegio_jpegdecoder_deinit_obj) },
+    { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&jpegio_jpegdecoder_deinit_obj) },
 };
 static MP_DEFINE_CONST_DICT(jpegio_jpegdecoder_locals_dict, jpegio_jpegdecoder_locals_dict_table);
 
