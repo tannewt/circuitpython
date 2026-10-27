@@ -478,9 +478,12 @@ bool common_hal_socketpool_socket_get_connected(socketpool_socket_obj_t *self) {
     self->connected_valid = true;
     self->connected = buf[0] == SOCKET_ESTABLISHED;
     if (buf[0] == SOCKET_CLOSED) {
-        // nina-fw frees the number of a closed client when asked its state, so
-        // it may be handed to someone else now.
-        forget(self);
+        // nina-fw 3.1.0 to 3.3.0 don't free the number of a client a server
+        // accepted when asked its state (3.3.0 frees only clients it connected
+        // itself), so each client that hangs up first would keep its number
+        // until a hard reset. Once all six are kept, every new connection is
+        // reset. STOP_CLIENT_TCP frees it, and does nothing to a free number.
+        stop_and_forget(self);
     }
     return self->connected;
 }
