@@ -188,10 +188,15 @@ static mp_obj_t busdisplay_busdisplay_make_new(const mp_obj_type_t *type, size_t
         mp_raise_ValueError_varg(MP_ERROR_TEXT("%q must be 1 when %q is True"), MP_QSTR_color_depth, MP_QSTR_SH1107_addressing);
     }
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    busdisplay_busdisplay_obj_t *self = m_new_obj(busdisplay_busdisplay_obj_t);
+    self->base.type = &busdisplay_busdisplay_type;
+    #else
     primary_display_t *disp = allocate_display_or_raise();
     busdisplay_busdisplay_obj_t *self = &disp->display;
 
     self->base.type = &busdisplay_busdisplay_type;
+    #endif
     common_hal_busdisplay_busdisplay_construct(
         self,
         display_bus, args[ARG_width].u_int, args[ARG_height].u_int, args[ARG_colstart].u_int, args[ARG_rowstart].u_int, rotation,

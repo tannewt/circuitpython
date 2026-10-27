@@ -14,6 +14,10 @@
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_mipi_dsi.h>
 
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "lvgl.h"
+#endif
+
 typedef struct {
     mp_obj_base_t base;
     mipidsi_bus_obj_t *bus;
@@ -24,9 +28,18 @@ typedef struct {
     mp_uint_t color_depth;
     mp_uint_t native_frames_per_second;
     uint8_t *framebuffer;
+    size_t framebuffer_size;
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    lv_display_t *lv_display;
+    lv_color_format_t lv_color_format;
+    displayio_group_t *root_group;
+    uint64_t last_refresh_call;
+    bool auto_refresh;
+    bool first_manual_refresh;
+    bool deinited;
+    #endif
     esp_lcd_panel_io_handle_t dbi_io_handle;
     esp_lcd_panel_handle_t dpi_panel_handle;
-    size_t framebuffer_size;
     union {
         digitalio_digitalinout_obj_t backlight_inout;
         #if CIRCUITPY_PWMIO

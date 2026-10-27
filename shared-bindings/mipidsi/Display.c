@@ -101,8 +101,13 @@ static mp_obj_t mipidsi_display_make_new(const mp_obj_type_t *type, size_t n_arg
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    mipidsi_display_obj_t *self = m_new_obj(mipidsi_display_obj_t);
+    self->base.type = &mipidsi_display_type;
+    #else
     mipidsi_display_obj_t *self = &allocate_display_bus_or_raise()->mipidsi;
     self->base.type = &mipidsi_display_type;
+    #endif
 
     mipidsi_bus_obj_t *bus = mp_arg_validate_type(args[ARG_bus].u_obj, &mipidsi_bus_type, MP_QSTR_bus);
 

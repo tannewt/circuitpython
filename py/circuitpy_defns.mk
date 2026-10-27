@@ -893,7 +893,7 @@ SRC_SHARED_MODULE_ALL = \
 
 # The displayio implementation sources live in one of the two backend directories:
 ifeq ($(CIRCUITPY_DISPLAYIO_LVGL),1)
-SRC_SHARED_MODULE_ALL += \
+SRC_SHARED_MODULE_INTERNAL += \
 	displayio/lvgl/Bitmap.c \
 	displayio/lvgl/ColorConverter.c \
 	displayio/lvgl/Group.c \
@@ -903,7 +903,7 @@ SRC_SHARED_MODULE_ALL += \
 	displayio/lvgl/TileGrid.c \
 
 else
-SRC_SHARED_MODULE_ALL += \
+SRC_SHARED_MODULE_INTERNAL += \
 	displayio/legacy/__init__.c \
 	displayio/legacy/area.c \
 	displayio/legacy/Bitmap.c \
