@@ -183,8 +183,7 @@ void common_hal_bitmaptools_rotozoom(displayio_bitmap_t *self, int16_t ox, int16
     mp_float_t rowu = startu + miny * duCol;
     mp_float_t rowv = startv + miny * dvCol;
 
-    displayio_area_t dirty_area = {minx, miny, maxx + 1, maxy + 1, NULL};
-    displayio_bitmap_set_dirty_area(self, &dirty_area);
+    displayio_bitmap_set_dirty(self, minx, miny, maxx + 1, maxy + 1);
 
     for (y = miny; y <= maxy; y++) {
         mp_float_t u = rowu + minx * duRow;
@@ -227,18 +226,30 @@ void common_hal_bitmaptools_fill_region(displayio_bitmap_t *destination,
     //
     // input checks should ensure that x1 < x2 and y1 < y2 and are within the bitmap region
 
-    displayio_area_t area = { x1, y1, x2, y2, NULL };
-    displayio_area_canon(&area);
-
-    displayio_area_t bitmap_area = { 0, 0, destination->width, destination->height, NULL };
-    displayio_area_compute_overlap(&area, &bitmap_area, &area);
+    // canon and clip to the bitmap bounds
+    int16_t clx1 = x1 < x2 ? x1 : x2;
+    int16_t clx2 = x1 < x2 ? x2 : x1;
+    int16_t cly1 = y1 < y2 ? y1 : y2;
+    int16_t cly2 = y1 < y2 ? y2 : y1;
+    if (clx1 < 0) {
+        clx1 = 0;
+    }
+    if (cly1 < 0) {
+        cly1 = 0;
+    }
+    if (clx2 > destination->width) {
+        clx2 = destination->width;
+    }
+    if (cly2 > destination->height) {
+        cly2 = destination->height;
+    }
 
     // update the dirty rectangle
-    displayio_bitmap_set_dirty_area(destination, &area);
+    displayio_bitmap_set_dirty(destination, clx1, cly1, clx2, cly2);
 
     int16_t x, y;
-    for (x = area.x1; x < area.x2; x++) {
-        for (y = area.y1; y < area.y2; y++) {
+    for (x = clx1; x < clx2; x++) {
+        for (y = cly1; y < cly2; y++) {
             displayio_bitmap_write_pixel(destination, x, y, value);
         }
     }
@@ -382,8 +393,7 @@ void common_hal_bitmaptools_boundary_fill(displayio_bitmap_t *destination,
     }
 
     // set dirty the area so displayio will draw
-    displayio_area_t area = { minx, miny, maxx + 1, maxy + 1, NULL};
-    displayio_bitmap_set_dirty_area(destination, &area);
+    displayio_bitmap_set_dirty(destination, minx, miny, maxx + 1, maxy + 1);
 
 }
 
@@ -490,11 +500,8 @@ void common_hal_bitmaptools_draw_line(displayio_bitmap_t *destination,
         ybb0 = y1;
         ybb1 = y0 + 1;
     }
-    displayio_area_t area = { xbb0, ybb0, xbb1, ybb1, NULL };
-    displayio_area_t bitmap_area = { 0, 0, destination->width, destination->height, NULL };
-    displayio_area_compute_overlap(&area, &bitmap_area, &area);
 
-    displayio_bitmap_set_dirty_area(destination, &area);
+    displayio_bitmap_set_dirty(destination, xbb0, ybb0, xbb1, ybb1);
 
     draw_line(destination, x0, y0, x1, y1, value);
 }
@@ -537,10 +544,7 @@ void common_hal_bitmaptools_draw_polygon(displayio_bitmap_t *destination, void *
         draw_line(destination, xprev, yprev, x0, y0, value);
     }
 
-    displayio_area_t area = { xmin, ymin, xmax, ymax, NULL };
-    displayio_area_t bitmap_area = { 0, 0, destination->width, destination->height, NULL };
-    displayio_area_compute_overlap(&area, &bitmap_area, &area);
-    displayio_bitmap_set_dirty_area(destination, &area);
+    displayio_bitmap_set_dirty(destination, xmin, ymin, xmax + 1, ymax + 1);
 }
 
 void common_hal_bitmaptools_arrayblit(displayio_bitmap_t *self, void *data, int element_size, int x1, int y1, int x2, int y2, bool skip_specified, uint32_t skip_value) {
@@ -569,8 +573,7 @@ void common_hal_bitmaptools_arrayblit(displayio_bitmap_t *self, void *data, int 
             }
         }
     }
-    displayio_area_t area = { x1, y1, x2, y2, NULL };
-    displayio_bitmap_set_dirty_area(self, &area);
+    displayio_bitmap_set_dirty(self, x1, y1, x2, y2);
 }
 
 void common_hal_bitmaptools_readinto(displayio_bitmap_t *self, mp_obj_t *file, int element_size, int bits_per_pixel, bool reverse_pixels_in_element, bool swap_bytes, bool reverse_rows) {
@@ -578,8 +581,7 @@ void common_hal_bitmaptools_readinto(displayio_bitmap_t *self, mp_obj_t *file, i
 
     mp_get_stream_raise(file, MP_STREAM_OP_READ);
 
-    displayio_area_t a = {0, 0, self->width, self->height, NULL};
-    displayio_bitmap_set_dirty_area(self, &a);
+    displayio_bitmap_set_dirty(self, 0, 0, self->width, self->height);
 
     size_t elements_per_row = (self->width * bits_per_pixel + element_size * 8 - 1) / (element_size * 8);
     size_t rowsize = element_size * elements_per_row;
@@ -854,15 +856,13 @@ void common_hal_bitmaptools_dither(displayio_bitmap_t *dest_bitmap, displayio_bi
         fill_row(source_bitmap, swap, rows[2], y + 3, info->mx);
     }
 
-    displayio_area_t a = { 0, 0, width, height, NULL };
-    displayio_bitmap_set_dirty_area(dest_bitmap, &a);
+    displayio_bitmap_set_dirty(dest_bitmap, 0, 0, width, height);
 }
 
 void common_hal_bitmaptools_alphablend(displayio_bitmap_t *dest, displayio_bitmap_t *source1, displayio_bitmap_t *source2, displayio_colorspace_t colorspace, mp_float_t factor1, mp_float_t factor2,
     bitmaptools_blendmode_t blendmode, uint32_t skip_source1_index, bool skip_source1_index_none, uint32_t skip_source2_index, bool skip_source2_index_none,
     displayio_bitmap_t *mask) {
-    displayio_area_t a = {0, 0, dest->width, dest->height, NULL};
-    displayio_bitmap_set_dirty_area(dest, &a);
+    displayio_bitmap_set_dirty(dest, 0, 0, dest->width, dest->height);
 
     int ifactor1_base = (int)(factor1 * 256);
     int ifactor2_base = (int)(factor2 * 256);
@@ -1073,11 +1073,7 @@ void common_hal_bitmaptools_draw_circle(displayio_bitmap_t *destination,
     ybb0 = y - radius;
     ybb1 = y + radius;
 
-    displayio_area_t area = { xbb0, ybb0, xbb1, ybb1, NULL };
-    displayio_area_t bitmap_area = { 0, 0, destination->width, destination->height, NULL };
-    displayio_area_compute_overlap(&area, &bitmap_area, &area);
-
-    displayio_bitmap_set_dirty_area(destination, &area);
+    displayio_bitmap_set_dirty(destination, xbb0, ybb0, xbb1, ybb1);
 
     draw_circle(destination, x, y, radius, value);
 }
@@ -1149,8 +1145,7 @@ void common_hal_bitmaptools_blit(displayio_bitmap_t *destination, displayio_bitm
         dirty_y_max = destination->height;
     }
 
-    displayio_area_t a = { x, y, dirty_x_max, dirty_y_max, NULL};
-    displayio_bitmap_set_dirty_area(destination, &a);
+    displayio_bitmap_set_dirty(destination, x, y, dirty_x_max, dirty_y_max);
 
     bool x_reverse = false;
     bool y_reverse = false;

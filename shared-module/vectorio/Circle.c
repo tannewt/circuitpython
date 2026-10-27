@@ -6,7 +6,7 @@
 
 #include "shared-bindings/vectorio/Circle.h"
 #include "shared-module/vectorio/__init__.h"
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 
 #include "py/runtime.h"
 #include "stdlib.h"

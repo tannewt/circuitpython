@@ -220,7 +220,9 @@ void supervisor_start_terminal(uint16_t width_px, uint16_t height_px) {
     // Right align the status bar.
     status_bar->x = width_px - status_bar->pixel_width;
     status_bar->top_left_y = 0;
+    #if !CIRCUITPY_DISPLAYIO_LVGL
     status_bar->full_change = true;
+    #endif
 
     scroll_area->tile_width = glyph_width;
     scroll_area->tile_height = glyph_height;
@@ -235,7 +237,9 @@ void supervisor_start_terminal(uint16_t width_px, uint16_t height_px) {
     // Align the scroll area to the bottom so that the newest line isn't cutoff. The top line
     // may be clipped by the status bar and that's ok.
     scroll_area->y = height_px - scroll_area->pixel_height;
+    #if !CIRCUITPY_DISPLAYIO_LVGL
     scroll_area->full_change = true;
+    #endif
 
     mp_obj_t new_bitmap = mp_const_none;
     mp_obj_t new_font = mp_const_none;

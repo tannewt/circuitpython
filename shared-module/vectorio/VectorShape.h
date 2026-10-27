@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #include "py/obj.h"
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 #include "shared-module/displayio/Palette.h"
 
 typedef void get_area_function(mp_obj_t shape, displayio_area_t *out_area);

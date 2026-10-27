@@ -282,6 +282,12 @@ CFLAGS += -DCIRCUITPY_COUNTIO=$(CIRCUITPY_COUNTIO)
 CIRCUITPY_DISPLAYIO ?= $(CIRCUITPY_FULL_BUILD)
 CFLAGS += -DCIRCUITPY_DISPLAYIO=$(CIRCUITPY_DISPLAYIO)
 
+# Select the displayio compositing core implementation: 0 = legacy scanline core (default),
+# 1 = LVGL-based core (shared-module/displayio/lvgl). The LVGL variant requires LVGL be
+# available to the port at build time.
+CIRCUITPY_DISPLAYIO_LVGL ?= 0
+CFLAGS += -DCIRCUITPY_DISPLAYIO_LVGL=$(CIRCUITPY_DISPLAYIO_LVGL)
+
 # Stack bytes a display refresh composes at once. Bigger means fewer, larger pieces per refresh.
 CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE ?= 512
 CFLAGS += -DCIRCUITPY_DISPLAY_AREA_BUFFER_SIZE=$(CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE)

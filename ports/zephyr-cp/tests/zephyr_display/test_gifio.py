@@ -11,6 +11,17 @@ from PIL import Image
 _TEST_GIF_PATH = Path(__file__).parent / "test.gif"
 _TEST_GIF_BYTES = _TEST_GIF_PATH.read_bytes()
 
+# Compositor-agnostic display access: on legacy-compositor builds the display is
+# board.DISPLAY; on LVGL-compositor builds it is supervisor.runtime.display.
+_DISPLAY_HELPER = """\
+import supervisor
+try:
+    import board
+    display = board.DISPLAY
+except AttributeError:
+    display = supervisor.runtime.display
+"""
+
 
 def _read_image(path: Path) -> tuple[int, int, bytes]:
     with Image.open(path) as img:
@@ -64,8 +75,9 @@ print('done')
 """
 
 
-GIFIO_DECODE_CODE = """\
-import board
+GIFIO_DECODE_CODE = (
+    _DISPLAY_HELPER
+    + """\
 import displayio
 import time
 from gifio import OnDiskGif
@@ -82,12 +94,12 @@ tg = displayio.TileGrid(
     ),
 )
 g = displayio.Group(scale=scale)
-g.x = (board.DISPLAY.width - odg.width * scale) // 2
-g.y = (board.DISPLAY.height - odg.height * scale) // 2
+g.x = (display.width - odg.width * scale) // 2
+g.y = (display.height - odg.height * scale) // 2
 g.append(tg)
 
-board.DISPLAY.auto_refresh = False
-board.DISPLAY.root_group = g
+display.auto_refresh = False
+display.root_group = g
 
 # Pin the render loop to a known point in simulated time so that the
 # capture_times_ns schedule below lands on each GIF frame while it is on screen.
@@ -99,7 +111,7 @@ print('loop_start', round(time.monotonic(), 3))
 
 for frame_index in range(odg.frame_count):
     odg.next_frame()
-    board.DISPLAY.refresh()
+    display.refresh()
     print('rendered', frame_index, round(time.monotonic(), 3))
     # Hold this frame on screen; the capture for this frame is scheduled
     # for the middle of this window.
@@ -111,6 +123,7 @@ print('done')
 while True:
     time.sleep(1)
 """
+)
 
 
 # Keep these in sync with LOOP_START / FRAME_HOLD in GIFIO_DECODE_CODE.

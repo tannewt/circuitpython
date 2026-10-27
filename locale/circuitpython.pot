@@ -1984,11 +1984,14 @@ msgstr ""
 msgid "Audio conversion not implemented"
 msgstr ""
 
-#: ports/raspberrypi/bindings/cyw43/__init__.c py/argcheck.c py/objexcept.c
-#: shared-bindings/bitmapfilter/__init__.c shared-bindings/canio/CAN.c
-#: shared-bindings/digitalio/Pull.c shared-bindings/picogame/Sprite.c
-#: shared-bindings/supervisor/__init__.c shared-module/audiofilters/__init__.c
-#: shared-module/displayio/__init__.c shared-module/synthio/Synthesizer.c
+#: ports/raspberrypi/bindings/cyw43/__init__.c
+#: ports/zephyr-cp/common-hal/zephyr_display/Display.c py/argcheck.c
+#: py/objexcept.c shared-bindings/bitmapfilter/__init__.c
+#: shared-bindings/canio/CAN.c shared-bindings/digitalio/Pull.c
+#: shared-bindings/picogame/Sprite.c shared-bindings/supervisor/__init__.c
+#: shared-module/audiofilters/__init__.c
+#: shared-module/displayio/legacy/__init__.c
+#: shared-module/synthio/Synthesizer.c
 msgid "%q must be of type %q or %q, not %q"
 msgstr ""
 
@@ -3845,7 +3848,9 @@ msgstr ""
 #: shared-bindings/_bleio/__init__.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/memorymonitor/AllocationSize.c
 #: shared-bindings/pulseio/PulseIn.c shared-module/bitmaptools/__init__.c
-#: shared-module/displayio/Bitmap.c shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Bitmap.c
+#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Bitmap.c
+#: shared-module/displayio/lvgl/Group.c
 msgid "Read-only"
 msgstr ""
 
@@ -4213,7 +4218,8 @@ msgstr ""
 
 #: shared-bindings/displayio/TileGrid.c
 #: shared-bindings/tilepalettemapper/TilePaletteMapper.c
-#: shared-module/displayio/TileGrid.c
+#: shared-module/displayio/legacy/TileGrid.c
+#: shared-module/displayio/lvgl/TileGrid.c
 msgid "Tile index out of bounds"
 msgstr ""
 
@@ -4516,46 +4522,55 @@ msgstr ""
 msgid "unsupported bitmap depth"
 msgstr ""
 
-#: shared-module/displayio/Bitmap.c
+#: shared-module/displayio/bus_core.c
+msgid "Unsupported display bus type"
+msgstr ""
+
+#: shared-module/displayio/legacy/Bitmap.c
+#: shared-module/displayio/lvgl/Bitmap.c
 msgid "Invalid bits per value"
 msgstr ""
 
-#: shared-module/displayio/ColorConverter.c
+#: shared-module/displayio/legacy/ColorConverter.c
+#: shared-module/displayio/lvgl/ColorConverter.c
 msgid "Only one color can be transparent at a time"
 msgstr ""
 
-#: shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Group.c
 msgid "Layer already in a group"
 msgstr ""
 
-#: shared-module/displayio/Group.c
+#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Group.c
 msgid "Layer must be a Group or TileGrid subclass"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 #, c-format
 msgid ""
 "Only Windows format, uncompressed BMP supported: given header size is %d"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 msgid "RLE-compressed BMP not supported"
 msgstr ""
 
-#: shared-module/displayio/OnDiskBitmap.c
+#: shared-module/displayio/legacy/OnDiskBitmap.c
+#: shared-module/displayio/lvgl/OnDiskBitmap.c
 msgid "Unable to read color palette data"
 msgstr ""
 
-#: shared-module/displayio/__init__.c
+#: shared-module/displayio/legacy/__init__.c
 msgid "Too many displays"
 msgstr ""
 
-#: shared-module/displayio/__init__.c
+#: shared-module/displayio/legacy/__init__.c
 msgid "Too many display busses; forgot displayio.release_displays() ?"
 msgstr ""
 
-#: shared-module/displayio/bus_core.c
-msgid "Unsupported display bus type"
+#: shared-module/displayio/lvgl/TileGrid.c
+msgid "LVGL displayio backend does not support flips/transpose yet"
 msgstr ""
 
 #: shared-module/gifio/GifWriter.c

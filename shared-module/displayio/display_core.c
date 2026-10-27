@@ -116,7 +116,8 @@ bool displayio_display_core_set_root_group(displayio_display_core_t *self, displ
     }
 
     if (root_group != NULL) {
-        displayio_group_update_transform(root_group, &self->transform);
+        // The compositor updates its own state when the group is attached: the legacy
+        // compositor re-applies transforms at the start of every display refresh.
         root_group->in_group = true;
     }
     self->current_group = root_group;
@@ -150,10 +151,9 @@ bool displayio_display_core_start_refresh(displayio_display_core_t *self) {
 }
 
 void displayio_display_core_finish_refresh(displayio_display_core_t *self) {
-    if (self->current_group != NULL) {
-        DISPLAYIO_CORE_DEBUG("displayiocore group_finish_refresh\n");
-        displayio_group_finish_refresh(self->current_group);
-    }
+    // The compositor's per-group finish refresh is the display's responsibility: each
+    // backend calls its own compositor API after this bookkeeping. The legacy compositor
+    // provides displayio_group_finish_refresh(); the LVGL compositor needs no equivalent.
     self->full_refresh = false;
     self->refresh_in_progress = false;
     self->last_refresh = supervisor_ticks_ms64();
@@ -167,39 +167,4 @@ void release_display_core(displayio_display_core_t *self) {
 
 void displayio_display_core_collect_ptrs(displayio_display_core_t *self) {
     gc_collect_ptr(self->current_group);
-}
-
-bool displayio_display_core_fill_area(displayio_display_core_t *self, displayio_area_t *area, uint32_t *mask, uint32_t *buffer) {
-    if (self->current_group != NULL) {
-        return displayio_group_fill_area(self->current_group, &self->colorspace, area, mask, buffer);
-    }
-    return false;
-}
-
-bool displayio_display_core_clip_area(displayio_display_core_t *self, const displayio_area_t *area, displayio_area_t *clipped) {
-    bool overlaps = displayio_area_compute_overlap(&self->area, area, clipped);
-    if (!overlaps) {
-        return false;
-    }
-    // Expand the area if we have multiple pixels per byte and we need to byte
-    // align the bounds.
-    if (self->colorspace.depth < 8) {
-        uint8_t pixels_per_byte = 8 / self->colorspace.depth * self->colorspace.bytes_per_cell;
-        if (self->colorspace.pixels_in_byte_share_row) {
-            if (clipped->x1 % pixels_per_byte != 0) {
-                clipped->x1 -= clipped->x1 % pixels_per_byte;
-            }
-            if (clipped->x2 % pixels_per_byte != 0) {
-                clipped->x2 += pixels_per_byte - clipped->x2 % pixels_per_byte;
-            }
-        } else {
-            if (clipped->y1 % pixels_per_byte != 0) {
-                clipped->y1 -= clipped->y1 % pixels_per_byte;
-            }
-            if (clipped->y2 % pixels_per_byte != 0) {
-                clipped->y2 += pixels_per_byte - clipped->y2 % pixels_per_byte;
-            }
-        }
-    }
-    return true;
 }

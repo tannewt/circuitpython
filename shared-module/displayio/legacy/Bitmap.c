@@ -109,12 +109,12 @@ uint32_t common_hal_displayio_bitmap_get_pixel(displayio_bitmap_t *self, int16_t
     return 0;
 }
 
-void displayio_bitmap_set_dirty_area(displayio_bitmap_t *self, const displayio_area_t *dirty_area) {
+void displayio_bitmap_set_dirty(displayio_bitmap_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
     if (self->read_only) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
     }
 
-    displayio_area_t area = *dirty_area;
+    displayio_area_t area = {x1, y1, x2, y2, NULL};
     displayio_area_canon(&area);
     displayio_area_union(&area, &self->dirty_area, &area);
     displayio_area_t bitmap_area = {0, 0, self->width, self->height, NULL};
@@ -160,8 +160,7 @@ void common_hal_displayio_bitmap_set_pixel(displayio_bitmap_t *self, int16_t x, 
         mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
     }
     // update the dirty region
-    displayio_area_t a = {x, y, x + 1, y + 1, NULL};
-    displayio_bitmap_set_dirty_area(self, &a);
+    displayio_bitmap_set_dirty(self, x, y, x + 1, y + 1);
 
     // write the pixel
     displayio_bitmap_write_pixel(self, x, y, value);
@@ -188,8 +187,7 @@ void common_hal_displayio_bitmap_fill(displayio_bitmap_t *self, uint32_t value) 
     if (self->read_only) {
         mp_raise_RuntimeError(MP_ERROR_TEXT("Read-only"));
     }
-    displayio_area_t a = {0, 0, self->width, self->height, NULL};
-    displayio_bitmap_set_dirty_area(self, &a);
+    displayio_bitmap_set_dirty(self, 0, 0, self->width, self->height);
 
     // build the packed word
     uint32_t word = 0;

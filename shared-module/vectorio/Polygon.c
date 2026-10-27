@@ -6,7 +6,7 @@
 
 #include "shared-module/vectorio/__init__.h"
 #include "shared-bindings/vectorio/Polygon.h"
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 
 #include "py/runtime.h"
 #include "py/gc.h"

@@ -11,6 +11,17 @@ from PIL import Image
 _TEST_JPG_PATH = Path(__file__).parent / "test.jpg"
 _TEST_JPG_BYTES = _TEST_JPG_PATH.read_bytes()
 
+# Compositor-agnostic display access: on legacy-compositor builds the display is
+# board.DISPLAY; on LVGL-compositor builds it is supervisor.runtime.display.
+_DISPLAY_HELPER = """\
+import supervisor
+try:
+    import board
+    display = board.DISPLAY
+except AttributeError:
+    display = supervisor.runtime.display
+"""
+
 
 def _read_image(path: Path) -> tuple[int, int, bytes]:
     with Image.open(path) as img:
@@ -33,8 +44,9 @@ def _golden_compare_or_update(request, captures, golden_path):
     assert gpx == dpx
 
 
-JPEGIO_DECODE_CODE = """\
-import board
+JPEGIO_DECODE_CODE = (
+    _DISPLAY_HELPER
+    + """\
 import displayio
 import time
 from jpegio import JpegDecoder
@@ -57,17 +69,18 @@ tg = displayio.TileGrid(
     ),
 )
 g = displayio.Group(scale=scale)
-g.x = (board.DISPLAY.width - width * scale) // 2
-g.y = (board.DISPLAY.height - height * scale) // 2
+g.x = (display.width - width * scale) // 2
+g.y = (display.height - height * scale) // 2
 g.append(tg)
 
-board.DISPLAY.auto_refresh = False
-board.DISPLAY.root_group = g
-board.DISPLAY.refresh()
+display.auto_refresh = False
+display.root_group = g
+display.refresh()
 print('rendered')
 while True:
     time.sleep(1)
 """
+)
 
 
 _JPEGIO_DRIVE = {"code.py": JPEGIO_DECODE_CODE, "test.jpg": _TEST_JPG_BYTES}

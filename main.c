@@ -393,7 +393,9 @@ static void cleanup_after_vm(mp_obj_t exception) {
     #endif
 
     // Turn off the display and flush the filesystem before the heap disappears.
-    #if CIRCUITPY_DISPLAYIO
+    #if CIRCUITPY_DISPLAYIO && !CIRCUITPY_DISPLAYIO_LVGL
+    // The LVGL compositor owns its display surfaces outside CircuitPython's display
+    // registry, so they survive VM resets.
     reset_displays();
     #endif
 

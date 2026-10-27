@@ -797,14 +797,6 @@ SRC_SHARED_MODULE_ALL = \
 	canio/Match.c \
 	canio/Message.c \
 	canio/RemoteTransmissionRequest.c \
-	displayio/Bitmap.c \
-	displayio/ColorConverter.c \
-	displayio/Group.c \
-	displayio/OnDiskBitmap.c \
-	displayio/Palette.c \
-	displayio/TileGrid.c \
-	displayio/area.c \
-	displayio/__init__.c \
 	dotclockframebuffer/__init__.c \
 	emmcio/__init__.c \
 	epaperdisplay/__init__.c \
@@ -898,6 +890,31 @@ SRC_SHARED_MODULE_ALL = \
 	warnings/__init__.c \
 	watchdog/__init__.c \
 	zlib/__init__.c \
+
+# The displayio implementation sources live in one of the two backend directories:
+ifeq ($(CIRCUITPY_DISPLAYIO_LVGL),1)
+SRC_SHARED_MODULE_ALL += \
+	displayio/lvgl/Bitmap.c \
+	displayio/lvgl/ColorConverter.c \
+	displayio/lvgl/Group.c \
+	displayio/lvgl/lvgl_image.c \
+	displayio/lvgl/OnDiskBitmap.c \
+	displayio/lvgl/Palette.c \
+	displayio/lvgl/TileGrid.c \
+
+else
+SRC_SHARED_MODULE_ALL += \
+	displayio/legacy/__init__.c \
+	displayio/legacy/area.c \
+	displayio/legacy/Bitmap.c \
+	displayio/legacy/ColorConverter.c \
+	displayio/legacy/display_core_scanline.c \
+	displayio/legacy/Group.c \
+	displayio/legacy/OnDiskBitmap.c \
+	displayio/legacy/Palette.c \
+	displayio/legacy/TileGrid.c \
+
+endif
 
 # All possible sources are listed here, and are filtered by SRC_PATTERNS.
 SRC_SHARED_MODULE = $(filter $(SRC_PATTERNS), $(SRC_SHARED_MODULE_ALL))

@@ -12,7 +12,7 @@
 #include "py/obj.h"
 #include "py/proto.h"
 
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 #include "shared-module/displayio/Palette.h"
 
 // Returns the object on which the rest of the draw protocol methods are invoked.

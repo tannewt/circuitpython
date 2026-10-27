@@ -380,6 +380,9 @@ static void _refresh_display(busdisplay_busdisplay_obj_t *self) {
         current_area = current_area->next;
     }
     displayio_display_core_finish_refresh(&self->core);
+    if (self->core.current_group != NULL) {
+        displayio_group_finish_refresh(self->core.current_group);
+    }
 }
 
 void common_hal_busdisplay_busdisplay_set_rotation(busdisplay_busdisplay_obj_t *self, int rotation) {

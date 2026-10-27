@@ -235,6 +235,9 @@ static void _refresh_display(framebufferio_framebufferdisplay_obj_t *self) {
         self->framebuffer_protocol->swapbuffers(self->framebuffer, dirty_row_bitmask);
     }
     displayio_display_core_finish_refresh(&self->core);
+    if (self->core.current_group != NULL) {
+        displayio_group_finish_refresh(self->core.current_group);
+    }
 }
 
 void common_hal_framebufferio_framebufferdisplay_set_rotation(framebufferio_framebufferdisplay_obj_t *self, int rotation) {

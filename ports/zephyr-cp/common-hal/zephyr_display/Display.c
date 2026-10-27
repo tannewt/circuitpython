@@ -16,6 +16,239 @@
 #include "supervisor/shared/display.h"
 #include "supervisor/shared/tick.h"
 
+
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include <lvgl.h>
+#include <lvgl_display.h>
+#include <lvgl_zephyr.h>
+
+#include "shared-bindings/displayio/Group.h"
+#include "shared-module/displayio/lvgl/lvgl_internal.h"
+#include "shared-bindings/displayio/__init__.h"
+
+// Single-display port. The display object is port-malloc'd in board_init and reached
+// via supervisor.runtime.display; displayio.release_displays() is a no-op (deinit the
+// display object instead).
+extern zephyr_display_display_obj_t *zephyr_display_display_instance;
+
+mp_obj_t common_hal_displayio_get_primary_display(void) {
+    if (zephyr_display_display_instance != NULL &&
+        zephyr_display_display_instance->base.type == &zephyr_display_display_type) {
+        return zephyr_display_display_instance;
+    }
+    return mp_const_none;
+}
+
+void common_hal_displayio_set_primary_display(mp_obj_t new_primary_display) {
+    if (new_primary_display == mp_const_none) {
+        return;
+    }
+    mp_obj_t primary = common_hal_displayio_get_primary_display();
+    if (primary == mp_const_none || new_primary_display != primary) {
+        mp_raise_TypeError_varg(MP_ERROR_TEXT("%q must be of type %q or %q, not %q"),
+            MP_QSTR_Display,
+            MP_QSTR_Display, MP_QSTR_AnyDisplay, MP_QSTR_None);
+    }
+}
+
+void common_hal_displayio_auto_primary_display(void) {
+}
+
+void common_hal_displayio_release_displays(void) {
+    // No-op: displays are owned by their creator; deinit the display object instead.
+}
+
+// The LVGL compositor's port hooks: the RTOS renders LVGL on its workqueue thread, and
+// CircuitPython-side mirror mutations take the glue's LVGL lock.
+void displayio_lvgl_port_lock(void) {
+    lvgl_lock();
+}
+
+void displayio_lvgl_port_unlock(void) {
+    lvgl_unlock();
+}
+
+static void zephyr_display_lvgl_flush_argb_alpha0(lv_display_t *display, const lv_area_t *area,
+    uint8_t *px_map) {
+    // The legacy compositor's transfer buffer for 32-bit displays carried no alpha
+    // channel (0x00RRGGBB), which the SDL capture surfaces as its transparency grid.
+    // Match that: clear the alpha byte of every pixel before handing the buffer to the
+    // glue's 32-bit flush.
+    uint32_t size = (uint32_t)(area->x2 - area->x1 + 1) * (uint32_t)(area->y2 - area->y1 + 1);
+    for (uint32_t i = 0; i < size; i++) {
+        px_map[i * 4 + 3] = 0x00;
+    }
+    lvgl_flush_cb_32bit(display, area, px_map);
+}
+
+static void zephyr_display_lvgl_flush_565x(lv_display_t *display, const lv_area_t *area,
+    uint8_t *px_map) {
+    // The driver for RGB_565X panels reads big-endian pixels. Keep LVGL's buffer in
+    // plain RGB565 and swap on the way out (mirrors the legacy colorspace-level swap).
+    uint32_t size = (uint32_t)(area->x2 - area->x1 + 1) * (uint32_t)(area->y2 - area->y1 + 1);
+    uint16_t *px = (uint16_t *)px_map;
+    for (uint32_t i = 0; i < size; i++) {
+        px[i] = (uint16_t)((px[i] << 8) | (px[i] >> 8));
+    }
+    lvgl_flush_cb_16bit(display, area, px_map);
+}
+
+// Recreate the default LVGL display for the (possibly newly selected) driver pixel format,
+// mirroring the glue's lvgl_init() display setup.
+static void zephyr_display_lvgl_recreate_display(zephyr_display_display_obj_t *self) {
+    lv_display_t *old = lv_display_get_default();
+    if (old != NULL) {
+        lv_display_delete(old);
+    }
+
+    lv_display_t *display = lv_display_create(self->capabilities.x_resolution,
+        self->capabilities.y_resolution);
+    if (display == NULL) {
+        return;
+    }
+
+    struct lvgl_disp_data *data = lv_malloc(sizeof(struct lvgl_disp_data));
+    if (data == NULL) {
+        return;
+    }
+    memset(data, 0, sizeof(*data));
+    data->display_dev = self->device;
+    display_get_capabilities(self->device, &data->cap);
+    lv_display_set_user_data(display, data);
+
+    if (set_lvgl_rendering_cb(display) != 0) {
+        return;
+    }
+
+    // Override the glue's flush choice where the legacy-compatible transfer differs.
+    if (self->pixel_format == PIXEL_FORMAT_RGB_565X) {
+        lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
+        lv_display_set_flush_cb(display, zephyr_display_lvgl_flush_565x);
+    } else if (self->pixel_format == PIXEL_FORMAT_ABGR_8888 ||
+               self->pixel_format == PIXEL_FORMAT_BGRA_8888) {
+        // Legacy treated ABGR/BGRA as 32-bit passthrough without alpha as well.
+        lv_display_set_flush_cb(display, zephyr_display_lvgl_flush_argb_alpha0);
+    } else if (self->pixel_format == PIXEL_FORMAT_ARGB_8888) {
+        lv_display_set_flush_cb(display, zephyr_display_lvgl_flush_argb_alpha0);
+    }
+
+    // Partial-render-mode buffer, sized like the glue does.
+    uint16_t hor_res = lv_display_get_horizontal_resolution(display);
+    uint16_t ver_res = lv_display_get_vertical_resolution(display);
+    uint32_t buf_nbr_pixels = (CONFIG_LV_Z_VDB_SIZE * hor_res * ver_res) / 100;
+    if (buf_nbr_pixels < hor_res) {
+        buf_nbr_pixels = hor_res;
+    }
+    uint32_t buf_size;
+    bool mono = self->pixel_format == PIXEL_FORMAT_MONO01 || self->pixel_format == PIXEL_FORMAT_MONO10;
+    bool al88 = self->pixel_format == PIXEL_FORMAT_AL_88;
+    switch (self->pixel_format) {
+        case PIXEL_FORMAT_ARGB_8888:
+        case PIXEL_FORMAT_ABGR_8888:
+            buf_size = 4 * buf_nbr_pixels;
+            break;
+        case PIXEL_FORMAT_RGB_888:
+        case PIXEL_FORMAT_BGR_888:
+            buf_size = 3 * buf_nbr_pixels;
+            break;
+        case PIXEL_FORMAT_RGB_565:
+        case PIXEL_FORMAT_RGB_565X:
+            buf_size = 2 * buf_nbr_pixels;
+            break;
+        case PIXEL_FORMAT_L_8:
+            buf_size = buf_nbr_pixels;
+            break;
+        case PIXEL_FORMAT_MONO01:
+        case PIXEL_FORMAT_MONO10:
+            buf_size = buf_nbr_pixels / 8 + 8;
+            buf_size += (buf_nbr_pixels % 8) == 0 ? 0 : 1;
+            break;
+        default:
+            buf_size = 2 * buf_nbr_pixels;
+            break;
+    }
+    if (al88) {
+        buf_size = 2 * buf_nbr_pixels;
+    }
+
+    void *buf0 = lv_malloc(buf_size);
+    if (buf0 == NULL) {
+        return;
+    }
+    lv_display_set_buffers(display, buf0, NULL, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+
+    if (mono) {
+        // The glue's mono flush converts the row-packed LVGL 1bpp buffer into the
+        // display's (possibly vertically tiled) layout through this buffer.
+        void *vtile_buf = lv_malloc(buf_size);
+        if (vtile_buf != NULL) {
+            lvgl_set_mono_conversion_buffer(vtile_buf, buf_size);
+        }
+    }
+}
+
+// Colorspace selection shared with the LVGL compositing core. Derived from the LVGL
+// display's color format (which matches what the display driver was configured with at
+// boot) plus the grayscale layout info from the capabilities.
+static void zephyr_display_lvgl_set_colorspace(zephyr_display_display_obj_t *self) {
+    _displayio_colorspace_t colorspace = {
+        .depth = 16,
+        .bytes_per_cell = 2,
+        .grayscale = false,
+        .grayscale_bit = 8,
+        .pixels_in_byte_share_row = false,
+        .reverse_pixels_in_byte = false,
+        .reverse_bytes_in_word = false,
+        .dither = false,
+    };
+    lv_color_format_t cf = LV_COLOR_FORMAT_RGB565;
+    lv_display_t *lv_display = lv_display_get_default();
+    if (lv_display != NULL) {
+        cf = lv_display_get_color_format(lv_display);
+    }
+    switch (cf) {
+        case LV_COLOR_FORMAT_RGB565:
+            break;
+        case LV_COLOR_FORMAT_RGB565_SWAPPED:
+            colorspace.reverse_bytes_in_word = true;
+            break;
+        case LV_COLOR_FORMAT_RGB888:
+            colorspace.depth = 24;
+            colorspace.bytes_per_cell = 3;
+            break;
+        case LV_COLOR_FORMAT_ARGB8888:
+        case LV_COLOR_FORMAT_XRGB8888:
+            colorspace.depth = 32;
+            colorspace.bytes_per_cell = 4;
+            break;
+        case LV_COLOR_FORMAT_L8:
+            colorspace.depth = 8;
+            colorspace.bytes_per_cell = 1;
+            colorspace.grayscale = true;
+            colorspace.grayscale_bit = 0;
+            break;
+        case LV_COLOR_FORMAT_AL88:
+            colorspace.depth = 8;
+            colorspace.bytes_per_cell = 1;
+            colorspace.grayscale = true;
+            colorspace.grayscale_bit = 0;
+            break;
+        case LV_COLOR_FORMAT_I1:
+            colorspace.depth = 1;
+            colorspace.bytes_per_cell = 1;
+            colorspace.grayscale = true;
+            colorspace.grayscale_bit = 7;
+            colorspace.pixels_in_byte_share_row = false;
+            colorspace.reverse_pixels_in_byte = true;
+            break;
+        default:
+            break;
+    }
+    displayio_lvgl_set_colorspace(&colorspace);
+}
+#endif
+
+#if !CIRCUITPY_DISPLAYIO_LVGL
 static const displayio_area_t *zephyr_display_get_refresh_areas(zephyr_display_display_obj_t *self) {
     if (self->core.full_refresh) {
         self->core.area.next = NULL;
@@ -25,6 +258,7 @@ static const displayio_area_t *zephyr_display_get_refresh_areas(zephyr_display_d
     }
     return NULL;
 }
+#endif
 
 static enum display_pixel_format zephyr_display_select_pixel_format(const struct display_capabilities *caps) {
     uint32_t formats = caps->supported_pixel_formats;
@@ -113,12 +347,28 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
     self->device = device;
     display_get_capabilities(self->device, &self->capabilities);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    // Lock for the whole LVGL setup: the workqueue may already be running timers.
+    lvgl_lock();
+    // Pick the pixel format exactly like the legacy compositor does (RGB565 preferred).
     self->pixel_format = zephyr_display_select_pixel_format(&self->capabilities);
     if (self->pixel_format != self->capabilities.current_pixel_format) {
         (void)display_set_pixel_format(self->device, self->pixel_format);
         display_get_capabilities(self->device, &self->capabilities);
         self->pixel_format = self->capabilities.current_pixel_format;
     }
+    // The LVGL display glue configured itself from the driver's original current format at
+    // boot. Recreate the LVGL display so its buffers and flush callbacks match the format
+    // actually selected above.
+    zephyr_display_lvgl_recreate_display(self);
+    #else
+    self->pixel_format = zephyr_display_select_pixel_format(&self->capabilities);
+    if (self->pixel_format != self->capabilities.current_pixel_format) {
+        (void)display_set_pixel_format(self->device, self->pixel_format);
+        display_get_capabilities(self->device, &self->capabilities);
+        self->pixel_format = self->capabilities.current_pixel_format;
+    }
+    #endif
 
     uint16_t color_depth;
     uint8_t bytes_per_cell;
@@ -152,7 +402,18 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
 
     (void)display_blanking_off(self->device);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    zephyr_display_lvgl_set_colorspace(self);
+    displayio_lvgl_init();
+    #endif
+
     displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    displayio_lvgl_set_root_group(&circuitpython_splash);
+    lvgl_unlock();
+    #else
+    displayio_group_update_transform(&circuitpython_splash, &self->core.transform);
+    #endif
     common_hal_zephyr_display_display_set_auto_refresh(self, auto_refresh);
 }
 
@@ -175,6 +436,7 @@ bool common_hal_zephyr_display_display_set_brightness(zephyr_display_display_obj
     return false;
 }
 
+#if !CIRCUITPY_DISPLAYIO_LVGL
 static bool zephyr_display_refresh_area(zephyr_display_display_obj_t *self, const displayio_area_t *area) {
     uint16_t buffer_size = CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE / sizeof(uint32_t);
 
@@ -333,7 +595,11 @@ static void zephyr_display_refresh(zephyr_display_display_obj_t *self) {
     }
 
     displayio_display_core_finish_refresh(&self->core);
+    if (self->core.current_group != NULL) {
+        displayio_group_finish_refresh(self->core.current_group);
+    }
 }
+#endif  // !CIRCUITPY_DISPLAYIO_LVGL
 
 void common_hal_zephyr_display_display_set_rotation(zephyr_display_display_obj_t *self, int rotation) {
     bool transposed = (self->core.rotation == 90 || self->core.rotation == 270);
@@ -346,14 +612,24 @@ void common_hal_zephyr_display_display_set_rotation(zephyr_display_display_obj_t
 
     displayio_display_core_set_rotation(&self->core, rotation);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    if (self == zephyr_display_display_instance) {
+    #else
     if (self == &displays[0].zephyr_display) {
+        #endif
         supervisor_stop_terminal();
         supervisor_start_terminal(self->core.width, self->core.height);
     }
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    if (self->core.current_group != NULL) {
+        displayio_lvgl_set_root_group(self->core.current_group);
+    }
+    #else
     if (self->core.current_group != NULL) {
         displayio_group_update_transform(self->core.current_group, &self->core.transform);
     }
+    #endif
 }
 
 uint16_t common_hal_zephyr_display_display_get_rotation(zephyr_display_display_obj_t *self) {
@@ -380,7 +656,16 @@ bool common_hal_zephyr_display_display_refresh(zephyr_display_display_obj_t *sel
         }
     }
     self->first_manual_refresh = false;
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    self->core.last_refresh = supervisor_ticks_ms64();
+    // Manual refresh must render immediately, not on LVGL's timer cadence. The
+    // workqueue's own handler already holds the lock, so no re-entrancy here.
+    lvgl_lock();
+    lv_refr_now(lv_display_get_default());
+    lvgl_unlock();
+    #else
     zephyr_display_refresh(self);
+    #endif
     return true;
 }
 
@@ -401,9 +686,15 @@ void common_hal_zephyr_display_display_set_auto_refresh(zephyr_display_display_o
 }
 
 void zephyr_display_display_background(zephyr_display_display_obj_t *self) {
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    // LVGL renders on its own RTOS thread (the LVGL workqueue), so the CircuitPython
+    // background task has nothing to pump.
+    (void)self;
+    #else
     if (self->auto_refresh && (supervisor_ticks_ms64() - self->core.last_refresh) > self->native_ms_per_frame) {
         zephyr_display_refresh(self);
     }
+    #endif
 }
 
 void release_zephyr_display(zephyr_display_display_obj_t *self) {
@@ -422,6 +713,11 @@ void zephyr_display_display_reset(zephyr_display_display_obj_t *self) {
     if (self->device != NULL && device_is_ready(self->device)) {
         common_hal_zephyr_display_display_set_auto_refresh(self, true);
         displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
+        #if CIRCUITPY_DISPLAYIO_LVGL
+        displayio_lvgl_set_root_group(&circuitpython_splash);
+        #else
+        displayio_group_update_transform(&circuitpython_splash, &self->core.transform);
+        #endif
         self->core.full_refresh = true;
     } else {
         release_zephyr_display(self);
@@ -436,5 +732,13 @@ mp_obj_t common_hal_zephyr_display_display_get_root_group(zephyr_display_display
 }
 
 bool common_hal_zephyr_display_display_set_root_group(zephyr_display_display_obj_t *self, displayio_group_t *root_group) {
-    return displayio_display_core_set_root_group(&self->core, root_group);
+    bool ok = displayio_display_core_set_root_group(&self->core, root_group);
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    displayio_lvgl_set_root_group(ok ? root_group : NULL);
+    #else
+    if (ok && root_group != NULL) {
+        displayio_group_update_transform(root_group, &self->core.transform);
+    }
+    #endif
+    return ok;
 }

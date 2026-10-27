@@ -7,7 +7,7 @@
 #pragma once
 
 #include "shared-module/vectorio/Polygon.h"
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 #include "shared-module/vectorio/__init__.h"
 
 extern const mp_obj_type_t vectorio_polygon_type;

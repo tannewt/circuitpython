@@ -12,7 +12,7 @@
 #include "shared-bindings/pwmio/PWMOut.h"
 #endif
 
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 #include "shared-module/displayio/bus_core.h"
 #include "shared-module/displayio/display_core.h"
 

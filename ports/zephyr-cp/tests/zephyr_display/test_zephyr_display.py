@@ -46,13 +46,27 @@ def _assert_pixels_equal_masked(
             )
 
 
-BOARD_DISPLAY_AVAILABLE_CODE = """\
-import board
-print(hasattr(board, 'DISPLAY'))
-print(type(board.DISPLAY).__name__)
-print(board.DISPLAY.width, board.DISPLAY.height)
+# Compositor-agnostic display access: on legacy-compositor builds the display is
+# board.DISPLAY; on LVGL-compositor builds it is supervisor.runtime.display (the
+# board module has no DISPLAY entry because the display object is port-malloc'd).
+_DISPLAY_HELPER = """\
+import supervisor
+try:
+    import board
+    display = board.DISPLAY
+except AttributeError:
+    display = supervisor.runtime.display
+"""
+
+BOARD_DISPLAY_AVAILABLE_CODE = (
+    _DISPLAY_HELPER
+    + """\
+print(display is not None)
+print(type(display).__name__)
+print(display.width, display.height)
 print('done')
 """
+)
 
 
 @pytest.mark.circuitpy_drive({"code.py": BOARD_DISPLAY_AVAILABLE_CODE})
@@ -69,9 +83,12 @@ def test_board_display_available(circuitpython):
 
 
 CONSOLE_TERMINAL_PRESENT_CODE = """\
-import board
-
-root = board.DISPLAY.root_group
+import supervisor
+try:
+    import board
+    root = board.DISPLAY.root_group
+except AttributeError:
+    root = supervisor.runtime.display.root_group
 has_terminal_tilegrids = (
     type(root).__name__ == 'Group' and
     len(root) >= 2 and
@@ -243,8 +260,9 @@ def _generate_gradient_bmp(width, height):
     return header + info + b"".join(rows)
 
 
-DISPLAYIO_COLOR_GRADIENT_CODE = """\
-import board
+DISPLAYIO_COLOR_GRADIENT_CODE = (
+    _DISPLAY_HELPER
+    + """\
 import displayio
 import time
 
@@ -253,13 +271,14 @@ tg = displayio.TileGrid(odb, pixel_shader=odb.pixel_shader)
 g = displayio.Group()
 g.append(tg)
 
-board.DISPLAY.auto_refresh = False
-board.DISPLAY.root_group = g
-board.DISPLAY.refresh()
+display.auto_refresh = False
+display.root_group = g
+display.refresh()
 print('rendered')
 while True:
     time.sleep(1)
 """
+)
 
 _GRADIENT_BMP = _generate_gradient_bmp(320, 240)
 _GRADIENT_DRIVE = {"code.py": DISPLAYIO_COLOR_GRADIENT_CODE, "gradient.bmp": _GRADIENT_BMP}
@@ -297,13 +316,14 @@ def test_displayio_color_gradient_pixel_format(pixel_format, request, circuitpyt
     _golden_compare_or_update(request, circuitpython.display_capture_paths(), golden)
 
 
-DISPLAYIO_GOLDEN_STRIPES_CODE = """\
-import board
+DISPLAYIO_GOLDEN_STRIPES_CODE = (
+    _DISPLAY_HELPER
+    + """\
 import displayio
 import time
 
-w = board.DISPLAY.width
-h = board.DISPLAY.height
+w = display.width
+h = display.height
 
 bitmap = displayio.Bitmap(w, h, 4)
 palette = displayio.Palette(4)
@@ -320,13 +340,14 @@ tg = displayio.TileGrid(bitmap, pixel_shader=palette)
 g = displayio.Group()
 g.append(tg)
 
-board.DISPLAY.auto_refresh = False
-board.DISPLAY.root_group = g
-board.DISPLAY.refresh()
+display.auto_refresh = False
+display.root_group = g
+display.refresh()
 print('rendered')
 while True:
     time.sleep(1)
 """
+)
 
 
 @pytest.mark.circuitpy_drive({"code.py": DISPLAYIO_GOLDEN_STRIPES_CODE})

@@ -23,7 +23,22 @@ parser.add_argument(
 )
 parser.add_argument("--output_c_file", type=argparse.FileType("w"), required=True)
 
+parser.add_argument(
+    "--lvgl-tilegrid",
+    action="store_true",
+    help="Set when building the LVGL compositing core: TileGrids have no partial_change field",
+)
+
 args = parser.parse_args()
+
+# The legacy TileGrid carries a partial_change flag for scanline dirty tracking; the
+# LVGL TileGrid does not, and the static initializer must match the struct in use.
+if args.lvgl_tilegrid:
+    partial_change_line = ""
+else:
+    partial_change_line = (
+        "    .partial_change = false,\n    .full_change = false,\n    .moved = false,\n"
+    )
 
 
 class BitmapStub:
@@ -225,16 +240,14 @@ displayio_tilegrid_t supervisor_blinka_sprite = {{
     .top_left_x = {0},
     .top_left_y = {0},
     .tiles = 0,
-    .partial_change = false,
-    .full_change = false,
+{partial_change_line}
     .hidden = false,
     .hidden_by_parent = false,
-    .moved = false,
     .inline_tiles = true,
     .in_group = true
 }};
 #endif
-""".format(blinka_size)
+""".format(blinka_size, partial_change_line=partial_change_line)
 )
 
 c_file.write(
@@ -275,15 +288,13 @@ displayio_tilegrid_t supervisor_terminal_scroll_area_text_grid = {{
     .tile_width = {1},
     .tile_height = {2},
     .tiles = NULL,
-    .partial_change = false,
-    .full_change = false,
+{partial_change_line}
     .hidden = false,
     .hidden_by_parent = false,
-    .moved = false,
     .inline_tiles = false,
     .in_group = true
 }};
-""".format(len(filtered_characters), tile_x, tile_y)
+""".format(len(filtered_characters), tile_x, tile_y, partial_change_line=partial_change_line)
 )
 
 c_file.write(
@@ -303,15 +314,13 @@ displayio_tilegrid_t supervisor_terminal_status_bar_text_grid = {{
     .tile_width = {1},
     .tile_height = {2},
     .tiles = NULL,
-    .partial_change = false,
-    .full_change = false,
+{partial_change_line}
     .hidden = false,
     .hidden_by_parent = false,
-    .moved = false,
     .inline_tiles = false,
     .in_group = true
 }};
-""".format(len(filtered_characters), tile_x, tile_y)
+""".format(len(filtered_characters), tile_x, tile_y, partial_change_line=partial_change_line)
 )
 
 c_file.write(

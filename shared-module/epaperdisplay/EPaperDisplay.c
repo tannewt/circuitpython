@@ -232,6 +232,9 @@ static void epaperdisplay_epaperdisplay_finish_refresh(epaperdisplay_epaperdispl
     self->refreshing = true;
 
     displayio_display_core_finish_refresh(&self->core);
+    if (self->core.current_group != NULL) {
+        displayio_group_finish_refresh(self->core.current_group);
+    }
 }
 
 mp_obj_t common_hal_epaperdisplay_epaperdisplay_get_bus(epaperdisplay_epaperdisplay_obj_t *self) {

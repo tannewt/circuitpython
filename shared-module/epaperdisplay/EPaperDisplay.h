@@ -8,7 +8,7 @@
 
 #include "shared-bindings/displayio/Group.h"
 
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 #include "shared-module/displayio/bus_core.h"
 #include "shared-module/displayio/display_core.h"
 #include "common-hal/digitalio/DigitalInOut.h"

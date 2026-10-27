@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 
 #include "py/misc.h"
 

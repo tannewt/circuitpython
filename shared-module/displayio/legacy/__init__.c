@@ -18,7 +18,6 @@
 #include "shared-bindings/displayio/Bitmap.h"
 #include "shared-bindings/displayio/Group.h"
 #include "shared-bindings/displayio/Palette.h"
-#include "shared-module/displayio/area.h"
 #include "supervisor/shared/display.h"
 #include "supervisor/shared/reload.h"
 

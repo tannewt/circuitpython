@@ -57,7 +57,8 @@ static void supervisor_background_tick(void *unused) {
     bleio_hci_background();
     #endif
 
-    #if CIRCUITPY_DISPLAYIO
+    #if CIRCUITPY_DISPLAYIO && !CIRCUITPY_DISPLAYIO_LVGL
+    // The LVGL compositor renders on an RTOS thread of its own; nothing to pump here.
     displayio_background();
     #endif
 

@@ -58,7 +58,16 @@ set(external_project_cflags
 
 zephyr_get(TRANSLATION SYSBUILD GLOBAL)
 zephyr_get(CONFIG_LTO SYSBUILD GLOBAL)
+zephyr_get(CONFIG_LVGL SYSBUILD GLOBAL)
 zephyr_get(BOARD_ALIAS SYSBUILD GLOBAL)
+
+# LVGL module (used by the displayio LVGL compositing core) passes its include paths to the
+# CircuitPython static library build explicitly, since the core build does not consume CMake
+# target information.
+set(LVGL_MODULE_DIR "")
+if(CONFIG_LVGL AND DEFINED ZEPHYR_LVGL_MODULE_DIR)
+    set(LVGL_MODULE_DIR ${ZEPHYR_LVGL_MODULE_DIR})
+endif()
 
 ExternalProject_Add(circuitpython
     DOWNLOAD_COMMAND ""
@@ -76,6 +85,8 @@ ExternalProject_Add(circuitpython
     PORT_SRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}
     TRANSLATION=${TRANSLATION}
     LTO=${CONFIG_LTO}
+    LVGL=${CONFIG_LVGL}
+    LVGL_DIR=${LVGL_MODULE_DIR}
     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/libcircuitpython.a
     BUILD_JOB_SERVER_AWARE TRUE
     BUILD_ALWAYS TRUE

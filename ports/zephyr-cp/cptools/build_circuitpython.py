@@ -268,23 +268,24 @@ async def generate_root_pointer_header(build_path):
     )
 
 
-async def generate_display_resources(output_path, translation, font, extra_characters):
-    await cpbuild.run_command(
-        [
-            "python",
-            srcdir / "tools" / "gen_display_resources.py",
-            "--font",
-            srcdir / font,
-            "--sample_file",
-            srcdir / "locale" / f"{translation}.po",
-            "--extra_characters",
-            repr(extra_characters),
-            "--output_c_file",
-            output_path,
-        ],
-        srcdir,
-        check_hash=[output_path],
-    )
+async def generate_display_resources(
+    output_path, translation, font, extra_characters, lvgl_tilegrid
+):
+    cmd = [
+        "python",
+        srcdir / "tools" / "gen_display_resources.py",
+        "--font",
+        srcdir / font,
+        "--sample_file",
+        srcdir / "locale" / f"{translation}.po",
+        "--extra_characters",
+        repr(extra_characters),
+        "--output_c_file",
+        output_path,
+    ]
+    if lvgl_tilegrid:
+        cmd.append("--lvgl-tilegrid")
+    await cpbuild.run_command(cmd, srcdir, check_hash=[output_path])
 
 
 async def generate_web_workflow_static(output_path, static_files):
@@ -407,6 +408,13 @@ async def build_circuitpython():  # noqa: C901
     for module in ALWAYS_ON_MODULES:
         circuitpython_flags.append(f"-DCIRCUITPY_{module.upper()}=1")
     lto = cmake_args.get("LTO", "n") == "y"
+    # LVGL module enabled for this board. The flag comes from CONFIG_LVGL via
+    # ExternalProject args so it stays in sync with the Kconfig choice. Any board that
+    # sets CONFIG_LVGL gets the LVGL-based displayio compositing core; boards without
+    # LVGL build the legacy scanline compositor.
+    lvgl_enabled = cmake_args.get("LVGL", "n") == "y"
+    lvgl_dir = cmake_args.get("LVGL_DIR", "")
+    logger.info(f"LVGL compositing core enabled: {lvgl_enabled} (dir={lvgl_dir or 'none'})")
     circuitpython_flags.append(f"-DCIRCUITPY_ENABLE_MPY_NATIVE={1 if enable_mpy_native else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_FULL_BUILD={1 if full_build else 0}")
     # Zephyr does not reset all pins in bulk on soft reset, so never_reset is
@@ -420,6 +428,17 @@ async def build_circuitpython():  # noqa: C901
     circuitpython_flags.append(f"-DMICROPY_PY_SELECT={1 if full_build else 0}")
     circuitpython_flags.append(f"-DMICROPY_PY_SELECT_SELECT={1 if full_build else 0}")
     circuitpython_flags.append("-DCIRCUITPY_STATUS_BAR=1")
+    if lvgl_enabled:
+        circuitpython_flags.append("-DCIRCUITPY_DISPLAYIO_LVGL=1")
+        circuitpython_flags.extend(("-isystem", lvgl_dir))
+        circuitpython_flags.extend(("-isystem", lvgl_dir + "/include"))
+        # The zephyr-provided LV_CONF_PATH definition loses its shell quoting while
+        # crossing the ExternalProject boundary. Re-supply it quoted so LVGL resolves
+        # the config header.
+        lv_conf_path = portdir / "zephyr" / "modules" / "lvgl" / "include" / "lv_conf.h"
+        circuitpython_flags.append("-ULV_CONF_PATH")
+        # The command runs through a shell, so escape the quotes for it.
+        circuitpython_flags.append(f'-DLV_CONF_PATH=\\"{lv_conf_path}\\"')
     circuitpython_flags.append(f"-DCIRCUITPY_USB_HOST={1 if usb_host else 0}")
     circuitpython_flags.append(f"-DCIRCUITPY_BOARD_ID='\"{board}\"'")
     circuitpython_flags.append(f"-DCIRCUITPY_TRANSLATE_OBJECT={1 if lto else 0}")
@@ -493,6 +512,25 @@ async def build_circuitpython():  # noqa: C901
     enabled_modules, module_reasons = determine_enabled_modules(board_info, portdir, srcdir)
     for m in mpconfigboard.get("DISABLED_MODULES", []):
         enabled_modules.discard(m)
+
+    if lvgl_enabled:
+        # The scanline display-side modules render through the legacy compositor and do
+        # not work with the LVGL one (the port's display object owns the screen; the
+        # LVGL compositor renders on an RTOS thread). Exclude them so LVGL builds don't
+        # link any legacy rendering or display-slot machinery.
+        legacy_display_modules = [
+            "busdisplay",
+            "epaperdisplay",
+            "framebufferio",
+            "fourwire",
+            "i2cdisplaybus",
+            "sharpdisplay",
+            "vectorio",
+        ]
+        for m in legacy_display_modules:
+            if m in enabled_modules:
+                enabled_modules.discard(m)
+                module_reasons[m] = "Legacy scanline display module; excluded from LVGL builds"
 
     web_workflow_enabled = (
         board_info.get("wifi", False)
@@ -676,7 +714,17 @@ async def build_circuitpython():  # noqa: C901
             hal_source.extend(top.glob(f"ports/zephyr-cp/common-hal/{module.name}/*.c"))
             # Only include shared-module/*.c if no common-hal/*.c files were found
             if len(hal_source) == len_before or module.name in SHARED_MODULE_AND_COMMON_HAL:
-                hal_source.extend(top.glob(f"shared-module/{module.name}/**/*.c"))
+                shared_module_sources = top.glob(f"shared-module/{module.name}/**/*.c")
+                if module.name == "displayio":
+                    # The compositing core (Group/TileGrid) is selected by backend directory.
+                    backend_dir = "lvgl" if lvgl_enabled else "legacy"
+                    backend_root = top / "shared-module" / "displayio"
+                    shared_module_sources = [
+                        s
+                        for s in shared_module_sources
+                        if s.parent.parent != backend_root or s.parent.name == backend_dir
+                    ]
+                hal_source.extend(shared_module_sources)
             # The USB HID report descriptors are shared with the TinyUSB ports and
             # have no common-hal override, so always compile them.
             if module.name == "usb_hid":
@@ -822,7 +870,9 @@ async def build_circuitpython():  # noqa: C901
             )
             extra_characters = mpconfigboard.get("CIRCUITPY_FONT_EXTRA_CHARACTERS", "")
             tg.create_task(
-                generate_display_resources(output_path, translation, font_path, extra_characters)
+                generate_display_resources(
+                    output_path, translation, font_path, extra_characters, lvgl_enabled
+                )
             )
             source_files.append(output_path)
 

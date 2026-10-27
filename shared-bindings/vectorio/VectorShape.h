@@ -11,7 +11,7 @@
 
 #include "shared-bindings/vectorio/__init__.h"
 #include "shared-module/vectorio/VectorShape.h"
-#include "shared-module/displayio/area.h"
+#include "shared-module/displayio/legacy/area.h"
 
 extern const mp_obj_type_t vectorio_vector_shape_type;
 
