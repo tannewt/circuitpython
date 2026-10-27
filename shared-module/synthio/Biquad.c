@@ -33,20 +33,27 @@ static mp_float_t fast_sqrt(mp_float_t number) {
     return number * Q_rsqrt(number);
 }
 
-#define FOUR_OVER_PI (4 / M_PI)
+// Sine and cosine of theta, evaluated together. theta is the filter's angle
+// 2 * pi * f / sample_rate, which is in [0, pi] up to Nyquist.
+//
+// Reflect into [0, pi / 2] (sin(pi - t) = sin(t), cos(pi - t) = -cos(t)), then
+// into [0, pi / 4] by swapping the two (sin(pi / 2 - t) = cos(t)). On that
+// interval a four-term polynomial for each, fitted to minimise the worst-case
+// error, is accurate to the last bit or two of a float.
 static void fast_sincos(mp_float_t theta, sincos_result_t *result) {
-    mp_float_t x = (theta * FOUR_OVER_PI) - 1;
-    mp_float_t x2 = x * x, x3 = x2 * x, x4 = x2 * x2, x5 = x2 * x3;
-    mp_float_t c0 = 0.70708592,
-               c1x = -0.55535724 * x,
-               c2x2 = -0.21798592 * x2,
-               c3x3 = 0.05707685 * x3,
-               c4x4 = 0.0109 * x4,
-               c5x5 = -0.00171961 * x5;
-
-    mp_float_t evens = c4x4 + c2x2 + c0, odds = c5x5 + c3x3 + c1x;
-    result->c = evens + odds;
-    result->s = evens - odds;
+    bool negate_cos = theta > (M_PI / 2);
+    mp_float_t t = negate_cos ? (M_PI - theta) : theta;
+    bool swap = t > (M_PI / 4);
+    if (swap) {
+        t = (M_PI / 2) - t;
+    }
+    mp_float_t t2 = t * t;
+    mp_float_t s = t * (1 + t2 * (-0.16666651 + t2 * (0.0083319786 + t2 * -0.00019495635)));
+    mp_float_t c = 1 + t2 * (-0.5 + t2 * (0.041666647 + t2 * (-0.0013887368 + t2 * 0.000024438452)));
+    mp_float_t sin_theta = swap ? c : s;
+    mp_float_t cos_theta = swap ? s : c;
+    result->s = sin_theta;
+    result->c = negate_cos ? -cos_theta : cos_theta;
 }
 
 mp_obj_t common_hal_synthio_biquad_new(synthio_filter_mode mode) {
