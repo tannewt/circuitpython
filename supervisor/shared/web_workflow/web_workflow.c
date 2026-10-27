@@ -411,6 +411,21 @@ static void _airlift_retry_listening(void) {
 }
 #endif
 
+#if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT)
+// Reads CIRCUITPY_WEB_API_PASSWORD into _api_password, encoded for HTTP basic
+// auth. Returns false if it isn't set.
+static bool _get_api_password(void) {
+    const size_t api_password_len = sizeof(_api_password) - 1;
+    settings_err_t result = settings_get_str("CIRCUITPY_WEB_API_PASSWORD", _api_password + 1, api_password_len);
+    if (result != SETTINGS_OK) {
+        return false;
+    }
+    _api_password[0] = ':';
+    _base64_in_place(_api_password, strlen(_api_password), sizeof(_api_password) - 1);
+    return true;
+}
+#endif
+
 bool supervisor_start_web_workflow(void) {
     #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII || CIRCUITPY_AIRLIFT)
 
@@ -430,7 +445,7 @@ bool supervisor_start_web_workflow(void) {
 
     settings_err_t result;
 
-    #if CIRCUITPY_WIFI
+    #if CIRCUITPY_WIFI || CIRCUITPY_AIRLIFT
     char ssid[33];
     char password[64];
 
@@ -446,7 +461,9 @@ bool supervisor_start_web_workflow(void) {
     } else if (result != SETTINGS_OK) {
         return false;
     }
+    #endif
 
+    #if CIRCUITPY_WIFI
     if (!common_hal_wifi_radio_get_enabled(&common_hal_wifi_radio_obj)) {
         common_hal_wifi_init(false);
         common_hal_wifi_radio_set_enabled(&common_hal_wifi_radio_obj, true);
@@ -467,30 +484,11 @@ bool supervisor_start_web_workflow(void) {
         common_hal_wifi_radio_set_enabled(&common_hal_wifi_radio_obj, false);
         return false;
     }
-    #endif
-
-    #if CIRCUITPY_AIRLIFT
-    char ssid[33];
-    char password[64];
-
-    result = settings_get_str("CIRCUITPY_WIFI_SSID", ssid, sizeof(ssid));
-    if (result != SETTINGS_OK || strlen(ssid) < 1) {
-        return false;
-    }
-
+    #elif CIRCUITPY_AIRLIFT
     // Without an API password there's no web workflow, so leave the ESP32 to
-    // user code. It is checked again below; this check must come before the
-    // ESP32 is touched.
-    result = settings_get_str("CIRCUITPY_WEB_API_PASSWORD", password, sizeof(password));
-    if (result != SETTINGS_OK) {
-        return false;
-    }
-
-    result = settings_get_str("CIRCUITPY_WIFI_PASSWORD", password, sizeof(password));
-    if (result == SETTINGS_ERR_NOT_FOUND) {
-        // if password is unspecified, assume an open network
-        password[0] = '\0';
-    } else if (result != SETTINGS_OK) {
+    // user code. Native Wi-Fi connects without one, so this is read here only
+    // for AirLift, before the ESP32 is touched.
+    if (!_get_api_password()) {
         return false;
     }
 
@@ -537,12 +535,7 @@ bool supervisor_start_web_workflow(void) {
         // (leaves new_port unchanged on any failure)
         (void)settings_get_int("CIRCUITPY_WEB_API_PORT", &web_api_port);
 
-        const size_t api_password_len = sizeof(_api_password) - 1;
-        result = settings_get_str("CIRCUITPY_WEB_API_PASSWORD", _api_password + 1, api_password_len);
-        if (result == SETTINGS_OK) {
-            _api_password[0] = ':';
-            _base64_in_place(_api_password, strlen(_api_password), sizeof(_api_password) - 1);
-        } else { // Skip starting web-workflow when no password is passed.
+        if (!_get_api_password()) { // Skip starting web-workflow when no password is passed.
             return false;
         }
 
