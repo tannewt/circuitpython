@@ -59,6 +59,7 @@ static void fast_sincos(mp_float_t theta, sincos_result_t *result) {
 mp_obj_t common_hal_synthio_biquad_new(synthio_filter_mode mode) {
     synthio_biquad_t *self = mp_obj_malloc(synthio_biquad_t, &synthio_biquad_type_obj);
     self->mode = mode;
+    self->shift = BIQUAD_DEFAULT_SHIFT;
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -90,8 +91,38 @@ void common_hal_synthio_biquad_set_frequency(synthio_biquad_t *self, mp_obj_t fr
     synthio_block_assign_slot(frequency, &self->f0, MP_QSTR_frequency);
 }
 
-static int32_t biquad_scale_arg_float(mp_float_t arg) {
-    return (int32_t)MICROPY_FLOAT_C_FUN(round)(MICROPY_FLOAT_C_FUN(ldexp)(arg, BIQUAD_SHIFT));
+static int32_t biquad_scale_arg_float(mp_float_t arg, int shift) {
+    mp_float_t scaled = MICROPY_FLOAT_C_FUN(round)(MICROPY_FLOAT_C_FUN(ldexp)(arg, shift));
+    // biquad_choose_shift() leaves room for this; the clamp is so that a
+    // rounding tick at the very top of the range cannot wrap the sign.
+    if (scaled >= 2147483648.0) {
+        return INT32_MAX;
+    }
+    if (scaled <= -2147483648.0) {
+        return INT32_MIN;
+    }
+    return (int32_t)scaled;
+}
+
+// The most fractional bits that all five coefficients can share and still fit
+// in an int32_t, up to BIQUAD_MAX_SHIFT. A plain low-pass tops out just under 2
+// (that is a1) and gets 30; a shelf with 24 dB of gain reaches almost 32 and gets 26.
+static int biquad_choose_shift(const mp_float_t *coefficients, size_t count) {
+    mp_float_t largest = 1;
+    for (size_t i = 0; i < count; i++) {
+        mp_float_t magnitude = MICROPY_FLOAT_C_FUN(fabs)(coefficients[i]);
+        if (magnitude > largest) {
+            largest = magnitude;
+        }
+    }
+    int exponent;
+    MICROPY_FLOAT_C_FUN(frexp)(largest, &exponent); // largest < 2 ** exponent
+    int shift = 31 - exponent;
+    if (shift > BIQUAD_MAX_SHIFT) {
+        shift = BIQUAD_MAX_SHIFT;
+    }
+    // The rounding term in the filter needs at least one bit.
+    return shift < 1 ? 1 : shift;
 }
 
 static int float_equal_or_update(
@@ -193,19 +224,48 @@ void common_hal_synthio_biquad_tick(mp_obj_t self_in) {
     }
     mp_float_t recip_a0 = 1 / a0;
 
-    self->a1 = biquad_scale_arg_float(a1 * recip_a0);
-    self->a2 = biquad_scale_arg_float(a2 * recip_a0);
-    self->b0 = biquad_scale_arg_float(b0 * recip_a0);
-    self->b1 = biquad_scale_arg_float(b1 * recip_a0);
-    self->b2 = biquad_scale_arg_float(b2 * recip_a0);
+    a1 *= recip_a0;
+    a2 *= recip_a0;
+    b0 *= recip_a0;
+    b1 *= recip_a0;
+    b2 *= recip_a0;
+
+    mp_float_t coefficients[] = {a1, a2, b0, b1, b2};
+    int shift = biquad_choose_shift(coefficients, MP_ARRAY_SIZE(coefficients));
+    self->shift = shift;
+    self->a1 = biquad_scale_arg_float(a1, shift);
+    self->a2 = biquad_scale_arg_float(a2, shift);
+    self->b0 = biquad_scale_arg_float(b0, shift);
+    self->b1 = biquad_scale_arg_float(b1, shift);
+    self->b2 = biquad_scale_arg_float(b2, shift);
 }
 
 void synthio_biquad_filter_reset(biquad_filter_state *st) {
     memset(st, 0, sizeof(*st));
 }
 
-static inline int32_t biquad_filter_sample(int32_t input, int32_t a1, int32_t a2, int32_t b0, int32_t b1, int32_t b2, int32_t x0, int32_t x1, int32_t y0, int32_t y1) {
-    return synthio_sat16((b0 * input + b1 * x0 + b2 * x1 - a1 * y0 - a2 * y1 + (1 << (BIQUAD_SHIFT - 1))), BIQUAD_SHIFT);
+// Returns the new feedback state: the output with BIQUAD_STATE_SHIFT bits
+// below the sample. Near 0 Hz a biquad turns each unit of error in its feedback
+// into thousands of units of output, so the feedback must not be rounded to
+// whole samples. The coefficients can have up to 30 fractional bits, so the
+// sum of products needs 64 bits.
+static inline int32_t biquad_filter_sample(int32_t input, int32_t a1, int32_t a2, int32_t b0, int32_t b1, int32_t b2, int shift, int32_t x0, int32_t x1, int32_t y0, int32_t y1) {
+    int64_t acc = ((int64_t)b0 * input + (int64_t)b1 * x0 + (int64_t)b2 * x1) * (1 << BIQUAD_STATE_SHIFT)
+        - (int64_t)a1 * y0 - (int64_t)a2 * y1;
+    // Add half a step, then shift, to round to nearest.
+    acc = (acc + ((int64_t)1 << (shift - 1))) >> shift;
+    if (acc > BIQUAD_STATE_MAX) {
+        return BIQUAD_STATE_MAX;
+    }
+    if (acc < BIQUAD_STATE_MIN) {
+        return BIQUAD_STATE_MIN;
+    }
+    return acc;
+}
+
+// The state is already within the range of a sample, so rounding is all it needs.
+static inline int32_t biquad_state_to_sample(int32_t y) {
+    return (y + (1 << (BIQUAD_STATE_SHIFT - 1))) >> BIQUAD_STATE_SHIFT;
 }
 
 void synthio_biquad_filter_samples(mp_obj_t self_in, biquad_filter_state *st, int32_t *buffer, size_t n_samples) {
@@ -216,6 +276,7 @@ void synthio_biquad_filter_samples(mp_obj_t self_in, biquad_filter_state *st, in
     int32_t b0 = self->b0;
     int32_t b1 = self->b1;
     int32_t b2 = self->b2;
+    int shift = self->shift;
 
     int32_t x0 = st->x[0];
     int32_t x1 = st->x[1];
@@ -224,13 +285,13 @@ void synthio_biquad_filter_samples(mp_obj_t self_in, biquad_filter_state *st, in
 
     for (size_t n = n_samples; n; --n, ++buffer) {
         int32_t input = *buffer;
-        int32_t output = biquad_filter_sample(input, a1, a2, b0, b1, b2, x0, x1, y0, y1);
+        int32_t y = biquad_filter_sample(input, a1, a2, b0, b1, b2, shift, x0, x1, y0, y1);
 
         x1 = x0;
         x0 = input;
         y1 = y0;
-        y0 = output;
-        *buffer = output;
+        y0 = y;
+        *buffer = biquad_state_to_sample(y);
     }
     st->x[0] = x0;
     st->x[1] = x1;
@@ -241,12 +302,12 @@ void synthio_biquad_filter_samples(mp_obj_t self_in, biquad_filter_state *st, in
 int32_t synthio_biquad_filter_sample(mp_obj_t self_in, biquad_filter_state *st, int32_t input) {
     synthio_biquad_t *self = MP_OBJ_TO_PTR(self_in);
 
-    int32_t output = biquad_filter_sample(input, self->a1, self->a2, self->b0, self->b1, self->b2, st->x[0], st->x[1], st->y[0], st->y[1]);
+    int32_t y = biquad_filter_sample(input, self->a1, self->a2, self->b0, self->b1, self->b2, self->shift, st->x[0], st->x[1], st->y[0], st->y[1]);
 
     st->x[1] = st->x[0];
     st->x[0] = input;
     st->y[1] = st->y[0];
-    st->y[0] = output;
+    st->y[0] = y;
 
-    return output;
+    return biquad_state_to_sample(y);
 }
