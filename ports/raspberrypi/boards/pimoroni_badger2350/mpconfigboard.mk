@@ -39,5 +39,4 @@ CFLAGS += \
 CFLAGS += -DCIRCUITPY_FIRMWARE_SIZE='(1536 * 1024)'
 
 FROZEN_MPY_DIRS += $(TOP)/frozen/circuitpython-pcf85063a
-FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_BusDevice
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_Register
