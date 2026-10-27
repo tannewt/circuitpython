@@ -405,6 +405,7 @@ CIRCUITPY_ESPCAMERA = 0
 
 # P4 has MIPI-DSI
 CIRCUITPY_MIPIDSI = 1
+CIRCUITPY_DISPLAYIO_LVGL = 1
 
 #### esp32s31 #########################################################
 else ifeq ($(IDF_TARGET),esp32s31)
@@ -450,6 +451,7 @@ CIRCUITPY_RGBMATRIX = 0
 CIRCUITPY_ALARM_TOUCH = 0
 CIRCUITPY_TOUCHIO = 0
 CIRCUITPY_TOUCHIO_USE_NATIVE = 0
+CIRCUITPY_DISPLAYIO_LVGL = 1
 
 #### esp32s2 ##########################################################
 else ifeq ($(IDF_TARGET),esp32s2)

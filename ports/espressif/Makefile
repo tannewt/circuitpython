@@ -22,6 +22,7 @@ endif
 #######################################
 
 INC += \
+	-I./components/lvgl/include \
 	-I.\
 	-I./boards \
 	-I./boards/$(BOARD) \
@@ -676,6 +677,7 @@ endif
 
 SRC_C += \
 	background.c \
+	supervisor/lvgl_port.c \
 	mphalport.c \
 	boards/$(BOARD)/board.c \
 	boards/$(BOARD)/pins.c \

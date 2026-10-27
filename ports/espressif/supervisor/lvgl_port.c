@@ -11,12 +11,16 @@ static void lvgl_tick_cb(void *arg) {
     lv_tick_inc(5);
 }
 
-void displayio_lvgl_port_lock(void) {}
-void displayio_lvgl_port_unlock(void) {}
+void displayio_lvgl_port_lock(void) {
+}
+void displayio_lvgl_port_unlock(void) {
+}
 
 void espressif_lvgl_init(void) {
     static bool inited = false;
-    if (inited) return;
+    if (inited) {
+        return;
+    }
     inited = true;
     lv_init();
     const esp_timer_create_args_t args = {

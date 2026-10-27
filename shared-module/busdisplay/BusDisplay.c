@@ -546,12 +546,18 @@ static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, 
 
 static lv_color_format_t busdisplay_lvgl_color_format(busdisplay_busdisplay_obj_t *self) {
     switch (self->color_depth) {
-        case 16: return LV_COLOR_FORMAT_RGB565;
-        case 24: return LV_COLOR_FORMAT_RGB888;
-        case 32: return LV_COLOR_FORMAT_ARGB8888;
-        case 8: return LV_COLOR_FORMAT_L8;
-        case 1: return LV_COLOR_FORMAT_I1;
-        default: return LV_COLOR_FORMAT_RGB565;
+        case 16:
+            return LV_COLOR_FORMAT_RGB565;
+        case 24:
+            return LV_COLOR_FORMAT_RGB888;
+        case 32:
+            return LV_COLOR_FORMAT_ARGB8888;
+        case 8:
+            return LV_COLOR_FORMAT_L8;
+        case 1:
+            return LV_COLOR_FORMAT_I1;
+        default:
+            return LV_COLOR_FORMAT_RGB565;
     }
 }
 
@@ -617,7 +623,9 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
             #endif
         } else if (self->backlight_inout.base.type == &digitalio_digitalinout_type) {
             bool on = brightness > 0;
-            if (!backlight_on_high) on = !on;
+            if (!backlight_on_high) {
+                on = !on;
+            }
             common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, on);
         }
     }
@@ -641,9 +649,13 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
 
     // Allocate draw buffers via port_malloc
     size_t bpp = (color_depth + 7) / 8;
-    if (bpp == 0) bpp = 1;
+    if (bpp == 0) {
+        bpp = 1;
+    }
     size_t buf_lines = LVGL_DRAW_BUF_LINES;
-    if (buf_lines > height) buf_lines = height;
+    if (buf_lines > height) {
+        buf_lines = height;
+    }
     size_t buf_size = width * buf_lines * bpp;
     // Align to 4 bytes
     buf_size = (buf_size + 3) & ~3;
@@ -684,31 +696,66 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
 }
 
 // Stubs for remaining API - to be implemented
-uint16_t common_hal_busdisplay_busdisplay_get_width(busdisplay_busdisplay_obj_t *self) { return self->width; }
-uint16_t common_hal_busdisplay_busdisplay_get_height(busdisplay_busdisplay_obj_t *self) { return self->height; }
-uint16_t common_hal_busdisplay_busdisplay_get_rotation(busdisplay_busdisplay_obj_t *self) { return self->rotation; }
-void common_hal_busdisplay_busdisplay_set_rotation(busdisplay_busdisplay_obj_t *self, int rotation) { self->rotation = rotation; }
-bool common_hal_busdisplay_busdisplay_get_auto_refresh(busdisplay_busdisplay_obj_t *self) { return self->auto_refresh; }
-void common_hal_busdisplay_busdisplay_set_auto_refresh(busdisplay_busdisplay_obj_t *self, bool auto_refresh) { self->auto_refresh = auto_refresh; }
+uint16_t common_hal_busdisplay_busdisplay_get_width(busdisplay_busdisplay_obj_t *self) {
+    return self->width;
+}
+uint16_t common_hal_busdisplay_busdisplay_get_height(busdisplay_busdisplay_obj_t *self) {
+    return self->height;
+}
+uint16_t common_hal_busdisplay_busdisplay_get_rotation(busdisplay_busdisplay_obj_t *self) {
+    return self->rotation;
+}
+void common_hal_busdisplay_busdisplay_set_rotation(busdisplay_busdisplay_obj_t *self, int rotation) {
+    self->rotation = rotation;
+}
+bool common_hal_busdisplay_busdisplay_get_auto_refresh(busdisplay_busdisplay_obj_t *self) {
+    return self->auto_refresh;
+}
+void common_hal_busdisplay_busdisplay_set_auto_refresh(busdisplay_busdisplay_obj_t *self, bool auto_refresh) {
+    self->auto_refresh = auto_refresh;
+}
 bool common_hal_busdisplay_busdisplay_refresh(busdisplay_busdisplay_obj_t *self, uint32_t target_ms_per_frame, uint32_t maximum_ms_per_real_frame) {
-    if (self->lv_display) lv_refr_now(self->lv_display);
+    if (self->lv_display) {
+        lv_refr_now(self->lv_display);
+    }
     return true;
 }
-mp_obj_t common_hal_busdisplay_busdisplay_get_bus(busdisplay_busdisplay_obj_t *self) { return self->bus; }
-mp_obj_t common_hal_busdisplay_busdisplay_get_root_group(busdisplay_busdisplay_obj_t *self) { return self->root_group ? self->root_group : mp_const_none; }
+mp_obj_t common_hal_busdisplay_busdisplay_get_bus(busdisplay_busdisplay_obj_t *self) {
+    return self->bus;
+}
+mp_obj_t common_hal_busdisplay_busdisplay_get_root_group(busdisplay_busdisplay_obj_t *self) {
+    return self->root_group ? self->root_group : mp_const_none;
+}
 mp_obj_t common_hal_busdisplay_busdisplay_set_root_group(busdisplay_busdisplay_obj_t *self, displayio_group_t *root_group) {
     self->root_group = root_group;
     displayio_lvgl_set_root_group(root_group);
     return mp_const_none;
 }
-mp_float_t common_hal_busdisplay_busdisplay_get_brightness(busdisplay_busdisplay_obj_t *self) { return self->current_brightness; }
-bool common_hal_busdisplay_busdisplay_set_brightness(busdisplay_busdisplay_obj_t *self, mp_float_t brightness) { self->current_brightness = brightness; return true; }
-bool common_hal_busdisplay_busdisplay_get_dither(busdisplay_busdisplay_obj_t *self) { return false; }
-void common_hal_busdisplay_busdisplay_set_dither(busdisplay_busdisplay_obj_t *self, bool dither) {}
-void busdisplay_busdisplay_background(busdisplay_busdisplay_obj_t *self) { if (self->auto_refresh && self->lv_display) lv_timer_handler(); }
-void release_busdisplay(busdisplay_busdisplay_obj_t *self) { self->deinited = true; }
-void reset_busdisplay(busdisplay_busdisplay_obj_t *self) {}
-void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) { gc_collect_ptr(self->root_group); gc_collect_ptr(self->bus); }
+mp_float_t common_hal_busdisplay_busdisplay_get_brightness(busdisplay_busdisplay_obj_t *self) {
+    return self->current_brightness;
+}
+bool common_hal_busdisplay_busdisplay_set_brightness(busdisplay_busdisplay_obj_t *self, mp_float_t brightness) {
+    self->current_brightness = brightness;
+    return true;
+}
+bool common_hal_busdisplay_busdisplay_get_dither(busdisplay_busdisplay_obj_t *self) {
+    return false;
+}
+void common_hal_busdisplay_busdisplay_set_dither(busdisplay_busdisplay_obj_t *self, bool dither) {
+}
+void busdisplay_busdisplay_background(busdisplay_busdisplay_obj_t *self) {
+    if (self->auto_refresh && self->lv_display) {
+        lv_timer_handler();
+    }
+}
+void release_busdisplay(busdisplay_busdisplay_obj_t *self) {
+    self->deinited = true;
+}
+void reset_busdisplay(busdisplay_busdisplay_obj_t *self) {
+}
+void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {
+    gc_collect_ptr(self->root_group);
+    gc_collect_ptr(self->bus);
+}
 
 #endif // CIRCUITPY_DISPLAYIO_LVGL
-

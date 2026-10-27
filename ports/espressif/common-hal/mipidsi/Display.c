@@ -330,8 +330,12 @@ static bool mipidsi_lvgl_notify_flush_ready(esp_lcd_panel_handle_t panel, esp_lc
 }
 
 static lv_color_format_t mipidsi_lvgl_color_format(mipidsi_display_obj_t *self) {
-    if (self->color_depth == 16) return LV_COLOR_FORMAT_RGB565;
-    if (self->color_depth == 24) return LV_COLOR_FORMAT_RGB888;
+    if (self->color_depth == 16) {
+        return LV_COLOR_FORMAT_RGB565;
+    }
+    if (self->color_depth == 24) {
+        return LV_COLOR_FORMAT_RGB888;
+    }
     return LV_COLOR_FORMAT_RGB565;
 }
 
@@ -440,7 +444,9 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         if (delay) {
             data_size++;
             delay_length_ms = *(cmd + 1 + data_size);
-            if (delay_length_ms == 255) delay_length_ms = 500;
+            if (delay_length_ms == 255) {
+                delay_length_ms = 500;
+            }
         }
         common_hal_time_delay_ms(delay_length_ms);
         i += 2 + data_size;
@@ -477,7 +483,9 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         #endif
         if (self->backlight_inout.base.type == &digitalio_digitalinout_type) {
             bool on = brightness > 0;
-            if (!backlight_on_high) on = !on;
+            if (!backlight_on_high) {
+                on = !on;
+            }
             common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, on);
         }
     }
@@ -538,16 +546,39 @@ void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
     self->deinited = true;
 }
 
-bool common_hal_mipidsi_display_deinited(mipidsi_display_obj_t *self) { return self->deinited; }
-void common_hal_mipidsi_display_refresh(mipidsi_display_obj_t *self) { if (self->lv_display) lv_refr_now(self->lv_display); }
-mp_float_t common_hal_mipidsi_display_get_brightness(mipidsi_display_obj_t *self) { return self->current_brightness; }
-bool common_hal_mipidsi_display_set_brightness(mipidsi_display_obj_t *self, mp_float_t brightness) { self->current_brightness = brightness; return true; }
-int common_hal_mipidsi_display_get_width(mipidsi_display_obj_t *self) { return self->width; }
-int common_hal_mipidsi_display_get_height(mipidsi_display_obj_t *self) { return self->height; }
-int common_hal_mipidsi_display_get_row_stride(mipidsi_display_obj_t *self) { return self->width * (self->color_depth / 8); }
-int common_hal_mipidsi_display_get_color_depth(mipidsi_display_obj_t *self) { return self->color_depth; }
-int common_hal_mipidsi_display_get_native_frames_per_second(mipidsi_display_obj_t *self) { return self->native_frames_per_second; }
-bool common_hal_mipidsi_display_get_grayscale(mipidsi_display_obj_t *self) { return false; }
+bool common_hal_mipidsi_display_deinited(mipidsi_display_obj_t *self) {
+    return self->deinited;
+}
+void common_hal_mipidsi_display_refresh(mipidsi_display_obj_t *self) {
+    if (self->lv_display) {
+        lv_refr_now(self->lv_display);
+    }
+}
+mp_float_t common_hal_mipidsi_display_get_brightness(mipidsi_display_obj_t *self) {
+    return self->current_brightness;
+}
+bool common_hal_mipidsi_display_set_brightness(mipidsi_display_obj_t *self, mp_float_t brightness) {
+    self->current_brightness = brightness;
+    return true;
+}
+int common_hal_mipidsi_display_get_width(mipidsi_display_obj_t *self) {
+    return self->width;
+}
+int common_hal_mipidsi_display_get_height(mipidsi_display_obj_t *self) {
+    return self->height;
+}
+int common_hal_mipidsi_display_get_row_stride(mipidsi_display_obj_t *self) {
+    return self->width * (self->color_depth / 8);
+}
+int common_hal_mipidsi_display_get_color_depth(mipidsi_display_obj_t *self) {
+    return self->color_depth;
+}
+int common_hal_mipidsi_display_get_native_frames_per_second(mipidsi_display_obj_t *self) {
+    return self->native_frames_per_second;
+}
+bool common_hal_mipidsi_display_get_grayscale(mipidsi_display_obj_t *self) {
+    return false;
+}
 mp_int_t common_hal_mipidsi_display_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
     mipidsi_display_obj_t *self = (mipidsi_display_obj_t *)self_in;
     bufinfo->buf = self->framebuffer;
@@ -557,4 +588,3 @@ mp_int_t common_hal_mipidsi_display_get_buffer(mp_obj_t self_in, mp_buffer_info_
 }
 
 #endif // CIRCUITPY_DISPLAYIO_LVGL
-
