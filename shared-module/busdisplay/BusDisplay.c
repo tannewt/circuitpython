@@ -514,33 +514,91 @@ void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {
 
 static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     busdisplay_busdisplay_obj_t *self = lv_display_get_user_data(disp);
-    // Set column and row windows
     uint16_t x1 = area->x1 + self->colstart;
     uint16_t x2 = area->x2 + self->colstart;
     uint16_t y1 = area->y1 + self->rowstart;
     uint16_t y2 = area->y2 + self->rowstart;
 
-    // Use bus send to set windows and write RAM
-    // Bus is stored as mp_obj_t, need to call FourWire send
-    // This is simplified - handles 16-bit RGB565 and 24-bit
-    bool is_16bit = (self->color_depth == 16);
     uint16_t w = area->x2 - area->x1 + 1;
     uint16_t h = area->y2 - area->y1 + 1;
-
-    // Begin transaction via bus
-    // For now, assume FourWire - need to dispatch based on bus type
-    // TODO: handle I2C/Parallel bus types
-    if (self->bus != mp_const_none) {
-        // Try FourWire
-        if (mp_obj_is_type(self->bus, &fourwire_fourwire_type)) {
-            common_hal_fourwire_fourwire_begin_transaction(self->bus);
-            // Simplified: send set_column, set_row, write_ram via FourWire
-            // Actual implementation needs to handle single_byte_bounds, data_as_commands, SH1107
-            // For brevity, call bus send helpers
-        }
+    size_t len = (size_t)w * h * ((self->color_depth + 7) / 8);
+    if (self->color_depth == 1) {
+        len = (w * h + 7) / 8;
+        if (self->bytes_per_cell > 1) len *= self->bytes_per_cell;
     }
 
-    // After sending, notify LVGL flush ready
+    if (self->bus == mp_const_none) {
+        lv_display_flush_ready(disp);
+        return;
+    }
+
+    // FourWire is the common case for ESP32 P4/S3 SPI TFTs
+    if (mp_obj_is_type(self->bus, &fourwire_fourwire_type)) {
+        // Handle SH1107 quirk for 1-bit displays if needed
+        if (self->sh1107_addressing && self->color_depth == 1) {
+            // SH1107 uses page addressing - for now use simplified flush
+            // TODO: proper SH1107 paging
+        }
+
+        common_hal_fourwire_fourwire_begin_transaction(self->bus);
+
+        // Set column window
+        if (self->single_byte_bounds) {
+            uint8_t data[2] = {(uint8_t)x1, (uint8_t)x2};
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->set_column_command, 1);
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data, 2);
+        } else {
+            uint8_t data[4] = {x1 >> 8, x1 & 0xFF, x2 >> 8, x2 & 0xFF};
+            if (self->data_as_commands) {
+                uint8_t full[5] = {self->set_column_command, data[0], data[1], data[2], data[3]};
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, full, 5);
+            } else {
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->set_column_command, 1);
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data, 4);
+            }
+        }
+
+        // Set row window
+        if (self->single_byte_bounds) {
+            uint8_t data[2] = {(uint8_t)y1, (uint8_t)y2};
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->set_row_command, 1);
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data, 2);
+        } else {
+            uint8_t data[4] = {y1 >> 8, y1 & 0xFF, y2 >> 8, y2 & 0xFF};
+            if (self->data_as_commands) {
+                uint8_t full[5] = {self->set_row_command, data[0], data[1], data[2], data[3]};
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, full, 5);
+            } else {
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->set_row_command, 1);
+                common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data, 4);
+            }
+        }
+
+        // Write RAM
+        if (self->data_as_commands) {
+            // Some displays expect data as commands - send pixel data as command stream
+            // For now, send write_ram as command and data together
+            uint8_t cmd = self->write_ram_command;
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &cmd, 1);
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, px_map, len);
+        } else {
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, &self->write_ram_command, 1);
+            common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, px_map, len);
+        }
+
+        common_hal_fourwire_fourwire_end_transaction(self->bus);
+    }
+#if CIRCUITPY_I2CDISPLAYBUS
+    else if (mp_obj_is_type(self->bus, &i2cdisplaybus_i2cdisplaybus_type)) {
+        // TODO: I2C display bus flush
+    }
+#endif
+#if CIRCUITPY_PARALLELDISPLAYBUS
+    else if (mp_obj_is_type(self->bus, &paralleldisplaybus_parallelbus_type)) {
+        // TODO: parallel bus flush
+    }
+#endif
+
     lv_display_flush_ready(disp);
 }
 
@@ -630,13 +688,46 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
         }
     }
 
-    // Send init sequence via bus (legacy helper - reuse bus send)
-    // For LVGL we still need to init display via bus commands
-    // Simplified: store and send via FourWire if available
+    // Send init sequence via bus - same format as legacy (DELAY 0x80)
     if (self->bus != mp_const_none && init_sequence_len > 0) {
-        // Need to handle bus type dispatch - for now just handle FourWire
-        // TODO: implement full init sequence handling
+        uint32_t i = 0;
+        while (i < init_sequence_len) {
+            uint8_t *cmd = init_sequence + i;
+            uint8_t data_size = *(cmd + 1);
+            bool delay = (data_size & DELAY) != 0;
+            data_size &= ~DELAY;
+            uint8_t *data = cmd + 2;
+            if (mp_obj_is_type(self->bus, &fourwire_fourwire_type)) {
+                while (!common_hal_fourwire_fourwire_begin_transaction(self->bus)) {
+                    RUN_BACKGROUND_TASKS;
+                }
+                if (self->data_as_commands) {
+                    uint8_t full[data_size + 1];
+                    full[0] = cmd[0];
+                    memcpy(full + 1, data, data_size);
+                    common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, CHIP_SELECT_TOGGLE_EVERY_BYTE, full, data_size + 1);
+                } else {
+                    common_hal_fourwire_fourwire_send(self->bus, DISPLAY_COMMAND, data_size > 0 ? CHIP_SELECT_TOGGLE_EVERY_BYTE : CHIP_SELECT_UNTOUCHED, cmd, 1);
+                    if (data_size > 0) {
+                        common_hal_fourwire_fourwire_send(self->bus, DISPLAY_DATA, CHIP_SELECT_UNTOUCHED, data, data_size);
+                    }
+                }
+                common_hal_fourwire_fourwire_end_transaction(self->bus);
+            }
+            uint16_t delay_ms = 0;
+            if (delay) {
+                data_size++;
+                delay_ms = *(cmd + 1 + data_size);
+                if (delay_ms == 255) delay_ms = 500;
+            }
+            if (delay_ms) common_hal_time_delay_ms(delay_ms);
+            i += 2 + data_size;
+        }
     }
+
+    // Ensure LVGL is inited (lv_init + tick)
+    extern void espressif_lvgl_init(void);
+    espressif_lvgl_init();
 
     // Create LVGL display
     self->lv_display = lv_display_create(width, height);
@@ -682,8 +773,9 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     displayio_lvgl_set_colorspace(&cs);
     displayio_lvgl_init();
 
-    // Set initial root group to splash
+    // Set initial root group to splash - make this display default first
     self->root_group = &circuitpython_splash;
+    lv_display_set_default(self->lv_display);
     displayio_lvgl_set_root_group(&circuitpython_splash);
 
     // Handle rotation
@@ -728,6 +820,19 @@ mp_obj_t common_hal_busdisplay_busdisplay_get_root_group(busdisplay_busdisplay_o
 }
 mp_obj_t common_hal_busdisplay_busdisplay_set_root_group(busdisplay_busdisplay_obj_t *self, displayio_group_t *root_group) {
     self->root_group = root_group;
+    // Update colorspace to this display's format - Group can only be on one display at a time
+    if (root_group != NULL) {
+        lv_display_set_default(self->lv_display);
+        _displayio_colorspace_t cs = {
+            .depth = self->color_depth,
+            .bytes_per_cell = self->bytes_per_cell,
+            .grayscale = self->grayscale,
+            .pixels_in_byte_share_row = self->pixels_in_byte_share_row,
+            .reverse_pixels_in_byte = self->reverse_pixels_in_byte,
+            .reverse_bytes_in_word = self->reverse_bytes_in_word,
+        };
+        displayio_lvgl_set_colorspace(&cs);
+    }
     displayio_lvgl_set_root_group(root_group);
     return mp_const_none;
 }

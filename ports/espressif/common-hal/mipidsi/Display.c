@@ -490,6 +490,10 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         }
     }
 
+    // Ensure LVGL is inited
+    extern void espressif_lvgl_init(void);
+    espressif_lvgl_init();
+
     // LVGL display - direct render using framebuffer as draw buffer
     self->lv_display = lv_display_create(width, height);
     if (self->lv_display == NULL) {
@@ -520,6 +524,7 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
     displayio_lvgl_set_colorspace(&cs);
     displayio_lvgl_init();
     self->root_group = &circuitpython_splash;
+    lv_display_set_default(self->lv_display);
     displayio_lvgl_set_root_group(&circuitpython_splash);
 
     mipidsi_bus_increment_use_count(self->bus);
