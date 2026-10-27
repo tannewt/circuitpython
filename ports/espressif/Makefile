@@ -22,7 +22,8 @@ endif
 #######################################
 
 INC += \
-	-I./components/lvgl/include \
+	-I../../lib/lvgl \
+	-I./lvgl \
 	-I.\
 	-I./boards \
 	-I./boards/$(BOARD) \
