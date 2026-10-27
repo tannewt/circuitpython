@@ -34,6 +34,7 @@
 
 #define DELAY 0x80
 
+#if !CIRCUITPY_DISPLAYIO_LVGL
 void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *self,
     mp_obj_t bus, uint16_t width, uint16_t height, int16_t colstart, int16_t rowstart,
     uint16_t rotation, uint16_t color_depth, bool grayscale, bool pixels_in_byte_share_row,
@@ -493,3 +494,221 @@ void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {
     displayio_display_core_collect_ptrs(&self->core);
     displayio_display_bus_collect_ptrs(&self->bus);
 }
+#endif // !CIRCUITPY_DISPLAYIO_LVGL
+
+// LVGL BusDisplay implementation for fourwire/SPI displays
+// Direct render via LVGL partial buffers, SPI flush
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "shared-bindings/busdisplay/BusDisplay.h"
+#include "shared-bindings/fourwire/FourWire.h"
+#include "shared-bindings/displayio/Group.h"
+#include "shared-module/displayio/lvgl/lvgl_internal.h"
+#include "supervisor/shared/tick.h"
+#include "py/runtime.h"
+#include "py/gc.h"
+#include <string.h>
+#include "lvgl.h"
+
+#define DELAY 0x80
+#define LVGL_DRAW_BUF_LINES 10
+
+static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
+    busdisplay_busdisplay_obj_t *self = lv_display_get_user_data(disp);
+    // Set column and row windows
+    uint16_t x1 = area->x1 + self->colstart;
+    uint16_t x2 = area->x2 + self->colstart;
+    uint16_t y1 = area->y1 + self->rowstart;
+    uint16_t y2 = area->y2 + self->rowstart;
+
+    // Use bus send to set windows and write RAM
+    // Bus is stored as mp_obj_t, need to call FourWire send
+    // This is simplified - handles 16-bit RGB565 and 24-bit
+    bool is_16bit = (self->color_depth == 16);
+    uint16_t w = area->x2 - area->x1 + 1;
+    uint16_t h = area->y2 - area->y1 + 1;
+
+    // Begin transaction via bus
+    // For now, assume FourWire - need to dispatch based on bus type
+    // TODO: handle I2C/Parallel bus types
+    if (self->bus != mp_const_none) {
+        // Try FourWire
+        if (mp_obj_is_type(self->bus, &fourwire_fourwire_type)) {
+            common_hal_fourwire_fourwire_begin_transaction(self->bus);
+            // Simplified: send set_column, set_row, write_ram via FourWire
+            // Actual implementation needs to handle single_byte_bounds, data_as_commands, SH1107
+            // For brevity, call bus send helpers
+        }
+    }
+
+    // After sending, notify LVGL flush ready
+    lv_display_flush_ready(disp);
+}
+
+static lv_color_format_t busdisplay_lvgl_color_format(busdisplay_busdisplay_obj_t *self) {
+    switch (self->color_depth) {
+        case 16: return LV_COLOR_FORMAT_RGB565;
+        case 24: return LV_COLOR_FORMAT_RGB888;
+        case 32: return LV_COLOR_FORMAT_ARGB8888;
+        case 8: return LV_COLOR_FORMAT_L8;
+        case 1: return LV_COLOR_FORMAT_I1;
+        default: return LV_COLOR_FORMAT_RGB565;
+    }
+}
+
+void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *self,
+    mp_obj_t bus, uint16_t width, uint16_t height, int16_t colstart, int16_t rowstart,
+    uint16_t rotation, uint16_t color_depth, bool grayscale, bool pixels_in_byte_share_row,
+    uint8_t bytes_per_cell, bool reverse_pixels_in_byte, bool reverse_bytes_in_word, uint8_t set_column_command,
+    uint8_t set_row_command, uint8_t write_ram_command,
+    uint8_t *init_sequence, uint16_t init_sequence_len, const mcu_pin_obj_t *backlight_pin,
+    uint16_t brightness_command, mp_float_t brightness,
+    bool single_byte_bounds, bool data_as_commands, bool auto_refresh, uint16_t native_frames_per_second,
+    bool backlight_on_high, bool SH1107_addressing, uint16_t backlight_pwm_frequency) {
+
+    self->bus = bus;
+    self->width = width;
+    self->height = height;
+    self->colstart = colstart;
+    self->rowstart = rowstart;
+    self->rotation = rotation;
+    self->color_depth = color_depth;
+    self->grayscale = grayscale;
+    self->pixels_in_byte_share_row = pixels_in_byte_share_row;
+    self->bytes_per_cell = bytes_per_cell;
+    self->reverse_pixels_in_byte = reverse_pixels_in_byte;
+    self->reverse_bytes_in_word = reverse_bytes_in_word;
+    self->set_column_command = set_column_command;
+    self->set_row_command = set_row_command;
+    self->write_ram_command = write_ram_command;
+    self->brightness_command = brightness_command;
+    self->backlight_on_high = backlight_on_high;
+    self->auto_refresh = auto_refresh;
+    self->first_manual_refresh = !auto_refresh;
+    self->native_frames_per_second = native_frames_per_second;
+    self->native_ms_per_frame = 1000 / (native_frames_per_second ? native_frames_per_second : 60);
+    self->single_byte_bounds = single_byte_bounds;
+    self->data_as_commands = data_as_commands;
+    self->sh1107_addressing = SH1107_addressing;
+    self->current_brightness = brightness;
+    self->deinited = false;
+    self->root_group = NULL;
+    self->backlight_inout.base.type = &mp_type_NoneType;
+
+    // Backlight setup (same as legacy)
+    if (backlight_pin != NULL && common_hal_mcu_pin_is_free(backlight_pin)) {
+        #if CIRCUITPY_PWMIO
+        pwmout_result_t result = common_hal_pwmio_pwmout_construct(&self->backlight_pwm, backlight_pin, 0, backlight_pwm_frequency, false);
+        if (result != PWMOUT_OK) {
+            self->backlight_inout.base.type = &digitalio_digitalinout_type;
+            common_hal_digitalio_digitalinout_construct(&self->backlight_inout, backlight_pin);
+            common_hal_never_reset_pin(backlight_pin);
+        } else {
+            self->backlight_pwm.base.type = &pwmio_pwmout_type;
+            common_hal_pwmio_pwmout_never_reset(&self->backlight_pwm);
+        }
+        #else
+        self->backlight_inout.base.type = &digitalio_digitalinout_type;
+        common_hal_digitalio_digitalinout_construct(&self->backlight_inout, backlight_pin);
+        common_hal_never_reset_pin(backlight_pin);
+        #endif
+        if (self->backlight_pwm.base.type == &pwmio_pwmout_type) {
+            #if CIRCUITPY_PWMIO
+            common_hal_pwmio_pwmout_set_duty_cycle(&self->backlight_pwm, (uint16_t)(brightness * 0xFFFF));
+            #endif
+        } else if (self->backlight_inout.base.type == &digitalio_digitalinout_type) {
+            bool on = brightness > 0;
+            if (!backlight_on_high) on = !on;
+            common_hal_digitalio_digitalinout_set_value(&self->backlight_inout, on);
+        }
+    }
+
+    // Send init sequence via bus (legacy helper - reuse bus send)
+    // For LVGL we still need to init display via bus commands
+    // Simplified: store and send via FourWire if available
+    if (self->bus != mp_const_none && init_sequence_len > 0) {
+        // Need to handle bus type dispatch - for now just handle FourWire
+        // TODO: implement full init sequence handling
+    }
+
+    // Create LVGL display
+    self->lv_display = lv_display_create(width, height);
+    if (self->lv_display == NULL) {
+        mp_raise_RuntimeError(MP_ERROR_TEXT("LVGL display create failed"));
+    }
+    lv_display_set_user_data(self->lv_display, self);
+    self->lv_color_format = busdisplay_lvgl_color_format(self);
+    lv_display_set_color_format(self->lv_display, self->lv_color_format);
+
+    // Allocate draw buffers via port_malloc
+    size_t bpp = (color_depth + 7) / 8;
+    if (bpp == 0) bpp = 1;
+    size_t buf_lines = LVGL_DRAW_BUF_LINES;
+    if (buf_lines > height) buf_lines = height;
+    size_t buf_size = width * buf_lines * bpp;
+    // Align to 4 bytes
+    buf_size = (buf_size + 3) & ~3;
+    self->lv_buf1 = m_malloc(buf_size, false);
+    self->lv_buf2 = m_malloc(buf_size, false);
+    if (self->lv_buf1 == NULL || self->lv_buf2 == NULL) {
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL buffer alloc failed"));
+    }
+    self->lv_buf_size = buf_size;
+    lv_display_set_buffers(self->lv_display, self->lv_buf1, self->lv_buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_flush_cb(self->lv_display, busdisplay_lvgl_flush_cb);
+
+    // Setup LVGL for displayio (colorspace, decoder)
+    _displayio_colorspace_t cs = {
+        .depth = color_depth,
+        .bytes_per_cell = bytes_per_cell,
+        .grayscale = grayscale,
+        .pixels_in_byte_share_row = pixels_in_byte_share_row,
+        .reverse_pixels_in_byte = reverse_pixels_in_byte,
+        .reverse_bytes_in_word = reverse_bytes_in_word,
+        .grayscale_bit = 0,
+        .dither = false,
+    };
+    displayio_lvgl_set_colorspace(&cs);
+    displayio_lvgl_init();
+
+    // Set initial root group to splash
+    self->root_group = &circuitpython_splash;
+    displayio_lvgl_set_root_group(&circuitpython_splash);
+
+    // Handle rotation
+    if (rotation != 0) {
+        // LVGL rotation support - set via lv_display_set_rotation if available
+        // For now, store and handle via transform
+    }
+
+    common_hal_busdisplay_busdisplay_set_auto_refresh(self, auto_refresh);
+}
+
+// Stubs for remaining API - to be implemented
+uint16_t common_hal_busdisplay_busdisplay_get_width(busdisplay_busdisplay_obj_t *self) { return self->width; }
+uint16_t common_hal_busdisplay_busdisplay_get_height(busdisplay_busdisplay_obj_t *self) { return self->height; }
+uint16_t common_hal_busdisplay_busdisplay_get_rotation(busdisplay_busdisplay_obj_t *self) { return self->rotation; }
+void common_hal_busdisplay_busdisplay_set_rotation(busdisplay_busdisplay_obj_t *self, int rotation) { self->rotation = rotation; }
+bool common_hal_busdisplay_busdisplay_get_auto_refresh(busdisplay_busdisplay_obj_t *self) { return self->auto_refresh; }
+void common_hal_busdisplay_busdisplay_set_auto_refresh(busdisplay_busdisplay_obj_t *self, bool auto_refresh) { self->auto_refresh = auto_refresh; }
+bool common_hal_busdisplay_busdisplay_refresh(busdisplay_busdisplay_obj_t *self, uint32_t target_ms_per_frame, uint32_t maximum_ms_per_real_frame) {
+    if (self->lv_display) lv_refr_now(self->lv_display);
+    return true;
+}
+mp_obj_t common_hal_busdisplay_busdisplay_get_bus(busdisplay_busdisplay_obj_t *self) { return self->bus; }
+mp_obj_t common_hal_busdisplay_busdisplay_get_root_group(busdisplay_busdisplay_obj_t *self) { return self->root_group ? self->root_group : mp_const_none; }
+mp_obj_t common_hal_busdisplay_busdisplay_set_root_group(busdisplay_busdisplay_obj_t *self, displayio_group_t *root_group) {
+    self->root_group = root_group;
+    displayio_lvgl_set_root_group(root_group);
+    return mp_const_none;
+}
+mp_float_t common_hal_busdisplay_busdisplay_get_brightness(busdisplay_busdisplay_obj_t *self) { return self->current_brightness; }
+bool common_hal_busdisplay_busdisplay_set_brightness(busdisplay_busdisplay_obj_t *self, mp_float_t brightness) { self->current_brightness = brightness; return true; }
+bool common_hal_busdisplay_busdisplay_get_dither(busdisplay_busdisplay_obj_t *self) { return false; }
+void common_hal_busdisplay_busdisplay_set_dither(busdisplay_busdisplay_obj_t *self, bool dither) {}
+void busdisplay_busdisplay_background(busdisplay_busdisplay_obj_t *self) { if (self->auto_refresh && self->lv_display) lv_timer_handler(); }
+void release_busdisplay(busdisplay_busdisplay_obj_t *self) { self->deinited = true; }
+void reset_busdisplay(busdisplay_busdisplay_obj_t *self) {}
+void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) { gc_collect_ptr(self->root_group); gc_collect_ptr(self->bus); }
+
+#endif // CIRCUITPY_DISPLAYIO_LVGL
+
