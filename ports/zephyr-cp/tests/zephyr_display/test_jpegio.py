@@ -76,7 +76,9 @@ _JPEGIO_DRIVE = {"code.py": JPEGIO_DECODE_CODE, "test.jpg": _TEST_JPG_BYTES}
 @pytest.mark.circuitpy_drive(_JPEGIO_DRIVE)
 @pytest.mark.display(capture_times_ns=[14_000_000_000])
 @pytest.mark.duration(18)
-def test_jpegio_decode(request, circuitpython):
+def test_jpegio_decode(request, board, circuitpython):
+    if board == "native_native_sim_lvgl":
+        pytest.skip("jpegio is disabled for the LVGL compositor while bitmaptools is disabled")
     circuitpython.wait_until_done()
 
     output = circuitpython.serial.all_output

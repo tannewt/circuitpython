@@ -33,6 +33,19 @@ static void clear_panel_handles(mipidsi_display_obj_t *self) {
     }
 }
 
+// The DPI driver requires this callback to live in IRAM. It runs in interrupt context, so it only
+// forwards to the framebuffer's frame callback (which hands off to the LVGL port) and returns.
+static bool IRAM_ATTR mipidsi_display_vsync_cb(esp_lcd_panel_handle_t panel,
+    esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx) {
+    (void)panel;
+    (void)edata;
+    mipidsi_display_obj_t *self = user_ctx;
+    if (self->frame_cb != NULL) {
+        self->frame_cb(self->frame_cb_data);
+    }
+    return false;
+}
+
 void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
     mipidsi_bus_obj_t *bus,
     const uint8_t *init_sequence,
@@ -66,6 +79,8 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
     self->framebuffer = NULL;
     self->dbi_io_handle = NULL;
     self->dpi_panel_handle = NULL;
+    self->frame_cb = NULL;
+    self->frame_cb_data = NULL;
     self->backlight_inout.base.type = &mp_type_NoneType;
 
     // Create the DBI interface for sending commands
@@ -165,6 +180,17 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         CHECK_ESP_RESULT(ret);
     }
 
+    // VSYNC is the frame boundary a FramebufferDisplay can pace itself with. The callback stays
+    // registered for the life of the panel; frame_cb is only set when a display asks for it.
+    esp_lcd_dpi_panel_event_callbacks_t dpi_cbs = {
+        .on_vsync = mipidsi_display_vsync_cb,
+    };
+    ret = esp_lcd_dpi_panel_register_event_callbacks(self->dpi_panel_handle, &dpi_cbs, self);
+    if (ret != ESP_OK) {
+        clear_panel_handles(self);
+        CHECK_ESP_RESULT(ret);
+    }
+
     // Send display-ON (0x29) after the DPI/video stream is running, matching
     // the reference BSP flow order.
     esp_lcd_panel_io_tx_param(self->dbi_io_handle, 0x29, NULL, 0);
@@ -207,6 +233,10 @@ void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
         return;
     }
 
+    // Stop the vsync ISR from reaching a display that is going away before the panel is deleted.
+    self->frame_cb = NULL;
+    self->frame_cb_data = NULL;
+
     // Cleanup backlight
     #if (CIRCUITPY_PWMIO)
     if (self->backlight_pwm.base.type == &pwmio_pwmout_type) {
@@ -236,6 +266,12 @@ void common_hal_mipidsi_display_refresh(mipidsi_display_obj_t *self) {
     // The DPI panel will automatically refresh from the framebuffer
     // No explicit refresh call is needed as the DSI hardware continuously
     // sends data from the framebuffer to the display
+}
+
+void common_hal_mipidsi_display_set_frame_callback(mipidsi_display_obj_t *self,
+    framebuffer_frame_callback_t cb, void *data) {
+    self->frame_cb = cb;
+    self->frame_cb_data = data;
 }
 
 void common_hal_mipidsi_display_refresh_rows(mipidsi_display_obj_t *self, const uint8_t *dirty_row_bitmap) {
