@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-#include "py/objproperty.h"
 #include "py/runtime.h"   // brings in the board config (CIRCUITPY_PICOGAME_FAST_DISPLAY)
 
 // The fast DMA Display backend is port-specific (needs a common-hal). Ports without it
@@ -20,9 +19,8 @@
 //| class Display:
 //|     """A display backend that wraps an existing :py:class:`~busdisplay.BusDisplay` and
 //|     renders straight to its bus in double-buffered strips. On a bus that sends
-//|     asynchronously (see `async_send`) the next strip is composed while the previous
-//|     one is on the wire. It reuses the wrapped display's bus, window commands and
-//|     dimensions.
+//|     asynchronously the next strip is composed while the previous one is on the
+//|     wire. It reuses the wrapped display's bus, window commands and dimensions.
 //|
 //|     Constructing it raises :py:class:`NotImplementedError` when
 //|     :py:data:`FAST_DISPLAY_SUPPORTED` is `False`."""
@@ -114,30 +112,15 @@ static mp_obj_t picogame_display_render(size_t n_args, const mp_obj_t *pos_args,
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(picogame_display_render_obj, 8, picogame_display_render);
 
-//|     async_send: bool
-//|     """`True` when the display bus sends each strip asynchronously, so the next strip is
-//|     composed while the previous one is on the wire. `False` when the bus has no such mode:
-//|     the strips then go out one after another, as `busdisplay.BusDisplay` sends them."""
-//|
-static mp_obj_t picogame_display_get_async_send(mp_obj_t self_in) {
-    picogame_display_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    return mp_obj_new_bool(self->async_send);
-}
-MP_DEFINE_CONST_FUN_OBJ_1(picogame_display_get_async_send_obj, picogame_display_get_async_send);
-
-MP_PROPERTY_GETTER(picogame_display_async_send_obj,
-    (mp_obj_t)&picogame_display_get_async_send_obj);
-
 static const mp_rom_map_elem_t picogame_display_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_render), MP_ROM_PTR(&picogame_display_render_obj) },
-    { MP_ROM_QSTR(MP_QSTR_async_send), MP_ROM_PTR(&picogame_display_async_send_obj) },
 };
 static MP_DEFINE_CONST_DICT(picogame_display_locals_dict, picogame_display_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     picogame_display_type,
     MP_QSTR_Display,
-    MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,   // async_send is a property
+    MP_TYPE_FLAG_NONE,
     make_new, picogame_display_make_new,
     locals_dict, &picogame_display_locals_dict
     );

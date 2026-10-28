@@ -142,8 +142,7 @@ static busdisplay_busdisplay_obj_t *pg_get_display(mp_obj_t obj) {
 //| """Whether `Display` supports ``rgb444=True`` on this board."""
 //|
 //| FAST_DISPLAY_SUPPORTED: bool
-//| """Whether the `Display` backend is built into this firmware. `Display.async_send` tells
-//| whether the display bus overlaps composing and sending."""
+//| """Whether the `Display` backend is built into this firmware."""
 //|
 //| FRAMEBUFFER_SUPPORTED: bool
 //| """Whether `Framebuffer` is available on this board."""
