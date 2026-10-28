@@ -325,7 +325,9 @@ ssl_sslsocket_obj_t *common_hal_ssl_sslcontext_wrap_socket(ssl_sslcontext_obj_t 
         goto cleanup;
     }
 
-    if (self->crt_bundle_attach != NULL) {
+    if (self->crt_bundle_attach != NULL && !server_side) {
+        // The root bundle checks servers. A server checks clients only
+        // against a CA loaded with load_verify_locations().
         mbedtls_ssl_conf_authmode(&o->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
         self->crt_bundle_attach(&o->conf);
     } else if (self->cacert_buf && self->cacert_bytes) {
