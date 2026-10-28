@@ -14,6 +14,7 @@ aesio = true
 alarm = false
 analogbufio = false
 analogio = false
+async_spi = false
 atexit = true
 audiobusio = false
 audiocore = false
