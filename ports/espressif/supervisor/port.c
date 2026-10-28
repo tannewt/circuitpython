@@ -446,7 +446,7 @@ void *esp_native_code_commit(void *buf, size_t len, void *reloc) {
     for (size_t i = 0; i < len / 4; i++) {
         dst[i] = src[i];
     }
-    #ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    #if defined(SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE) && SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
     // The code is still in the data cache, and the instruction cache may hold
     // stale lines from the node's earlier use: write back, then invalidate.
     esp_cache_msync(node, len_node, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
