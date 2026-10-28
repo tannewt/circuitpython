@@ -644,9 +644,14 @@ CFLAGS += -DCIRCUITPY_STAGE=$(CIRCUITPY_STAGE)
 # PicoPad 2D game engine (off by default).
 CIRCUITPY_PICOGAME ?= 0
 CFLAGS += -DCIRCUITPY_PICOGAME=$(CIRCUITPY_PICOGAME)
-# Fast async-DMA Display backend: needs a port-specific common-hal (the raspberrypi and
-# espressif ports provide one). Boards without it use the portable bus.send renderer.
+# The strip-rendering Display backend. It is worth building where busio sends asynchronously
+# (the next strip is composed while the previous one is on the wire), so that is the default;
+# a board can turn it off to save flash, or on without async busio for RGB444 alone.
+ifeq ($(CIRCUITPY_PICOGAME),1)
+CIRCUITPY_PICOGAME_FAST_DISPLAY ?= $(CIRCUITPY_BUSIO_SPI_ASYNC)
+else
 CIRCUITPY_PICOGAME_FAST_DISPLAY ?= 0
+endif
 CFLAGS += -DCIRCUITPY_PICOGAME_FAST_DISPLAY=$(CIRCUITPY_PICOGAME_FAST_DISPLAY)
 # Does this board's panel controller support 12-bit RGB444 (COLMOD)? A capability flag the
 # board declares (ST7789/ST7735 = 1, ILI9341 = 0); exposed as picogame.RGB444_SUPPORTED so
