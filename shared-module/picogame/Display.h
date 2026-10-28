@@ -13,12 +13,11 @@
 #include "py/obj.h"
 #include "shared-bindings/busdisplay/BusDisplay.h"
 #include "shared-module/picogame/Sprite.h"
-#include "supervisor/shared/async_flag.h"
 
 typedef struct {
     mp_obj_base_t base;
     busdisplay_busdisplay_obj_t *display;
-    circuitpy_async_flag_t sent;    // of the strip being sent
+    bool async_send;  // the display bus sends a strip asynchronously, so a blit overlaps a send
     bool rgb444;      // pack strips to 12-bit RGB444 before sending (~25% less SPI traffic)
 } picogame_display_obj_t;
 

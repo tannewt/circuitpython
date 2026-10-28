@@ -9,9 +9,7 @@
 #include "py/runtime.h"
 #include "shared-module/picogame/__init__.h"
 #include "shared-module/displayio/display_core.h"
-#include "shared-bindings/busio/SPI.h"
 #include "shared-bindings/displayio/__init__.h"
-#include "shared-bindings/fourwire/FourWire.h"
 
 void common_hal_picogame_display_construct(picogame_display_obj_t *self,
     busdisplay_busdisplay_obj_t *display, bool rgb444) {
@@ -25,11 +23,12 @@ void common_hal_picogame_display_construct(picogame_display_obj_t *self,
     self->rgb444 = false;
     #endif
 
-    // The strips go straight to the SPI bus; only FourWire buses are supported.
-    if (!mp_obj_is_type(display->bus.bus, &fourwire_fourwire_type)) {
-        mp_raise_TypeError_varg(MP_ERROR_TEXT("%q must be of type %q, not %q"),
-            MP_QSTR_display, MP_QSTR_FourWire, mp_obj_get_type(display->bus.bus)->name);
-    }
+    // Strips go out through the display bus. With an asynchronous send the next strip is blitted
+    // while this one is on the wire; without one they go out one after another.
+    self->async_send = false;
+    #if CIRCUITPY_BUSIO_SPI_ASYNC
+    self->async_send = display->bus.send_async != NULL;
+    #endif
 
     #if CIRCUITPY_PICOGAME_RGB444
     // Tell the panel which pixel format we'll send (COLMOD). Asserting it here also recovers from
@@ -45,8 +44,6 @@ void common_hal_picogame_display_render(picogame_display_obj_t *self,
     int ox, int oy) {
 
     busdisplay_busdisplay_obj_t *display = self->display;
-    fourwire_fourwire_obj_t *fw = MP_OBJ_TO_PTR(display->bus.bus);
-    busio_spi_obj_t *bus = fw->bus;
 
     // RGB444 packs 2 px into 3 bytes, so each strip row must be an even number of pixels
     // (whole bytes). Widen the region to even bounds; the extra <=1 px per side just repaints.
@@ -69,7 +66,6 @@ void common_hal_picogame_display_render(picogame_display_obj_t *self,
 
     uint16_t *bufs[2] = { buf_a, buf_b };
     int cur = 0;
-    bool first = true;
     #if CIRCUITPY_PICOGAME_RGB444
     const bool rgb444 = self->rgb444;        // hoist: invariant across all strips
     #endif
@@ -95,15 +91,16 @@ void common_hal_picogame_display_render(picogame_display_obj_t *self,
         size_t nbytes = (size_t)region_w * sh * 2;
         #endif
 
-        if (first) {
-            // The first strip goes through the display bus: it drives DC high for data, which
-            // then stays high for the strips sent straight to the SPI bus.
+        #if CIRCUITPY_BUSIO_SPI_ASYNC
+        if (self->async_send) {
+            // The bus ends the previous strip's send first, so its buffer is free for the next blit.
+            display->bus.send_async(display->bus.bus, DISPLAY_DATA,
+                CHIP_SELECT_UNTOUCHED, (uint8_t *)buf, nbytes);
+        } else
+        #endif
+        {
             display->bus.send(display->bus.bus, DISPLAY_DATA,
                 CHIP_SELECT_UNTOUCHED, (uint8_t *)buf, nbytes);
-            first = false;
-        } else {
-            // Ends the previous strip's transfer first, so its buffer is free for the next blit.
-            common_hal_busio_spi_write_start(bus, (uint8_t *)buf, nbytes, &self->sent);
         }
         cur ^= 1;
         if (pending != MP_OBJ_NULL) {   // callback interrupted: this strip is queued, now stop + flush

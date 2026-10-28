@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include "py/objproperty.h"
 #include "py/runtime.h"   // brings in the board config (CIRCUITPY_PICOGAME_FAST_DISPLAY)
 
 // The fast DMA Display backend is port-specific (needs a common-hal). Ports without it
@@ -14,13 +15,14 @@
 #include "shared-bindings/picogame/Sprite.h"
 #include "shared-bindings/busdisplay/BusDisplay.h"
 #include "shared-module/picogame/__init__.h"
-#include "common-hal/picogame/Display.h"
+#include "shared-module/picogame/Display.h"
 
 //| class Display:
-//|     """An accelerated display backend that wraps an existing
-//|     :py:class:`~busdisplay.BusDisplay` and sends pixels with asynchronous,
-//|     double-buffered DMA. It reuses the wrapped display's bus, window commands
-//|     and dimensions.
+//|     """A display backend that wraps an existing :py:class:`~busdisplay.BusDisplay` and
+//|     renders straight to its bus in double-buffered strips. On a bus that sends
+//|     asynchronously (see `async_send`) the next strip is composed while the previous
+//|     one is on the wire. It reuses the wrapped display's bus, window commands and
+//|     dimensions.
 //|
 //|     Constructing it raises :py:class:`NotImplementedError` when
 //|     :py:data:`FAST_DISPLAY_SUPPORTED` is `False`."""
@@ -66,7 +68,7 @@ static mp_obj_t picogame_display_make_new(const mp_obj_type_t *type, size_t n_ar
 //|         background: int = 0,
 //|     ) -> None:
 //|         """Render ``sprites`` into the screen region from ``(x0, y0)`` up to, but
-//|         not including, ``(x1, y1)``, and send it with asynchronous DMA. ``buffer_a`` and ``buffer_b`` are two
+//|         not including, ``(x1, y1)``, and send it strip by strip. ``buffer_a`` and ``buffer_b`` are two
 //|         equal strip buffers of at least ``(x1 - x0) * 2`` bytes each, used for
 //|         double buffering.
 //|
@@ -112,15 +114,30 @@ static mp_obj_t picogame_display_render(size_t n_args, const mp_obj_t *pos_args,
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(picogame_display_render_obj, 8, picogame_display_render);
 
+//|     async_send: bool
+//|     """`True` when the display bus sends each strip asynchronously, so the next strip is
+//|     composed while the previous one is on the wire. `False` when the bus has no such mode:
+//|     the strips then go out one after another, as `busdisplay.BusDisplay` sends them."""
+//|
+static mp_obj_t picogame_display_get_async_send(mp_obj_t self_in) {
+    picogame_display_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    return mp_obj_new_bool(self->async_send);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(picogame_display_get_async_send_obj, picogame_display_get_async_send);
+
+MP_PROPERTY_GETTER(picogame_display_async_send_obj,
+    (mp_obj_t)&picogame_display_get_async_send_obj);
+
 static const mp_rom_map_elem_t picogame_display_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_render), MP_ROM_PTR(&picogame_display_render_obj) },
+    { MP_ROM_QSTR(MP_QSTR_async_send), MP_ROM_PTR(&picogame_display_async_send_obj) },
 };
 static MP_DEFINE_CONST_DICT(picogame_display_locals_dict, picogame_display_locals_dict_table);
 
 MP_DEFINE_CONST_OBJ_TYPE(
     picogame_display_type,
     MP_QSTR_Display,
-    MP_TYPE_FLAG_NONE,
+    MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,   // async_send is a property
     make_new, picogame_display_make_new,
     locals_dict, &picogame_display_locals_dict
     );
