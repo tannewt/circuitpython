@@ -416,7 +416,7 @@ void port_gc_deinit(void) {
 void *esp_native_code_commit(void *buf, size_t len, void *reloc) {
     len = (len + 3) & ~3;
     size_t len_node = sizeof(native_code_node_t) + len;
-    #ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    #if defined(SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE) && SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
     // Internal RAM is reached through the L1 caches (ESP32-P4): the node is
     // whole cache lines, so that it can be synced below.
     len_node = (len_node + CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1) & ~(CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1);
