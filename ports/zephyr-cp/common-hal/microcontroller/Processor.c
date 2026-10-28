@@ -12,6 +12,7 @@
 #include "shared-bindings/microcontroller/ResetReason.h"
 
 #include <sys/types.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/hwinfo.h>
 
 #if defined(CONFIG_WIFI)
@@ -47,10 +48,14 @@ float common_hal_mcu_processor_get_temperature(void) {
     return 0.0;
 }
 
-extern uint32_t SystemCoreClock;
+#define CPU_NODE DT_PATH(cpus, cpu_0)
+
 uint32_t common_hal_mcu_processor_get_frequency(void) {
-    #ifdef __ARM__
-    return SystemCoreClock;
+    #if DT_NODE_HAS_PROP(CPU_NODE, clock_frequency)
+    return DT_PROP(CPU_NODE, clock_frequency);
+    #elif DT_NODE_HAS_PROP(CPU_NODE, clocks)
+    // No clock-frequency on the cpu node (nRF54L), so use the clock that drives it.
+    return DT_PROP_OR(DT_CLOCKS_CTLR(CPU_NODE), clock_frequency, CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
     #else
     return CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
     #endif

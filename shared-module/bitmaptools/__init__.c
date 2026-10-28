@@ -576,7 +576,7 @@ void common_hal_bitmaptools_arrayblit(displayio_bitmap_t *self, void *data, int 
 void common_hal_bitmaptools_readinto(displayio_bitmap_t *self, mp_obj_t *file, int element_size, int bits_per_pixel, bool reverse_pixels_in_element, bool swap_bytes, bool reverse_rows) {
     uint32_t mask = (1 << common_hal_displayio_bitmap_get_bits_per_value(self)) - 1;
 
-    const mp_stream_p_t *file_proto = mp_get_stream_raise(file, MP_STREAM_OP_READ);
+    mp_get_stream_raise(file, MP_STREAM_OP_READ);
 
     displayio_area_t a = {0, 0, self->width, self->height, NULL};
     displayio_bitmap_set_dirty_area(self, &a);
@@ -593,8 +593,9 @@ void common_hal_bitmaptools_readinto(displayio_bitmap_t *self, mp_obj_t *file, i
         const int y_draw = reverse_rows ? (self->height) - 1 - y : y;
 
 
+        // A stream such as a socket can return part of a row, so read until the row is complete.
         int error = 0;
-        mp_uint_t bytes_read = file_proto->read(file, rowdata32, rowsize, &error);
+        mp_uint_t bytes_read = mp_stream_read_exactly(file, rowdata32, rowsize, &error);
         if (error) {
             mp_raise_OSError(error);
         }

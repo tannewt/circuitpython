@@ -32,7 +32,6 @@ LANGUAGE_ALLOW_LIST = set(
         "de_DE",
         "en_GB",
         "en_US",
-        "en_x_pirate",
         "es",
         "fil",
         "fr",

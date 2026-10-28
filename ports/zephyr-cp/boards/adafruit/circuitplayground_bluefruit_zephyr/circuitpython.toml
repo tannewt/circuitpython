@@ -1,0 +1,62 @@
+CIRCUITPY_BUILD_EXTENSIONS = ["hex", "uf2"]
+USB_VID=0x239A
+USB_PID=0x8046
+NAME="Circuit Playground Bluefruit"
+
+# Non-Zephyr build of the same board; nvm and CIRCUITPY must sit where it puts them.
+counterpart = "nordic/circuitplayground_bluefruit"
+
+# Status RGB LED, driven with neopixel_write; name from [pins].
+STATUS_NEOPIXEL = "NEOPIXEL"
+
+
+[pins]
+# Pin names copied from the ports/ counterpart board's pins.c and resolved
+# to nRF52840 aQFN73 package pin numbers through the package pin map
+# selected in board.conf.
+AUDIO = 27  # P0.26
+D12 = 27  # P0.26
+SPEAKER = 27  # P0.26
+A1 = 3  # P0.02
+D6 = 3  # P0.02
+SCK = 3  # P0.02
+A2 = 2  # P0.29
+D9 = 2  # P0.29
+MISO = 2  # P0.29
+A3 = 16  # P0.03
+D10 = 16  # P0.03
+MOSI = 16  # P0.03
+A4 = 30  # P0.04
+D3 = 30  # P0.04
+SCL = 30  # P0.04
+A5 = 32  # P0.05
+D2 = 32  # P0.05
+SDA = 32  # P0.05
+A6 = 14  # P0.30
+D0 = 14  # P0.30
+RX = 14  # P0.30
+D1 = 54  # P0.14
+TX = 54  # P0.14
+LIGHT = 15  # P0.28
+A8 = 15  # P0.28
+TEMPERATURE = 1  # P0.31
+A9 = 1  # P0.31
+BUTTON_A = 48  # P1.02
+D4 = 48  # P1.02
+BUTTON_B = 4  # P1.15
+D5 = 4  # P1.15
+SLIDE_SWITCH = 41  # P1.06
+D7 = 41  # P1.06
+POWER_SWITCH = 33  # P0.06
+D35 = 33  # P0.06
+LED = 17  # P1.14
+L = 17  # P1.14
+D13 = 17  # P1.14
+NEOPIXEL = 65  # P0.13
+D8 = 65  # P0.13
+MICROPHONE_CLOCK = 67  # P0.17
+MICROPHONE_DATA = 55  # P0.16
+ACCELEROMETER_INTERRUPT = 5  # P1.13
+ACCELEROMETER_SDA = 7  # P1.10
+ACCELEROMETER_SCL = 18  # P1.12
+SPEAKER_ENABLE = 45  # P1.04

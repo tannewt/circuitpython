@@ -1,25 +1,6 @@
-&pinctrl {
-	i2s0_default_alt: i2s0_default_alt {
-		group1 {
-			psels = <NRF_PSEL(I2S_MCK, 0, 12)>,
-				<NRF_PSEL(I2S_SCK_M, 1, 15)>,
-				<NRF_PSEL(I2S_LRCK_M, 1, 12)>,
-				<NRF_PSEL(I2S_SDOUT, 1, 13)>,
-				<NRF_PSEL(I2S_SDIN, 1, 14)>;
-		};
-	};
-};
-
-&clock {
-	hfclkaudio-frequency = <11289600>;
-};
-
-i2s_rxtx: &i2s0 {
-	status = "okay";
-	pinctrl-0 = <&i2s0_default_alt>;
-	pinctrl-names = "default";
-	clock-source = "ACLK";
-};
+// TODO: restore the I2S for the Open Music Labs Audio Codec Shield. The fixed
+// i2s0 that was here used the Arduino SPI pins (D10-D13), so board.SPI() could
+// not use them, and audiobusio.I2SOut can't be routed dynamically yet.
 
 // Enable free serial peripheral instances so CircuitPython can mux them to
 // arbitrary pins at runtime. Each instance is enabled in one mode because the
@@ -29,11 +10,46 @@ i2s_rxtx: &i2s0 {
 // claimed at boot; iobroker initializes and routes a device when a busio
 // object is constructed and de-initializes it on release.
 //
+// See "nRF serial instances" in internal-modules/iobroker/README.md for how
+// the instances are shared and allocated.
+//
 // Instance 0 is left alone: uart0 is the console and i2c0/spi0 share that
-// same peripheral, so they must not be enabled. Instance 1 stays with the
-// fixed arduino header i2c1, and spi4 stays the fixed arduino header SPI.
+// same peripheral, so they must not be enabled. Instance 1 is i2c1, the
+// Arduino header I2C. spi4 is the upstream Arduino header SPI and the only
+// SPI instance. uart1 is the upstream Arduino serial, but it is the same
+// instance as i2c1, so busio.UART uses uart3.
 
 &pinctrl {
+	i2c1_dyn_default: i2c1_dyn_default {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(TWIM_SDA)>,
+				<NRF_PSEL_DISCONNECTED(TWIM_SCL)>;
+		};
+	};
+
+	i2c1_dyn_sleep: i2c1_dyn_sleep {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(TWIM_SDA)>,
+				<NRF_PSEL_DISCONNECTED(TWIM_SCL)>;
+		};
+	};
+
+	spi4_dyn_default: spi4_dyn_default {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
+	spi4_dyn_sleep: spi4_dyn_sleep {
+		group1 {
+			psels = <NRF_PSEL_DISCONNECTED(SPIM_SCK)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MOSI)>,
+				<NRF_PSEL_DISCONNECTED(SPIM_MISO)>;
+		};
+	};
+
 	i2c2_dyn_default: i2c2_dyn_default {
 		group1 {
 			psels = <NRF_PSEL_DISCONNECTED(TWIM_SDA)>,
@@ -63,11 +79,27 @@ i2s_rxtx: &i2s0 {
 	};
 };
 
+&i2c1 {
+	status = "okay";
+	zephyr,deferred-init;
+	pinctrl-0 = <&i2c1_dyn_default>;
+	pinctrl-1 = <&i2c1_dyn_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
 &i2c2 {
 	status = "okay";
 	zephyr,deferred-init;
 	pinctrl-0 = <&i2c2_dyn_default>;
 	pinctrl-1 = <&i2c2_dyn_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&spi4 {
+	status = "okay";
+	zephyr,deferred-init;
+	pinctrl-0 = <&spi4_dyn_default>;
+	pinctrl-1 = <&spi4_dyn_sleep>;
 	pinctrl-names = "default", "sleep";
 };
 
@@ -78,6 +110,14 @@ i2s_rxtx: &i2s0 {
 	pinctrl-0 = <&uart3_dyn_default>;
 	pinctrl-1 = <&uart3_dyn_sleep>;
 	pinctrl-names = "default", "sleep";
+};
+
+// The upstream board forwards the Arduino D0/D1 pins (P1.00/P1.01) and
+// P0.10/P0.11 to the network core for its UART console, so the application
+// core could not use them. Keep them on the application core, for
+// board.UART() on TX/RX (D1/D0).
+&gpio_fwd {
+	status = "disabled";
 };
 
 // PWM instances 1-3, same scheme: all four outputs disconnected and deferred

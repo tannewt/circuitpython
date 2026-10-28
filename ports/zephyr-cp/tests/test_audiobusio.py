@@ -31,7 +31,7 @@ sample = audiocore.RawSample(
     channel_count=2,
 )
 
-dac = board.I2S0()
+dac = board.I2SOUT()
 print("playing")
 dac.play(sample, loop=True)
 time.sleep(0.5)
@@ -134,7 +134,7 @@ sample = audiocore.RawSample(
     channel_count=2,
 )
 
-dac = board.I2S0()
+dac = board.I2SOUT()
 dac.play(sample, loop=True)
 print("playing")
 time.sleep(0.2)
@@ -183,7 +183,7 @@ sample = audiocore.RawSample(
     channel_count=2,
 )
 
-dac = board.I2S0()
+dac = board.I2SOUT()
 dac.play(sample, loop=True)
 print("playing")
 time.sleep(0.2)
@@ -243,7 +243,7 @@ sample = audiocore.RawSample(
     channel_count=2,
 )
 
-dac = board.I2S0()
+dac = board.I2SOUT()
 print("playing")
 dac.play(sample, loop=False)
 time.sleep(0.5)

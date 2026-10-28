@@ -30,6 +30,12 @@ static const char *TAG = "monitor";
 static void wifi_monitor_cb(void *recv_buf, wifi_promiscuous_pkt_type_t type) {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)recv_buf;
 
+    // Construct enables promiscuous mode before make_new sets the singleton.
+    wifi_monitor_obj_t *self = MP_STATE_VM(wifi_monitor_singleton);
+    if (self == NULL || common_hal_wifi_monitor_deinited(self)) {
+        return;
+    }
+
     // prepare packet
     monitor_packet_t packet = {
         .channel = pkt->rx_ctrl.channel,
@@ -43,14 +49,11 @@ static void wifi_monitor_cb(void *recv_buf, wifi_promiscuous_pkt_type_t type) {
         packet.payload = malloc(packet.length);
         if (packet.payload) {
             memcpy(packet.payload, pkt->payload, packet.length);
-            wifi_monitor_obj_t *self = MP_STATE_VM(wifi_monitor_singleton);
-            if (self->queue) {
-                // send packet
-                if (xQueueSendFromISR(self->queue, &packet, NULL) != pdTRUE) {
-                    self->lost++;
-                    free(packet.payload);
-                    ESP_LOGE(TAG, "packet queue full");
-                }
+            // send packet
+            if (xQueueSendFromISR(self->queue, &packet, NULL) != pdTRUE) {
+                self->lost++;
+                free(packet.payload);
+                ESP_LOGE(TAG, "packet queue full");
             }
         } else {
             ESP_LOGE(TAG, "not enough memory for packet");
@@ -97,13 +100,12 @@ void common_hal_wifi_monitor_construct(wifi_monitor_obj_t *self, uint8_t channel
     self->queue_length = queue;
 }
 
-bool common_hal_wifi_monitor_deinited(void) {
-    bool enabled;
-    return (esp_wifi_get_promiscuous(&enabled) == ESP_ERR_WIFI_NOT_INIT) ? true : !enabled;
+bool common_hal_wifi_monitor_deinited(wifi_monitor_obj_t *self) {
+    return self->queue == NULL;
 }
 
 void common_hal_wifi_monitor_deinit(wifi_monitor_obj_t *self) {
-    if (common_hal_wifi_monitor_deinited()) {
+    if (common_hal_wifi_monitor_deinited(self)) {
         return;
     }
 
@@ -119,6 +121,8 @@ void common_hal_wifi_monitor_deinit(wifi_monitor_obj_t *self) {
     }
     vQueueDelete(self->queue);
     self->queue = NULL;
+    // Root pointers outlive the VM heap.
+    MP_STATE_VM(wifi_monitor_singleton) = NULL;
 }
 
 void common_hal_wifi_monitor_set_channel(wifi_monitor_obj_t *self, uint8_t channel) {

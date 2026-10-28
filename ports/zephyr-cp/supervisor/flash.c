@@ -31,6 +31,28 @@
 #elif FIXED_PARTITION_EXISTS(circuitpy_partition)
 #define CIRCUITPY_PARTITION circuitpy_partition
 #endif
+
+// Check that the filesystem partition starts and ends on a layout page
+// boundary: flash.c addresses erase pages relative to the start of the
+// partition. The NOR flash drivers set their layout page size in Kconfig, so
+// they can be checked at build time. (Other drivers report it only at run
+// time.)
+#if FIXED_PARTITION_EXISTS(CIRCUITPY_PARTITION)
+#define CIRCUITPY_PARTITION_NODE DT_NODELABEL(CIRCUITPY_PARTITION)
+#define CIRCUITPY_PARTITION_MTD DT_MTD_FROM_FIXED_PARTITION(CIRCUITPY_PARTITION_NODE)
+#if defined(CONFIG_NORDIC_QSPI_NOR) && DT_NODE_HAS_COMPAT(CIRCUITPY_PARTITION_MTD, nordic_qspi_nor)
+#define CIRCUITPY_LAYOUT_PAGE_SIZE CONFIG_NORDIC_QSPI_NOR_FLASH_LAYOUT_PAGE_SIZE
+#elif defined(CONFIG_SPI_NOR) && DT_NODE_HAS_COMPAT(CIRCUITPY_PARTITION_MTD, jedec_spi_nor)
+#define CIRCUITPY_LAYOUT_PAGE_SIZE CONFIG_SPI_NOR_FLASH_LAYOUT_PAGE_SIZE
+#elif defined(CONFIG_FLASH_MSPI_NOR) && DT_NODE_HAS_COMPAT(CIRCUITPY_PARTITION_MTD, jedec_nor)
+#define CIRCUITPY_LAYOUT_PAGE_SIZE CONFIG_FLASH_MSPI_NOR_LAYOUT_PAGE_SIZE
+#endif
+#ifdef CIRCUITPY_LAYOUT_PAGE_SIZE
+BUILD_ASSERT(DT_REG_ADDR(CIRCUITPY_PARTITION_NODE) % CIRCUITPY_LAYOUT_PAGE_SIZE == 0 &&
+    DT_REG_SIZE(CIRCUITPY_PARTITION_NODE) % CIRCUITPY_LAYOUT_PAGE_SIZE == 0,
+    "filesystem partition must start and end on a flash layout page boundary");
+#endif
+#endif
 static const struct flash_area *filesystem_area = NULL;
 
 #if !FIXED_PARTITION_EXISTS(CIRCUITPY_PARTITION)
@@ -57,6 +79,12 @@ static uint32_t _page_mask;
 static uint32_t _current_page_address;
 
 static uint32_t _scratch_page_address;
+
+// Size of the filesystem in bytes: every whole page, less the scratch page if
+// there is one.
+static uint32_t _filesystem_size;
+
+static bool allocate_ram_cache(void);
 
 // Per-block flags packed into a uint8_t array (one byte per block).
 #define ROW_LOADED  0x01  // Block data is present in the cache.
@@ -212,8 +240,6 @@ void supervisor_flash_init(void) {
     const struct flash_parameters *fp = flash_get_parameters(d);
     _erase_value = fp->erase_value;
     flash_get_page_info_by_offs(d, filesystem_area->fa_off, &first_info);
-    struct flash_pages_info last_info;
-    flash_get_page_info_by_offs(d, filesystem_area->fa_off + filesystem_area->fa_size - FILESYSTEM_BLOCK_SIZE, &last_info);
     _page_size = first_info.size;
     if (_page_size < FILESYSTEM_BLOCK_SIZE) {
         _page_size = FILESYSTEM_BLOCK_SIZE;
@@ -223,6 +249,17 @@ void supervisor_flash_init(void) {
     printk("  erase page size %d\n", _page_size);
     printk("  blocks per page %d\n", _blocks_per_page);
 
+    // Page addresses are relative to the start of the area. If the area
+    // doesn't end on a page boundary, its last partial page can't be erased
+    // without going past the end, so it is left unused.
+    size_t page_count = filesystem_area->fa_size / _page_size;
+    size_t min_page_count = IS_ENABLED(CONFIG_CIRCUITPY_FLASH_SCRATCH_PAGE) ? 2 : 1;
+    if (page_count < min_page_count) {
+        printk("Filesystem area too small (%zu pages)\n", page_count);
+        filesystem_area = NULL;
+        return;
+    }
+
     _row_flags = port_malloc(_blocks_per_page, false);
     if (_row_flags == NULL) {
         printk("Unable to allocate row flags (%d bytes)\n", _blocks_per_page);
@@ -231,9 +268,22 @@ void supervisor_flash_init(void) {
     }
     memset(_row_flags, 0, _blocks_per_page);
 
-    // The last page is the scratch sector.
-    _scratch_page_address = last_info.start_offset - filesystem_area->fa_off;
     _current_page_address = NO_PAGE_LOADED;
+
+    #if CONFIG_CIRCUITPY_FLASH_SCRATCH_PAGE
+    // The last whole page is the scratch page.
+    _scratch_page_address = (page_count - 1) * _page_size;
+    _filesystem_size = _scratch_page_address;
+    #else
+    // No scratch page: allocate the RAM cache now and keep it, so writes
+    // never need one.
+    if (!allocate_ram_cache()) {
+        printk("Unable to allocate the filesystem ram cache\n");
+        filesystem_area = NULL;
+        return;
+    }
+    _filesystem_size = page_count * _page_size;
+    #endif
 }
 
 uint32_t supervisor_flash_get_block_size(void) {
@@ -244,7 +294,7 @@ uint32_t supervisor_flash_get_block_count(void) {
     if (filesystem_area == NULL) {
         return 0;
     }
-    return _scratch_page_address / FILESYSTEM_BLOCK_SIZE;
+    return _filesystem_size / FILESYSTEM_BLOCK_SIZE;
 }
 
 
@@ -355,6 +405,10 @@ static bool flush_scratch_flash(void) {
         copy_block(_scratch_page_address + i * FILESYSTEM_BLOCK_SIZE,
             _current_page_address + i * FILESYSTEM_BLOCK_SIZE);
     }
+    // Every scratch block is now written, so the next write must erase the
+    // scratch page first. Unload the page so that it does.
+    _current_page_address = NO_PAGE_LOADED;
+    _clear_row_flags();
     return true;
 }
 
@@ -468,6 +522,10 @@ static bool flush_ram_cache(bool keep_cache) {
 // Delegates to the correct flash flush method depending on the existing cache.
 // TODO Don't blink the status indicator if we don't actually do any writing (hard to tell right now).
 static void _flush_keep_cache(bool keep_cache) {
+    #if !CONFIG_CIRCUITPY_FLASH_SCRATCH_PAGE
+    // Without a scratch page, the RAM cache is never released.
+    keep_cache = true;
+    #endif
     #ifdef MICROPY_HW_LED_MSC
     port_pin_set_output_level(MICROPY_HW_LED_MSC, true);
     #endif
@@ -541,8 +599,14 @@ static bool _flash_write_block(const uint8_t *data, uint32_t block) {
     // Mask out the lower bits that designate the address within the sector.
     uint32_t page_address = address & _page_mask;
     size_t block_index = (address / FILESYSTEM_BLOCK_SIZE) % _blocks_per_page;
-    // Flush the cache if we're moving onto a different page.
-    if (_current_page_address != page_address) {
+    // Flush the cache if we're moving onto a different page, or if we're
+    // writing the same block again while caching in the scratch page: flash
+    // can't be rewritten without an erase, so the second write must start a
+    // fresh scratch page.
+    bool scratch_rewrite = flash_cache_table == NULL &&
+        _current_page_address == page_address &&
+        (_row_flags[block_index] & ROW_DIRTY);
+    if (_current_page_address != page_address || scratch_rewrite) {
         // Check to see if we'd write to an erased block and aren't writing to
         // our cache. In that case we can write directly. Do not take this fast
         // path when the target block is part of the currently cached page: the
@@ -552,7 +616,9 @@ static bool _flash_write_block(const uint8_t *data, uint32_t block) {
             return write_flash(address, data, FILESYSTEM_BLOCK_SIZE);
         }
         if (_current_page_address != NO_PAGE_LOADED) {
-            supervisor_flash_flush();
+            // Flush only the old page. supervisor_flash_flush() would also
+            // clear the dirty flag, which littlefs sets before writing.
+            _flush_keep_cache(true);
         }
         if (flash_cache_table == NULL && !allocate_ram_cache()) {
             erase_page(_scratch_page_address);

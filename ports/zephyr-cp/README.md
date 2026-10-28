@@ -22,11 +22,17 @@ west sdk install
 Now to build from `ports/zephyr-cp`:
 
 ```sh
-make BOARD=nordic_nrf7002dk
+make BOARD=nordic_nrf5340dk
 ```
 
 This uses Zephyr's cmake to generate Makefiles that then delegate to
 `tools/cpbuild/build_circuitpython.py` to build the CircuitPython bits in parallel.
+
+`DEBUG=1` adds the debug Kconfig settings in `debug.conf`. `CONSOLE=1` (implied
+by `DEBUG=1`) applies a board's `console.overlay`, if it has one, together with
+the port's `console.conf`, which turns the Zephyr UART console back on. Boards
+whose console UART pins are also user pins, such as the Feather nRF52840, have
+the Zephyr UART console only in those builds.
 
 ## Native simulator build container
 
@@ -201,7 +207,12 @@ boards like `nrf54l15dk`). Boards that boot the stock Adafruit nRF52
 bootloader (the Adafruit boards) read the request from the raw GPREGRET
 register instead and need no bootloader-side changes.
 
-`nordic_nrf54l15dk` is the first board with this enabled.
+`nordic_nrf54l15dk` is the first MCUboot board with this enabled.
+
+RP2 boards have no MCUboot. The request is a flag in a few bytes of RAM that
+survive the reset. Early in the next boot Zephyr sees the flag and jumps to
+the chip's built-in ROM bootloader, which shows up as the RPI-RP2 (RP2040) or
+RP2350 UF2 drive. adaboot sets up that RAM region for the RP2 boards.
 
 ## Testing other boards
 

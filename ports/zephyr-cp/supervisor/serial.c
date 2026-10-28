@@ -14,13 +14,13 @@ usb_cdc_serial_obj_t *usb_console;
 #else
 #include "shared-bindings/busio/UART.h"
 static busio_uart_obj_t uart_console;
-static uint8_t buffer[64];
+static uint8_t buffer[1024];
 #endif
 
 void port_serial_early_init(void) {
     #if CIRCUITPY_USB_DEVICE == 0
     uart_console.base.type = &busio_uart_type;
-    common_hal_busio_uart_construct_from_device(&uart_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(buffer), buffer);
+    common_hal_busio_uart_construct_from_device(&uart_console, DEVICE_DT_GET(DT_CHOSEN(zephyr_console)), sizeof(buffer), buffer, true);
     #endif
 }
 
@@ -80,6 +80,6 @@ void port_serial_write_substring(const char *text, uint32_t length) {
     }
     common_hal_usb_cdc_serial_write(usb_console, text, length, NULL);
     #else
-    common_hal_busio_uart_write(&uart_console, text, length, NULL);
+    zephyr_uart_write_blocking(&uart_console, (const uint8_t *)text, length);
     #endif
 }

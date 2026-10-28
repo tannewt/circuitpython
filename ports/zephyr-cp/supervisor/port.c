@@ -47,6 +47,11 @@
 #include <zephyr/dfu/mcuboot.h>
 #endif
 
+#if defined(CONFIG_SOC_FAMILY_RPI_PICO)
+#include <hardware/structs/psm.h>
+#include <hardware/structs/watchdog.h>
+#endif
+
 #if defined(CONFIG_TRACING_PERFETTO) && defined(CONFIG_BOARD_NATIVE_SIM)
 #include "perfetto_encoder.h"
 #include <zephyr/sys/mem_stats.h>
@@ -254,6 +259,17 @@ void reset_cpu(void) {
     cp_retained_save();
     #endif
 
+    #if defined(CONFIG_SOC_FAMILY_RPI_PICO)
+    // On RP2 the Arm system reset leaves the USB controller running, so the
+    // host never sees the board go away. Reset the whole chip through the
+    // watchdog instead, as pico-sdk's watchdog_reboot() does. Zephyr's
+    // hal_rpi_pico does not build watchdog.c, so write the registers here.
+    hw_clear_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_ENABLE_BITS);
+    watchdog_hw->scratch[4] = 0;
+    hw_set_bits(&psm_hw->wdsel, PSM_WDSEL_BITS & ~(PSM_WDSEL_ROSC_BITS | PSM_WDSEL_XOSC_BITS));
+    hw_set_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_TRIGGER_BITS);
+    #endif
+
     // Try a warm reboot first. It won't return if it works but isn't always
     // implemented.
     sys_reboot(SYS_REBOOT_WARM);
@@ -287,11 +303,8 @@ void reset_port(void) {
 }
 
 void reset_to_bootloader(void) {
-    // The 1200-bps CDC disconnect (and the supervisor's bootloader reset
-    // cause) asks for the update mode. On bootloaders that distinguish the
-    // flavors this is the serial DFU one; on the fork's MCUboot adaboot both
-    // flavors end up in the same update mode.
-    adaboot_request_update_mode(false);
+    // Ask for UF2 mode so the bootloader shows its drive.
+    adaboot_request_update_mode(true);
     reset_cpu();
 }
 

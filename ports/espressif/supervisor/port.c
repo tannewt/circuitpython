@@ -29,6 +29,9 @@
 #include "bindings/espulp/__init__.h"
 #include "common-hal/microcontroller/Pin.h"
 #include "common-hal/analogio/AnalogOut.h"
+#if CIRCUITPY_AUDIOPWMIO
+#include "common-hal/audiopwmio/PWMAudioOut.h"
+#endif
 #include "common-hal/busio/SPI.h"
 #include "common-hal/busio/UART.h"
 #include "common-hal/dualbank/__init__.h"
@@ -72,7 +75,7 @@
 #include "soc/lp_aon_reg.h"
 #define CP_SAVED_WORD_REGISTER LP_AON_STORE0_REG
 #else
-#ifdef CONFIG_IDF_TARGET_ESP32P4
+#if defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31)
 #include "soc/lp_system_reg.h"
 #define CP_SAVED_WORD_REGISTER LP_SYSTEM_REG_LP_STORE15_REG
 
@@ -454,6 +457,10 @@ void reset_port(void) {
 
     #if CIRCUITPY_ANALOGIO
     analogout_reset();
+    #endif
+
+    #if CIRCUITPY_AUDIOPWMIO
+    audiopwmout_reset();
     #endif
 
     #if CIRCUITPY_BUSIO

@@ -16,11 +16,42 @@
 #include "py/mperrno.h"
 #include "py/runtime.h"
 #include "py/stream.h"
+#if CIRCUITPY_STORAGE_MAP_FILE
+#include "shared-bindings/storage/__init__.h"
+#endif
 
 
 #define DISPLAYIO_ODBMP_DEBUG(...) (void)0
 // #define DISPLAYIO_ODBMP_DEBUG(...) mp_printf(&mp_plat_print __VA_OPT__(,) __VA_ARGS__)
 
+
+#if CIRCUITPY_STORAGE_MAP_FILE
+static void add_run(void *self_in, const uint8_t *addr, size_t len) {
+    displayio_ondiskbitmap_t *self = self_in;
+    if (self->map_count < MP_ARRAY_SIZE(self->map)) {
+        self->map[self->map_count].addr = addr;
+        self->map[self->map_count].len = len;
+        self->map_count++;
+    } else {
+        self->map_count = MP_ARRAY_SIZE(self->map) + 1;  // too fragmented: read through the cache
+    }
+}
+
+// Flash address of len bytes at offset if they lie in one run, else NULL.
+static const uint8_t *map_at(displayio_ondiskbitmap_t *self, uint32_t offset, uint32_t len) {
+    for (uint8_t i = 0; i < self->map_count; i++) {
+        if (offset < self->map[i].len) {
+            return offset + len <= self->map[i].len ? self->map[i].addr + offset : NULL;
+        }
+        offset -= self->map[i].len;
+    }
+    return NULL;
+}
+
+const uint8_t *displayio_ondiskbitmap_row(displayio_ondiskbitmap_t *self, int16_t y) {
+    return map_at(self, self->data_offset + (self->height - y - 1) * self->stride, self->width);
+}
+#endif
 
 static uint32_t read_word(uint16_t *bmp_header, uint16_t index) {
     return bmp_header[index] | bmp_header[index + 1] << 16;
@@ -166,6 +197,15 @@ void common_hal_displayio_ondiskbitmap_construct(displayio_ondiskbitmap_t *self,
         self->stride = (bit_stride / 8);
     }
 
+    #if CIRCUITPY_STORAGE_MAP_FILE
+    self->map_count = 0;
+    if (storage_map_runs(file, add_run, self) != 0 || self->map_count > MP_ARRAY_SIZE(self->map)) {
+        self->map_count = 0;
+    }
+    // BMP rows don't start on a 4-byte boundary, so in a split file some row crosses a run.
+    self->rows_mapped = self->bits_per_pixel == 8 &&
+        map_at(self, self->data_offset, (uint32_t)(self->height - 1) * self->stride + self->width) != NULL;
+    #endif
 }
 
 
@@ -183,21 +223,36 @@ uint32_t common_hal_displayio_ondiskbitmap_get_pixel(displayio_ondiskbitmap_t *s
     } else {
         location = self->data_offset + (self->height - y - 1) * self->stride + x / pixels_per_byte;
     }
-    int errcode = 0;
-    if (location < self->cache_start || location + bytes_per_pixel > self->cache_start + self->cache_len) {
-        mp_stream_seek(self->file, location, MP_SEEK_SET, &errcode);
-        if (errcode != 0) {
-            return 0;
-        }
-        self->cache_start = location;
-        self->cache_len = mp_stream_rw(self->file, self->cache, sizeof(self->cache), &errcode, MP_STREAM_RW_ONCE);
-        if (errcode != 0 || self->cache_len < bytes_per_pixel) {
-            self->cache_len = 0;
-            return 0;
-        }
-    }
     uint32_t pixel_data = 0;
-    memcpy(&pixel_data, self->cache + (location - self->cache_start), bytes_per_pixel);
+    #if CIRCUITPY_STORAGE_MAP_FILE
+    if (self->map_count > 0) {
+        // Byte by byte, so a pixel split across two runs reads right too. The cache can't
+        // help there: it shares memory with the run table.
+        for (uint8_t i = 0; i < bytes_per_pixel; i++) {
+            const uint8_t *p = map_at(self, location + i, 1);
+            if (p == NULL) {
+                return 0;
+            }
+            ((uint8_t *)&pixel_data)[i] = *p;
+        }
+    } else
+    #endif
+    {
+        int errcode = 0;
+        if (location < self->cache_start || location + bytes_per_pixel > self->cache_start + self->cache_len) {
+            mp_stream_seek(self->file, location, MP_SEEK_SET, &errcode);
+            if (errcode != 0) {
+                return 0;
+            }
+            self->cache_start = location;
+            self->cache_len = mp_stream_rw(self->file, self->cache, sizeof(self->cache), &errcode, MP_STREAM_RW_ONCE);
+            if (errcode != 0 || self->cache_len < bytes_per_pixel) {
+                self->cache_len = 0;
+                return 0;
+            }
+        }
+        memcpy(&pixel_data, self->cache + (location - self->cache_start), bytes_per_pixel);
+    }
     uint32_t tmp = 0;
     uint8_t red;
     uint8_t green;

@@ -42,35 +42,43 @@ from zephyr2cp import zephyr_dts_to_cp_board
 compiler = cpbuild.Compiler(srcdir, builddir, cmake_args)
 
 ALWAYS_ON_MODULES = ["sys", "collections"]
+# Keep in alphabetical order.
 DEFAULT_MODULES = [
     "__future__",
-    "time",
-    "os",
-    "microcontroller",
-    "struct",
+    "adafruit_bus_device",
+    "aesio",
     "array",
-    "json",
-    "random",
+    "asyncio",
+    "atexit",
+    "binascii",
+    "bitbangio",
+    "codeop",
     "digitalio",
-    "rotaryio",
+    "errno",
+    "getpass",
+    "hashlib",
+    "io",
+    "json",
+    "keypad",
+    "keypad_demux",
+    "locale",
+    "math",
+    "microcontroller",
+    "msgpack",
+    "os",
     "rainbowio",
+    "random",
+    "re",
+    "rotaryio",
+    "select",
+    "storage",
+    "struct",
+    "supervisor",
+    "time",
+    "touchio",
     "traceback",
     "warnings",
-    "supervisor",
-    "errno",
-    "io",
-    "math",
-    "msgpack",
-    "aesio",
-    "hashlib",
     "zlib",
-    "adafruit_bus_device",
-    "getpass",
-    "storage",
-    "binascii",
-    "re",
-    "asyncio",
-    "select",
 ]
 # Flags that don't match with with a *bindings module. Some used by adafruit_requests
 MPCONFIG_FLAGS = ["array", "errno", "io", "json", "math", "binascii"]
@@ -116,8 +124,10 @@ REVERSE_DEPENDENCIES = {
 EXTRA_FLAGS = {
     "audiobusio": {"AUDIOBUSIO_I2SOUT": 1, "AUDIOBUSIO_PDMIN": 0},
     "busio": {"BUSIO_SPI": 1, "BUSIO_I2C": 1, "BUSIO_UART": 1},
+    "keypad": {"KEYPAD_KEYMATRIX": 1, "KEYPAD_KEYS": 1, "KEYPAD_SHIFTREGISTERKEYS": 1},
     "rotaryio": {"ROTARYIO_SOFTENCODER": 1},
     "synthio": {"SYNTHIO_MAX_CHANNELS": 12},
+    "touchio": {"TOUCHIO_USE_NATIVE": 0},
 }
 
 # Library sources. Will be globbed from the top level directory
@@ -314,6 +324,10 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("wifi")
         module_reasons["wifi"] = "Zephyr board has wifi"
 
+    if board_info.get("ethernet", False):
+        enabled_modules.add("mii")
+        module_reasons["mii"] = "Zephyr board has ethernet"
+
     if board_info["flash_count"] > 0:
         enabled_modules.add("storage")
         module_reasons["storage"] = "Zephyr board has flash"
@@ -322,7 +336,11 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("nvm")
         module_reasons["nvm"] = "Board has NVM partition"
 
-    network_enabled = board_info.get("wifi", False) or board_info.get("hostnetwork", False)
+    network_enabled = (
+        board_info.get("wifi", False)
+        or board_info.get("ethernet", False)
+        or board_info.get("hostnetwork", False)
+    )
 
     if network_enabled:
         enabled_modules.add("ipaddress")
@@ -332,9 +350,15 @@ def determine_enabled_modules(board_info, portdir, srcdir):
         enabled_modules.add("hashlib")
         module_reasons["hashlib"] = "Zephyr networking enabled"
 
-    if board_info.get("wifi", False) or board_info.get("ethernet", False):
+    if board_info.get("wifi", False):
         enabled_modules.add("ssl")
-        module_reasons["ssl"] = "Zephyr networking enabled"
+        module_reasons["ssl"] = "Zephyr wifi enabled"
+    elif board_info.get("ethernet", False):
+        enabled_modules.add("ssl")
+        module_reasons["ssl"] = "Zephyr ethernet enabled"
+    elif board_info.get("hostnetwork", False):
+        enabled_modules.add("ssl")
+        module_reasons["ssl"] = "Zephyr hostnetwork enabled"
 
     # Iterate the shared-bindings directory in a stable (sorted) order. Several
     # modules can enable the same reverse dependency, and the "reason" comment
@@ -470,7 +494,11 @@ async def build_circuitpython():  # noqa: C901
     for m in mpconfigboard.get("DISABLED_MODULES", []):
         enabled_modules.discard(m)
 
-    web_workflow_enabled = board_info.get("wifi", False) or board_info.get("hostnetwork", False)
+    web_workflow_enabled = (
+        board_info.get("wifi", False)
+        or board_info.get("hostnetwork", False)
+        or "mii" in enabled_modules
+    )
 
     circuitpython_flags.extend(board_info["cflags"])
     circuitpython_flags.append(f"-DCIRCUITPY_WEB_WORKFLOW={1 if web_workflow_enabled else 0}")

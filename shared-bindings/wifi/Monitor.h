@@ -13,7 +13,7 @@ extern const mp_obj_type_t wifi_monitor_type;
 void common_hal_wifi_monitor_construct(wifi_monitor_obj_t *self,
     uint8_t channel, size_t queue);
 void common_hal_wifi_monitor_deinit(wifi_monitor_obj_t *self);
-bool common_hal_wifi_monitor_deinited(void);
+bool common_hal_wifi_monitor_deinited(wifi_monitor_obj_t *self);
 
 void common_hal_wifi_monitor_set_channel(wifi_monitor_obj_t *self, uint8_t channel);
 mp_obj_t common_hal_wifi_monitor_get_channel(wifi_monitor_obj_t *self);

@@ -40,6 +40,7 @@ runs:
       run: |
         source $IDF_PATH/export.sh
         echo >> $GITHUB_ENV "IDF_PYTHON_ENV_PATH=$IDF_PYTHON_ENV_PATH"
+        echo >> $GITHUB_ENV "ESP_IDF_VERSION=$ESP_IDF_VERSION"
         echo >> $GITHUB_PATH "$PATH"
       shell: bash
 

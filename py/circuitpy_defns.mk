@@ -240,6 +240,9 @@ endif
 ifeq ($(CIRCUITPY_ESPULP),1)
 SRC_PATTERNS += espulp/%
 endif
+ifeq ($(CIRCUITPY_MII),1)
+SRC_PATTERNS += mii/%
+endif
 ifeq ($(CIRCUITPY_FLOPPYIO),1)
 SRC_PATTERNS += floppyio/%
 endif
@@ -474,6 +477,9 @@ endif
 ifeq ($(CIRCUITPY_USB_HOST),1)
 SRC_PATTERNS += usb_host/%
 endif
+ifeq ($(CIRCUITPY_USB_HOST_AUDIO),1)
+SRC_PATTERNS += usb_host_audio/%
+endif
 ifeq ($(CIRCUITPY_USB_HOST_BULK),1)
 SRC_PATTERNS += usb_host_bulk/%
 endif
@@ -558,6 +564,10 @@ SRC_COMMON_HAL_ALL = \
 	dualbank/__init__.c \
 	emmcio/EMMC.c \
 	emmcio/__init__.c \
+	mii/MDIO.c \
+	mii/Ethernet.c \
+	mii/RMII.c \
+	mii/__init__.c \
 	floppyio/__init__.c \
 	frequencyio/FrequencyIn.c \
 	frequencyio/__init__.c \
@@ -881,6 +891,8 @@ SRC_SHARED_MODULE_ALL = \
 	usb/core/__init__.c \
 	usb/core/Device.c \
 	usb/util/__init__.c \
+	usb_host_audio/USBIn.c \
+	usb_host_audio/__init__.c \
 	ustack/__init__.c \
 	vectorio/Circle.c \
 	vectorio/Polygon.c \

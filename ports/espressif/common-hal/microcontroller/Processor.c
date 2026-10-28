@@ -68,6 +68,8 @@ static uint32_t get_valid_cpu_frequency(uint32_t requested_freq_mhz) {
     // C5's 48 MHz crystal does not divide evenly to 20 or 24 MHz, both of
     // which esp_pm_configure() rejects.
     uint32_t valid_cpu_frequencies[] = {40, 80, 160, 240};
+    #elif defined(CONFIG_IDF_TARGET_ESP32S31)
+    uint32_t valid_cpu_frequencies[] = {20, 40, 80, 160, 240, 320};
     #else
     uint32_t valid_cpu_frequencies[] = {20, 40, 80, 160, 240};
     #endif

@@ -213,9 +213,9 @@ def _lfs_geometry(board, erase_page_size):
     geometry = LITTLEFS_FILESYSTEM_BOARDS[board]
     block_size = geometry["block_size"]
     page_size = max(erase_page_size, block_size)
-    # The last erase page of the partition is the supervisor flash cache's
-    # scratch page, so littlefs only gets the blocks before it.
-    last_page_start = ((geometry["partition_size"] - block_size) // page_size) * page_size
+    # The last whole erase page of the partition is the supervisor flash
+    # cache's scratch page, so littlefs only gets the blocks before it.
+    last_page_start = (geometry["partition_size"] // page_size - 1) * page_size
     return block_size, last_page_start // block_size
 
 

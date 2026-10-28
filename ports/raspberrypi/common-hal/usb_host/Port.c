@@ -36,6 +36,32 @@ usb_host_port_obj_t usb_host_instance;
 
 volatile bool _core1_ready = false;
 
+#if PIO_USB_HOST_ISOCHRONOUS
+// The isochronous ring from settings.toml. Like the port, it is never freed.
+static uint8_t *_iso_settings_buffer = NULL;
+static uint32_t _iso_settings_size = 0;
+// A ring claimed for the length of one stream, which replaces the one above
+// until it is released.
+static uint8_t *_iso_claimed_buffer = NULL;
+
+// The ring size the host controller accepts: a power of two in [2048, 65536].
+static uint32_t _iso_ring_size(size_t size) {
+    uint32_t rounded = 2048;
+    while (rounded < size && rounded < 65536) {
+        rounded <<= 1;
+    }
+    return rounded;
+}
+
+// Hand the host controller another ring. Core 1 may still be in the frame
+// where the endpoint stopped streaming into the old ring, so let it finish
+// first. False while an endpoint streams into the ring.
+static bool _iso_set_ring(uint8_t *buffer, uint32_t size) {
+    busy_wait_us(2000);
+    return pio_usb_host_set_iso_ring(buffer, size);
+}
+#endif
+
 // Core1 posts TinyUSB events while core0 may hold the queue FIFO mutex. The
 // contended wait path calls best_effort_wfe_or_timeout() and time_us_64(),
 // which normally live in flash, but core1 must not touch flash (see the MPU
@@ -183,11 +209,7 @@ usb_host_port_obj_t *common_hal_usb_host_port_construct(const mcu_pin_obj_t *dp,
     mp_int_t iso_size = 0;
     if (settings_get_int("CIRCUITPY_USB_HOST_ISO_BUFFER_SIZE", &iso_size) == SETTINGS_OK
         && iso_size > 0) {
-        // Round up to a power of two and clamp to [2048, 65536]
-        uint32_t rounded = 2048;
-        while (rounded < (uint32_t)iso_size && rounded < 65536) {
-            rounded <<= 1;
-        }
+        uint32_t rounded = _iso_ring_size(iso_size);
         // dma_capable=true forces the internal-SRAM heap. Never PSRAM: PSRAM
         // is inside the XIP region that core 1's MPU blocks below, and the
         // ring is written from core 1. Like the port itself, the buffer is
@@ -195,6 +217,8 @@ usb_host_port_obj_t *common_hal_usb_host_port_construct(const mcu_pin_obj_t *dp,
         uint8_t *iso_buf = port_malloc(rounded, true);
         if (iso_buf != NULL) {
             pio_usb_host_set_iso_ring(iso_buf, rounded);
+            _iso_settings_buffer = iso_buf;
+            _iso_settings_size = rounded;
         } else {
             mp_raise_RuntimeError_varg(MP_ERROR_TEXT("Failed to allocate %q buffer"),
                 MP_QSTR_USB_HOST_ISO_BUFFER);
@@ -212,6 +236,45 @@ usb_host_port_obj_t *common_hal_usb_host_port_construct(const mcu_pin_obj_t *dp,
     tuh_init(TUH_OPT_RHPORT);
 
     return self;
+}
+
+bool common_hal_usb_host_port_claim_iso_buffer(size_t size) {
+    #if PIO_USB_HOST_ISOCHRONOUS
+    // A ring left claimed because it was still streaming may be free by now.
+    common_hal_usb_host_port_release_iso_buffer();
+    if (_iso_claimed_buffer != NULL) {
+        return false;
+    }
+    uint32_t rounded = _iso_ring_size(size);
+    // Internal SRAM only, for the same reason as the settings.toml ring above.
+    uint8_t *buffer = port_malloc(rounded, true);
+    if (buffer == NULL) {
+        m_malloc_fail(rounded);
+    }
+    if (!_iso_set_ring(buffer, rounded)) {
+        port_free(buffer);
+        return false;
+    }
+    _iso_claimed_buffer = buffer;
+    return true;
+    #else
+    (void)size;
+    return false;
+    #endif
+}
+
+void common_hal_usb_host_port_release_iso_buffer(void) {
+    #if PIO_USB_HOST_ISOCHRONOUS
+    if (_iso_claimed_buffer == NULL) {
+        return;
+    }
+    // When an endpoint still streams into the ring, core 1 keeps writing it, so
+    // it can't be freed. It stays claimed and the next claim tries again.
+    if (_iso_set_ring(_iso_settings_buffer, _iso_settings_size)) {
+        port_free(_iso_claimed_buffer);
+        _iso_claimed_buffer = NULL;
+    }
+    #endif
 }
 
 // Not used, but we must define to put this hook into SRAM

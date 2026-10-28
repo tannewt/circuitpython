@@ -23,7 +23,7 @@ void common_hal_wifi_monitor_construct(wifi_monitor_obj_t *self, uint8_t channel
     mp_raise_NotImplementedError(MP_ERROR_TEXT("wifi.Monitor not available"));
 }
 
-bool common_hal_wifi_monitor_deinited(void) {
+bool common_hal_wifi_monitor_deinited(wifi_monitor_obj_t *self) {
     return true;
 }
 

@@ -97,7 +97,9 @@ SECTIONS
         . = . + _minimum_heap_size;
         . = ALIGN(4);
     } >RAM
-    _ld_heap_end = ORIGIN(RAM) + LENGTH(RAM);
+    /* The stack sits at the top of RAM, so end the heap below it. The extra 1K matches
+       CIRCUITPY_EXCEPTION_STACK_SIZE, which port_stack_get_limit() counts as stack too. */
+    _ld_heap_end = ORIGIN(RAM) + LENGTH(RAM) - _ld_default_stack_size - 1K;
 
     /* this just checks there is enough RAM for the stack */
     .stack :

@@ -148,6 +148,12 @@ class NativeSimProcess:
         if "connected to pseudotty:" not in uart_pty_line:
             raise RuntimeError("Failed to connect to UART")
         pty_path = uart_pty_line.strip().rsplit(":", maxsplit=1)[1].strip()
+        # The console UART's device name ("uart"). Other PTY UARTs announce
+        # their pseudotty in the same way, so reconnect_serial() looks for this
+        # name's line only.
+        self._console_pty_marker = (
+            uart_pty_line.split("connected to pseudotty:")[0].strip() + " connected to pseudotty:"
+        )
         self.serial = SerialSaver(
             serial.Serial(pty_path, baudrate=115200, timeout=0.05, write_timeout=0),
             name="uart0",
@@ -169,13 +175,17 @@ class NativeSimProcess:
         """
         import time
 
-        marker = "connected to pseudotty:"
+        marker = self._console_pty_marker
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._proc.poll() is not None:
                 return False
             out = self.debug_serial.all_output
+            # Only a line that starts with the console's name: the marker must
+            # not match the end of another UART's line.
             idx = out.find(marker, self._pty_search_offset)
+            while idx > 0 and out[idx - 1] not in "\r\n":
+                idx = out.find(marker, idx + 1)
             newline = out.find("\n", idx) if idx >= 0 else -1
             if idx >= 0 and newline >= 0:
                 line = out[idx:newline]

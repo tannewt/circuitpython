@@ -182,12 +182,12 @@ void check_nimble_error(int rc, const char *file, size_t line) {
         default:
             #if CIRCUITPY_VERBOSE_BLE || CIRCUITPY_DEBUG
             if (file) {
-                mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown system firmware error at %s:%d: %d"), file, line, rc);
+                mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error at %s:%d: 0x%04x"), file, line, rc);
             }
             #else
             (void)file;
             (void)line;
-            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown system firmware error: %d"), rc);
+            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error: 0x%04x"), rc);
             #endif
 
             break;
@@ -200,21 +200,38 @@ void check_ble_error(int error_code, const char *file, size_t line) {
         return;
     }
     switch (error_code) {
+        case BLE_HS_ATT_ERR(BLE_ATT_ERR_READ_NOT_PERMITTED):
+            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("%q not permitted"), MP_QSTR_read);
+            return;
+        case BLE_HS_ATT_ERR(BLE_ATT_ERR_WRITE_NOT_PERMITTED):
+            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("%q not permitted"), MP_QSTR_write);
+            return;
         case BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_AUTHEN):
             mp_raise_bleio_SecurityError(MP_ERROR_TEXT("Insufficient authentication"));
             return;
+        case BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_AUTHOR):
+            mp_raise_bleio_SecurityError(MP_ERROR_TEXT("Insufficient authorization"));
+            return;
         case BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_ENC):
+        case BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_KEY_SZ):
             mp_raise_bleio_SecurityError(MP_ERROR_TEXT("Insufficient encryption"));
             return;
+        case BLE_HS_ATT_ERR(BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN):
+            mp_arg_error_invalid(MP_QSTR_length);
+            return;
         default:
+            if (error_code > BLE_HS_ERR_ATT_BASE && error_code < BLE_HS_ERR_HCI_BASE) {
+                // Some other ATT error from the peer.
+                mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown gatt error: 0x%04x"), error_code);
+            }
             #if CIRCUITPY_VERBOSE_BLE || CIRCUITPY_DEBUG
             if (file) {
-                mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error at %s:%d: %d"), file, line, error_code);
+                mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error at %s:%d: 0x%04x"), file, line, error_code);
             }
             #else
             (void)file;
             (void)line;
-            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error: %d"), error_code);
+            mp_raise_bleio_BluetoothError(MP_ERROR_TEXT("Unknown BLE error: 0x%04x"), error_code);
             #endif
 
             break;
@@ -276,6 +293,17 @@ static int _wait_for_completion(uint32_t timeout_msecs) {
     return _completion_status;
 }
 
+// Raise an exception for a nonzero completion status. Statuses from
+// BLE_HS_ERR_ATT_BASE up are ATT errors from the peer, such as insufficient
+// encryption, which check_ble_error() maps to SecurityError.
+static void _check_completion_status(int status) {
+    if (status < BLE_HS_ERR_ATT_BASE) {
+        CHECK_NIMBLE_ERROR(status);
+        return;
+    }
+    CHECK_BLE_ERROR(status);
+}
+
 static int _read_cb(uint16_t conn_handle,
     const struct ble_gatt_error *error,
     struct ble_gatt_attr *attr,
@@ -300,7 +328,7 @@ static int _read_cb(uint16_t conn_handle,
 int bleio_gattc_read(uint16_t conn_handle, uint16_t value_handle, uint8_t *buf, size_t len) {
     void *seq = _start_request();
     CHECK_NIMBLE_ERROR(ble_gattc_read(conn_handle, value_handle, _read_cb, seq));
-    CHECK_NIMBLE_ERROR(_wait_for_completion(2000));
+    _check_completion_status(_wait_for_completion(2000));
     if (!_completion_done) {
         // Interrupted: nothing was read.
         return 0;
@@ -325,5 +353,5 @@ static int _write_cb(uint16_t conn_handle,
 void bleio_gattc_write(uint16_t conn_handle, uint16_t value_handle, uint8_t *buf, size_t len) {
     void *seq = _start_request();
     CHECK_NIMBLE_ERROR(ble_gattc_write_flat(conn_handle, value_handle, buf, len, _write_cb, seq));
-    CHECK_NIMBLE_ERROR(_wait_for_completion(2000));
+    _check_completion_status(_wait_for_completion(2000));
 }

@@ -253,7 +253,8 @@ static mp_obj_t str_from_invalid(mp_encoding_t encoding, const mp_obj_type_t *ty
 
 #if MICROPY_PY_BUILTINS_STR_UNICODE_CHECK
 static mp_encoding_t parse_encoding_arg(qstr encoding) {
-    if (encoding == MP_QSTR_utf_hyphen_8 || encoding == MP_QSTR_utf8) {
+    // CIRCUITPY-CHANGE: also accept "UTF-8", which is commonly used.
+    if (encoding == MP_QSTR_utf_hyphen_8 || encoding == MP_QSTR_UTF_hyphen_8 || encoding == MP_QSTR_utf8) {
         return MP_ENCODING_UTF8;
     }
     if (encoding == MP_QSTR_ascii) {

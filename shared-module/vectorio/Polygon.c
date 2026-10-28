@@ -161,11 +161,12 @@ uint32_t common_hal_vectorio_polygon_get_pixel(void *obj, int16_t x, int16_t y) 
     int16_t winding_number = 0;
     int16_t x1 = self->points_list[0];
     int16_t y1 = self->points_list[1];
-    for (uint16_t i = 2; i <= self->len + 1; ++i) {
+    for (uint16_t i = 2; i <= self->len; i += 2) {
         VECTORIO_POLYGON_DEBUG("  {(%3d, %3d),", x1, y1);
-        int16_t x2 = self->points_list[i % self->len];
-        ++i;
-        int16_t y2 = self->points_list[i % self->len];
+        // The last edge closes the polygon back to the first point.
+        uint16_t next = i == self->len ? 0 : i;
+        int16_t x2 = self->points_list[next];
+        int16_t y2 = self->points_list[next + 1];
         VECTORIO_POLYGON_DEBUG(" (%3d, %3d)}\n", x2, y2);
         if (y1 <= y) {
             if (y2 > y && line_side(x1, y1, x2, y2, x, y) < 0) {

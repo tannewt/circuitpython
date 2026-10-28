@@ -34,9 +34,7 @@
 #include "hal/gpio_hal.h"
 #include "soc/lcd_cam_struct.h"
 #include "esp_heap_caps.h"
-
-// should be from rom/cache.h but it wasn't working
-int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
+#include "esp_cache.h"
 
 #define LCD_RGB_ISR_IRAM_SAFE (1)
 #define LCD_RGB_INTR_ALLOC_FLAGS     (ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_INTRDISABLED)
@@ -103,7 +101,7 @@ void common_hal_dotclockframebuffer_framebuffer_construct(dotclockframebuffer_fr
     cfg->timings.vsync_back_porch = vsync_back_porch;
     cfg->timings.vsync_front_porch = vsync_front_porch;
     cfg->timings.flags.hsync_idle_low = hsync_idle_low;
-    cfg->timings.flags.vsync_idle_low = hsync_idle_low;
+    cfg->timings.flags.vsync_idle_low = vsync_idle_low;
     cfg->timings.flags.de_idle_high = de_idle_high;
     cfg->timings.flags.pclk_active_neg = !pclk_active_high;
     cfg->timings.flags.pclk_idle_high = pclk_idle_high;
@@ -213,7 +211,7 @@ mp_int_t common_hal_dotclockframebuffer_framebuffer_get_first_pixel_offset(dotcl
 }
 
 void common_hal_dotclockframebuffer_framebuffer_refresh(dotclockframebuffer_framebuffer_obj_t *self) {
-    Cache_WriteBack_Addr((uint32_t)(self->bufinfo.buf), self->bufinfo.len);
+    esp_cache_msync(self->bufinfo.buf, self->bufinfo.len, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
 }
 
 mp_int_t common_hal_dotclockframebuffer_framebuffer_get_refresh_rate(dotclockframebuffer_framebuffer_obj_t *self) {

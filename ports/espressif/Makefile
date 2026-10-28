@@ -6,6 +6,9 @@
 
 include ../../py/circuitpy_mkenv.mk
 
+# Keep dependency selection identical during automatic CMake reconfiguration.
+export IDF_COMPONENT_MANAGER = 0
+
 ifeq ($(IDF_TARGET),esp32s3)
 BT_IDF_TARGET = esp32c3
 else ifeq ($(IDF_TARGET),esp32c61)
@@ -82,6 +85,7 @@ INC += \
 	-isystem esp-idf/components/esp_hw_support/port/$(IDF_TARGET)/private_include \
 	-isystem esp-idf/components/esp_hw_support/etm/include \
 	-isystem esp-idf/components/esp_mm/include \
+	-isystem esp-idf/components/esp_eth/include \
 	-isystem esp-idf/components/esp_netif/include \
 	-isystem esp-idf/components/esp_blockdev/include \
 	-isystem esp-idf/components/esp_partition/include \
@@ -119,6 +123,7 @@ INC += \
 	-isystem esp-idf/components/esp_hal_i2s/include \
 	-isystem esp-idf/components/esp_hal_i2s/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_ledc/include \
+	-isystem esp-idf/components/esp_hal_ledc/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_pcnt/include \
 	-isystem esp-idf/components/esp_hal_rmt/include \
 	-isystem esp-idf/components/esp_hal_rmt/$(IDF_TARGET)/include \
@@ -128,6 +133,8 @@ INC += \
 	-isystem esp-idf/components/esp_hal_gpspi/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_dma/include \
 	-isystem esp-idf/components/esp_hal_dma/$(IDF_TARGET)/include \
+	-isystem esp-idf/components/esp_hal_emac/include \
+	-isystem esp-idf/components/esp_hal_emac/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_lcd/include \
 	-isystem esp-idf/components/esp_hal_lcd/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_sd/include \
@@ -150,7 +157,6 @@ INC += \
 	-isystem esp-idf/components/lwip/port/include \
 	-isystem esp-idf/components/lwip/port/esp32xx/include \
 	-isystem esp-idf/components/lwip/port/freertos/include \
-	-isystem esp-idf/components/mbedtls/esp_crt_bundle/include \
 	-isystem esp-idf/components/mbedtls/mbedtls/include \
 	-isystem esp-idf/components/mbedtls/mbedtls/tf-psa-crypto/include \
 	-isystem esp-idf/components/mbedtls/mbedtls/tf-psa-crypto/drivers/builtin/include \
@@ -241,7 +247,7 @@ endif
 # Chips with PAU + TOP power-down (SOC_PAU_SUPPORTED && SOC_PM_SUPPORT_TOP_PD):
 # C5, C6, C61, H2, H21, H4, P4. These pull in sleep_gpio + system-peripheral
 # retention, and the SW-driven RISC-V CPU register save/restore path.
-ifneq ($(filter $(IDF_TARGET),esp32c5 esp32c6 esp32c61 esp32h2 esp32h21 esp32h4 esp32p4),)
+ifneq ($(filter $(IDF_TARGET),esp32c5 esp32c6 esp32c61 esp32h2 esp32h21 esp32h4 esp32p4 esp32s31),)
 REGISTRATION_FUNCTIONS += \
 	-u esp_sleep_gpio_include \
 	-u sleep_system_peripheral_dummy \
@@ -249,9 +255,9 @@ REGISTRATION_FUNCTIONS += \
 	-u rv_core_critical_regs_restore
 endif
 
-# RISC-V chips with a hardware FPU (H4, P4) need FPU register save/restore
+# RISC-V chips with a hardware FPU (H4, P4, S31) need FPU register save/restore
 # alongside the CPU retention path.
-ifneq ($(filter $(IDF_TARGET),esp32h4 esp32p4),)
+ifneq ($(filter $(IDF_TARGET),esp32h4 esp32p4 esp32s31),)
 REGISTRATION_FUNCTIONS += \
 	-u rv_core_fpu_save \
 	-u rv_core_fpu_restore
@@ -259,7 +265,9 @@ endif
 
 ifneq ($(CIRCUITPY_WIFI),0)
 ifeq ($(filter $(IDF_TARGET),esp32s2 esp32p4),)
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
 REGISTRATION_FUNCTIONS += -u esp_coex_init_include_func
+endif
 endif
 endif
 
@@ -320,7 +328,7 @@ endif
 	SRC_C += shared/runtime/gchelper_generic.c
 else ifeq ($(IDF_TARGET_ARCH),riscv)
 
-	ifeq ($(IDF_TARGET),esp32p4)
+	ifneq ($(filter $(IDF_TARGET),esp32p4 esp32s31),)
 		CFLAGS += -march=rv32imafc_zicsr_zifencei_zaamo_zalrsc -mabi=ilp32f
 	else ifeq ($(IDF_TARGET),$(filter $(IDF_TARGET),esp32c2 esp32c3))
 		CFLAGS += -march=rv32imc_zicsr_zifencei
@@ -367,6 +375,7 @@ CFLAGS += -isystem esp-idf/components/esp_driver_touch_sens/hw_ver1/include
 CHIP_COMPONENTS = \
 	esp_driver_dac \
 	esp_driver_touch_sens \
+	esp_hal_emac \
 	esp_hal_i2s \
 	esp_hal_lcd \
 	esp_hal_pcnt \
@@ -505,6 +514,31 @@ CHIP_COMPONENTS = \
 	esp_driver_tsens \
 	esp_driver_usb_serial_jtag \
 	esp_hal_dma \
+	esp_hal_emac \
+	esp_hal_i2s \
+	esp_hal_lcd \
+	esp_hal_pcnt \
+	esp_hal_pmu \
+	esp_hal_rmt \
+	esp_hal_touch_sens \
+	esp_hal_twai \
+	esp_hal_usb
+
+else ifeq ($(IDF_TARGET),esp32s31)
+CFLAGS += -isystem esp-idf/components/esp_hw_support/ldo/include
+
+IDF_TARGET_ROM_FLOAT_LD = esp32s31.rom.rvfp.ld
+LDFLAGS += \
+	-Tesp32s31.rom.heap.ld \
+	-Trom.systimer.ld \
+	-Tesp32s31.rom.libc.ld \
+	-Tesp32s31.rom.version.ld \
+	-Trom.wdt.ld
+
+CHIP_COMPONENTS = \
+	esp_driver_tsens \
+	esp_driver_usb_serial_jtag \
+	esp_hal_dma \
 	esp_hal_i2s \
 	esp_hal_lcd \
 	esp_hal_pcnt \
@@ -602,6 +636,8 @@ else ifeq ($(IDF_TARGET),esp32c61)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32C61
 else ifeq ($(IDF_TARGET),esp32p4)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32P4
+else ifeq ($(IDF_TARGET),esp32s31)
+CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32S31
 else ifeq ($(IDF_TARGET),esp32h2)
 CFLAGS += -DCFG_TUSB_MCU=OPT_MCU_ESP32H2
 else ifeq ($(IDF_TARGET),esp32s2)
@@ -647,7 +683,15 @@ SRC_C += \
 	peripherals/$(IDF_TARGET)/pins.c
 
 ifeq ($(CIRCUITPY_SSL),1)
-SRC_C += common-hal/ssl/crt_bundle.c
+# The same root certificate bundle and lookup code as the other ports, not ESP-IDF's.
+# A board short of flash can set CIRCUITPY_SSL_ROOTS to roots-filtered.pem.
+# The generated bundle holds a hash of each root's subject name, not the name itself;
+# the format is described in lib/mbedtls_config/crt_bundle.c.
+CIRCUITPY_SSL_ROOTS ?= $(TOP)/lib/certificates/data/roots-full.pem
+SRC_C += lib/mbedtls_config/crt_bundle.c
+$(BUILD)/x509_crt_bundle.S: $(CIRCUITPY_SSL_ROOTS) $(TOP)/tools/gen_crt_bundle.py
+	$(Q)$(PYTHON) $(TOP)/tools/gen_crt_bundle.py -i $< -o $@ --asm
+OBJ_CRT_BUNDLE := $(BUILD)/x509_crt_bundle.o
 endif
 
 SRC_C += $(wildcard common-hal/espidf/*.c)
@@ -814,6 +858,7 @@ endif
 OBJ += $(addprefix $(BUILD)/, $(SRC_CIRCUITPY_COMMON:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_MOD:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_S:.s=.o))
+OBJ += $(OBJ_CRT_BUNDLE)
 
 $(BUILD)/$(FATFS_DIR)/ff.o: COPT += -Os
 $(filter $(PY_BUILD)/../extmod/vfs_fat_%.o, $(PY_O)): COPT += -Os
@@ -897,7 +942,7 @@ do-sdkconfig: $(BUILD)/esp-idf/config/sdkconfig.h
 QSTR_GLOBAL_REQUIREMENTS += $(BUILD)/esp-idf/config/sdkconfig.h
 $(BUILD)/esp-idf/config/sdkconfig.h: boards/$(BOARD)/sdkconfig boards/$(BOARD)/mpconfigboard.mk CMakeLists.txt | $(BUILD)/esp-idf
 	$(STEPECHO) "Create $@"
-	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -GNinja
+	$(Q)env IDF_PATH=$(IDF_PATH) IDF_COMPONENT_MANAGER=0 cmake -S . -B $(BUILD)/esp-idf -DSDKCONFIG=$(BUILD)/esp-idf/sdkconfig -DSDKCONFIG_DEFAULTS="$(SDKCONFIGS)" -DCMAKE_TOOLCHAIN_FILE=$(IDF_PATH)/tools/cmake/toolchain-$(IDF_TARGET).cmake -DIDF_TARGET=$(IDF_TARGET) -DCIRCUITPY_ESP_HOSTED=$(CIRCUITPY_ESP_HOSTED) -GNinja
 	$(Q)$(PYTHON) tools/check-sdkconfig.py \
 		CIRCUITPY_DUALBANK=$(CIRCUITPY_DUALBANK) \
 		CIRCUITPY_STORAGE_EXTEND=$(CIRCUITPY_STORAGE_EXTEND) \
@@ -935,6 +980,7 @@ BINARY_WIFI_BLOBS = libcore.a libespnow.a libnet80211.a libpp.a libsmartconfig.a
 ifneq ($(IDF_TARGET),esp32p4)
 	BINARY_BLOBS = esp-idf/components/esp_phy/lib/$(IDF_TARGET)/libphy.a
 endif
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
 ifneq ($(CIRCUITPY_WIFI),0)
 	BINARY_BLOBS += $(addprefix esp-idf/components/esp_wifi/lib/$(IDF_TARGET)/, $(BINARY_WIFI_BLOBS))
 	BINARY_BLOBS += esp-idf/components/esp_coex/lib/$(IDF_TARGET)/libcoexist.a
@@ -943,11 +989,49 @@ ifneq ($(CIRCUITPY_WIFI),0)
 	endif
 endif
 
+endif
+
 ifeq ($(IDF_TARGET),esp32)
 BINARY_BLOBS += esp-idf/components/esp_phy/lib/$(IDF_TARGET)/librtc.a
 endif
 
-ESP_IDF_COMPONENTS_LINK = $(IDF_TARGET_ARCH) $(CHIP_COMPONENTS) app_update bootloader_support driver esp_driver_dma esp_driver_gpio esp_driver_gptimer esp_driver_i2c esp_driver_ledc esp_driver_spi esp_driver_uart efuse esp_adc esp_app_format esp_common esp_event esp_gdbstub esp_hal_ana_conv esp_hal_clock esp_hal_gpio esp_hal_gpspi esp_hal_i2c esp_hal_ledc esp_hal_mspi esp_hal_security esp_hal_timg esp_hal_uart esp_hal_wdt esp_hw_support esp_mm esp_partition esp_pm esp_ringbuf esp_rom esp_system esp_timer freertos hal heap log esp_libc nvs_flash nvs_sec_provider pthread soc spi_flash vfs esp_stdio
+# CONFIG_COMPILER_CXX_EXCEPTIONS is off, so IDF's cxx component replaces these
+# with stubs that abort, and C++ code such as nvs_flash does not link libgcc's
+# unwinder. Same list as esp-idf/components/cxx/CMakeLists.txt.
+CXX_EXCEPTION_WRAPS = \
+	__register_frame_info_bases \
+	__register_frame_info \
+	__register_frame \
+	__register_frame_info_table_bases \
+	__register_frame_info_table \
+	__register_frame_table \
+	__deregister_frame_info_bases \
+	__deregister_frame_info \
+	_Unwind_Find_FDE \
+	_Unwind_GetGR \
+	_Unwind_GetCFA \
+	_Unwind_GetIP \
+	_Unwind_GetIPInfo \
+	_Unwind_GetRegionStart \
+	_Unwind_GetDataRelBase \
+	_Unwind_GetTextRelBase \
+	_Unwind_SetIP \
+	_Unwind_SetGR \
+	_Unwind_GetLanguageSpecificData \
+	_Unwind_FindEnclosingFunction \
+	_Unwind_Resume \
+	_Unwind_RaiseException \
+	_Unwind_DeleteException \
+	_Unwind_ForcedUnwind \
+	_Unwind_Resume_or_Rethrow \
+	_Unwind_Backtrace \
+	__cxa_call_unexpected \
+	__gxx_personality_v0 \
+	__cxa_throw \
+	__cxa_allocate_exception
+LDFLAGS += $(foreach f,$(CXX_EXCEPTION_WRAPS),-Wl,--wrap=$(f))
+
+ESP_IDF_COMPONENTS_LINK = $(IDF_TARGET_ARCH) $(CHIP_COMPONENTS) app_update bootloader_support driver esp_driver_dma esp_driver_gpio esp_driver_gptimer esp_driver_i2c esp_driver_ledc esp_driver_spi esp_driver_uart efuse esp_adc esp_app_format esp_common esp_event esp_gdbstub esp_hal_ana_conv esp_hal_clock esp_hal_gpio esp_hal_gpspi esp_hal_i2c esp_hal_ledc esp_hal_mspi esp_hal_security esp_hal_timg esp_hal_uart esp_hal_wdt esp_hw_support esp_mm esp_partition esp_pm esp_ringbuf esp_rom esp_system esp_timer freertos hal heap log esp_libc nvs_flash nvs_sec_provider pthread soc spi_flash vfs esp_stdio cxx
 ifneq ($(IDF_TARGET),esp32)
 ESP_IDF_COMPONENTS_LINK += esp_hal_systimer
 endif
@@ -957,8 +1041,34 @@ LDFLAGS += -Trom.regi2c.ld
 else
 ESP_IDF_COMPONENTS_LINK += esp_hal_regi2c
 endif
+# Only targets with EMAC support (per SOC_EMAC_SUPPORTED in soc_caps.h) build
+# libesp_hal_emac.a; those targets list it in their CHIP_COMPONENTS above. The
+# component is interface-only elsewhere, so it must not appear in the list of
+# components to link.
 ifneq ($(CIRCUITPY_WIFI),0)
-	ESP_IDF_COMPONENTS_LINK += esp_coex esp_netif esp_security esp-tls esp_wifi lwip mdns wpa_supplicant esp_phy
+	ESP_IDF_COMPONENTS_LINK += esp_netif esp_security esp-tls esp_wifi lwip mbedtls mdns
+ifneq ($(CIRCUITPY_ESP_HOSTED),1)
+ESP_IDF_COMPONENTS_LINK += esp_coex esp_phy wpa_supplicant
+endif
+endif
+ifeq ($(CIRCUITPY_ESP_HOSTED),1)
+# ESP-IDF v6.1+ has remote Wi-Fi support built into esp_wifi, so no separate
+# esp_wifi_remote component is needed.
+INC := -isystem esp-hosted/host/api/include -isystem esp-hosted/host $(INC)
+ESP_IDF_COMPONENTS_LINK += esp-hosted esp_http_client http_parser console
+REGISTRATION_FUNCTIONS += -u esp_hosted_init
+endif
+# mdns registers handlers on ETH_EVENT, which is defined by esp_eth. On EMAC-capable
+# targets, esp_eth's compiled EMAC sources reference the esp_hal_emac symbols; that
+# library comes via CHIP_COMPONENTS.
+ifneq ($(CIRCUITPY_MDNS),0)
+	ESP_IDF_COMPONENTS_LINK += esp_eth
+endif
+ifneq ($(CIRCUITPY_MII),0)
+	ESP_IDF_COMPONENTS_LINK += esp_eth
+  ifeq ($(CIRCUITPY_WIFI),0)
+	ESP_IDF_COMPONENTS_LINK += esp_netif lwip mbedtls
+  endif
 endif
 ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BLE_IMPL_esp32 := esp32
@@ -991,7 +1101,7 @@ ifneq ($(CIRCUITPY_BLEIO_NATIVE),0)
 	BINARY_BLOBS += $(firstword $(wildcard $(BLE_LIB_DIR)/libble_app.a) $(BLE_LIB_DIR)/$(IDF_TARGET)/libble_app.a)
 	endif
 endif
-ifeq ($(IDF_TARGET),esp32p4)
+ifneq ($(filter $(IDF_TARGET),esp32p4 esp32s31),)
     ESP_IDF_COMPONENTS_LINK += esp_security
 endif
 ifneq ($(CIRCUITPY_ESPULP),0)
@@ -1070,6 +1180,8 @@ else ifeq ($(IDF_TARGET),esp32c61)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32p4)
 BOOTLOADER_OFFSET = 0x2000
+else ifeq ($(IDF_TARGET),esp32s31)
+BOOTLOADER_OFFSET = 0x2000
 else ifeq ($(IDF_TARGET),esp32s3)
 BOOTLOADER_OFFSET = 0x0
 else ifeq ($(IDF_TARGET),esp32s2)
@@ -1140,7 +1252,7 @@ endif
 
 UF2_FAMILY_ID_esp32s2 = 0xbfdd4eee
 UF2_FAMILY_ID_esp32s3 = 0xc47e5767
-UF2_FAMILY_ID_esp32p4 = 0x540ddf62
+UF2_FAMILY_ID_esp32p4 = 0x3d308e94
 
 $(BUILD)/firmware.uf2: $(BUILD)/circuitpython-firmware.bin
 	$(STEPECHO) "Create $@"

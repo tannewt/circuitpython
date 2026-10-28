@@ -989,6 +989,7 @@ msgstr "Все таймеры уже используются"
 #: ports/atmel-samd/common-hal/pulseio/PulseIn.c
 #: ports/atmel-samd/common-hal/rotaryio/IncrementalEncoder.c
 #: ports/cxd56/common-hal/pulseio/PulseIn.c
+#: ports/espressif/common-hal/mii/RMII.c
 #: ports/raspberrypi/common-hal/picodvi/Framebuffer_RP2350.c
 #: ports/zephyr-cp/common-hal/busio/I2C.c
 #: ports/zephyr-cp/common-hal/busio/SPI.c
@@ -1082,7 +1083,7 @@ msgstr "Все каналы событий уже используются"
 msgid "No pull up found on SDA or SCL; check your wiring"
 msgstr "На SDA или SCL не обнаружено подтягивания; проверь свою проводку"
 
-#: ports/atmel-samd/common-hal/busio/UART.c shared-bindings/usb/core/Device.c
+#: ports/atmel-samd/common-hal/busio/UART.c
 #: shared-bindings/usb_host_bulk/InStream.c
 msgid "%q must be power of 2"
 msgstr "%q должен быть во 2-й степени"
@@ -1316,6 +1317,12 @@ msgstr "Сканирование уже выполняется. Останови
 #: ports/espressif/common-hal/_bleio/Adapter.c
 #: ports/nordic/common-hal/_bleio/Adapter.c
 #: ports/zephyr-cp/common-hal/_bleio/Adapter.c
+msgid "Failed to connect: timeout"
+msgstr "Не удалось подключиться: таймаут"
+
+#: ports/espressif/common-hal/_bleio/Adapter.c
+#: ports/nordic/common-hal/_bleio/Adapter.c
+#: ports/zephyr-cp/common-hal/_bleio/Adapter.c
 msgid "Failed to connect: internal error"
 msgstr "Не удалось подключиться: внутренняя ошибка"
 
@@ -1361,6 +1368,7 @@ msgstr "Длина значения > максимальная_длина"
 #: ports/espressif/common-hal/_bleio/Characteristic.c
 #: ports/espressif/common-hal/_bleio/Service.c
 #: ports/raspberrypi/common-hal/alarm/pin/PinAlarm.c
+#: ports/raspberrypi/common-hal/usb_host_bulk/InStream.c
 msgid "Too many %q"
 msgstr ""
 
@@ -1381,9 +1389,25 @@ msgstr "Невозможно установить CCCD для локальной
 #: ports/zephyr-cp/common-hal/_bleio/Characteristic.c
 #: ports/zephyr-cp/common-hal/_bleio/Connection.c
 #: ports/zephyr-cp/common-hal/_bleio/Descriptor.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
 #: shared-bindings/_bleio/CharacteristicBuffer.c
 msgid "Not connected"
 msgstr "Не подключено"
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+msgid ""
+"Unspecified issue. The pairing request on the other device may have been "
+"declined or ignored."
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/Connection.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/Connection.c
+#, c-format
+msgid "Unknown security error: 0x%04x"
+msgstr "Неизвестная ошибка безопасности: 0x%04x"
 
 #: ports/espressif/common-hal/_bleio/Connection.c
 msgid "No pairing in progress"
@@ -1429,33 +1453,45 @@ msgstr "Уже в процессе"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #, c-format
-msgid "Unknown system firmware error at %s:%d: %d"
-msgstr "Неизвестная системная ошибка прошивки на %s:%d: %d"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#, c-format
-msgid "Unknown system firmware error: %d"
-msgstr "Неизвестная ошибка прошивки системы: %d"
+msgid "Unknown BLE error at %s:%d: 0x%04x"
+msgstr ""
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
+#, c-format
+msgid "Unknown BLE error: 0x%04x"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
+msgid "%q not permitted"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
 msgid "Insufficient authentication"
 msgstr "Неполная аутентификация"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
 #: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
+msgid "Insufficient authorization"
+msgstr ""
+
+#: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
 msgid "Insufficient encryption"
 msgstr "Недостаточное шифрование"
 
 #: ports/espressif/common-hal/_bleio/__init__.c
+#: ports/nordic/common-hal/_bleio/__init__.c
+#: ports/zephyr-cp/common-hal/_bleio/__init__.c
 #, c-format
-msgid "Unknown BLE error at %s:%d: %d"
-msgstr "Неизвестная ошибка BLE в %s:%d: %d"
-
-#: ports/espressif/common-hal/_bleio/__init__.c
-#, c-format
-msgid "Unknown BLE error: %d"
-msgstr "Неизвестная ошибка BLE: %d"
+msgid "Unknown gatt error: 0x%04x"
+msgstr "Неизвестная ошибка gatt: 0x%04x"
 
 #: ports/espressif/common-hal/alarm/pin/PinAlarm.c
 msgid "Cannot wake on pin edge. Only level."
@@ -1494,7 +1530,7 @@ msgid "%q must be array of type 'H'"
 msgstr "%q должен быть массивом типа 'H \""
 
 #: ports/espressif/common-hal/audiobusio/PDMIn.c
-#: shared-bindings/audioi2sin/I2SIn.c
+#: shared-bindings/audioi2sin/I2SIn.c shared-bindings/usb_host_audio/USBIn.c
 msgid "%q must be 8, 16, 24, or 32"
 msgstr ""
 
@@ -1695,6 +1731,7 @@ msgstr "Слишком длинная программа"
 #: shared-bindings/digitalio/DigitalInOut.c shared-bindings/emmcio/EMMC.c
 #: shared-bindings/i2cioexpander/IOPin.c shared-bindings/microcontroller/Pin.c
 #: shared-module/max3421e/Max3421E.c shared-module/usb/core/Device.c
+#: shared-module/usb_host_audio/USBIn.c
 msgid "%q in use"
 msgstr "%q используется"
 
@@ -1806,14 +1843,12 @@ msgstr "Неподдерживаемый тип сокета"
 
 #: ports/espressif/common-hal/socketpool/Socket.c
 #: ports/raspberrypi/common-hal/socketpool/Socket.c
-#: ports/zephyr-cp/common-hal/socketpool/Socket.c
 msgid "Out of sockets"
 msgstr "Вне розеток"
 
 #: ports/espressif/common-hal/socketpool/SocketPool.c
-#: ports/raspberrypi/common-hal/socketpool/SocketPool.c
-msgid "SocketPool can only be used with wifi.radio"
-msgstr "SocketPool можно использовать только с wifi.radio"
+msgid "SocketPool can only be used with %q.%q or any %q.%q"
+msgstr ""
 
 #: ports/espressif/common-hal/watchdog/WatchDogTimer.c
 msgid "%q must be <= %u"
@@ -1895,11 +1930,6 @@ msgstr "таймаут должен быть < 655.35 сек"
 msgid "non-zero timeout must be > 0.01"
 msgstr "Ненулевое время ожидания должно быть > 0,01"
 
-#: ports/nordic/common-hal/_bleio/Adapter.c
-#: ports/zephyr-cp/common-hal/_bleio/Adapter.c
-msgid "Failed to connect: timeout"
-msgstr "Не удалось подключиться: таймаут"
-
 #: ports/nordic/common-hal/_bleio/UUID.c
 msgid "Unexpected nrfx uuid type"
 msgstr "Неожиданный тип nrfx uuid"
@@ -1912,24 +1942,6 @@ msgstr "Скандинавская система прошивки из памя
 #, c-format
 msgid "Unknown system firmware error: %04x"
 msgstr "Неизвестная системная ошибка прошивки: %04x"
-
-#: ports/nordic/common-hal/_bleio/__init__.c
-#, c-format
-msgid "Unknown gatt error: 0x%04x"
-msgstr "Неизвестная ошибка gatt: 0x%04x"
-
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-msgid ""
-"Unspecified issue. The pairing request on the other device may have been "
-"declined or ignored."
-msgstr ""
-
-#: ports/nordic/common-hal/_bleio/__init__.c
-#: ports/zephyr-cp/common-hal/_bleio/Connection.c
-#, c-format
-msgid "Unknown security error: 0x%04x"
-msgstr "Неизвестная ошибка безопасности: 0x%04x"
 
 #: ports/nordic/common-hal/alarm/pin/PinAlarm.c
 msgid "Cannot wake on pin edge, only level"
@@ -2268,6 +2280,10 @@ msgstr ""
 msgid "Only IPv4 sockets supported"
 msgstr "Поддерживаются только сокеты IPv4"
 
+#: ports/raspberrypi/common-hal/socketpool/SocketPool.c
+msgid "SocketPool can only be used with wifi.radio"
+msgstr "SocketPool можно использовать только с wifi.radio"
+
 #: ports/raspberrypi/common-hal/usb_host/Port.c
 msgid "All dma channels in use"
 msgstr "Все используемые каналы dma"
@@ -2451,8 +2467,12 @@ msgstr ""
 msgid "Use device tree to define %q devices"
 msgstr ""
 
+#: ports/zephyr-cp/common-hal/mii/Ethernet.c
+msgid "cannot construct ethernet interfaces; use board.ETHERNET"
+msgstr ""
+
 #: ports/zephyr-cp/common-hal/socketpool/SocketPool.c
-msgid "SocketPool can only be used with wifi.radio or hostnetwork.HostNetwork"
+msgid "SocketPool can only be used with %q.%q, %q.%q, or %q.%q"
 msgstr ""
 
 #: ports/zephyr-cp/common-hal/usb_hid/Device.c shared-module/usb_hid/Device.c
@@ -3978,10 +3998,12 @@ msgid "%q must be multiple of 8."
 msgstr "%q должно быть кратно 8."
 
 #: shared-bindings/audiobusio/PDMIn.c shared-bindings/audioi2sin/I2SIn.c
+#: shared-bindings/usb_host_audio/USBIn.c
 msgid "Cannot record to a file"
 msgstr "Невозможно записать в файл"
 
 #: shared-bindings/audiobusio/PDMIn.c shared-bindings/audioi2sin/I2SIn.c
+#: shared-bindings/usb_host_audio/USBIn.c
 msgid "Destination capacity is smaller than destination_length."
 msgstr "Емкость места назначения меньше длины места назначения."
 
@@ -4024,7 +4046,7 @@ msgstr ""
 msgid "bits_per_sample must be 16"
 msgstr ""
 
-#: shared-bindings/audioi2sin/I2SIn.c
+#: shared-bindings/audioi2sin/I2SIn.c shared-bindings/usb_host_audio/USBIn.c
 #, c-format
 msgid "invalid destination buffer, must be an array of type: %c"
 msgstr ""
@@ -4350,6 +4372,10 @@ msgstr "%q содержит пины дупликаты"
 msgid "%q and %q contain duplicate pins"
 msgstr "%q и %q содержат пины дупликаты"
 
+#: shared-bindings/mii/Ethernet.c shared-bindings/wifi/Radio.c
+msgid "invalid hostname"
+msgstr "Недопустимое имя хоста"
+
 #: shared-bindings/msgpack/ExtType.c
 msgid "code outside range 0~127"
 msgstr "код вне диапазона 0~127"
@@ -4493,10 +4519,6 @@ msgstr "%q должен быть подклассом %q"
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid hex password"
 msgstr "Неверный шестнадцатеричный пароль"
-
-#: shared-bindings/wifi/Radio.c
-msgid "invalid hostname"
-msgstr "Недопустимое имя хоста"
 
 #: shared-bindings/wifi/Radio.c
 msgid "Invalid MAC address"
@@ -4769,10 +4791,6 @@ msgid "Invalid socket for TLS"
 msgstr "Неверный сокет для TLS"
 
 #: shared-module/ssl/SSLSocket.c
-msgid "invalid key"
-msgstr "Неверный ключ"
-
-#: shared-module/ssl/SSLSocket.c
 msgid "invalid cert"
 msgstr "Неверный сертификат"
 
@@ -4977,6 +4995,25 @@ msgstr "выключить"
 #: supervisor/shared/web_workflow/web_workflow.c
 msgid "No IP"
 msgstr "Нет IP"
+
+#~ msgid "invalid key"
+#~ msgstr "Неверный ключ"
+
+#, c-format
+#~ msgid "Unknown system firmware error at %s:%d: %d"
+#~ msgstr "Неизвестная системная ошибка прошивки на %s:%d: %d"
+
+#, c-format
+#~ msgid "Unknown system firmware error: %d"
+#~ msgstr "Неизвестная ошибка прошивки системы: %d"
+
+#, c-format
+#~ msgid "Unknown BLE error at %s:%d: %d"
+#~ msgstr "Неизвестная ошибка BLE в %s:%d: %d"
+
+#, c-format
+#~ msgid "Unknown BLE error: %d"
+#~ msgstr "Неизвестная ошибка BLE: %d"
 
 #~ msgid "shape must be None, and integer or a tuple of integers"
 #~ msgstr "форма должна быть None, целым числом или кортежем целых чисел"

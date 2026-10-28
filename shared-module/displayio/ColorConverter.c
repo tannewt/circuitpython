@@ -9,8 +9,6 @@
 #include "py/misc.h"
 #include "py/runtime.h"
 
-#define NO_TRANSPARENT_COLOR (0x1000000)
-
 uint32_t displayio_colorconverter_dither_noise_1(uint32_t n) {
     n = (n >> 13) ^ n;
     int nn = (n * (n * n * 60493 + 19990303) + 1376312589) & 0x7fffffff;

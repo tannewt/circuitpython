@@ -67,6 +67,12 @@
 	};
 };
 
+/* A second PTY UART, so there is a UART that isn't the console (uart0):
+ * board.UART() and the busio.UART tests use it. */
+&uart1 {
+	status = "okay";
+};
+
 /* Expand ADC channels for analogio tests. */
 &adc0 {
 	nchannels = <4>;

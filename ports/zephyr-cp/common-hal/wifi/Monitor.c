@@ -76,14 +76,14 @@ void common_hal_wifi_monitor_construct(wifi_monitor_obj_t *self, uint8_t channel
     // self->queue_length = queue;
 }
 
-bool common_hal_wifi_monitor_deinited(void) {
+bool common_hal_wifi_monitor_deinited(wifi_monitor_obj_t *self) {
     // bool enabled;
     // return (esp_wifi_get_promiscuous(&enabled) == ESP_ERR_WIFI_NOT_INIT) ? true : !enabled;
     return true;
 }
 
 void common_hal_wifi_monitor_deinit(wifi_monitor_obj_t *self) {
-    if (common_hal_wifi_monitor_deinited()) {
+    if (common_hal_wifi_monitor_deinited(self)) {
         return;
     }
 

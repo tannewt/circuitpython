@@ -12,6 +12,9 @@
 #include "py/obj.h"
 #include "shared-module/displayio/Palette.h"
 
+// Stored in transparent_color when no color is transparent. It is outside the 24 bit color range.
+#define NO_TRANSPARENT_COLOR (0x1000000)
+
 typedef struct displayio_colorconverter {
     mp_obj_base_t base;
     bool dither;

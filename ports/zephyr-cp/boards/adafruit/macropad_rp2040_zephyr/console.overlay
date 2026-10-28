@@ -1,0 +1,17 @@
+/* Applied after board.overlay in CONSOLE=1 and DEBUG=1 builds: the Zephyr
+ * console on UART1, on the STEMMA QT pins (TX on SDA/GPIO20, RX on SCL/GPIO21).
+ * board.I2C() and board.STEMMA_I2C are then not available. */
+/ {
+	chosen {
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "disabled";
+};

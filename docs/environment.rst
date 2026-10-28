@@ -53,8 +53,11 @@ Details of the TOML language subset
 * The supported data types are strings, integers, floats, and booleans.
 * Whitespace is allowed.
 * Only basic strings are supported, not triple-quoted strings.
-* Only integers supported by ``strtol()`` can be parsed:
-  no ``0o``, no ``0b``, no underscores ``1_000``, ``011`` is 9, not 11.
+* Integers may be decimal, hexadecimal ``0x1F``, octal ``0o17``, or binary ``0b101``,
+  and may contain underscores ``1_000``.
+  Unlike TOML, a sign is also allowed before ``0x``, ``0o``, and ``0b``,
+  the prefix may be uppercase, and underscores need not be between digits.
+* Leading zeros are not allowed: ``011`` is an error, not 9 or 11.
 * Only bare keys are supported.
 * Duplicate keys are not diagnosed.
 * Comments are allowed.
@@ -101,9 +104,9 @@ Used to avoid "Pystack exhausted" errors when the code can't be reworked to avoi
 
 CIRCUITPY_USB_HOST_ISO_BUFFER_SIZE (integer)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Allocates a buffer for incoming isochronous USB data (USB camera, USB audio)
-on boards with a ``usb_host.Port``. Without it, isochronous IN transfers return at
-most one packet per USB frame, so data arriving while code is busy is lost.
+Allocates a buffer for incoming isochronous USB data, such as from a USB camera
+read with ``usb.core``, on boards with a ``usb_host.Port``. Without it, isochronous IN
+transfers return at most one packet per USB frame, so data arriving while code is busy is lost.
 The value is rounded up to the next power of two and limited to the range 2048
 to 65536. A typical value for a USB camera is 16384. The buffer is allocated when
 the USB host port is created and is never freed.
@@ -239,6 +242,22 @@ Example: Configure the display to 640x480 black and white (1 bit per pixel):
     CIRCUITPY_DISPLAY_COLOR_DEPTH=1
 
 `Adafruit Feather RP2350 <https://circuitpython.org/board/adafruit_feather_rp2350/>`_
+`Adafruit Metro RP2350 <https://circuitpython.org/board/adafruit_metro_rp2350/>`_
+
+CIRCUITPY_PICODVI_AUDIO (boolean)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Whether the display configured at board initialization also sends sound through
+the DVI cable, as ``supervisor.runtime.audio``. Defaults to true. It needs a 640-wide
+output: 640x480, 320x240 or 160x120. Audio uses about 37 KB of internal RAM
+next to a 640x480 display. Set this to false to keep that RAM free, for
+example on a monitor without speakers.
+
+``supervisor.runtime.audio`` is a :py:class:`picodvi.AudioOut`. It becomes ``None`` when
+the display is released by ``displayio.release_displays()`` or when it is
+deinitialized, and stays ``None`` until the next reset.
+
+`Adafruit Feather RP2350 <https://circuitpython.org/board/adafruit_feather_rp2350/>`_
+`Adafruit Fruit Jam <https://circuitpython.org/board/adafruit_fruit_jam/>`_
 `Adafruit Metro RP2350 <https://circuitpython.org/board/adafruit_metro_rp2350/>`_
 
 CIRCUITPY_SAFEMODE_DELAY (float)

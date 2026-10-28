@@ -30,6 +30,25 @@ typedef struct {
     uint8_t bits_per_pixel;
     // The last bytes read from the file. Pixels are read along rows, so most reads hit it.
     uint8_t cache_len;
+    #if CIRCUITPY_STORAGE_MAP_FILE
+    // Flash runs the pixels are read from instead of the cache; 0 = read through the cache.
+    uint8_t map_count;
+    // 8-bit file with every row inside one run, so TileGrid can read whole rows.
+    bool rows_mapped;
+    #endif
     uint32_t cache_start;
-    uint8_t cache[64];
+    union {
+        uint8_t cache[64];
+        #if CIRCUITPY_STORAGE_MAP_FILE
+        struct {
+            const uint8_t *addr;
+            uint32_t len;
+        } map[8];
+        #endif
+    };
 } displayio_ondiskbitmap_t;
+
+#if CIRCUITPY_STORAGE_MAP_FILE
+// Row y of an 8-bit file in flash, or NULL if it spans two runs or the file isn't mapped.
+const uint8_t *displayio_ondiskbitmap_row(displayio_ondiskbitmap_t *self, int16_t y);
+#endif

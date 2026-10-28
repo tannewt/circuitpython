@@ -52,6 +52,7 @@
 #include "supervisor/shared/tick.h"
 
 #include "hardware/clocks.h"
+#include "hardware/structs/psm.h"
 #include "hardware/structs/scb.h"
 #include "hardware/structs/watchdog.h"
 #include "hardware/gpio.h"
@@ -536,9 +537,15 @@ void reset_to_bootloader(void) {
     }
 }
 
-void reset_cpu(void) {
-    watchdog_reboot(0, SRAM_END, 0);
-    watchdog_start_tick(12);
+// Called from isr_hardfault(), so this and everything it calls runs from RAM.
+// Same register sequence as watchdog_reboot(0, 0, 0), which is in flash.
+void __not_in_flash_func(reset_cpu)(void) {
+    hw_clear_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_ENABLE_BITS);
+    watchdog_hw->scratch[4] = 0;
+    hw_set_bits(&psm_hw->wdsel, PSM_WDSEL_BITS & ~(PSM_WDSEL_ROSC_BITS | PSM_WDSEL_XOSC_BITS));
+    hw_clear_bits(&watchdog_hw->ctrl,
+        WATCHDOG_CTRL_PAUSE_DBG0_BITS | WATCHDOG_CTRL_PAUSE_DBG1_BITS | WATCHDOG_CTRL_PAUSE_JTAG_BITS);
+    hw_set_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_TRIGGER_BITS);
 
     while (true) {
         __wfi();
@@ -569,7 +576,7 @@ uint32_t *port_heap_get_top(void) {
 }
 
 uint32_t __uninitialized_ram(saved_word);
-void port_set_saved_word(uint32_t value) {
+void __not_in_flash_func(port_set_saved_word)(uint32_t value) {
     // Store in RAM because the watchdog scratch registers don't survive
     // resetting by pulling the RUN pin low.
     saved_word = value;

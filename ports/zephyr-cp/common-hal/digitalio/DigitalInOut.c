@@ -35,6 +35,7 @@ digitalinout_result_t common_hal_digitalio_digitalinout_construct(
         return DIGITALINOUT_PIN_BUSY;
     }
     self->direction = DIRECTION_INPUT;
+    self->fake_open_drain = false;
 
     return DIGITALINOUT_OK;
 }
@@ -64,6 +65,8 @@ digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
     digitalio_drive_mode_t drive_mode) {
 
     self->direction = DIRECTION_OUTPUT;
+    // set_drive_mode() starts the output at self->value.
+    self->value = value;
     common_hal_digitalio_digitalinout_set_drive_mode(self, drive_mode);
     common_hal_digitalio_digitalinout_set_value(self, value);
     return DIGITALINOUT_OK;
@@ -76,7 +79,12 @@ digitalio_direction_t common_hal_digitalio_digitalinout_get_direction(
 
 void common_hal_digitalio_digitalinout_set_value(
     digitalio_digitalinout_obj_t *self, bool value) {
-    int res = gpio_pin_set(self->port, self->number, value);
+    int res;
+    if (self->fake_open_drain) {
+        res = gpio_pin_configure(self->port, self->number, value ? GPIO_INPUT : GPIO_OUTPUT_LOW);
+    } else {
+        res = gpio_pin_set(self->port, self->number, value);
+    }
     if (res != 0) {
         printk("Failed to set value %d\n", res);
     }
@@ -95,17 +103,25 @@ bool common_hal_digitalio_digitalinout_get_value(
 digitalinout_result_t common_hal_digitalio_digitalinout_set_drive_mode(
     digitalio_digitalinout_obj_t *self,
     digitalio_drive_mode_t drive_mode) {
-    // Also INPUT so we can read the value back.
-    gpio_flags_t flags = GPIO_OUTPUT;
+    // Start the output at the cached value. Plain GPIO_OUTPUT would keep the
+    // pin's old output level, which is low after emulated open drain has
+    // driven it low, even if value has since been set to True.
+    gpio_flags_t flags = self->value ? GPIO_OUTPUT_HIGH : GPIO_OUTPUT_LOW;
     if (drive_mode == DRIVE_MODE_OPEN_DRAIN) {
         flags |= GPIO_OPEN_DRAIN;
     }
     int res = gpio_pin_configure(self->port, self->number, flags);
+    if (res == -ENOTSUP && drive_mode == DRIVE_MODE_OPEN_DRAIN) {
+        self->fake_open_drain = true;
+        self->drive_mode = drive_mode;
+        common_hal_digitalio_digitalinout_set_value(self, self->value);
+        return DIGITALINOUT_OK;
+    }
     if (res != 0) {
-        // TODO: Fake open drain.
         printk("Failed to set drive mode %d\n", res);
         return DIGITALINOUT_INVALID_DRIVE_MODE;
     }
+    self->fake_open_drain = false;
     self->drive_mode = drive_mode;
     return DIGITALINOUT_OK;
 }

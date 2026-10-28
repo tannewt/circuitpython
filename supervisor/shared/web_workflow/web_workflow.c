@@ -9,7 +9,6 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "extmod/vfs.h"
@@ -48,7 +47,13 @@
 #endif
 
 #if CIRCUITPY_WIFI
+#include "common-hal/wifi/__init__.h"
 #include "shared-bindings/wifi/__init__.h"
+#endif
+
+#if CIRCUITPY_MII
+#include "shared-bindings/mii/__init__.h"
+#include "shared-bindings/mii/Ethernet.h"
 #endif
 
 #if CIRCUITPY_SETTINGS_TOML
@@ -84,7 +89,6 @@ typedef struct {
     bool json;
     bool websocket;
     bool new_socket;
-    uint32_t websocket_version;
     // RFC6455 for websockets says this header should be 24 base64 characters long.
     char websocket_key[24 + 1];
 } _request;
@@ -93,7 +97,7 @@ typedef struct {
 static wifi_radio_error_t _wifi_status = WIFI_RADIO_ERROR_NONE;
 #endif
 
-#if CIRCUITPY_STATUS_BAR && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK)
+#if CIRCUITPY_STATUS_BAR && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII)
 // Store various last states to compute if status bar needs an update.
 static bool _last_enabled = false;
 static uint32_t _last_ip = 0;
@@ -202,8 +206,35 @@ static bool _get_web_workflow_ip(uint32_t *ipv4_address) {
     // hostnetwork uses the host network namespace and is reachable via localhost.
     *ipv4_address = 0x0100007f; // 127.0.0.1
     return true;
+    #elif CIRCUITPY_MII
+    mii_ethernet_obj_t *eth = (mii_ethernet_obj_t *)mii_get_default_instance();
+    if (eth == NULL || !common_hal_mii_ethernet_get_enabled(eth)) {
+        return false;
+    }
+    *ipv4_address = mii_get_ipv4_address();
+    return true;
     #else
     return false;
+    #endif
+}
+
+// Get the network interface hostname (the one sent to the DHCP server) when
+// no mDNS server is active to provide one. Never allocates. Returns "" when
+// there isn't one.
+static const char *_get_web_workflow_hostname(void) {
+    #if CIRCUITPY_WIFI
+    if (!common_hal_wifi_radio_get_enabled(&common_hal_wifi_radio_obj)) {
+        return "";
+    }
+    return wifi_get_hostname_raw();
+    #elif CIRCUITPY_MII
+    mii_ethernet_obj_t *eth = (mii_ethernet_obj_t *)mii_get_default_instance();
+    if (eth == NULL || !common_hal_mii_ethernet_get_enabled(eth)) {
+        return "";
+    }
+    return mii_get_hostname_raw();
+    #else
+    return "";
     #endif
 }
 
@@ -229,7 +260,7 @@ mdns_server_obj_t *supervisor_web_workflow_mdns(mp_obj_t network_interface) {
 
 #if CIRCUITPY_STATUS_BAR
 bool supervisor_web_workflow_status_dirty(void) {
-    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK
+    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII
     uint32_t ipv4_address = 0;
     bool enabled = _get_web_workflow_ip(&ipv4_address);
     if (enabled != _last_enabled || ipv4_address != _last_ip || web_api_port != _last_web_api_port) {
@@ -249,7 +280,7 @@ bool supervisor_web_workflow_status_dirty(void) {
 
 #if CIRCUITPY_STATUS_BAR
 void supervisor_web_workflow_status(void) {
-    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK
+    #if CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII
     uint32_t ipv4_address = 0;
     _last_enabled = _get_web_workflow_ip(&ipv4_address);
     _last_web_api_port = web_api_port;
@@ -279,6 +310,9 @@ void supervisor_web_workflow_status(void) {
         _last_ip = 0;
         serial_write_compressed(MP_ERROR_TEXT("No IP"));
     }
+    #elif CIRCUITPY_MII
+    _last_ip = 0;
+    serial_write_compressed(MP_ERROR_TEXT("No IP"));
     #endif
     #else
     return;
@@ -287,10 +321,16 @@ void supervisor_web_workflow_status(void) {
 #endif
 
 bool supervisor_start_web_workflow(void) {
-    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK)
+    #if CIRCUITPY_WEB_WORKFLOW && CIRCUITPY_SETTINGS_TOML && (CIRCUITPY_WIFI || CIRCUITPY_HOSTNETWORK || CIRCUITPY_MII)
 
     #if CIRCUITPY_WIFI
     mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_wifi_radio_obj);
+    #elif CIRCUITPY_MII
+    mp_obj_t socketpool_radio = mii_get_default_instance();
+    if (socketpool_radio == NULL) {
+        // The board never registered its ethernet instance.
+        return false;
+    }
     #else
     mp_obj_t socketpool_radio = MP_OBJ_FROM_PTR(&common_hal_hostnetwork_obj);
     #endif
@@ -334,6 +374,22 @@ bool supervisor_start_web_workflow(void) {
         common_hal_wifi_radio_set_enabled(&common_hal_wifi_radio_obj, false);
         return false;
     }
+    #endif
+
+    #if CIRCUITPY_MII && !CIRCUITPY_WIFI
+    mii_ethernet_obj_t *eth = (mii_ethernet_obj_t *)mii_get_default_instance();
+    if (eth == NULL) {
+        return false;
+    }
+    // Re-enable the interface in case user code disabled it before a reload.
+    if (!common_hal_mii_ethernet_get_enabled(eth)) {
+        common_hal_mii_ethernet_set_enabled(eth, true);
+    }
+
+    // The listening socket cannot be created until the interface has an
+    // address, so wait out the DHCP lease. This brings the workflow up during
+    // the first VM start instead of after the next one.
+    mii_wait_for_lease();
     #endif
 
     // Skip starting the workflow if the reset reason reflects a problem.
@@ -911,13 +967,16 @@ static void _reply_with_version_json(socketpool_socket_obj_t *socket, _request *
     mp_print_t _socket_print = {socket, _print_chunk};
 
     const char *hostname = "";
-    const char *instance_name = "";
     #if CIRCUITPY_MDNS
     if (!common_hal_mdns_server_deinited(&mdns)) {
         hostname = common_hal_mdns_server_get_hostname(&mdns);
-        instance_name = common_hal_mdns_server_get_instance_name(&mdns);
     }
     #endif
+    if (hostname[0] == '\0') {
+        // Fall back to the network interface hostname when no mDNS server is
+        // advertising one.
+        hostname = _get_web_workflow_hostname();
+    }
     uint32_t ipv4_address = 0;
     (void)_get_web_workflow_ip(&ipv4_address);
     _update_encoded_ip(ipv4_address);
@@ -935,7 +994,7 @@ static void _reply_with_version_json(socketpool_socket_obj_t *socket, _request *
         "\"creator_id\": %u, "
         "\"creation_id\": %u, "
         "\"hostname\": \"%s\", "
-        "\"port\": %d, ", instance_name, CIRCUITPY_CREATOR_ID, CIRCUITPY_CREATION_ID, hostname, web_api_port, _our_ip_encoded);
+        "\"port\": %d, ", MICROPY_HW_BOARD_NAME, CIRCUITPY_CREATOR_ID, CIRCUITPY_CREATION_ID, hostname, web_api_port, _our_ip_encoded);
     #if CIRCUITPY_MICROCONTROLLER && COMMON_HAL_MCU_PROCESSOR_UID_LENGTH > 0
     uint8_t raw_id[COMMON_HAL_MCU_PROCESSOR_UID_LENGTH];
     common_hal_mcu_processor_get_uid(raw_id);
@@ -1209,6 +1268,17 @@ static void _decode_percents(char *str) {
     if (o < i) {
         str[o] = '\0';
     }
+}
+
+// Parse leading decimal digits. Overflow is not checked.
+// Used instead of strtoul() and strtoull(), which would pull in libc code.
+static uint64_t _parse_decimal(const char *str) {
+    uint64_t value = 0;
+    while ('0' <= *str && *str <= '9') {
+        value = value * 10 + (*str - '0');
+        str++;
+    }
+    return value;
 }
 
 static bool _reply(socketpool_socket_obj_t *socket, _request *request) {
@@ -1546,7 +1616,7 @@ static void _process_request(socketpool_socket_obj_t *socket, _request *request)
                         strncpy(request->host, request->header_value, sizeof(request->host) - 1);
                         request->host[sizeof(request->host) - 1] = '\0';
                     } else if (strcasecmp(request->header_key, "Content-Length") == 0) {
-                        request->content_length = strtoul(request->header_value, NULL, 10);
+                        request->content_length = _parse_decimal(request->header_value);
                     } else if (strcasecmp(request->header_key, "Expect") == 0) {
                         request->expect = strcmp(request->header_value, "100-continue") == 0;
                     } else if (strcasecmp(request->header_key, "Accept") == 0) {
@@ -1555,11 +1625,9 @@ static void _process_request(socketpool_socket_obj_t *socket, _request *request)
                         strncpy(request->origin, request->header_value, sizeof(request->origin) - 1);
                         request->origin[sizeof(request->origin) - 1] = '\0';
                     } else if (strcasecmp(request->header_key, "X-Timestamp") == 0) {
-                        request->timestamp_ms = strtoull(request->header_value, NULL, 10);
+                        request->timestamp_ms = _parse_decimal(request->header_value);
                     } else if (strcasecmp(request->header_key, "Upgrade") == 0) {
                         request->websocket = strcmp(request->header_value, "websocket") == 0;
-                    } else if (strcasecmp(request->header_key, "Sec-WebSocket-Version") == 0) {
-                        request->websocket_version = strtoul(request->header_value, NULL, 10);
                     } else if (strcasecmp(request->header_key, "Sec-WebSocket-Key") == 0 &&
                                strlen(request->header_value) == 24) {
                         strcpy(request->websocket_key, request->header_value);

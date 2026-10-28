@@ -43,5 +43,23 @@ void picodvi_audioout_frame_done(void);
 // and deinit its AudioOut.
 void picodvi_audioout_framebuffer_deinit(picodvi_framebuffer_obj_t *framebuffer);
 
-// Deinit any AudioOut before the VM heap goes away.
+// Deinit any AudioOut before the VM heap goes away. The board AudioOut only
+// stops, since it lives as long as the boot framebuffer.
 void picodvi_audioout_reset(void);
+
+// Marks the AudioOut of each framebuffer, and its sample, as in use for the GC.
+void picodvi_audioout_collect_ptrs(picodvi_framebuffer_obj_t *framebuffer);
+
+#if defined(DEFAULT_DVI_BUS_CLK_DP)
+// supervisor.runtime.audio. Its type is NoneType until
+// picodvi_audioout_construct_board succeeds, and again after it or its
+// framebuffer is deinitialized. supervisor.runtime.audio returns None then.
+extern picodvi_audioout_obj_t picodvi_board_audioout;
+
+// Makes picodvi_board_audioout send audio with the boot framebuffer. Runs
+// before the VM starts, so it never allocates on the VM heap and never raises.
+// Returns true on success. Returns false, leaving the board AudioOut as None
+// and nothing allocated, if the output is not 640 pixels wide or internal RAM
+// is short.
+bool picodvi_audioout_construct_board(picodvi_framebuffer_obj_t *framebuffer);
+#endif

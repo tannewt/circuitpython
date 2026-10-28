@@ -379,10 +379,14 @@ MP_DEFINE_CONST_FUN_OBJ_KW(supervisor_set_usb_identification_obj, 0, supervisor_
 //|     - ``str``: Double-quoted string.
 //|       The string may include Unicode characters, and ``\\u`` Unicode escapes. Backslash-escaped characters
 //|       ``\\b``, ``\\r``, ``\\n``, ``\\t``, ``\\v``, ``\\v`` are also allowed.
-//|     - ``int``: signed or unsigned integer.
+//|     - ``int``: signed or unsigned integer: decimal, or hexadecimal ``0x1F``, octal ``0o17``,
+//|       or binary ``0b101``. Underscores are allowed: ``1_000``.
 //|     - ``bool``: lower-case ``true`` or ``false``.
 //|       The values are returned as Python ``True`` or ``False`` values.
 //|     - ``float``: signed or unsigned decimal number with a ``.`` or exponent, or ``inf``, ``inf``, ``nan``.
+//|
+//|     Leading zeros are not allowed in integers or in the integer part of floats:
+//|     ``017`` and ``01.5`` are errors.
 //|
 //|     Example::
 //|

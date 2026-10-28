@@ -243,6 +243,29 @@ MP_PROPERTY_GETSET(supervisor_runtime_display_obj,
     (mp_obj_t)&supervisor_runtime_set_display_obj);
 #endif
 
+MP_WEAK mp_obj_t common_hal_supervisor_runtime_get_audio(void) {
+    return mp_const_none;
+}
+
+//|     audio: picodvi.AudioOut | None
+//|     """The default audio output for the supervisor and user code.
+//|
+//|     On boards with a default DVI display this is a `picodvi.AudioOut` that
+//|     sends sound over the DVI cable along with the picture. It is `None` when
+//|     the display did not start, when audio is turned off with
+//|     ``CIRCUITPY_PICODVI_AUDIO = false`` in ``settings.toml``, or after the
+//|     display is released with ``displayio.release_displays()``.
+//|
+//|     On boards without such an output, this property is always `None`."""
+//|
+static mp_obj_t supervisor_runtime_get_audio(mp_obj_t self) {
+    return common_hal_supervisor_runtime_get_audio();
+}
+MP_DEFINE_CONST_FUN_OBJ_1(supervisor_runtime_get_audio_obj, supervisor_runtime_get_audio);
+
+MP_PROPERTY_GETTER(supervisor_runtime_audio_obj,
+    (mp_obj_t)&supervisor_runtime_get_audio_obj);
+
 static const mp_rom_map_elem_t supervisor_runtime_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_usb_connected), MP_ROM_PTR(&supervisor_runtime_usb_connected_obj) },
     { MP_ROM_QSTR(MP_QSTR_serial_connected), MP_ROM_PTR(&supervisor_runtime_serial_connected_obj) },
@@ -257,6 +280,7 @@ static const mp_rom_map_elem_t supervisor_runtime_locals_dict_table[] = {
     #else
     { MP_ROM_QSTR(MP_QSTR_display),  MP_ROM_NONE },
     #endif
+    { MP_ROM_QSTR(MP_QSTR_audio),  MP_ROM_PTR(&supervisor_runtime_audio_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(supervisor_runtime_locals_dict, supervisor_runtime_locals_dict_table);

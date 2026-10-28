@@ -8,6 +8,9 @@
 #include "esp_err.h"
 
 #include "driver/sdmmc_host.h"
+#ifndef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
+#include "soc/sdmmc_pins.h"
+#endif
 #include "ports/espressif/esp-idf/components/sdmmc/include/sdmmc_cmd.h"
 
 #include "extmod/vfs.h"
@@ -22,7 +25,6 @@ static const char *TAG = "SDCard.c";
 
 static bool slot_in_use[2];
 static bool never_reset_sdio[2] = { false, false };
-static bool host_initialized = false;
 
 static void common_hal_sdioio_sdcard_check_for_deinit(sdioio_sdcard_obj_t *self) {
     if (common_hal_sdioio_sdcard_deinited(self)) {
@@ -35,20 +37,28 @@ static int check_pins(const mcu_pin_obj_t *clock, const mcu_pin_obj_t *command, 
     // ESP32-S3 and P4 can use any pin for any SDMMC func in either slot
     // Default to SLOT_1 for SD cards
     ESP_LOGI(TAG, "Using chip with CONFIG_SOC_SDMMC_USE_GPIO_MATRIX");
-    if (!slot_in_use[1]) {
+    if (!slot_in_use[1]
+        #ifdef CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE
+        && CONFIG_ESP_HOSTED_SDIO_SLOT != 1
+        #endif
+        ) {
         return SDMMC_HOST_SLOT_1;
-    } else if (!slot_in_use[0]) {
+    } else if (!slot_in_use[0]
+               #ifdef CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE
+               && CONFIG_ESP_HOSTED_SDIO_SLOT != 0
+               #endif
+               ) {
         return SDMMC_HOST_SLOT_0;
     }
     #else
-    if (command->number == GPIO_NUM_11 && clock->number == GPIO_NUM_6 && data[0]->number == GPIO_NUM_7) {
+    if (command->number == SDMMC_SLOT0_IOMUX_PIN_NUM_CMD && clock->number == SDMMC_SLOT0_IOMUX_PIN_NUM_CLK && data[0]->number == SDMMC_SLOT0_IOMUX_PIN_NUM_D0) {
         // Might be slot 0
-        if (num_data == 1 || (num_data == 4 && data[1]->number == GPIO_NUM_8 && data[2]->number == GPIO_NUM_9 && data[3]->number == GPIO_NUM_10)) {
+        if (num_data == 1 || (num_data == 4 && data[1]->number == SDMMC_SLOT0_IOMUX_PIN_NUM_D1 && data[2]->number == SDMMC_SLOT0_IOMUX_PIN_NUM_D2 && data[3]->number == SDMMC_SLOT0_IOMUX_PIN_NUM_D3)) {
             return SDMMC_HOST_SLOT_0;
         }
-    } else if (command->number == GPIO_NUM_15 && clock->number == GPIO_NUM_14 && data[0]->number == 2) {
+    } else if (command->number == SDMMC_SLOT1_IOMUX_PIN_NUM_CMD && clock->number == SDMMC_SLOT1_IOMUX_PIN_NUM_CLK && data[0]->number == SDMMC_SLOT1_IOMUX_PIN_NUM_D0) {
         // Might be slot 1
-        if (num_data == 1 || (num_data == 4 && data[1]->number == GPIO_NUM_4 && data[2]->number == GPIO_NUM_12 && data[3]->number == GPIO_NUM_13)) {
+        if (num_data == 1 || (num_data == 4 && data[1]->number == SDMMC_SLOT1_IOMUX_PIN_NUM_D1 && data[2]->number == SDMMC_SLOT1_IOMUX_PIN_NUM_D2 && data[3]->number == SDMMC_SLOT1_IOMUX_PIN_NUM_D3)) {
             return SDMMC_HOST_SLOT_1;
         }
     }
@@ -85,6 +95,7 @@ void common_hal_sdioio_sdcard_construct(sdioio_sdcard_obj_t *self,
     esp_err_t err = ESP_OK;
 
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    host.slot = sd_slot;
     host.max_freq_khz = frequency / 1000;
 
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
@@ -113,7 +124,6 @@ void common_hal_sdioio_sdcard_construct(sdioio_sdcard_obj_t *self,
         if (err != ESP_OK) {
             mp_raise_OSError_msg_varg(MP_ERROR_TEXT("SDIO Init Error 0x%02x"), err);
         }
-        host_initialized = true;
     }
 
     err = sdmmc_host_init_slot(sd_slot, &slot_config);
@@ -251,13 +261,10 @@ void common_hal_sdioio_sdcard_deinit(sdioio_sdcard_obj_t *self) {
         return;
     }
 
+    sdmmc_host_deinit_slot(self->slot);
     never_reset_sdio[get_slot_index(self)] = false;
     slot_in_use[get_slot_index(self)] = false;
 
-    if (!slot_in_use[0] && !slot_in_use[1] && host_initialized) {
-        sdmmc_host_deinit();
-        host_initialized = false;
-    }
 
     reset_pin_number(self->command);
     self->command = COMMON_HAL_MCU_NO_PIN;
@@ -293,12 +300,11 @@ void common_hal_sdioio_sdcard_never_reset(sdioio_sdcard_obj_t *self) {
 void sdioio_reset(void) {
     for (size_t i = 0; i < MP_ARRAY_SIZE(slot_in_use); i++) {
         if (!never_reset_sdio[i]) {
+            if (slot_in_use[i]) {
+                sdmmc_host_deinit_slot(i);
+            }
             slot_in_use[i] = false;
         }
-    }
-    if (!slot_in_use[0] && !slot_in_use[1] && host_initialized) {
-        sdmmc_host_deinit();
-        host_initialized = false;
     }
 
     return;

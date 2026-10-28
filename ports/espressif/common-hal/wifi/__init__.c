@@ -17,7 +17,7 @@
 #include "py/mpstate.h"
 #include "py/runtime.h"
 
-#include "components/esp_wifi/include/esp_wifi.h"
+#include "esp_wifi.h"
 
 #include "components/heap/include/esp_heap_caps.h"
 
@@ -39,6 +39,11 @@ wifi_radio_obj_t common_hal_wifi_radio_obj;
 #endif
 
 #include "esp_ipc.h"
+
+#ifdef CONFIG_ESP_HOSTED_ENABLED
+#include "esp_hosted.h"
+#include "common-hal/microcontroller/Pin.h"
+#endif
 
 #ifdef CONFIG_IDF_TARGET_ESP32
 #include "nvs_flash.h"
@@ -457,6 +462,19 @@ void common_hal_wifi_init(bool user_initiated) {
     if (!wifi_ever_inited) {
         ESP_ERROR_CHECK(esp_event_loop_create_default());
         ESP_ERROR_CHECK(esp_netif_init());
+        #ifdef CONFIG_ESP_HOSTED_ENABLED
+        const uint8_t pins[] = {
+            CONFIG_ESP_HOSTED_SDIO_PIN_CLK, CONFIG_ESP_HOSTED_SDIO_PIN_CMD,
+            CONFIG_ESP_HOSTED_SDIO_PIN_D0, CONFIG_ESP_HOSTED_SDIO_PIN_D1,
+            CONFIG_ESP_HOSTED_SDIO_PIN_D2, CONFIG_ESP_HOSTED_SDIO_PIN_D3,
+            CONFIG_ESP_HOSTED_SDIO_GPIO_RESET_SLAVE,
+        };
+        for (size_t i = 0; i < MP_ARRAY_SIZE(pins); i++) {
+            claim_pin_number(pins[i]);
+            never_reset_pin_number(pins[i]);
+        }
+        ESP_ERROR_CHECK(esp_hosted_init());
+        #endif
         wifi_ever_inited = true;
     }
 
@@ -558,7 +576,9 @@ void wifi_reset(void) {
     if (!wifi_inited) {
         return;
     }
-    common_hal_wifi_monitor_deinit(MP_STATE_VM(wifi_monitor_singleton));
+    if (MP_STATE_VM(wifi_monitor_singleton) != NULL) {
+        common_hal_wifi_monitor_deinit(MP_STATE_VM(wifi_monitor_singleton));
+    }
     wifi_radio_obj_t *radio = &common_hal_wifi_radio_obj;
     common_hal_wifi_radio_set_enabled(radio, false);
     #ifndef CONFIG_IDF_TARGET_ESP32
@@ -621,42 +641,6 @@ mp_obj_t espaddr4_to_str(const esp_ip4_addr_t *espaddr) {
 
 mp_obj_t espaddr6_to_str(const esp_ip6_addr_t *espaddr) {
     return espaddrx_to_str(espaddr, ESP_IPADDR_TYPE_V6);
-}
-
-mp_obj_t sockaddr_to_str(const struct sockaddr_storage *sockaddr) {
-    char buf[IPADDR_STRLEN_MAX];
-    #if CIRCUITPY_SOCKETPOOL_IPV6
-    if (sockaddr->ss_family == AF_INET6) {
-        const struct sockaddr_in6 *addr6 = (const void *)sockaddr;
-        inet_ntop(AF_INET6, &addr6->sin6_addr, buf, sizeof(buf));
-    } else
-    #endif
-    {
-        const struct sockaddr_in *addr = (const void *)sockaddr;
-        inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf));
-    }
-    return mp_obj_new_str(buf, strlen(buf));
-}
-
-mp_obj_t sockaddr_to_tuple(const struct sockaddr_storage *sockaddr) {
-    mp_obj_t args[4] = {
-        sockaddr_to_str(sockaddr),
-    };
-    int n = 2;
-    #if CIRCUITPY_SOCKETPOOL_IPV6
-    if (sockaddr->ss_family == AF_INET6) {
-        const struct sockaddr_in6 *addr6 = (const void *)sockaddr;
-        args[1] = MP_OBJ_NEW_SMALL_INT(htons(addr6->sin6_port));
-        args[2] = MP_OBJ_NEW_SMALL_INT(addr6->sin6_flowinfo);
-        args[3] = MP_OBJ_NEW_SMALL_INT(addr6->sin6_scope_id);
-        n = 4;
-    } else
-    #endif
-    {
-        const struct sockaddr_in *addr = (const void *)sockaddr;
-        args[1] = MP_OBJ_NEW_SMALL_INT(htons(addr->sin_port));
-    }
-    return mp_obj_new_tuple(n, args);
 }
 
 void sockaddr_to_espaddr(const struct sockaddr_storage *sockaddr, esp_ip_addr_t *espaddr) {

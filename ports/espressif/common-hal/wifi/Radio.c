@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "shared-bindings/wifi/Radio.h"
+#include "shared-bindings/wifi/__init__.h"
 #include "shared-bindings/wifi/Network.h"
 
 #include <string.h>
@@ -24,7 +25,7 @@
 #include "common-hal/socketpool/__init__.h"
 
 #include "components/esp_netif/include/esp_netif_net_stack.h"
-#include "components/esp_wifi/include/esp_wifi.h"
+#include "esp_wifi.h"
 #include "soc/soc_caps.h"
 #include "components/lwip/include/apps/ping/ping_sock.h"
 #include "lwip/sockets.h"
@@ -118,6 +119,12 @@ mp_obj_t common_hal_wifi_radio_get_hostname(wifi_radio_obj_t *self) {
 void common_hal_wifi_radio_set_hostname(wifi_radio_obj_t *self, const char *hostname) {
     esp_netif_set_hostname(self->netif, hostname);
     esp_netif_set_hostname(self->ap_netif, hostname);
+}
+
+const char *wifi_get_hostname_raw(void) {
+    const char *hostname = NULL;
+    esp_netif_get_hostname(common_hal_wifi_radio_obj.netif, &hostname);
+    return hostname == NULL ? "" : hostname;
 }
 
 mp_obj_t common_hal_wifi_radio_get_mac_address(wifi_radio_obj_t *self) {

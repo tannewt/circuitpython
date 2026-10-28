@@ -21,5 +21,9 @@ typedef struct {
     digitalio_direction_t direction;
     bool value;
     digitalio_drive_mode_t drive_mode;
+    // Set when this pin's GPIO driver rejects GPIO_OPEN_DRAIN with -ENOTSUP
+    // (such as gpio_emul): open drain is then emulated by driving low and
+    // releasing high as an input.
+    bool fake_open_drain;
     digitalio_pull_t pull;
 } digitalio_digitalinout_obj_t;

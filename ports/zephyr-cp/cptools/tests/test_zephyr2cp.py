@@ -1,6 +1,7 @@
 import sys
 import pathlib
 import tempfile
+from types import SimpleNamespace
 
 # Add devicetree library to path
 portdir = pathlib.Path(__file__).parent.parent.parent
@@ -22,8 +23,15 @@ from zephyr2cp import (
     find_ram_regions,
     BLOCKED_FLASH_COMPAT,
     MINIMUM_RAM_SIZE,
+    STEMMA_I2C_PINS,
     add_toml_pin_names,
+    _board_i2c_buses,
+    _fastest_first,
+    _named_pins,
+    _standard_bus_pins,
+    _toml_status_dotstar,
     _toml_status_pin,
+    _used_by_zephyr,
 )
 
 
@@ -796,3 +804,209 @@ class TestTomlStatusPin:
     def test_unknown_name_raises(self):
         with pytest.raises(RuntimeError, match="STATUS_NEOPIXEL = 'NOPE' is not a board pin name"):
             _toml_status_pin({"STATUS_NEOPIXEL": "NOPE"}, self.BOARD_NAMES, "STATUS_NEOPIXEL")
+
+
+class TestStandardBusPins:
+    """The standard pins of board.I2C(), board.SPI() and board.UART()."""
+
+    BOARD_NAMES = {
+        ("gpio0", 11): ["SCL"],
+        ("gpio0", 12): ["SDA"],
+        ("gpio0", 14): ["SCK"],
+        ("gpio0", 13): ["MOSI"],
+        ("gpio0", 15): ["MISO"],
+        ("gpio0", 25): ["TX"],
+        ("gpio0", 24): ["RX"],
+    }
+
+    def test_all_standard_names(self):
+        assert _standard_bus_pins(self.BOARD_NAMES) == {
+            "i2c": {"scl": ("gpio0", 11), "sda": ("gpio0", 12)},
+            "spi": {"clock": ("gpio0", 14), "mosi": ("gpio0", 13), "miso": ("gpio0", 15)},
+            "uart": {"tx": ("gpio0", 25), "rx": ("gpio0", 24)},
+        }
+
+    def test_missing_name_leaves_out_bus(self):
+        names = {key: value for key, value in self.BOARD_NAMES.items() if value != ["MISO"]}
+        assert list(_standard_bus_pins(names)) == ["i2c", "uart"]
+
+    def test_no_standard_names(self):
+        assert _standard_bus_pins({("gpio0", 2): ["D2"]}) == {}
+
+    def test_pin_names_ignore_case(self):
+        names = dict(self.BOARD_NAMES)
+        names[("gpio0", 11)] = ["scl"]
+        assert _standard_bus_pins(names)["i2c"]["scl"] == ("gpio0", 11)
+
+    def test_connector_aliases(self):
+        # Arduino header pins carry both their header name and the standard name.
+        names = {
+            ("gpio1", 0): ["D0", "RX"],
+            ("gpio1", 1): ["D1", "TX"],
+            ("gpio1", 2): ["D14", "SDA"],
+            ("gpio1", 3): ["D15", "SCL"],
+        }
+        assert _standard_bus_pins(names) == {
+            "i2c": {"scl": ("gpio1", 3), "sda": ("gpio1", 2)},
+            "uart": {"tx": ("gpio1", 1), "rx": ("gpio1", 0)},
+        }
+
+
+class TestUsedByZephyr:
+    """Fixed bus instances that Zephyr itself uses."""
+
+    DTS = """
+/dts-v1/;
+/ {
+    chosen {
+        zephyr,console = &uart0;
+    };
+    uart0: uart@0 {
+    };
+    uart1: uart@1 {
+    };
+    spi0: spi@0 {
+        flash@0 {
+            reg = <0>;
+        };
+    };
+    spi1: spi@1 {
+    };
+    spi2: spi@2 {
+    };
+    display {
+        spi-dev = <&spi1>;
+    };
+    disabled_display {
+        status = "disabled";
+        spi-dev = <&spi2>;
+    };
+};
+"""
+
+    def _used(self, label):
+        dt = parse_dts_string(self.DTS)
+        return _used_by_zephyr(dt, dt.label2node[label])
+
+    def test_chosen_console(self):
+        assert self._used("uart0")
+
+    def test_child_device(self):
+        assert self._used("spi0")
+
+    def test_referenced_by_phandle(self):
+        assert self._used("spi1")
+
+    def test_referenced_only_by_disabled_node(self):
+        assert not self._used("spi2")
+
+    def test_unused(self):
+        assert not self._used("uart1")
+
+
+class TestStemmaI2cPins:
+    """The pins of board.STEMMA_I2C, named by the stemma-qt-connector entry."""
+
+    def test_same_pins_as_i2c(self):
+        names = {("gpio0", 3): ["SCL", "STEMMA_SCL"], ("gpio0", 2): ["SDA", "STEMMA_SDA"]}
+        assert _named_pins(names, STEMMA_I2C_PINS) == {
+            "scl": ("gpio0", 3),
+            "sda": ("gpio0", 2),
+        }
+
+    def test_own_pins(self):
+        names = {
+            ("gpio0", 25): ["SCL"],
+            ("gpio0", 24): ["SDA"],
+            ("gpio0", 23): ["SCL1", "STEMMA_SCL"],
+            ("gpio0", 22): ["SDA1", "STEMMA_SDA"],
+        }
+        assert _named_pins(names, STEMMA_I2C_PINS) == {
+            "scl": ("gpio0", 23),
+            "sda": ("gpio0", 22),
+        }
+
+    def test_no_connector(self):
+        assert _named_pins({("gpio0", 3): ["SCL"], ("gpio0", 2): ["SDA"]}, STEMMA_I2C_PINS) is None
+
+
+class TestBoardI2cBuses:
+    """The board I2C buses for board.I2C() and board.STEMMA_I2C."""
+
+    I2C = {"scl": ("gpio0", 25), "sda": ("gpio0", 24)}
+    STEMMA = {"scl": ("gpio0", 23), "sda": ("gpio0", 22)}
+
+    def test_no_stemma_connector(self):
+        assert _board_i2c_buses(self.I2C, None) == ([self.I2C], None)
+
+    def test_stemma_on_the_i2c_pins(self):
+        assert _board_i2c_buses(self.I2C, dict(self.I2C)) == ([self.I2C], 0)
+
+    def test_stemma_on_other_pins(self):
+        assert _board_i2c_buses(self.I2C, self.STEMMA) == ([self.I2C, self.STEMMA], 1)
+
+    def test_stemma_without_standard_i2c(self):
+        assert _board_i2c_buses(None, self.STEMMA) == ([self.STEMMA], 0)
+
+    def test_neither(self):
+        assert _board_i2c_buses(None, None) == ([], None)
+
+
+class TestFastestFirst:
+    """Ordering of bus instance pools by devicetree max-frequency."""
+
+    @staticmethod
+    def _node(name, max_frequency=None):
+        props = {}
+        if max_frequency is not None:
+            props["max-frequency"] = SimpleNamespace(to_num=lambda: max_frequency)
+        return SimpleNamespace(name=name, props=props)
+
+    def test_highest_first(self):
+        nodes = [self._node("spi2", 8_000_000), self._node("spi3", 32_000_000)]
+        assert [n.name for n in _fastest_first(nodes)] == ["spi3", "spi2"]
+
+    def test_stable_for_equal_and_missing(self):
+        nodes = [
+            self._node("i2c1"),
+            self._node("spi22", 8_000_000),
+            self._node("i2c0"),
+            self._node("spi21", 8_000_000),
+            self._node("spi00", 32_000_000),
+        ]
+        assert [n.name for n in _fastest_first(nodes)] == [
+            "spi00",
+            "spi22",
+            "spi21",
+            "i2c1",
+            "i2c0",
+        ]
+
+
+class TestTomlStatusDotstar:
+    """Resolution of circuitpython.toml STATUS_DOTSTAR_DATA/CLOCK keys."""
+
+    BOARD_NAMES = {
+        ("gpio0", 8): ["DOTSTAR_DATA"],
+        ("gpio1", 9): ["DOTSTAR_CLOCK"],
+        ("gpio0", 16): ["NEOPIXEL"],
+    }
+    DOTSTAR = {"STATUS_DOTSTAR_DATA": "DOTSTAR_DATA", "STATUS_DOTSTAR_CLOCK": "DOTSTAR_CLOCK"}
+
+    def test_resolves_data_and_clock(self):
+        assert _toml_status_dotstar(self.DOTSTAR, self.BOARD_NAMES) == (
+            ("gpio0", 8),
+            ("gpio1", 9),
+        )
+
+    def test_absent_keys_are_none(self):
+        assert _toml_status_dotstar({}, self.BOARD_NAMES) is None
+        assert _toml_status_dotstar(None, self.BOARD_NAMES) is None
+
+    def test_one_key_only_raises(self):
+        with pytest.raises(RuntimeError, match="needs both"):
+            _toml_status_dotstar({"STATUS_DOTSTAR_DATA": "DOTSTAR_DATA"}, self.BOARD_NAMES)
+
+    def test_with_status_neopixel_raises(self):
+        with pytest.raises(RuntimeError, match="both STATUS_NEOPIXEL and a status DotStar"):
+            _toml_status_dotstar({**self.DOTSTAR, "STATUS_NEOPIXEL": "NEOPIXEL"}, self.BOARD_NAMES)

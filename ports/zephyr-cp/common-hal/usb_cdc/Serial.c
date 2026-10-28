@@ -10,8 +10,8 @@
 #include "common-hal/busio/UART.h"
 #include "supervisor/shared/tick.h"
 
-mp_obj_t common_hal_usb_cdc_serial_construct_from_device(usb_cdc_serial_obj_t *self, const struct device *uart_device, uint16_t receiver_buffer_size, byte *receiver_buffer) {
-    common_hal_busio_uart_construct_from_device(self, uart_device, receiver_buffer_size, receiver_buffer);
+mp_obj_t common_hal_usb_cdc_serial_construct_from_device(usb_cdc_serial_obj_t *self, const struct device *uart_device, uint16_t receiver_buffer_size, byte *receiver_buffer, bool sigint_enabled) {
+    common_hal_busio_uart_construct_from_device(self, uart_device, receiver_buffer_size, receiver_buffer, sigint_enabled);
     self->flow_control = true;
     self->base.type = &usb_cdc_serial_type;
     return MP_OBJ_FROM_PTR(self);
@@ -22,7 +22,8 @@ size_t common_hal_usb_cdc_serial_read(usb_cdc_serial_obj_t *self, uint8_t *data,
 }
 
 size_t common_hal_usb_cdc_serial_write(usb_cdc_serial_obj_t *self, const uint8_t *data, size_t len, int *errcode) {
-    return common_hal_busio_uart_write(self, data, len, errcode);
+    zephyr_uart_write_blocking(self, data, len);
+    return len;
 }
 
 uint32_t common_hal_usb_cdc_serial_get_in_waiting(usb_cdc_serial_obj_t *self) {

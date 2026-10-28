@@ -45,7 +45,7 @@ static mp_obj_t wifi_monitor_make_new(const mp_obj_type_t *type, size_t n_args, 
     mp_int_t queue = mp_arg_validate_int_min(args[ARG_queue].u_int, 0, MP_QSTR_queue);
 
     wifi_monitor_obj_t *self = MP_STATE_VM(wifi_monitor_singleton);
-    if (common_hal_wifi_monitor_deinited()) {
+    if (self == NULL || common_hal_wifi_monitor_deinited(self)) {
         self = mp_obj_malloc_with_finaliser(wifi_monitor_obj_t, &wifi_monitor_type);
         common_hal_wifi_monitor_construct(self, channel, queue);
         MP_STATE_VM(wifi_monitor_singleton) = self;
@@ -109,7 +109,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(wifi_monitor_lost_obj, wifi_monitor_obj_get_lost);
 //|         ...
 //|
 static mp_obj_t wifi_monitor_obj_get_queued(mp_obj_t self_in) {
-    if (common_hal_wifi_monitor_deinited()) {
+    if (common_hal_wifi_monitor_deinited(self_in)) {
         return mp_obj_new_int_from_uint(0);
     }
     return common_hal_wifi_monitor_get_queued(self_in);
@@ -122,7 +122,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(wifi_monitor_queued_obj, wifi_monitor_obj_get_queued);
 //|
 //|
 static mp_obj_t wifi_monitor_obj_get_packet(mp_obj_t self_in) {
-    if (common_hal_wifi_monitor_deinited()) {
+    if (common_hal_wifi_monitor_deinited(self_in)) {
         raise_deinited_error();
     }
     return common_hal_wifi_monitor_get_packet(self_in);

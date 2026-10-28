@@ -16,6 +16,10 @@
 #include "py/runtime.h"
 #include "supervisor/port_heap.h"
 
+#if CIRCUITPY_PICODVI_AUDIOOUT && defined(DEFAULT_DVI_BUS_CLK_DP)
+#include "common-hal/picodvi/AudioOut.h"
+#endif
+
 #if defined(DEFAULT_DVI_BUS_CLK_DP)
 static bool picodvi_autoconstruct_enabled(mp_int_t *default_width, mp_int_t *default_height) {
     char buf[sizeof("detect")];
@@ -101,6 +105,11 @@ void picodvi_autoconstruct(void) {
         return;
     }
 
+    #if CIRCUITPY_PICODVI_AUDIOOUT
+    bool audio = true;
+    (void)settings_get_bool("CIRCUITPY_PICODVI_AUDIO", &audio);
+    #endif
+
     mp_int_t width = default_width;
     mp_int_t height = 0;
     mp_int_t color_depth = 8;
@@ -162,6 +171,14 @@ void picodvi_autoconstruct(void) {
         MP_OBJ_FROM_PTR(fb),
         rotation,
         true);
+
+    #if CIRCUITPY_PICODVI_AUDIOOUT
+    // Before the VM heap exists, so the audio buffers get internal RAM. On
+    // failure supervisor.runtime.audio is None, and the display still works.
+    if (audio) {
+        (void)picodvi_audioout_construct_board(fb);
+    }
+    #endif
 }
 #else
 void picodvi_autoconstruct(void) {

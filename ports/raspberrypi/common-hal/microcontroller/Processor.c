@@ -71,7 +71,12 @@ void __no_inline_not_in_flash_func(mcu_processor_update_psram_timing)(uint32_t s
     // Divisor 1 is not used above 100 MHz because the RXDELAY it needs is
     // too late. RXDELAY samples later as the divisor grows, plus one more
     // cycle once SCK is above 100 MHz. Same rule as arduino-pico.
-    uint32_t clkdiv = (sys_clk_khz + 132999) / 133000;
+    uint32_t max_sck_khz = 133000;
+    #ifdef CIRCUITPY_PSRAM_MAX_SCK_HZ
+    // Keep a board's lower PSRAM clock limit when the CPU frequency changes.
+    max_sck_khz = MIN(max_sck_khz, CIRCUITPY_PSRAM_MAX_SCK_HZ / 1000);
+    #endif
+    uint32_t clkdiv = (sys_clk_khz + max_sck_khz - 1) / max_sck_khz;
     if (clkdiv == 1 && sys_clk_khz > 100000) {
         clkdiv = 2;
     }
@@ -79,6 +84,10 @@ void __no_inline_not_in_flash_func(mcu_processor_update_psram_timing)(uint32_t s
     if (sys_clk_khz / clkdiv > 100000) {
         rxdelay++;
     }
+    #ifdef CIRCUITPY_PSRAM_MAX_SCK_HZ
+    // Slower PSRAM clocks can require a delay beyond this three-bit field.
+    rxdelay = MIN(rxdelay, QMI_M0_TIMING_RXDELAY_BITS >> QMI_M0_TIMING_RXDELAY_LSB);
+    #endif
 
     qmi_hw->m[1].timing =
         QMI_M0_TIMING_PAGEBREAK_VALUE_1024 << QMI_M0_TIMING_PAGEBREAK_LSB | // Break between pages.

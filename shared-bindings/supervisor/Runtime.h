@@ -23,6 +23,11 @@ bool common_hal_supervisor_runtime_get_serial_connected(void);
 
 uint32_t common_hal_supervisor_runtime_get_serial_bytes_available(void);
 
+// Returns the audio output that the supervisor set up along with the boot
+// display, or mp_const_none if there is none. The default returns
+// mp_const_none; a port overrides it when it has one. Never raises.
+mp_obj_t common_hal_supervisor_runtime_get_audio(void);
+
 // TODO: placeholders for future functions
 // bool common_hal_get_supervisor_runtime_repl_active(void);
 // bool common_hal_get_supervisor_runtime_usb_enumerated(void);

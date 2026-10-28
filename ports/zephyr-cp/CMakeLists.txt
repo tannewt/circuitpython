@@ -21,6 +21,8 @@ set(ZEPHYR_EXTRA_MODULES
 find_package(Zephyr REQUIRED HINTS ${ZEPHYR_BASE} $ENV{ZEPHYR_BASE} lib/zephyr)
 project(circuitpython)
 
+include(ExternalProject)
+
 target_sources(app PRIVATE zephyr_main.c)
 
 # Add native_sim test support helpers.

@@ -1,0 +1,39 @@
+CIRCUITPY_BUILD_EXTENSIONS = ["uf2"]
+
+# Non-Zephyr build of the same board; nvm and CIRCUITPY must sit where it puts them.
+counterpart = "raspberrypi/adafruit_macropad_rp2040"
+
+
+# Pin names from the ports/ counterpart board's pins.c, as RP2040 QFN-56
+# package pin numbers.
+[pins]
+KEY1 = 3
+KEY2 = 4
+KEY3 = 5
+KEY4 = 6
+KEY5 = 7
+KEY6 = 8
+KEY7 = 9
+KEY8 = 11
+KEY9 = 12
+KEY10 = 13
+KEY11 = 14
+KEY12 = 15
+LED = 16
+SPEAKER_ENABLE = 17
+SPEAKER = 27
+ENCODER_SWITCH = 2
+BUTTON = 2
+ENCODER_A = 28
+ROTA = 28
+ENCODER_B = 29
+ROTB = 29
+NEOPIXEL = 30
+SDA = 31
+SCL = 32
+OLED_CS = 34
+OLED_RESET = 35
+OLED_DC = 36
+SCK = 38
+MOSI = 39
+MISO = 40

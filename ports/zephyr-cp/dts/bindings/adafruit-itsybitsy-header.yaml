@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Dan Halbert for Adafruit Industries
+# SPDX-License-Identifier: MIT
+
+description: |
+    GPIO pins exposed on the Adafruit ItsyBitsy nRF52840 headers.
+
+    This binding provides a nexus mapping for 21 pins. The positions are in
+    the order of the CONNECTORS["adafruit-itsybitsy-header"] names in
+    cptools/zephyr2cp.py, not in physical header order:
+
+         0 A0       7 MOSI    14 D5
+         1 A1       8 MISO    15 D7
+         2 A2       9 D0/RX   16 D9
+         3 A3      10 D1/TX   17 D10
+         4 A4      11 D2      18 D11
+         5 A5      12 SDA     19 D12
+         6 SCK     13 SCL     20 D13
+
+    TODO: figure out how to handle the extra pins on other ItsyBitsy boards,
+    such as D3 and D4 on the ItsyBitsy M4 and RP2040. We may want separate
+    connectors for the different board families.
+
+compatible: "adafruit-itsybitsy-header"
+
+include: [gpio-nexus.yaml, base.yaml]

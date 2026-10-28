@@ -1,0 +1,32 @@
+/* Partition layout is owned by the mcuboot fork (dts/adafruit/adafruit_macropad_rp2040.dtsi)
+ * and applied to this image by sysbuild. This overlay only adds board/app config. */
+#include "../../../app.overlay"
+
+/* Free the key and encoder pins for keypad and rotaryio. */
+/ {
+	keys {
+		status = "disabled";
+	};
+
+	encoder {
+		status = "disabled";
+	};
+};
+
+/* No Zephyr console by default, so SCL/SDA (GPIO21/20) are free for I2C0. A
+ * CONSOLE=1 build puts the console back on UART1 (console.overlay). */
+/ {
+	chosen {
+		/delete-property/ zephyr,console;
+		/delete-property/ zephyr,shell-uart;
+	};
+};
+
+&uart1 {
+	status = "disabled";
+};
+
+/* The zephyr_i2c label makes this board.STEMMA_I2C as well as board.I2C. */
+zephyr_i2c: &i2c0 {
+	status = "okay";
+};
