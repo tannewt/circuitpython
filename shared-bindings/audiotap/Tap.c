@@ -18,13 +18,13 @@
 //| class Tap:
 //|     """Passes audio through unchanged and keeps a copy that the program can read"""
 //|
-//|     def __init__(self, capacity_ms: int = 100) -> None:
+//|     def __init__(self, capacity: float = 0.1) -> None:
 //|         """Create a Tap. It plays a sample like the effects in `audiofilters`
 //|         and `audiodelays` do, so it can go anywhere in an audio chain. Whatever
 //|         plays the tap gets the sample's audio unchanged.
 //|
-//|         As the audio passes through, the tap keeps up to ``capacity_ms`` of
-//|         it in a buffer, which `readinto` copies out of without waiting, and
+//|         As the audio passes through, the tap keeps up to ``capacity`` seconds
+//|         of it in a buffer, which `readinto` copies out of without waiting, and
 //|         measures its `peak` and `rms` levels. The program can look at
 //|         the audio this way, at the point in the chain where the tap is,
 //|         while it plays.
@@ -44,7 +44,7 @@
 //|         again, and `overflow` turns True. The audio that passes through is
 //|         never affected.
 //|
-//|         :param int capacity_ms: How many milliseconds of audio are kept for
+//|         :param float capacity: How many seconds of audio are kept for
 //|           `readinto`. 0 keeps none, for a tap that only measures `peak` and
 //|           `rms`.
 //|
@@ -93,7 +93,7 @@
 //|               max_packet_size=mic_format.max_packet_size,
 //|           )
 //|           # Keep a quarter second, more than arrives between reads of the loop below.
-//|           tap = audiotap.Tap(capacity_ms=250)
+//|           tap = audiotap.Tap(capacity=0.25)
 //|           mixer = audiomixer.Mixer(voice_count=1, sample_rate=48000, channel_count=mic.channel_count)
 //|           supervisor.runtime.audio.play(mixer)
 //|           mixer.voice[0].play(audiospeed.Resampler(tap.play(mic)))
@@ -125,18 +125,21 @@
 //|         ...
 //|
 static mp_obj_t audiotap_tap_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    enum { ARG_capacity_ms, };
+    enum { ARG_capacity, };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_capacity_ms, MP_ARG_INT, {.u_int = 100} },
+        { MP_QSTR_capacity, MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
     };
 
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    mp_int_t capacity_ms = mp_arg_validate_int_range(args[ARG_capacity_ms].u_int, 0, 60000, MP_QSTR_capacity_ms);
+    mp_float_t capacity = (args[ARG_capacity].u_obj == MP_OBJ_NULL)
+        ? MICROPY_FLOAT_CONST(0.1)
+        : mp_obj_get_float(args[ARG_capacity].u_obj);
+    mp_arg_validate_float_range(capacity, 0, 60, MP_QSTR_capacity);
 
     audiotap_tap_obj_t *self = mp_obj_malloc_with_finaliser(audiotap_tap_obj_t, &audiotap_tap_type);
-    common_hal_audiotap_tap_construct(self, capacity_ms);
+    common_hal_audiotap_tap_construct(self, capacity);
 
     return MP_OBJ_FROM_PTR(self);
 }

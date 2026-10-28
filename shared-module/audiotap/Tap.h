@@ -33,7 +33,7 @@ typedef struct {
     // the tap writes it, from a background task or an interrupt, and the VM
     // reads it, so each side moves only its own position. Both positions run
     // from 0 to 2 * capacity, which tells a full ring from an empty one.
-    uint32_t capacity_ms;
+    mp_float_t capacity_seconds;
     uint8_t *ring;
     uint32_t capacity; // in samples, a whole number of frames
     volatile uint32_t write_pos;

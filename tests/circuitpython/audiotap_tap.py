@@ -7,7 +7,9 @@ ramp = array.array("h", range(-300, 300, 3))  # 200 samples
 source = RawSample(ramp, sample_rate=8000)
 
 
-def pull(sample, times=1):
+def output(sample, times=1):
+    # Stands in for an audio output, which pulls the audio through the tap
+    # and plays it. Returns what it played.
     out = []
     for _ in range(times):
         result, buffer = get_buffer(sample)
@@ -15,68 +17,84 @@ def pull(sample, times=1):
     return out
 
 
-# Audio passes through unchanged and a copy can be read.
-tap = Tap(capacity=1000, buffer_size=128, sample_rate=8000)
-print("idle", tap.playing, tap.available, tap.levels())
-print("idle silence", set(pull(tap)), tap.available)
+# Before a sample is played, the tap has no format and keeps nothing.
+tap = Tap(capacity=0.125)
+print("idle", tap.playing, tap.available, tap.peak, tap.rms)
+
+# The tap takes the format of the first sample it plays and keeps 125 ms of it.
 tap.play(source, loop=True)
-print("playing", tap.playing)
-played = pull(tap, 4)
-print("played", len(played), played[:3], played == list(ramp) + list(ramp)[:56])
+print("playing", tap.playing, tap.sample_rate, tap.channel_count, tap.bits_per_sample)
+
+# Audio passes through to the output unchanged, and the tap keeps a copy.
+played = output(tap, 4)
+print("played", len(played), played[:3], played == list(ramp) * 4)
 print("available", tap.available)
-copy = array.array("h", [0] * 300)
-print("read", tap.readinto(copy), list(copy[:256]) == played, tap.available)
+copy = array.array("h", [0] * 1200)
+print("read", tap.readinto(copy), list(copy[:800]) == played, tap.available)
 print("read empty", tap.readinto(copy))
 
-# Levels of the audio since the last call.
-peak, rms = tap.levels()
-print("levels", round(peak, 4), round(rms, 4))
-print("levels again", tap.levels())
+# Peak and RMS are measured separately, each since it was last read.
+print("peak", round(tap.peak, 4), tap.peak)
+output(tap)
+print("rms", round(tap.rms, 4), tap.rms)
+print("peak again", round(tap.peak, 4))
+
+# Later samples must match the first one's format.
+try:
+    tap.play(RawSample(ramp, sample_rate=16000))
+except ValueError as error:
+    print("mismatch", error)
+
+# A later sample's longer buffers are passed on in pieces no longer than the first's.
+short = Tap()
+short.play(RawSample(array.array("h", range(100)), sample_rate=8000))
+short.play(RawSample(array.array("h", range(250)), sample_rate=8000))
+print("pieces", [len(output(short)) for _ in range(3)], short.playing)
 
 # Overflow keeps the oldest audio and drops the newer.
-small = Tap(capacity=100, buffer_size=128, sample_rate=8000)
+small = Tap(capacity=0.01)  # 80 samples
 small.play(source, loop=True)
-played = pull(small, 2)
+played = output(small)
 print("full", small.available, small.overflow, small.overflow)
 copy = array.array("h", [0] * 100)
-print("kept oldest", small.readinto(copy), list(copy) == played[:100])
-pull(small)
+print("kept oldest", small.readinto(copy), list(copy[:80]) == played[:80])
+output(small)
 small.clear()
 print("cleared", small.available)
 
 # A bytearray holds half as many 16 bit samples, and memoryview slices work.
-pull(small)
+output(small)
 raw = bytearray(10)
 print("bytearray", small.readinto(raw), small.available)
 part = array.array("h", [7] * 8)
 print("slice", small.readinto(memoryview(part)[2:5]), list(part))
 
 # Levels only.
-meter = Tap(capacity=0, buffer_size=64, sample_rate=8000)
+meter = Tap(capacity=0)
 meter.play(RawSample(array.array("h", [16384, -32768] * 16), sample_rate=8000), loop=True)
-pull(meter)
-print("meter", meter.capacity, meter.readinto(copy), meter.levels())
+output(meter)
+print("meter", meter.available, meter.readinto(copy), meter.peak, meter.rms)
 
 # Stereo reads whole frames.
-stereo = Tap(capacity=64, buffer_size=32, sample_rate=8000, channel_count=2)
+stereo = Tap(capacity=0.004)  # 32 frames
 stereo.play(RawSample(array.array("h", range(16)), sample_rate=8000, channel_count=2), loop=True)
-pull(stereo)
+output(stereo)
 odd = array.array("h", [0] * 5)
-print("stereo", stereo.readinto(odd), list(odd))
+print("stereo", stereo.channel_count, stereo.readinto(odd), list(odd))
 
 # 8 bit unsigned levels: 0x80 is silence.
-eight = Tap(capacity=16, buffer_size=16, sample_rate=8000, bits_per_sample=8, samples_signed=False)
+eight = Tap(capacity=0.002)
 eight.play(RawSample(array.array("B", [0x80, 0xC0] * 8), sample_rate=8000), loop=True)
-pull(eight)
-print("8 bit", eight.levels())
+output(eight)
+print("8 bit", eight.bits_per_sample, eight.peak, eight.rms)
 
-# In a chain, and the end of a sample that does not loop.
-once = Tap(capacity=1000, buffer_size=128, sample_rate=8000)
+# In a chain, and the end of a sample that does not loop: then the tap plays silence.
+once = Tap()
 chain = Filter(buffer_size=128, sample_rate=8000)
-chain.play(once)
-once.play(source)
-pull(chain, 6)
+chain.play(once.play(source))
+output(chain, 6)
 print("ended", once.playing, once.available)
+print("silence", set(output(once)), once.available)
 
 once.deinit()
 try:

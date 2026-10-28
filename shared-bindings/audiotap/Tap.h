@@ -10,7 +10,7 @@
 
 extern const mp_obj_type_t audiotap_tap_type;
 
-void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capacity_ms);
+void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, mp_float_t capacity);
 
 void common_hal_audiotap_tap_deinit(audiotap_tap_obj_t *self);
 

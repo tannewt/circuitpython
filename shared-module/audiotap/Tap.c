@@ -12,7 +12,7 @@
 
 #include "py/runtime.h"
 
-void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capacity_ms) {
+void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, mp_float_t capacity) {
     // The format comes from the first sample played. Until then the tap is
     // 16 bit mono at 0 Hz, which nothing plays: a channel count of 0 would
     // mark it deinitialized.
@@ -32,7 +32,7 @@ void common_hal_audiotap_tap_construct(audiotap_tap_obj_t *self, uint32_t capaci
     self->loop = false;
     self->more_data = false;
 
-    self->capacity_ms = capacity_ms;
+    self->capacity_seconds = capacity;
     self->ring = NULL;
     self->capacity = 0;
     self->write_pos = 0;
@@ -94,7 +94,9 @@ static void take_format(audiotap_tap_obj_t *self, mp_obj_t sample) {
         memset(silence, 0x80, silence_len);
     }
 
-    uint32_t capacity = (uint32_t)((uint64_t)self->capacity_ms * source->sample_rate / 1000) * source->channel_count;
+    // Rounded, so that a capacity such as 0.7 s, which a float holds as a hair
+    // under, does not lose a frame.
+    uint32_t capacity = (uint32_t)(self->capacity_seconds * source->sample_rate + MICROPY_FLOAT_CONST(0.5)) * source->channel_count;
     uint8_t *ring = NULL;
     if (capacity > 0) {
         ring = m_malloc_without_collect(capacity * sample_bytes);
