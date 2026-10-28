@@ -18,7 +18,7 @@
 #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
 #include "py/persistentcode.h"
 #include "soc/soc_caps.h"
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+#ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
 #include "esp_cache.h"
 #endif
 #endif
@@ -416,7 +416,7 @@ void port_gc_deinit(void) {
 void *esp_native_code_commit(void *buf, size_t len, void *reloc) {
     len = (len + 3) & ~3;
     size_t len_node = sizeof(native_code_node_t) + len;
-    #if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    #ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
     // Internal RAM is reached through the L1 caches (ESP32-P4): the node is
     // whole cache lines, so that it can be synced below.
     len_node = (len_node + CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1) & ~(CONFIG_CACHE_L1_CACHE_LINE_SIZE - 1);
@@ -446,7 +446,7 @@ void *esp_native_code_commit(void *buf, size_t len, void *reloc) {
     for (size_t i = 0; i < len / 4; i++) {
         dst[i] = src[i];
     }
-    #if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    #ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
     // The code is still in the data cache, and the instruction cache may hold
     // stale lines from the node's earlier use: write back, then invalidate.
     esp_cache_msync(node, len_node, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
