@@ -155,6 +155,9 @@ endif
 ifeq ($(CIRCUITPY_AUDIOSPEED),1)
 SRC_PATTERNS += audiospeed/%
 endif
+ifeq ($(CIRCUITPY_AUDIOTAP),1)
+SRC_PATTERNS += audiotap/%
+endif
 ifeq ($(CIRCUITPY_AUDIOFILEWRITER),1)
 SRC_PATTERNS += audiofilewriter/%
 endif
@@ -762,6 +765,8 @@ SRC_SHARED_MODULE_ALL = \
 	audiospeed/Resampler.c \
 	audiospeed/SpeedChanger.c \
 	audiospeed/__init__.c \
+	audiotap/Tap.c \
+	audiotap/__init__.c \
 	audiodelays/Echo.c \
 	audiodelays/Chorus.c \
 	audiodelays/Flanger.c \
