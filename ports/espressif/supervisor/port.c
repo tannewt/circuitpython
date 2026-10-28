@@ -18,7 +18,7 @@
 #if MICROPY_PERSISTENT_CODE_LOAD_NATIVE
 #include "py/persistentcode.h"
 #include "soc/soc_caps.h"
-#ifdef SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+#if defined(SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE) && SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
 #include "esp_cache.h"
 #endif
 #endif
