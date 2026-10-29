@@ -28,6 +28,7 @@ audiomixer = true # Zephyr board has audiobusio
 audiomp3 = true # Zephyr board has audiobusio
 audiopwmio = false
 audiospeed = false
+audiotap = false
 aurora_epaper = false
 bitbangio = true
 bitmapfilter = true # Zephyr board has busio
