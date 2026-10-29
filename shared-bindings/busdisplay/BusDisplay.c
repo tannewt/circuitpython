@@ -425,6 +425,9 @@ MP_PROPERTY_GETSET(busdisplay_busdisplay_root_group_obj,
     (mp_obj_t)&busdisplay_busdisplay_set_root_group_obj);
 
 
+// The LVGL compositor has no CPU-readable display core, so fill_row is only
+// available with the legacy compositor.
+#if !CIRCUITPY_DISPLAYIO_LVGL
 //|     def fill_row(self, y: int, buffer: WriteableBuffer) -> WriteableBuffer:
 //|         """Extract the pixels from a single row
 //|
@@ -484,11 +487,14 @@ static mp_obj_t busdisplay_busdisplay_obj_fill_row(size_t n_args, const mp_obj_t
     }
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(busdisplay_busdisplay_fill_row_obj, 1, busdisplay_busdisplay_obj_fill_row);
+#endif // !CIRCUITPY_DISPLAYIO_LVGL
 
 static const mp_rom_map_elem_t busdisplay_busdisplay_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_show), MP_ROM_PTR(&busdisplay_busdisplay_show_obj) },
     { MP_ROM_QSTR(MP_QSTR_refresh), MP_ROM_PTR(&busdisplay_busdisplay_refresh_obj) },
+    #if !CIRCUITPY_DISPLAYIO_LVGL
     { MP_ROM_QSTR(MP_QSTR_fill_row), MP_ROM_PTR(&busdisplay_busdisplay_fill_row_obj) },
+    #endif
 
     { MP_ROM_QSTR(MP_QSTR_auto_refresh), MP_ROM_PTR(&busdisplay_busdisplay_auto_refresh_obj) },
 

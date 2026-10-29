@@ -12,6 +12,10 @@
 #include "py/gc.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
 
+#if CIRCUITPY_VECTORIO
+#include "shared-module/vectorio/VectorShape.h"
+#endif
+
 enum { ALIGN_BITS = 8 * sizeof(uint32_t) };
 
 static int stride(uint32_t width, uint32_t bits_per_value) {
@@ -217,7 +221,7 @@ static displayio_lvgl_mirror_entry_t *_mirror_entry(void *mirrored) {
     return NULL;
 }
 
-static void displayio_lvgl_mirror_register(void *mirrored, displayio_tilegrid_t *tilegrid) {
+static void displayio_lvgl_mirror_register(void *mirrored, void *user, uint8_t kind) {
     displayio_lvgl_mirror_entry_t *entry = _mirror_entry(mirrored);
     if (entry == NULL) {
         entry = lv_malloc(sizeof(displayio_lvgl_mirror_entry_t));
@@ -230,37 +234,34 @@ static void displayio_lvgl_mirror_register(void *mirrored, displayio_tilegrid_t 
         }
         *link = entry;
     }
-    for (displayio_lvgl_mirror_user_t *user = entry->users; user != NULL; user = user->next) {
-        if (user->tilegrid == tilegrid) {
+    for (displayio_lvgl_mirror_user_t *existing = entry->users; existing != NULL; existing = existing->next) {
+        if (existing->user == user) {
             return;
         }
     }
-    displayio_lvgl_mirror_user_t *user = lv_malloc(sizeof(displayio_lvgl_mirror_user_t));
-    user->tilegrid = tilegrid;
-    user->next = entry->users;
-    entry->users = user;
+    displayio_lvgl_mirror_user_t *new_user = lv_malloc(sizeof(displayio_lvgl_mirror_user_t));
+    new_user->user = user;
+    new_user->kind = kind;
+    new_user->next = entry->users;
+    entry->users = new_user;
 }
 
-static void displayio_lvgl_mirror_unregister(void *mirrored, displayio_tilegrid_t *tilegrid) {
+static void displayio_lvgl_mirror_unregister(void *mirrored, void *user) {
     displayio_lvgl_mirror_entry_t *entry = _mirror_entry(mirrored);
     if (entry == NULL) {
         return;
     }
     displayio_lvgl_mirror_user_t **link = &entry->users;
     while (*link != NULL) {
-        if ((*link)->tilegrid == tilegrid) {
-            displayio_lvgl_mirror_user_t *user = *link;
-            *link = user->next;
-            lv_free(user);
+        if ((*link)->user == user) {
+            displayio_lvgl_mirror_user_t *found = *link;
+            *link = found->next;
+            lv_free(found);
             break;
         }
         link = &(*link)->next;
     }
     if (entry->users == NULL) {
-        displayio_lvgl_mirror_user_t **prev_link = (displayio_lvgl_mirror_user_t **)&mirror_registry;
-        displayio_lvgl_mirror_user_t *prev = NULL;
-        (void)prev;
-        (void)prev_link;
         // Walk with entry-typed links to remove the entry itself.
         displayio_lvgl_mirror_entry_t **prev_entry_link = &mirror_registry;
         while (*prev_entry_link != entry) {
@@ -277,9 +278,17 @@ static void displayio_lvgl_mirror_notify(void *mirrored, int16_t x1, int16_t y1,
         return;
     }
     for (displayio_lvgl_mirror_user_t *user = entry->users; user != NULL; user = user->next) {
-        if (user->tilegrid->lv_obj != NULL) {
-            lv_obj_invalidate(user->tilegrid->lv_obj);
+        if (user->kind == DISPLAYIO_LVGL_USER_TILEGRID) {
+            displayio_tilegrid_t *tilegrid = user->user;
+            if (tilegrid->lv_obj != NULL) {
+                lv_obj_invalidate(tilegrid->lv_obj);
+            }
         }
+        #if CIRCUITPY_VECTORIO
+        else if (user->kind == DISPLAYIO_LVGL_USER_VECTOR_SHAPE) {
+            displayio_lvgl_vector_shape_shader_changed(user->user);
+        }
+        #endif
     }
     (void)x1;
     (void)y1;
@@ -288,11 +297,19 @@ static void displayio_lvgl_mirror_notify(void *mirrored, int16_t x1, int16_t y1,
 }
 
 void displayio_lvgl_bitmap_register_user(displayio_bitmap_t *self, displayio_tilegrid_t *tilegrid) {
-    displayio_lvgl_mirror_register(self, tilegrid);
+    displayio_lvgl_mirror_register(self, tilegrid, DISPLAYIO_LVGL_USER_TILEGRID);
 }
 
 void displayio_lvgl_bitmap_unregister_user(displayio_bitmap_t *self, displayio_tilegrid_t *tilegrid) {
     displayio_lvgl_mirror_unregister(self, tilegrid);
+}
+
+void displayio_lvgl_shader_register_user(mp_obj_t pixel_shader, void *user, uint8_t kind) {
+    displayio_lvgl_mirror_register(MP_OBJ_TO_PTR(pixel_shader), user, kind);
+}
+
+void displayio_lvgl_shader_unregister_user(mp_obj_t pixel_shader, void *user) {
+    displayio_lvgl_mirror_unregister(MP_OBJ_TO_PTR(pixel_shader), user);
 }
 
 void displayio_lvgl_bitmap_notify_users(displayio_bitmap_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
@@ -305,7 +322,7 @@ void displayio_lvgl_mirror_gc(void);
 void displayio_lvgl_mirror_gc(void) {
     for (displayio_lvgl_mirror_entry_t *entry = mirror_registry; entry != NULL; entry = (displayio_lvgl_mirror_entry_t *)entry->next) {
         for (displayio_lvgl_mirror_user_t *user = entry->users; user != NULL; user = user->next) {
-            gc_collect_ptr(user->tilegrid);
+            gc_collect_ptr(user->user);
         }
     }
 }

@@ -503,7 +503,11 @@ void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {
 #include "shared-bindings/fourwire/FourWire.h"
 #include "shared-bindings/displayio/Group.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
+#include "supervisor/port_heap.h"
 #include "supervisor/shared/tick.h"
+#if CIRCUITPY_ESPIDF
+#include "supervisor/lvgl_port.h"
+#endif
 #include "py/runtime.h"
 #include "py/gc.h"
 #include <string.h>
@@ -511,6 +515,11 @@ void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {
 
 #define DELAY 0x80
 #define LVGL_DRAW_BUF_LINES 10
+
+#if CIRCUITPY_ESPIDF
+#include "esp_log.h"
+static const char *lvgl_tag = "LVGL";
+#endif
 
 static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     busdisplay_busdisplay_obj_t *self = lv_display_get_user_data(disp);
@@ -521,10 +530,15 @@ static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, 
 
     uint16_t w = area->x2 - area->x1 + 1;
     uint16_t h = area->y2 - area->y1 + 1;
+    #if CIRCUITPY_ESPIDF
+    ESP_LOGI(lvgl_tag, "BusDisplay LVGL flush %ux%u at %u,%u", w, h, x1, y1);
+    #endif
     size_t len = (size_t)w * h * ((self->color_depth + 7) / 8);
     if (self->color_depth == 1) {
         len = (w * h + 7) / 8;
-        if (self->bytes_per_cell > 1) len *= self->bytes_per_cell;
+        if (self->bytes_per_cell > 1) {
+            len *= self->bytes_per_cell;
+        }
     }
 
     if (self->bus == mp_const_none) {
@@ -588,16 +602,16 @@ static void busdisplay_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, 
 
         common_hal_fourwire_fourwire_end_transaction(self->bus);
     }
-#if CIRCUITPY_I2CDISPLAYBUS
+    #if CIRCUITPY_I2CDISPLAYBUS
     else if (mp_obj_is_type(self->bus, &i2cdisplaybus_i2cdisplaybus_type)) {
         // TODO: I2C display bus flush
     }
-#endif
-#if CIRCUITPY_PARALLELDISPLAYBUS
+    #endif
+    #if CIRCUITPY_PARALLELDISPLAYBUS
     else if (mp_obj_is_type(self->bus, &paralleldisplaybus_parallelbus_type)) {
         // TODO: parallel bus flush
     }
-#endif
+    #endif
 
     lv_display_flush_ready(disp);
 }
@@ -718,16 +732,21 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
             if (delay) {
                 data_size++;
                 delay_ms = *(cmd + 1 + data_size);
-                if (delay_ms == 255) delay_ms = 500;
+                if (delay_ms == 255) {
+                    delay_ms = 500;
+                }
             }
-            if (delay_ms) common_hal_time_delay_ms(delay_ms);
+            if (delay_ms) {
+                common_hal_time_delay_ms(delay_ms);
+            }
             i += 2 + data_size;
         }
     }
 
     // Ensure LVGL is inited (lv_init + tick)
-    extern void espressif_lvgl_init(void);
+    #if CIRCUITPY_ESPIDF
     espressif_lvgl_init();
+    #endif
 
     // Create LVGL display
     self->lv_display = lv_display_create(width, height);
@@ -738,7 +757,8 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     self->lv_color_format = busdisplay_lvgl_color_format(self);
     lv_display_set_color_format(self->lv_display, self->lv_color_format);
 
-    // Allocate draw buffers via port_malloc
+    // Allocate draw buffers via port_malloc. Displays outlive the VM, so these
+    // can't come from the garbage collected heap.
     size_t bpp = (color_depth + 7) / 8;
     if (bpp == 0) {
         bpp = 1;
@@ -750,11 +770,24 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     size_t buf_size = width * buf_lines * bpp;
     // Align to 4 bytes
     buf_size = (buf_size + 3) & ~3;
-    self->lv_buf1 = m_malloc(buf_size, false);
-    self->lv_buf2 = m_malloc(buf_size, false);
-    if (self->lv_buf1 == NULL || self->lv_buf2 == NULL) {
+    // LVGL draw buffers (and the PPA) require LV_DRAW_BUF_ALIGN alignment, which is
+    // larger than what port_malloc guarantees and can't be freed separately from an
+    // offset pointer, so allocate extra and align the pointer. The buffers are never
+    // freed individually; they live as long as the display.
+    size_t alloc_size = buf_size + LV_DRAW_BUF_ALIGN;
+    void *raw_buf1 = port_malloc(alloc_size, false);
+    void *raw_buf2 = port_malloc(alloc_size, false);
+    if (raw_buf1 == NULL || raw_buf2 == NULL) {
+        if (raw_buf1 != NULL) {
+            port_free(raw_buf1);
+        }
+        if (raw_buf2 != NULL) {
+            port_free(raw_buf2);
+        }
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL buffer alloc failed"));
     }
+    self->lv_buf1 = lv_draw_buf_align(raw_buf1, self->lv_color_format);
+    self->lv_buf2 = lv_draw_buf_align(raw_buf2, self->lv_color_format);
     self->lv_buf_size = buf_size;
     lv_display_set_buffers(self->lv_display, self->lv_buf1, self->lv_buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(self->lv_display, busdisplay_lvgl_flush_cb);

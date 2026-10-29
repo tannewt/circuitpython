@@ -1752,11 +1752,6 @@ msgstr ""
 msgid "Address range not allowed"
 msgstr ""
 
-#: ports/espressif/common-hal/mipidsi/Display.c
-#: shared-module/busdisplay/BusDisplay.c
-msgid "LVGL display create failed"
-msgstr ""
-
 #: ports/espressif/common-hal/nvm/ByteArray.c
 msgid "NVS Error"
 msgstr ""
@@ -1880,6 +1875,18 @@ msgstr ""
 msgid "Only IPv4 addresses supported"
 msgstr ""
 
+#: ports/espressif/supervisor/lvgl_port.c
+#: ports/raspberrypi/bindings/cyw43/__init__.c
+#: ports/zephyr-cp/common-hal/zephyr_display/Display.c py/argcheck.c
+#: py/objexcept.c shared-bindings/bitmapfilter/__init__.c
+#: shared-bindings/canio/CAN.c shared-bindings/digitalio/Pull.c
+#: shared-bindings/picogame/Sprite.c shared-bindings/supervisor/__init__.c
+#: shared-module/audiofilters/__init__.c
+#: shared-module/displayio/legacy/__init__.c
+#: shared-module/synthio/Synthesizer.c
+msgid "%q must be of type %q or %q, not %q"
+msgstr ""
+
 #: ports/mimxrt10xx/common-hal/busio/SPI.c
 #: ports/raspberrypi/bindings/wiznet/PIO_SPI.c shared-bindings/busio/SPI.c
 msgid "Must provide MISO or MOSI pin"
@@ -1988,17 +1995,6 @@ msgstr ""
 
 #: ports/raspberrypi/audio_dma.c
 msgid "Audio conversion not implemented"
-msgstr ""
-
-#: ports/raspberrypi/bindings/cyw43/__init__.c
-#: ports/zephyr-cp/common-hal/zephyr_display/Display.c py/argcheck.c
-#: py/objexcept.c shared-bindings/bitmapfilter/__init__.c
-#: shared-bindings/canio/CAN.c shared-bindings/digitalio/Pull.c
-#: shared-bindings/picogame/Sprite.c shared-bindings/supervisor/__init__.c
-#: shared-module/audiofilters/__init__.c
-#: shared-module/displayio/legacy/__init__.c
-#: shared-module/synthio/Synthesizer.c
-msgid "%q must be of type %q or %q, not %q"
 msgstr ""
 
 #: ports/raspberrypi/bindings/picodvi/AudioOut.c
@@ -4529,6 +4525,12 @@ msgid "unsupported bitmap depth"
 msgstr ""
 
 #: shared-module/busdisplay/BusDisplay.c
+#: shared-module/framebufferio/FramebufferDisplay.c
+msgid "LVGL display create failed"
+msgstr ""
+
+#: shared-module/busdisplay/BusDisplay.c
+#: shared-module/framebufferio/FramebufferDisplay.c
 msgid "LVGL buffer alloc failed"
 msgstr ""
 
@@ -4550,7 +4552,7 @@ msgstr ""
 msgid "Layer already in a group"
 msgstr ""
 
-#: shared-module/displayio/legacy/Group.c shared-module/displayio/lvgl/Group.c
+#: shared-module/displayio/legacy/Group.c
 msgid "Layer must be a Group or TileGrid subclass"
 msgstr ""
 
@@ -4579,8 +4581,16 @@ msgstr ""
 msgid "Too many display busses; forgot displayio.release_displays() ?"
 msgstr ""
 
+#: shared-module/displayio/lvgl/Group.c
+msgid "Layer must be a Group, TileGrid or vector shape"
+msgstr ""
+
 #: shared-module/displayio/lvgl/TileGrid.c
 msgid "LVGL displayio backend does not support flips/transpose yet"
+msgstr ""
+
+#: shared-module/framebufferio/FramebufferDisplay.c
+msgid "LVGL dirty row alloc failed"
 msgstr ""
 
 #: shared-module/gifio/GifWriter.c

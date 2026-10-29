@@ -37,15 +37,21 @@ mp_obj_t vectorio_vector_shape_make_new(const mp_obj_t shape, const mp_obj_t pix
     // Wire up shape functions
     if (mp_obj_is_type(shape, &vectorio_polygon_type)) {
         ishape.shape = shape;
+        #if !CIRCUITPY_DISPLAYIO_LVGL
         ishape.get_area = &common_hal_vectorio_polygon_get_area;
+        #endif
         ishape.get_pixel = &common_hal_vectorio_polygon_get_pixel;
     } else if (mp_obj_is_type(shape, &vectorio_rectangle_type)) {
         ishape.shape = shape;
+        #if !CIRCUITPY_DISPLAYIO_LVGL
         ishape.get_area = &common_hal_vectorio_rectangle_get_area;
+        #endif
         ishape.get_pixel = &common_hal_vectorio_rectangle_get_pixel;
     } else if (mp_obj_is_type(shape, &vectorio_circle_type)) {
         ishape.shape = shape;
+        #if !CIRCUITPY_DISPLAYIO_LVGL
         ishape.get_area = &common_hal_vectorio_circle_get_area;
+        #endif
         ishape.get_pixel = &common_hal_vectorio_circle_get_pixel;
     } else {
         mp_raise_TypeError_varg(MP_ERROR_TEXT("unsupported %q type"), MP_QSTR_shape);
@@ -76,13 +82,17 @@ mp_obj_t vectorio_vector_shape_make_new(const mp_obj_t shape, const mp_obj_t pix
 }
 
 vectorio_draw_protocol_impl_t vectorio_vector_shape_draw_protocol_impl = {
+    .draw_set_dirty = (draw_set_dirty_fun)common_hal_vectorio_vector_shape_set_dirty,
+    .draw_set_in_group = (draw_set_in_group_fun)vectorio_vector_shape_set_in_group,
+    #if !CIRCUITPY_DISPLAYIO_LVGL
+    // The scanline compositor asks shapes to fill spans and to track dirty areas. LVGL
+    // draws and invalidates the shape's mirror object instead, so none of this exists.
     .draw_fill_area = (draw_fill_area_fun)vectorio_vector_shape_fill_area,
     .draw_get_dirty_area = (draw_get_dirty_area_fun)vectorio_vector_shape_get_dirty_area,
     .draw_update_transform = (draw_update_transform_fun)vectorio_vector_shape_update_transform,
     .draw_finish_refresh = (draw_finish_refresh_fun)vectorio_vector_shape_finish_refresh,
     .draw_get_refresh_areas = (draw_get_refresh_areas_fun)vectorio_vector_shape_get_refresh_areas,
-    .draw_set_dirty = (draw_set_dirty_fun)common_hal_vectorio_vector_shape_set_dirty,
-    .draw_set_in_group = (draw_set_in_group_fun)vectorio_vector_shape_set_in_group,
+    #endif
 };
 
 // Stub checker does not approve of these shared properties.

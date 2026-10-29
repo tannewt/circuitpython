@@ -2,6 +2,14 @@
 # Espressif IoT Development Framework Configuration
 #
 #
+# Bootloader config
+#
+# The P4 bootloader is offset 0x2000 and the partition table is at 0x8000, so it must
+# fit in 24KB. Bootloader log output at the default INFO level overflows that.
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+# end of Bootloader config
+
+#
 # Component config
 #
 #

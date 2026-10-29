@@ -29,7 +29,7 @@
 #include "shared-bindings/hashlib/__init__.h"
 #include "shared-bindings/hashlib/Hash.h"
 
-#if CIRCUITPY_FOURWIRE
+#if CIRCUITPY_FOURWIRE && !CIRCUITPY_DISPLAYIO_LVGL
 #include "shared-module/displayio/__init__.h"
 #endif
 
@@ -1669,7 +1669,9 @@ static void _process_request(socketpool_socket_obj_t *socket, _request *request)
 }
 
 static bool supervisor_filesystem_access_could_block(void) {
-    #if CIRCUITPY_FOURWIRE
+    // The LVGL displayio backend doesn't track display buses globally, so we can't
+    // tell whether a display is sharing an SPI bus with the filesystem.
+    #if CIRCUITPY_FOURWIRE && !CIRCUITPY_DISPLAYIO_LVGL
     mp_vfs_mount_t *vfs = MP_STATE_VM(vfs_mount_table);
     if (!vfs->next) {
         // Assume that the CIRCUITPY root is not sharing a SPI bus with the display SPI bus

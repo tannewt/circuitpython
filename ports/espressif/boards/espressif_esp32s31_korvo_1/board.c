@@ -6,6 +6,7 @@
 
 #include "supervisor/board.h"
 #include "mpconfigboard.h"
+#include "common-hal/dotclockframebuffer/DotClockFramebuffer.h"
 #include "shared-bindings/dotclockframebuffer/DotClockFramebuffer.h"
 #include "shared-bindings/framebufferio/FramebufferDisplay.h"
 #include "shared-bindings/microcontroller/Pin.h"
@@ -28,10 +29,22 @@ static const mcu_pin_obj_t *red_pins[] = {
 // Display enable on the LCD connector.
 #define LCD_DISP_PIN (38)
 
+#if CIRCUITPY_DISPLAYIO_LVGL
+// LVGL displays aren't part of the legacy display registry, so keep them in
+// static storage rather than allocating from the (not yet initialized) VM heap.
+static dotclockframebuffer_framebuffer_obj_t board_framebuffer;
+// The board module exposes this as board.DISPLAY, so it can't be static.
+framebufferio_framebufferdisplay_obj_t board_framebuffer_display;
+#endif
+
 void board_init(void) {
     config_pin_as_output_with_level(LCD_DISP_PIN, true);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    dotclockframebuffer_framebuffer_obj_t *framebuffer = &board_framebuffer;
+    #else
     dotclockframebuffer_framebuffer_obj_t *framebuffer = &allocate_display_bus_or_raise()->dotclock;
+    #endif
     framebuffer->base.type = &dotclockframebuffer_framebuffer_type;
 
     common_hal_dotclockframebuffer_framebuffer_construct(
@@ -51,7 +64,11 @@ void board_init(void) {
         /* overscan_left */ 0
         );
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    framebufferio_framebufferdisplay_obj_t *display = &board_framebuffer_display;
+    #else
     framebufferio_framebufferdisplay_obj_t *display = &allocate_display_or_raise()->framebuffer_display;
+    #endif
     display->base.type = &framebufferio_framebufferdisplay_type;
     common_hal_framebufferio_framebufferdisplay_construct(
         display,

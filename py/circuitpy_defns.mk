@@ -685,6 +685,13 @@ $(filter $(SRC_PATTERNS), \
 	digitalio/Direction.c \
 	digitalio/DriveMode.c \
 	digitalio/Pull.c \
+	displayio/Bitmap.c \
+	displayio/ColorConverter.c \
+	displayio/Group.c \
+	displayio/OnDiskBitmap.c \
+	displayio/Palette.c \
+	displayio/TileGrid.c \
+	displayio/__init__.c \
 	displayio/Colorspace.c \
 	fontio/Glyph.c \
 	imagecapture/ParallelImageCapture.c \
@@ -701,6 +708,7 @@ $(filter $(SRC_PATTERNS), \
 	supervisor/RunReason.c \
 	supervisor/Runtime.c \
 	supervisor/StatusBar.c \
+	vectorio/VectorShape.c \
 	wifi/AuthMode.c \
 	wifi/Packet.c \
 	wifi/PowerManagement.c \
@@ -885,13 +893,14 @@ SRC_SHARED_MODULE_ALL = \
 	vectorio/Circle.c \
 	vectorio/Polygon.c \
 	vectorio/Rectangle.c \
-	vectorio/VectorShape.c \
 	vectorio/__init__.c \
 	warnings/__init__.c \
 	watchdog/__init__.c \
 	zlib/__init__.c \
 
-# The displayio implementation sources live in one of the two backend directories:
+# The displayio and vectorio implementation sources live in one of the two backend
+# directories. vectorio's shape math (Circle, Polygon, Rectangle) is backend agnostic and
+# lives in shared-module/vectorio/ directly.
 ifeq ($(CIRCUITPY_DISPLAYIO_LVGL),1)
 SRC_SHARED_MODULE_INTERNAL += \
 	displayio/lvgl/Bitmap.c \
@@ -901,11 +910,11 @@ SRC_SHARED_MODULE_INTERNAL += \
 	displayio/lvgl/OnDiskBitmap.c \
 	displayio/lvgl/Palette.c \
 	displayio/lvgl/TileGrid.c \
+	vectorio/lvgl/VectorShape.c \
 
 else
 SRC_SHARED_MODULE_INTERNAL += \
 	displayio/legacy/__init__.c \
-	displayio/legacy/area.c \
 	displayio/legacy/Bitmap.c \
 	displayio/legacy/ColorConverter.c \
 	displayio/legacy/display_core_scanline.c \
@@ -913,6 +922,7 @@ SRC_SHARED_MODULE_INTERNAL += \
 	displayio/legacy/OnDiskBitmap.c \
 	displayio/legacy/Palette.c \
 	displayio/legacy/TileGrid.c \
+	vectorio/legacy/VectorShape.c \
 
 endif
 
@@ -1104,10 +1114,13 @@ $(BUILD)/lib/uzlib/tinflate.o: CFLAGS += -Wno-missing-braces -Wno-missing-protot
 endif
 
 # All possible sources are listed here, and are filtered by SRC_PATTERNS.
-SRC_SHARED_MODULE_INTERNAL = \
+# area.c is shared by both compositors (vectorio needs the area helpers) so it is
+# always compiled.
+SRC_SHARED_MODULE_INTERNAL += \
 $(filter $(SRC_PATTERNS), \
 	displayio/bus_core.c \
 	displayio/display_core.c \
+	displayio/legacy/area.c \
 	usb/utf16le.c \
 )
 

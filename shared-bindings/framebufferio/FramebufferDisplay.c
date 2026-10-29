@@ -59,8 +59,12 @@ static mp_obj_t framebufferio_framebufferdisplay_make_new(const mp_obj_type_t *t
         mp_raise_ValueError(MP_ERROR_TEXT("Display rotation must be in 90 degree increments"));
     }
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    framebufferio_framebufferdisplay_obj_t *self = m_new_obj(framebufferio_framebufferdisplay_obj_t);
+    #else
     primary_display_t *disp = allocate_display_or_raise();
     framebufferio_framebufferdisplay_obj_t *self = &disp->framebuffer_display;
+    #endif
     self->base.type = &framebufferio_framebufferdisplay_type;
     common_hal_framebufferio_framebufferdisplay_construct(
         self,
@@ -245,6 +249,9 @@ MP_PROPERTY_GETTER(framebufferio_framebufferframebuffer_obj,
     (mp_obj_t)&framebufferio_framebufferdisplay_get_framebuffer_obj);
 
 
+// The LVGL compositor has no CPU-readable display core, so fill_row is only
+// available with the legacy compositor.
+#if !CIRCUITPY_DISPLAYIO_LVGL
 //|     def fill_row(self, y: int, buffer: WriteableBuffer) -> WriteableBuffer:
 //|         """Extract the pixels from a single row
 //|
@@ -306,6 +313,7 @@ static mp_obj_t framebufferio_framebufferdisplay_obj_fill_row(size_t n_args, con
     }
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(framebufferio_framebufferdisplay_fill_row_obj, 1, framebufferio_framebufferdisplay_obj_fill_row);
+#endif // !CIRCUITPY_DISPLAYIO_LVGL
 
 //|     root_group: displayio.Group
 //|     """The root group on the display.
@@ -342,7 +350,9 @@ MP_PROPERTY_GETSET(framebufferio_framebufferdisplay_root_group_obj,
 static const mp_rom_map_elem_t framebufferio_framebufferdisplay_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_show), MP_ROM_PTR(&framebufferio_framebufferdisplay_show_obj) },
     { MP_ROM_QSTR(MP_QSTR_refresh), MP_ROM_PTR(&framebufferio_framebufferdisplay_refresh_obj) },
+    #if !CIRCUITPY_DISPLAYIO_LVGL
     { MP_ROM_QSTR(MP_QSTR_fill_row), MP_ROM_PTR(&framebufferio_framebufferdisplay_fill_row_obj) },
+    #endif
 
     { MP_ROM_QSTR(MP_QSTR_auto_refresh), MP_ROM_PTR(&framebufferio_framebufferdisplay_auto_refresh_obj) },
 

@@ -58,7 +58,11 @@ static mp_obj_t i2cdisplaybus_i2cdisplaybus_make_new(const mp_obj_type_t *type, 
     const mcu_pin_obj_t *reset = validate_obj_is_free_pin_or_none(args[ARG_reset].u_obj, MP_QSTR_reset);
 
     mp_obj_t i2c = mp_arg_validate_type(args[ARG_i2c_bus].u_obj, &busio_i2c_type, MP_QSTR_i2c_bus);
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    i2cdisplaybus_i2cdisplaybus_obj_t *self = m_new_obj(i2cdisplaybus_i2cdisplaybus_obj_t);
+    #else
     i2cdisplaybus_i2cdisplaybus_obj_t *self = &allocate_display_bus_or_raise()->i2cdisplay_bus;
+    #endif
     self->base.type = &i2cdisplaybus_i2cdisplaybus_type;
 
     common_hal_i2cdisplaybus_i2cdisplaybus_construct(self,

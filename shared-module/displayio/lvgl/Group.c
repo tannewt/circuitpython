@@ -23,7 +23,12 @@
 #include "py/runtime.h"
 #include "py/objlist.h"
 #include "shared-bindings/displayio/TileGrid.h"
+#include "shared-module/displayio/__init__.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
+
+#if CIRCUITPY_VECTORIO
+#include "shared-bindings/vectorio/VectorShape.h"
+#endif
 
 #if CIRCUITPY_DISPLAYIO_LVGL
 
@@ -51,15 +56,16 @@ void displayio_lvgl_unlock(void) {
 // Recompute children's inherited scale and positions after this group's scale or
 // position changed.
 static void _update_children(displayio_group_t *self) {
+    uint16_t child_scale = self->lv_scale * self->scale;
     for (size_t i = 0; i < self->members->len; i++) {
         mp_obj_t layer = self->members->items[i];
         mp_obj_t native = mp_obj_cast_to_native_base(layer, &displayio_tilegrid_type);
         if (native != MP_OBJ_NULL) {
             displayio_tilegrid_t *tilegrid = native;
-            tilegrid->lv_scale = self->lv_scale * self->scale;
+            tilegrid->lv_scale = child_scale;
             if (tilegrid->lv_obj != NULL) {
-                lv_obj_set_pos(tilegrid->lv_obj, tilegrid->x * tilegrid->lv_scale,
-                    tilegrid->y * tilegrid->lv_scale);
+                lv_obj_set_pos(tilegrid->lv_obj, tilegrid->x * child_scale,
+                    tilegrid->y * child_scale);
                 displayio_lvgl_tilegrid_update_scale(tilegrid);
             }
             continue;
@@ -67,13 +73,26 @@ static void _update_children(displayio_group_t *self) {
         native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
         if (native != MP_OBJ_NULL) {
             displayio_group_t *group = native;
-            group->lv_scale = self->lv_scale * self->scale;
+            group->lv_scale = child_scale;
+            group->lv_abs_x = self->lv_abs_x + group->x * child_scale;
+            group->lv_abs_y = self->lv_abs_y + group->y * child_scale;
             if (group->lv_obj != NULL) {
-                lv_obj_set_pos(group->lv_obj, group->x * group->lv_scale,
-                    group->y * group->lv_scale);
+                lv_obj_set_pos(group->lv_obj, group->x * child_scale,
+                    group->y * child_scale);
                 _update_children(group);
             }
+            continue;
         }
+        #if CIRCUITPY_VECTORIO
+        native = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+        if (native != MP_OBJ_NULL) {
+            vectorio_vector_shape_t *shape = native;
+            displayio_lvgl_vector_shape_set_transform(shape,
+                self->lv_abs_x + shape->x * child_scale,
+                self->lv_abs_y + shape->y * child_scale,
+                child_scale);
+        }
+        #endif
     }
 }
 
@@ -111,6 +130,8 @@ void displayio_group_construct(displayio_group_t *self, mp_obj_list_t *members, 
     self->readonly = false;
     self->lv_obj = NULL;
     self->lv_scale = 1;
+    self->lv_abs_x = x;
+    self->lv_abs_y = y;
 }
 
 void common_hal_displayio_group_construct(displayio_group_t *self, uint32_t scale, mp_int_t x, mp_int_t y) {
@@ -145,8 +166,14 @@ static void _propagate_hidden(displayio_group_t *self, bool hidden) {
         layer = mp_obj_cast_to_native_base(self->members->items[i], &displayio_group_type);
         if (layer != MP_OBJ_NULL) {
             displayio_group_set_hidden_by_parent(layer, hidden);
+            continue;
         }
-        // Other layer kinds (vectorio etc.) are not supported by the LVGL core yet.
+        #if CIRCUITPY_VECTORIO
+        layer = mp_obj_cast_to_native_base(self->members->items[i], &vectorio_vector_shape_type);
+        if (layer != MP_OBJ_NULL) {
+            displayio_lvgl_vector_shape_set_hidden_by_parent(layer, hidden);
+        }
+        #endif
     }
 }
 
@@ -208,6 +235,8 @@ void common_hal_displayio_group_set_x(displayio_group_t *self, mp_int_t x) {
     if (self->lv_obj != NULL) {
         displayio_lvgl_lock();
         lv_obj_set_pos(self->lv_obj, self->x, self->y);
+        // Children's absolute positions moved with us; vectorio's contains() needs them.
+        _update_children(self);
         displayio_lvgl_unlock();
     }
 }
@@ -225,8 +254,50 @@ void common_hal_displayio_group_set_y(displayio_group_t *self, mp_int_t y) {
     if (self->lv_obj != NULL) {
         displayio_lvgl_lock();
         lv_obj_set_pos(self->lv_obj, self->x, self->y);
+        _update_children(self);
         displayio_lvgl_unlock();
     }
+}
+
+// Resolve a group member to its mirror object, or NULL if it has none yet.
+static lv_obj_t *_member_mirror(mp_obj_t layer) {
+    mp_obj_t native = mp_obj_cast_to_native_base(layer, &displayio_tilegrid_type);
+    if (native != MP_OBJ_NULL) {
+        return ((displayio_tilegrid_t *)native)->lv_obj;
+    }
+    native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
+    if (native != MP_OBJ_NULL) {
+        return ((displayio_group_t *)native)->lv_obj;
+    }
+    #if CIRCUITPY_VECTORIO
+    native = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+    if (native != MP_OBJ_NULL) {
+        return ((vectorio_vector_shape_t *)native)->lv_obj;
+    }
+    #endif
+    return NULL;
+}
+
+// Create the mirror for a member that doesn't have one yet. Unsupported layers stay NULL.
+static lv_obj_t *_attach_member(displayio_group_t *self, mp_obj_t layer) {
+    mp_obj_t native = mp_obj_cast_to_native_base(layer, &displayio_tilegrid_type);
+    if (native != MP_OBJ_NULL) {
+        displayio_lvgl_tilegrid_attach((displayio_tilegrid_t *)native, self->lv_obj);
+        return ((displayio_tilegrid_t *)native)->lv_obj;
+    }
+    native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
+    if (native != MP_OBJ_NULL) {
+        displayio_lvgl_group_attach((displayio_group_t *)native, self->lv_obj);
+        return ((displayio_group_t *)native)->lv_obj;
+    }
+    #if CIRCUITPY_VECTORIO
+    native = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+    if (native != MP_OBJ_NULL) {
+        displayio_lvgl_vector_shape_attach((vectorio_vector_shape_t *)native, self->lv_obj);
+        return ((vectorio_vector_shape_t *)native)->lv_obj;
+    }
+    #endif
+    return NULL;
 }
 
 // Adopt a member: validate that it can join, update Python-visible state, and push it
@@ -240,18 +311,31 @@ static void _adopt_member(displayio_group_t *self, mp_obj_t layer) {
         }
         tilegrid->in_group = true;
         displayio_tilegrid_set_hidden_by_parent(tilegrid, self->hidden || self->hidden_by_parent);
-    } else {
-        native_layer = mp_obj_cast_to_native_base(layer, &displayio_group_type);
-        if (native_layer == MP_OBJ_NULL) {
-            mp_raise_ValueError(MP_ERROR_TEXT("Layer must be a Group or TileGrid subclass"));
-        }
+        return;
+    }
+    native_layer = mp_obj_cast_to_native_base(layer, &displayio_group_type);
+    if (native_layer != MP_OBJ_NULL) {
         displayio_group_t *group = native_layer;
         if (group->in_group) {
             mp_raise_ValueError(MP_ERROR_TEXT("Layer already in a group"));
         }
         group->in_group = true;
         displayio_group_set_hidden_by_parent(group, self->hidden || self->hidden_by_parent);
+        return;
     }
+    #if CIRCUITPY_VECTORIO
+    native_layer = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+    if (native_layer != MP_OBJ_NULL) {
+        vectorio_vector_shape_t *shape = native_layer;
+        if (vectorio_vector_shape_set_in_group(shape, true)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("Layer already in a group"));
+        }
+        displayio_lvgl_vector_shape_set_hidden_by_parent(shape,
+            self->hidden || self->hidden_by_parent);
+        return;
+    }
+    #endif
+    mp_raise_ValueError(MP_ERROR_TEXT("Layer must be a Group, TileGrid or vector shape"));
 }
 
 // Release a member and remove its mirror. Must be called under the displayio lock.
@@ -261,14 +345,23 @@ static void _release_member(displayio_group_t *self, mp_obj_t layer) {
         displayio_tilegrid_t *tilegrid = native_layer;
         tilegrid->in_group = false;
         displayio_lvgl_tilegrid_detach(tilegrid);
-    } else {
-        native_layer = mp_obj_cast_to_native_base(layer, &displayio_group_type);
-        if (native_layer != MP_OBJ_NULL) {
-            displayio_group_t *group = native_layer;
-            group->in_group = false;
-            displayio_lvgl_group_detach(group);
-        }
+        return;
     }
+    native_layer = mp_obj_cast_to_native_base(layer, &displayio_group_type);
+    if (native_layer != MP_OBJ_NULL) {
+        displayio_group_t *group = native_layer;
+        group->in_group = false;
+        displayio_lvgl_group_detach(group);
+        return;
+    }
+    #if CIRCUITPY_VECTORIO
+    native_layer = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+    if (native_layer != MP_OBJ_NULL) {
+        vectorio_vector_shape_t *shape = native_layer;
+        vectorio_vector_shape_set_in_group(shape, false);
+        displayio_lvgl_vector_shape_detach(shape);
+    }
+    #endif
 }
 
 // Push the mirror children into the same order as the members list. Newly added members
@@ -281,29 +374,10 @@ static void _sync_members(displayio_group_t *self) {
     size_t child_index = 0;
     for (size_t i = 0; i < self->members->len; i++) {
         mp_obj_t layer = self->members->items[i];
-        lv_obj_t *obj = NULL;
-        mp_obj_t native = mp_obj_cast_to_native_base(layer, &displayio_tilegrid_type);
-        if (native != MP_OBJ_NULL) {
-            obj = ((displayio_tilegrid_t *)native)->lv_obj;
-        } else {
-            native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
-            if (native != MP_OBJ_NULL) {
-                obj = ((displayio_group_t *)native)->lv_obj;
-            }
-        }
+        lv_obj_t *obj = _member_mirror(layer);
         if (obj == NULL) {
             // Not mirrored yet: try to attach it now (unsupported layers stay NULL).
-            native = mp_obj_cast_to_native_base(layer, &displayio_tilegrid_type);
-            if (native != MP_OBJ_NULL) {
-                displayio_lvgl_tilegrid_attach((displayio_tilegrid_t *)native, self->lv_obj);
-                obj = ((displayio_tilegrid_t *)native)->lv_obj;
-            } else {
-                native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
-                if (native != MP_OBJ_NULL) {
-                    displayio_lvgl_group_attach((displayio_group_t *)native, self->lv_obj);
-                    obj = ((displayio_group_t *)native)->lv_obj;
-                }
-            }
+            obj = _attach_member(self, layer);
         }
         if (obj == NULL) {
             continue;
@@ -321,6 +395,8 @@ static void _sync_members(displayio_group_t *self) {
         lv_obj_t *child = lv_obj_get_child(self->lv_obj, (int32_t)(lv_obj_get_child_count(self->lv_obj) - 1));
         lv_obj_delete(child);
     }
+    // Newly attached members need their position, scale and absolute offset pushed in.
+    _update_children(self);
 }
 
 void common_hal_displayio_group_insert(displayio_group_t *self, size_t index, mp_obj_t layer) {
@@ -413,7 +489,14 @@ void displayio_lvgl_group_detach(displayio_group_t *self) {
         native = mp_obj_cast_to_native_base(layer, &displayio_group_type);
         if (native != MP_OBJ_NULL) {
             displayio_lvgl_group_detach(native);
+            continue;
         }
+        #if CIRCUITPY_VECTORIO
+        native = mp_obj_cast_to_native_base(layer, &vectorio_vector_shape_type);
+        if (native != MP_OBJ_NULL) {
+            displayio_lvgl_vector_shape_detach(native);
+        }
+        #endif
     }
     lv_obj_delete(self->lv_obj);
     self->lv_obj = NULL;

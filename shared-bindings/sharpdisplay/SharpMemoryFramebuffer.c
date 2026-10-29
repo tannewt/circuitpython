@@ -59,7 +59,11 @@ static mp_obj_t sharpdisplay_framebuffer_make_new(const mp_obj_type_t *type, siz
     const mcu_pin_obj_t *chip_select = validate_obj_is_free_pin(args[ARG_chip_select].u_obj, MP_QSTR_chip_select);
     busio_spi_obj_t *spi = validate_obj_is_spi_bus(args[ARG_spi_bus].u_obj, MP_QSTR_spi_bus);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    sharpdisplay_framebuffer_obj_t *self = m_new_obj(sharpdisplay_framebuffer_obj_t);
+    #else
     sharpdisplay_framebuffer_obj_t *self = &allocate_display_bus_or_raise()->sharpdisplay;
+    #endif
     self->base.type = &sharpdisplay_framebuffer_type;
 
     common_hal_sharpdisplay_framebuffer_construct(self, spi, chip_select, args[ARG_baudrate].u_int, args[ARG_width].u_int, args[ARG_height].u_int, args[ARG_jdi_display].u_bool);

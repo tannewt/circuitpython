@@ -13,6 +13,10 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/util.h"
 #include "shared-module/displayio/__init__.h"
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "common-hal/dotclockframebuffer/DotClockFramebuffer.h"
+#include "shared-module/framebufferio/FramebufferDisplay.h"
+#endif
 #include "supervisor/shared/translate/translate.h"
 
 //| class DotClockFramebuffer:
@@ -140,7 +144,11 @@ static mp_obj_t dotclockframebuffer_framebuffer_make_new(const mp_obj_type_t *ty
     validate_list_is_free_pins(MP_QSTR_green, green_pins, (mp_int_t)MP_ARRAY_SIZE(green_pins), args[ARG_green].u_obj, &num_green);
     validate_list_is_free_pins(MP_QSTR_blue, blue_pins, (mp_int_t)MP_ARRAY_SIZE(blue_pins), args[ARG_blue].u_obj, &num_blue);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    dotclockframebuffer_framebuffer_obj_t *self = m_new_obj(dotclockframebuffer_framebuffer_obj_t);
+    #else
     dotclockframebuffer_framebuffer_obj_t *self = &allocate_display_bus_or_raise()->dotclock;
+    #endif
     self->base.type = &dotclockframebuffer_framebuffer_type;
 
     common_hal_dotclockframebuffer_framebuffer_construct(

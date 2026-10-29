@@ -7,6 +7,11 @@
 #include "shared-bindings/board/__init__.h"
 #include "shared-module/displayio/__init__.h"
 
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "shared-bindings/framebufferio/FramebufferDisplay.h"
+extern framebufferio_framebufferdisplay_obj_t board_framebuffer_display;
+#endif
+
 static const mp_rom_map_elem_t board_module_globals_table[] = {
     CIRCUITPYTHON_BOARD_DICT_STANDARD_ITEMS
 
@@ -26,6 +31,10 @@ static const mp_rom_map_elem_t board_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_USB_HOST_DATA_MINUS), MP_ROM_PTR(&pin_USB_HS_DM) },
 
     // 800x480 RGB panel on the LCD connector.
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY), MP_ROM_PTR(&board_framebuffer_display) },
+    #else
     { MP_ROM_QSTR(MP_QSTR_DISPLAY), MP_ROM_PTR(&displays[0].display) },
+    #endif
 };
 MP_DEFINE_CONST_DICT(board_module_globals, board_module_globals_table);

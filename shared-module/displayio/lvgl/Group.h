@@ -36,6 +36,10 @@ typedef struct {
     // LVGL mirror state.
     lv_obj_t *lv_obj;    // Plain lv_obj container created when the group is attached.
     uint16_t lv_scale;   // Scale inherited from the parent group for child positioning.
+    // Absolute position of this group's coordinate origin. Children use it to keep their
+    // own absolute position (needed by vectorio's contains()) in sync.
+    int32_t lv_abs_x;
+    int32_t lv_abs_y;
 } displayio_group_t;
 
 void displayio_group_construct(displayio_group_t *self, mp_obj_list_t *members, uint32_t scale, mp_int_t x, mp_int_t y);

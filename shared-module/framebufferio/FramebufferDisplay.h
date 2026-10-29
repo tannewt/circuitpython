@@ -12,6 +12,10 @@
 
 #include "shared-bindings/displayio/Group.h"
 
+#if CIRCUITPY_DISPLAYIO_LVGL
+#include "lvgl.h"
+#endif
+
 #include "shared-module/displayio/legacy/area.h"
 #include "shared-module/displayio/display_core.h"
 
@@ -28,6 +32,18 @@ typedef struct {
     uint16_t row_stride;
     bool auto_refresh;
     bool first_manual_refresh;
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    // The LVGL display renders either directly into the provided framebuffer or into
+    // an aligned partial buffer that the flush callback copies into it.
+    lv_display_t *lv_display;
+    lv_color_format_t lv_color_format;
+    void *lv_buf_raw;
+    uint8_t *lv_buf;
+    size_t lv_buf_size;
+    uint8_t *lv_dirty_row_bitmask;
+    size_t lv_dirty_row_bitmask_size;
+    bool lv_direct;
+    #endif
 } framebufferio_framebufferdisplay_obj_t;
 
 void framebufferio_framebufferdisplay_background(framebufferio_framebufferdisplay_obj_t *self);

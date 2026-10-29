@@ -71,10 +71,17 @@ typedef struct {
     uint8_t lv_pad;
 } displayio_tilegrid_t;
 
-// One displayio TileGrid registered with a shared Bitmap or Palette: pushed change
-// notifications walk this list (head pointers live on the Bitmap/Palette object).
+// One displayio object registered as a mirror user: a TileGrid or a vectorio VectorShape
+// registered with a shared Bitmap or Palette. Pushed change notifications walk this list
+// (head pointers live on the Bitmap/Palette object).
+typedef enum {
+    DISPLAYIO_LVGL_USER_TILEGRID = 0,   // user is a displayio_tilegrid_t.
+    DISPLAYIO_LVGL_USER_VECTOR_SHAPE,   // user is a vectorio_vector_shape_t.
+} displayio_lvgl_user_kind_t;
+
 typedef struct displayio_lvgl_mirror_user {
-    displayio_tilegrid_t *tilegrid;
+    void *user;
+    uint8_t kind;  // displayio_lvgl_user_kind_t
     struct displayio_lvgl_mirror_user *next;
 } displayio_lvgl_mirror_user_t;
 

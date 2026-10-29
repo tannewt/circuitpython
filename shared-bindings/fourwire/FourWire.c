@@ -75,7 +75,11 @@ static mp_obj_t fourwire_fourwire_make_new(const mp_obj_type_t *type, size_t n_a
 
     mp_obj_t spi = mp_arg_validate_type(args[ARG_spi_bus].u_obj, &busio_spi_type, MP_QSTR_spi_bus);
 
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    fourwire_fourwire_obj_t *self = m_new_obj(fourwire_fourwire_obj_t);
+    #else
     fourwire_fourwire_obj_t *self = &allocate_display_bus_or_raise()->fourwire_bus;
+    #endif
     self->base.type = &fourwire_fourwire_type;
 
     uint8_t polarity = (uint8_t)mp_arg_validate_int_range(args[ARG_polarity].u_int, 0, 1, MP_QSTR_polarity);

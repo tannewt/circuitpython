@@ -5,31 +5,32 @@
 #ifndef LV_CONF_H
 #define LV_CONF_H
 
-#define LV_USE_OS 0
+#define LV_USE_OS LV_OS_NONE
 
-/* Color depth: 16 for RGB565, 32 for ARGB8888 - set via display, but default 16 */
-#define LV_COLOR_DEPTH 16
+/* Color depth: 16 for RGB565, 32 for ARGB8888 - individual displays set their own
+ * format when they are created. */
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_RGB565
 
-/* Memory: use CircuitPython heap via port_malloc */
-#define LV_MEM_CUSTOM 1
-#define LV_MEM_CUSTOM_INCLUDE "supervisor/memory.h"
-#define LV_MEM_CUSTOM_ALLOC   port_malloc
-#define LV_MEM_CUSTOM_FREE    port_free
-#define LV_MEM_CUSTOM_REALLOC port_realloc
-
-/* Tick: driven by esp_timer via lv_tick_inc */
-#define LV_TICK_CUSTOM 0
+/* Memory: allocate from the port heap instead of the garbage collected VM heap.
+ * Displays live outside the VM, so LVGL allocations must not be collected. */
+#define LV_USE_STDLIB_MALLOC LV_STDLIB_CUSTOM
+#define LV_USE_STDLIB_STRING LV_STDLIB_CLIB
+#define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 
 /* Display and rendering */
-#define LV_DISPLAY_RENDER_MODE_PARTIAL 1
-#define LV_DISPLAY_RENDER_MODE_DIRECT 1
-#define LV_DISPLAY_RENDER_MODE_FULL 1
-
-/* Features needed for displayio */
 #define LV_USE_DRAW_SW 1
-#define LV_USE_IMG 1
+#define LV_USE_IMAGE 1
 #define LV_USE_LABEL 1
 #define LV_USE_OBJ 1
+
+/* Use the ESP32-P4/S31 Pixel Processing Accelerator for fills, blends and simple
+ * images. PPA works on cache lines, so draw buffers must be 64-byte aligned. */
+#define LV_USE_PPA 1
+#define LV_USE_PPA_IMG 1
+/* LVGL 9.6 checks this before defining it, which trips -Wundef. */
+#define LV_PPA_NONBLOCKING_OPS 0
+#define LV_DRAW_BUF_ALIGN 64
+#define CONFIG_LV_DRAW_BUF_ALIGN 64
 
 /* Font: use built-in */
 #define LV_FONT_MONTSERRAT_14 1
@@ -37,10 +38,44 @@
 /* Logging */
 #define LV_USE_LOG 0
 
-/* Enable required widgets for displayio */
+/* displayio draws plain objects with explicit styles, so the themes aren't used.
+ * The default theme pulls in widgets that this config disables. */
+#define LV_USE_THEME_DEFAULT 0
+#define LV_USE_THEME_SIMPLE 0
+#define LV_USE_THEME_MONO 0
+
+/* displayio only uses lv_obj and lv_image (and lv_label for text). The rest of the
+ * widgets are enabled by default, and many of them require each other, so turn them
+ * all off to keep the build small and the dependency checks happy. */
+#define LV_USE_ANIMIMG 0
 #define LV_USE_ARC 0
+#define LV_USE_ARCLABEL 0
 #define LV_USE_BAR 0
 #define LV_USE_BUTTON 0
+#define LV_USE_BUTTONMATRIX 0
+#define LV_USE_CALENDAR 0
 #define LV_USE_CANVAS 0
+#define LV_USE_CHART 0
+#define LV_USE_CHECKBOX 0
+#define LV_USE_DROPDOWN 0
+#define LV_USE_IMAGEBUTTON 0
+#define LV_USE_KEYBOARD 0
+#define LV_USE_LED 0
+#define LV_USE_LINE 0
+#define LV_USE_LIST 0
+#define LV_USE_MENU 0
+#define LV_USE_MSGBOX 0
+#define LV_USE_ROLLER 0
+#define LV_USE_SCALE 0
+#define LV_USE_SLIDER 0
+#define LV_USE_SPAN 0
+#define LV_USE_SPINBOX 0
+#define LV_USE_SPINNER 0
+#define LV_USE_SWITCH 0
+#define LV_USE_TABLE 0
+#define LV_USE_TABVIEW 0
+#define LV_USE_TEXTAREA 0
+#define LV_USE_TILEVIEW 0
+#define LV_USE_WIN 0
 
 #endif

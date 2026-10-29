@@ -29,7 +29,7 @@
 
 // The decoder descriptor struct is private in LVGL 9.6+, and custom decoders are expected
 // to fill it in. Pull in the private definitions for the fields we set.
-#include "draw/lv_image_decoder_private.h"
+#include "image/lv_image_decoder_private.h"
 #include "core/lv_global.h"
 
 static _displayio_colorspace_t cp_lvgl_colorspace;
@@ -411,7 +411,7 @@ static lv_result_t cp_lvgl_decoder_open(lv_image_decoder_t *decoder, lv_image_de
         } else if (mp_obj_is_type(ext->pixel_shader, &displayio_palette_type)) {
             displayio_palette_get_color(ext->pixel_shader, &cp_lvgl_colorspace, &dbg_in, &dbg_out);
         }
-        printf("[DBG] gif dec in=%04x out=%06x; row1:", px01, dbg_out.pixel);
+        printf("[DBG] gif dec in=%04x out=%06x; row1:", (unsigned)px01, (unsigned)dbg_out.pixel);
         for (int gx = 0; gx < 16; gx++) {
             uint32_t gv = common_hal_displayio_bitmap_get_pixel(ext->bitmap, gx, 1);
             displayio_input_pixel_t di2 = { .pixel = gv };
@@ -421,7 +421,7 @@ static lv_result_t cp_lvgl_decoder_open(lv_image_decoder_t *decoder, lv_image_de
             } else if (mp_obj_is_type(ext->pixel_shader, &displayio_palette_type)) {
                 displayio_palette_get_color(ext->pixel_shader, &cp_lvgl_colorspace, &di2, &do2);
             }
-            printf(" %04x>%04x", gv, do2.pixel);
+            printf(" %04x>%04x", (unsigned)gv, (unsigned)do2.pixel);
         }
         printf("\n");
     }

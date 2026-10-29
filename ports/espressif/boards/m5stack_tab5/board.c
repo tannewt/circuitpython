@@ -11,6 +11,7 @@
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/mipidsi/Bus.h"
 #include "shared-bindings/mipidsi/Display.h"
+#include "shared-bindings/framebufferio/FramebufferDisplay.h"
 #include "shared-module/displayio/__init__.h"
 #include "shared-module/framebufferio/__init__.h"
 #include "shared-module/framebufferio/FramebufferDisplay.h"
@@ -18,6 +19,13 @@
 
 // Statically allocate the MIPI DSI bus (only one DSI bus on ESP32-P4)
 static mipidsi_bus_obj_t board_mipidsi_bus;
+#if CIRCUITPY_DISPLAYIO_LVGL
+// LVGL displays aren't part of the legacy display registry, so keep them in
+// static storage rather than allocating from the (not yet initialized) VM heap.
+static mipidsi_display_obj_t board_mipidsi_display;
+// The board module exposes this as board.DISPLAY, so it can't be static.
+framebufferio_framebufferdisplay_obj_t board_framebuffer_display;
+#endif
 
 // ILI9881C initialization sequence
 static const uint8_t ili9881c_init_sequence[] = {
@@ -337,8 +345,12 @@ void board_init(void) {
     common_hal_mipidsi_bus_construct(&board_mipidsi_bus, bus_frequency, 2);  // 2 lanes
 
     // Allocate display bus for the display object
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    mipidsi_display_obj_t *display = &board_mipidsi_display;
+    #else
     primary_display_bus_t *display_bus_obj = allocate_display_bus_or_raise();
     mipidsi_display_obj_t *display = &display_bus_obj->mipidsi;
+    #endif
     display->base.type = &mipidsi_display_type;
 
     common_hal_mipidsi_display_construct(
@@ -365,7 +377,11 @@ void board_init(void) {
         );
 
     // Create framebuffer display
+    #if CIRCUITPY_DISPLAYIO_LVGL
+    framebufferio_framebufferdisplay_obj_t *fb_display = &board_framebuffer_display;
+    #else
     framebufferio_framebufferdisplay_obj_t *fb_display = &allocate_display()->framebuffer_display;
+    #endif
     fb_display->base.type = &framebufferio_framebufferdisplay_type;
 
     common_hal_framebufferio_framebufferdisplay_construct(

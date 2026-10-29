@@ -54,14 +54,17 @@ void displayio_lvgl_dsc_cache_drop(displayio_lvgl_image_dsc_t *dsc);
 void displayio_lvgl_mirror_gc(void);
 
 // Bitmap and Palette content-change notification, implemented in Bitmap.c and
-// Palette.c. TileGrids register as mirror users when attached; changes to the
-// shared bitmap or palette invalidate their images.
+// Palette.c. Mirror users (TileGrids and vectorio shapes) register when they attach;
+// changes to the shared bitmap or palette invalidate or restyle them.
 void displayio_lvgl_bitmap_register_user(displayio_bitmap_t *self, displayio_tilegrid_t *tilegrid);
 void displayio_lvgl_bitmap_unregister_user(displayio_bitmap_t *self, displayio_tilegrid_t *tilegrid);
 void displayio_lvgl_bitmap_notify_users(displayio_bitmap_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2);
 void displayio_lvgl_palette_register_user(displayio_palette_t *self, displayio_tilegrid_t *tilegrid);
 void displayio_lvgl_palette_unregister_user(displayio_palette_t *self, displayio_tilegrid_t *tilegrid);
 void displayio_lvgl_palette_notify_users(displayio_palette_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2);
+// Pixel shader (Palette or ColorConverter) registration for non-TileGrid mirrors.
+void displayio_lvgl_shader_register_user(mp_obj_t pixel_shader, void *user, uint8_t kind);
+void displayio_lvgl_shader_unregister_user(mp_obj_t pixel_shader, void *user);
 void displayio_lvgl_tilegrid_bitmap_changed(displayio_tilegrid_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2);
 void displayio_lvgl_tilegrid_palette_changed(displayio_tilegrid_t *self, int16_t x1, int16_t y1, int16_t x2, int16_t y2);
 

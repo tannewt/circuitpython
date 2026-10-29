@@ -8,6 +8,21 @@
 
 #include "py/misc.h"
 
+// Identity transform. Shared by vectorio and the legacy compositor; the LVGL
+// compositor ignores display transforms.
+displayio_buffer_transform_t null_transform = {
+    .x = 0,
+    .y = 0,
+    .dx = 1,
+    .dy = 1,
+    .scale = 1,
+    .width = 0,
+    .height = 0,
+    .mirror_x = false,
+    .mirror_y = false,
+    .transpose_xy = false
+};
+
 void displayio_area_copy(const displayio_area_t *src, displayio_area_t *dst) {
     dst->x1 = src->x1;
     dst->y1 = src->y1;
