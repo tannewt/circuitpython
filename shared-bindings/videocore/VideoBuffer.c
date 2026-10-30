@@ -15,35 +15,25 @@
 //| class VideoBuffer:
 //|     """Stream a video source into a framebuffer or buffer.
 //|
-//|     A VideoBuffer can be added to displayio.Groups to show on a display
-//|     but may have size and position limitations.
+//|     A VideoBuffer connects a video source, such as `mipicsi.Camera`, to a
+//|     target: either a framebuffer, such as `mipidsi.Display`, or a writable
+//|     buffer such as a ``bytearray``. It is the video counterpart of
+//|     `audioio.AudioOut`.
 //|
-//|     A VideoBuffer connects a video source (an object implementing the
-//|     videosource protocol, such as `mipicsi.Camera`) to a target: either a
-//|     framebuffer (an object implementing the framebuffer protocol, such as
-//|     `mipidsi.Display`) or a writable buffer such as a ``bytearray`` or
-//|     ``memoryview``. It is the video counterpart of `audioio.AudioOut`.
+//|     Add a VideoBuffer to a `displayio.Group` to show it on a display. A
+//|     framebuffer target only streams while it is shown.
 //|
-//|     The VideoBuffer tells the source where to put frames and moves the
-//|     destination as needed; while shown, the source streams continuously
-//|     into it. While playing, the target always holds the newest frame.
-//|
-//|     When the target is a framebuffer, position the video with ``x`` and
-//|     ``y``: they may be changed at any time, including while playing, which
-//|     moves where the source puts its next frame. Some implementations may
-//|     restrict size and position. Setting position directly will raise an
-//|     error but indirectly through Group may result in weird output. For
-//|     example, on ESP32-P4 a VideoBuffer written into the framebuffer
-//|     directly must be full width because the ESP can't handle a stride
-//|     without an intermediate buffer.
+//|     Implementations may restrict size and position. For example, on
+//|     ESP32-P4 a framebuffer target must be full width because the DMA can't
+//|     skip between rows without an intermediate buffer. Setting an
+//|     unsupported position directly raises an error, but moving a containing
+//|     Group may give garbled output instead.
 //|
 //|     When the target is a plain buffer, frames are written compactly (row
 //|     stride equals ``width * bits_per_pixel / 8``) and can be read from
-//|     Python at any time — for example to process or save camera pixels.
+//|     Python at any time, for example to process or save camera pixels.
 //|
-//|     Two complete examples are in the `videocore` module overview: one
-//|     streaming a camera directly into a display, and one capturing a
-//|     320x240 window into a ``bytearray`` that displayio places in a Group.
+//|     See the `videocore` module overview for complete examples.
 //|     """
 //|
 //|     def __init__(
@@ -78,14 +68,17 @@ static mp_obj_t videocore_videobuffer_make_new(const mp_obj_type_t *type, size_t
 //|
 //|         The source streams continuously, writing each new frame where the
 //|         VideoBuffer tells it to, replacing the previous one. The source's
-//|         frame format must be byte aligned. When the target is a
-//|         framebuffer, its bits per pixel must match the framebuffer color
-//|         depth and the whole frame must fit within the framebuffer at the
-//|         current ``x``/``y`` position (rows can't wrap past its end). When
-//|         the target is a plain buffer, it must be large enough for a whole
-//|         frame. The source's size and format are then fixed for the
-//|         duration of the play; sources that change them require ``stop``
-//|         and a new ``play``.
+//|         frame format must be byte aligned. The source's size and format are
+//|         then fixed for the duration of the ``play()``; sources that change
+//|         them require ``stop()`` and a new ``play()``.
+//|
+//|         When the target is a framebuffer, its bits per pixel must match the
+//|         framebuffer color depth and the whole frame must fit within the
+//|         framebuffer at the current ``x``/``y`` position. An exception may be
+//|         raised if the video can't be played directly into the framebuffer.
+//|
+//|         When the target is a plain buffer, it must be large enough for a
+//|         whole frame.
 //|
 //|         :param ~circuitpython_typing.VideoSource source: The video source to
 //|             play, such as `mipicsi.Camera`
@@ -132,13 +125,11 @@ MP_PROPERTY_GETTER(videocore_videobuffer_source_obj,
     (mp_obj_t)&videocore_videobuffer_get_source_obj);
 
 //|     x: int
-//|     """The x position of the video within the display. Framebuffer targets
-//|     must be at x == 0 (video sources DMA whole rows): ``ValueError``
-//|     otherwise. Plain buffer targets only use it to place the video in a
-//|     Group: it doesn't change where frames land within the buffer."""
+//|     """The x position of the video within its Group. Framebuffer targets
+//|     only support ``x == 0`` and raise `ValueError` otherwise."""
 //|
 //|     y: int
-//|     """The y position of the video within the display."""
+//|     """The y position of the video within its Group."""
 //|
 //|
 static void videocore_videobuffer_get_position(mp_obj_t self_in, mp_int_t *x, mp_int_t *y) {
@@ -184,7 +175,7 @@ MP_PROPERTY_GETSET(videocore_videobuffer_y_obj,
     (mp_obj_t)&videocore_videobuffer_set_y_obj);
 
 //|     def deinit(self) -> None:
-//|         """Stop playing. The video source stops itself."""
+//|         """Stop playing and stop the video source."""
 //|         ...
 //|
 //|     def __enter__(self) -> VideoBuffer:
@@ -203,9 +194,8 @@ static mp_obj_t videocore_videobuffer_deinit(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(videocore_videobuffer_deinit_obj, videocore_videobuffer_deinit);
 
-// The finaliser must not raise (it runs during garbage collection), so stop
-// without one instead of deinit(): a failed stop stays best-effort, matching
-// the source's own finaliser.
+// The finaliser runs during garbage collection and must not raise, so use
+// the quiet stop instead of deinit().
 static mp_obj_t videocore_videobuffer___del__(mp_obj_t self_in) {
     videocore_videobuffer_obj_t *self = MP_OBJ_TO_PTR(self_in);
     videocore_videobuffer_stop_quiet(self);

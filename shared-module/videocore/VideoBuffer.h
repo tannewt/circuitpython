@@ -11,11 +11,6 @@
 #include "shared-bindings/vectorio/__init__.h" // draw protocol
 #include "shared-module/displayio/area.h"
 
-// How many frames that landed away from the current destination (see
-// stray_frames) can wait for a refresh to repaint them. One lands per move or
-// pause; more pile up only when the video moves faster than the display
-// refreshes, and an overflow repaints the whole framebuffer instead.
-#define VIDEOCORE_STRAY_FRAMES 4
 #include "shared-module/framebufferio/FramebufferDisplay.h" // framebuffer protocol
 #include "shared-module/videocore/__init__.h"
 
@@ -37,25 +32,26 @@ typedef struct {
     mp_int_t source_height;
     mp_int_t source_bits_per_pixel;
     size_t source_frame_bytes;
-    // Where the source streams frames into: the requested destination, or a
-    // later, hardware-aligned position inside it. "Later in the buffer" only
-    // happens for plain-buffer targets; set by play() and the x/y
-    // properties.
+    // Base of the destination the source last accepted, or NULL when there
+    // is none.
     const void *stream_base;
     // Set from interrupt context when the source lands a frame in the
     // destination; cleared by the refresh pass once the new frame has been
     // rendered into the display.
     volatile bool frame_ready;
-    // Frames that landed somewhere other than stream_base: the frame being
-    // written when the destination changes, or when the source is paused,
-    // still lands at the previous destination, possibly after the refresh
-    // that repainted the vacated area. on_frame queues where they landed
-    // (interrupt context, the only producer) and the refresh pass repaints
-    // those areas with the lower layers (the only consumer).
-    const void *volatile stray_frames[VIDEOCORE_STRAY_FRAMES];
-    volatile uint8_t stray_head;
-    volatile uint8_t stray_tail;
-    volatile bool stray_overflow;
+    // Screen area of frames that landed where the video used to be: the frame
+    // in flight when the destination moves or the source pauses still lands
+    // at the old destination, possibly after that area was repainted. Grown
+    // by on_frame in interrupt context; the refresh moves it into
+    // ephemeral_dirty_area with interrupts disabled.
+    displayio_area_t vacated_area;
+    // Framebuffer geometry cached for on_frame, which can't call the
+    // framebuffer protocol from interrupt context. fb_pixels is NULL for
+    // plain buffer targets.
+    const uint8_t *fb_pixels;
+    size_t fb_pixels_len;
+    size_t fb_row_stride;
+    mp_int_t fb_width;
     // displayio draw protocol state: the rect currently rendered (in screen
     // coordinates) and the rect that changed since the last refresh.
     displayio_area_t current_area;
@@ -69,12 +65,9 @@ typedef struct {
     // the video won't show until stop and play again.
     bool stale_size;
     bool playing;
-    // True when the framebuffer target isn't shown (not attached to a display
-    // or hidden), so the source should not stream to the target. play() passes
-    // this to the source so it starts paused; otherwise showing/hiding the
-    // target pauses and resumes the source. It also keeps this state while
-    // stopped, so a later play() starts correctly. Plain buffer targets are
-    // never paused.
+    // True while a framebuffer target isn't shown, so its source is paused.
+    // Tracked while stopped too, so play() can start the source paused.
+    // Plain buffer targets are never paused.
     bool paused;
 } videocore_videobuffer_obj_t;
 
@@ -88,9 +81,7 @@ void videocore_videobuffer_stop_quiet(videocore_videobuffer_obj_t *self);
 bool common_hal_videocore_videobuffer_get_playing(videocore_videobuffer_obj_t *self);
 mp_obj_t common_hal_videocore_videobuffer_get_source(videocore_videobuffer_obj_t *self);
 
-// The draw protocol implementation that lets a VideoBuffer be added to a
-// displayio Group: plain-buffer targets get bulk copied into the framebuffer
-// by displayio's rendering; framebuffer targets claim their area (a no-op
-// fill: the source streams their pixels straight into the framebuffer) so
-// displayio's refresh pushes the video's rows to the framebuffer.
+// Draw protocol that lets a VideoBuffer be added to a displayio Group.
+// displayio copies plain-buffer frames into the display; framebuffer-target
+// frames are already in place, so displayio only marks their rows.
 extern const vectorio_draw_protocol_t videocore_videobuffer_draw_protocol;

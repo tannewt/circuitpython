@@ -20,13 +20,15 @@
 //| configured separately (typically over I2C); this module only receives
 //| the image data the sensor transmits.
 //|
-//| The image data arrives in the format the sensor transmits, described by
-//| `PixelFormat`. RAW formats carry Bayer data, whose element order is
-//| described by `BayerOrder`. For instance, a sensor transmitting RGB565
-//| data yields frames of RGB565 pixels. Optionally, `mipicsi.Camera` can
-//| convert frames with the ISP processor (set ``output_format`` and
-//| ``pixel_format``), for example from the sensor's RAW output to RGB565 for
-//| display.
+//| By default, captured frames are in the same format the sensor sends,
+//| described by `PixelFormat`. For example, an RGB565 sensor gives RGB565
+//| frames. RAW formats contain Bayer data, with the color order given by
+//| `BayerOrder`.
+//|
+//| `mipicsi.Camera` may be able to convert the format as it receives a
+//| frame. To do this, pass the desired ``output_format`` when creating the
+//| Camera. An exception will be raised if it cannot be done in hardware
+//| without another buffer.
 //| """
 
 static const mp_rom_map_elem_t mipicsi_module_globals_table[] = {

@@ -33,10 +33,10 @@ static void parse_byteorder(mp_obj_t byteorder_obj, pixelbuf_byteorder_details_t
 //| class PixelBuf:
 //|     """A fast RGB[W] pixel buffer for LED and similar devices.
 //|
-//|     Subclasses must define ``_transmit(self, buffer)``, which `show` calls
-//|     with a `bytearray` of the bytes to send: the header, the pixel
-//|     values, and the trailer. ``_transmit`` is internal, for PixelBuf's
-//|     use only; user code shows pixels through `show` and `auto_write`.
+//|     Subclasses must define ``_transmit(self, buffer)``, which `show()`
+//|     calls with a `bytearray` of the bytes to send: the header, the pixel
+//|     values, and the trailer. ``_transmit()`` is internal, for PixelBuf's
+//|     use only; user code shows pixels through `show()` and `auto_write`.
 //|     """
 //|
 //|     def __init__(

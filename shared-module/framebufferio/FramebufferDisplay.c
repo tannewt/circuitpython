@@ -184,11 +184,9 @@ static bool _refresh_area(framebufferio_framebufferdisplay_obj_t *self, const di
 
         bool covered = displayio_display_core_fill_area(&self->core, &subrectangle, mask, buffer);
 
-        // A framebuffer-target VideoBuffer streams its pixels straight into
-        // the framebuffer, so when it is the only layer covering this
-        // subrectangle it returns full coverage without claiming any pixels.
-        // Nothing was composed into the scratch, so writing it back would
-        // erase the video; leave the framebuffer alone and just mark the rows.
+        // A framebuffer-target VideoBuffer that is the only layer here reports
+        // full coverage without claiming pixels: its frame is already in the
+        // framebuffer, so don't overwrite it with the empty scratch.
         bool write_back = true;
         if (covered) {
             write_back = false;

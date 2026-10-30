@@ -13,11 +13,8 @@
 #include "py/obj.h"
 #include "py/proto.h"
 
-// Destination for a video stream: where to put pixels, as a pointer to the
-// first pixel and the destination row stride. row_bytes/height describe the
-// source frame; the source assumes the destination holds the whole frame
-// (the ESP CSI DMA is contiguous-only), so the rect is validated before
-// streaming starts and when the position changes.
+// Destination for a video stream. The caller checks that the whole frame
+// fits before handing it to a source.
 typedef struct {
     // First pixel of the destination.
     uint8_t *base;
@@ -46,22 +43,19 @@ typedef void (*videocore_on_frame_fun)(void *ctx, const void *frame);
 typedef struct _videosource_p_t {
     MP_PROTOCOL_HEAD // MP_QSTR_protocol_videosource
 
-    // Create whatever streaming hardware the source needs and start it (e.g.
-    // start a sensor streaming). Called once before the first
-    // set_destination of a stream, from Python (VideoBuffer.play), so it may
-    // raise. Raises when the source is already streaming for someone else.
-    // May be NULL for sources that need no preparation. The source must not
-    // write frames before set_destination(). When paused is true, the source's
-    // hardware must come up active but not writing frames, as if pause() had
-    // been called before it started; this avoids a play-then-pause race when
-    // the target isn't shown yet.
+    // Start the source's hardware (e.g. start the sensor). Called from
+    // VideoBuffer.play, so it may raise, including when the source is
+    // already playing. No frames are written before set_destination(). When
+    // paused is true, start as if pause() had already been called. May be
+    // NULL.
     void (*play)(mp_obj_t self, bool paused);
 
     // Pause streaming without stopping the camera or releasing its hardware:
     // e.g. stop the CSI controller's DMA while the sensor keeps streaming.
     // No frames are written until resume(). Called when a framebuffer target
     // stops being shown. set_destination() while paused updates where resume()
-    // will stream. Must not raise: it runs from displayio group operations.
+    // will stream. May raise; VideoBuffer ignores errors since it also pauses
+    // during display reset.
     void (*pause)(mp_obj_t self);
 
     // Resume streaming after pause() into the most recent destination. Called
@@ -69,21 +63,16 @@ typedef struct _videosource_p_t {
     // may raise; the source must stay paused if it does.
     void (*resume)(mp_obj_t self);
 
-    // Direct future frames into dest. The destination may be changed
-    // between frames; there is no NULL/stop value: stopping is stop()'s
-    // job. Never raises: returns whether the stream accepted the
-    // destination (the caller may ignore the result). on_frame(ctx, frame)
-    // is called from interrupt context whenever a frame has landed, with the
-    // destination base it landed at (the source never relocates frames
-    // elsewhere). A change takes effect from the next frame: the frame being
-    // written still lands at the previous destination.
+    // Direct frames into dest, starting with the next frame. Never raises:
+    // returns whether the source accepted dest. on_frame(ctx, frame) is
+    // called from interrupt context each time a frame lands, with the base
+    // it landed at.
     bool (*set_destination)(mp_obj_t self, const videocore_destination_t *dest,
         videocore_on_frame_fun on_frame, void *ctx);
 
-    // Stop streaming and release the streaming hardware (e.g. stop the
-    // sensor so its settings can be changed). Called once per stream, from
-    // Python (VideoBuffer.stop), so it may raise; exceptions there are
-    // clearer than implicit stops. Only called when play() succeeded.
+    // Stop streaming and release the hardware (e.g. stop the sensor so its
+    // settings can be changed). Called from VideoBuffer.stop, so it may
+    // raise. May be NULL.
     void (*stop)(mp_obj_t self);
 
     // Width of the frames the source streams, in pixels.
@@ -94,9 +83,8 @@ typedef struct _videosource_p_t {
     mp_int_t (*get_bits_per_pixel)(mp_obj_t self);
 } videosource_p_t;
 
-// Protocol function helpers. videosource_play/stop are no-ops for sources
-// whose protocol doesn't implement them. pause/resume are required: they
-// keep a source's hardware alive while a framebuffer target is hidden.
+// Protocol dispatch helpers. play and stop are no-ops when the source doesn't
+// implement them; the rest are required.
 void videosource_play(mp_obj_t source, bool paused);
 void videosource_stop(mp_obj_t source);
 void videosource_pause(mp_obj_t source);
@@ -105,8 +93,6 @@ void videosource_resume(mp_obj_t source);
 // Return the videosource protocol of obj or raise TypeError.
 const videosource_p_t *videosource_check(mp_obj_t obj);
 
-// Dispatch helpers mirroring the audiosample_* functions. videosource_play
-// is a no-op for sources whose protocol has no play.
 bool videosource_set_destination(mp_obj_t source, const videocore_destination_t *dest,
     videocore_on_frame_fun on_frame, void *ctx);
 mp_int_t videosource_get_width(mp_obj_t source);

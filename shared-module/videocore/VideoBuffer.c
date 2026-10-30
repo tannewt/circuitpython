@@ -11,6 +11,7 @@
 #include "py/runtime.h"
 
 #include "shared-bindings/displayio/Group.h"
+#include "shared-bindings/microcontroller/__init__.h"
 #include "shared-bindings/videocore/VideoBuffer.h"
 #include "shared-bindings/videocore/__init__.h"
 #include "shared-module/displayio/Group.h"
@@ -25,92 +26,61 @@
         ? self->framebuffer_protocol->method(self->framebuffer) \
         : (default_value))
 
-// Called from interrupt context when the source lands a frame. The frame
-// landed in stream_base, the buffer the accepted destination gave (set when
-// the last set_destination returned true), so keep it tiny.
+// Add the screen area of a frame that landed at frame to vacated_area. Uses
+// only the cached framebuffer geometry since this runs in interrupt context.
+// A shifted frame can start mid-row and wrap its rows; then cover the full
+// width.
+static void videocore_videobuffer_add_vacated_frame(videocore_videobuffer_obj_t *self, const void *frame) {
+    const size_t bytes_per_pixel = self->source_bits_per_pixel / 8;
+    const uint8_t *pixels = self->fb_pixels;
+    if (pixels == NULL || bytes_per_pixel == 0 || self->fb_row_stride == 0 ||
+        (const uint8_t *)frame < pixels) {
+        return; // Plain buffer frames are never shown where they land.
+    }
+    const size_t offset = (const uint8_t *)frame - pixels;
+    if (offset >= self->fb_pixels_len) {
+        return;
+    }
+    displayio_area_t area = {
+        .x1 = (offset % self->fb_row_stride) / bytes_per_pixel,
+        .y1 = offset / self->fb_row_stride,
+    };
+    area.x2 = area.x1 + self->source_width;
+    area.y2 = area.y1 + self->source_height;
+    if (area.x2 > self->fb_width) {
+        area.x1 = 0;
+        area.x2 = self->fb_width;
+        area.y2 += 1;
+    }
+    displayio_area_union(&self->vacated_area, &area, &self->vacated_area);
+}
+
+// Called from interrupt context when the source lands a frame, so keep it
+// tiny.
 static void videocore_videobuffer_on_frame(void *ctx, const void *frame) {
     videocore_videobuffer_obj_t *self = ctx;
     if (frame == self->stream_base) {
         self->frame_ready = true;
         return;
     }
-    // It landed at a destination we have moved away from or paused: the
-    // frame that was being written at the time. Queue it for the refresh pass
-    // to repaint, since that area may already have been repainted.
-    const uint8_t head = self->stray_head;
-    if ((uint8_t)(head - self->stray_tail) >= VIDEOCORE_STRAY_FRAMES) {
-        self->stray_overflow = true;
-        return;
-    }
-    self->stray_frames[head % VIDEOCORE_STRAY_FRAMES] = frame;
-    __atomic_store_n(&self->stray_head, (uint8_t)(head + 1), __ATOMIC_RELEASE);
+    // It landed where the video used to be (the frame in flight when it moved
+    // or paused). Repaint there, since that area may already have been
+    // repainted.
+    videocore_videobuffer_add_vacated_frame(self, frame);
 }
 
-// Union the screen area of a framebuffer-target frame that landed at frame
-// into the dirty area. Framebuffer coordinates are screen coordinates (see
-// compute_destination). A shift can start the frame mid-row, wrapping its
-// rows; then cover the full width.
-static void videocore_videobuffer_dirty_frame_at(videocore_videobuffer_obj_t *self, const void *frame) {
-    const size_t bytes_per_pixel = self->source_bits_per_pixel / 8;
-    if (self->framebuffer_protocol == NULL || bytes_per_pixel == 0) {
-        return; // Raw buffer frames are never shown where they land.
-    }
-    mp_buffer_info_t bufinfo;
-    self->framebuffer_protocol->get_bufinfo(self->framebuffer, &bufinfo);
-    const mp_int_t fb_width = FB_GETTER(get_width, 0);
-    const mp_int_t row_stride = FB_GETTER(get_row_stride, fb_width * self->source_bits_per_pixel / 8);
-    const mp_int_t first_pixel_offset = FB_GETTER(get_first_pixel_offset, 0);
-    const mp_int_t offset = (const uint8_t *)frame - (const uint8_t *)bufinfo.buf - first_pixel_offset;
-    if (bufinfo.buf == NULL || row_stride <= 0 || offset < 0 || offset >= (mp_int_t)bufinfo.len) {
-        return;
-    }
-    displayio_area_t area = {
-        .x1 = (offset % row_stride) / bytes_per_pixel,
-        .y1 = offset / row_stride,
-    };
-    area.x2 = area.x1 + self->source_width;
-    area.y2 = area.y1 + self->source_height;
-    if (area.x2 > fb_width) {
-        area.x1 = 0;
-        area.x2 = fb_width;
-        area.y2 += 1;
-    }
-    displayio_area_union(&self->ephemeral_dirty_area, &area, &self->ephemeral_dirty_area);
+// Cache the framebuffer geometry for on_frame (see fb_pixels).
+static void videocore_videobuffer_cache_fb_geometry(videocore_videobuffer_obj_t *self,
+    const mp_buffer_info_t *bufinfo, mp_int_t fb_width, mp_int_t row_stride, mp_int_t first_pixel_offset) {
+    self->fb_pixels = (const uint8_t *)bufinfo->buf + first_pixel_offset;
+    self->fb_pixels_len = bufinfo->len - first_pixel_offset;
+    self->fb_row_stride = row_stride;
+    self->fb_width = fb_width;
 }
 
-// Repaint where frames landed away from the current destination (see
-// on_frame). Main context only.
-static void videocore_videobuffer_dirty_stray_frames(videocore_videobuffer_obj_t *self) {
-    const uint8_t head = __atomic_load_n(&self->stray_head, __ATOMIC_ACQUIRE);
-    uint8_t tail = self->stray_tail;
-    while (tail != head) {
-        videocore_videobuffer_dirty_frame_at(self, self->stray_frames[tail % VIDEOCORE_STRAY_FRAMES]);
-        tail++;
-    }
-    __atomic_store_n(&self->stray_tail, tail, __ATOMIC_RELEASE);
-    if (self->stray_overflow) {
-        // Lost track of some: repaint the whole framebuffer.
-        self->stray_overflow = false;
-        if (self->framebuffer_protocol != NULL) {
-            displayio_area_t all = {
-                .x1 = 0,
-                .y1 = 0,
-                .x2 = FB_GETTER(get_width, 0),
-                .y2 = FB_GETTER(get_height, 0),
-            };
-            displayio_area_union(&self->ephemeral_dirty_area, &all, &self->ephemeral_dirty_area);
-        }
-    }
-}
-
-// Tear down playback state: clear our fields.
-static void videocore_videobuffer_clear(videocore_videobuffer_obj_t *self);
-
-// Union the video's currently rendered rect into the dirty area so the next
-// refresh repaints the pixels it leaves behind when it moves. Only meaningful
-// while the video is actually shown: when it isn't, there are no pixels of
-// ours to clear. Accumulates, so repeated moves before a refresh keep every
-// vacated rect.
+// Add the currently rendered rect to the dirty area so the next refresh
+// repaints what a move leaves behind. Accumulates across moves. Does nothing
+// while the video isn't shown.
 static void videocore_videobuffer_dirty_current_area(videocore_videobuffer_obj_t *self) {
     if (self->absolute_transform.scale == 0 || self->hidden) {
         return;
@@ -132,13 +102,10 @@ static void videocore_videobuffer_update_area(videocore_videobuffer_obj_t *self)
     self->current_area.next = NULL;
 }
 
-// Compute the destination for the source in the current target, honoring the
-// current x/y position and the absolute transform's translation (a video in
-// a group). Raises unless the whole frame fits in the target: the camera
-// DMA's whole, contiguous frames with no stride padding, so rows can't wrap
-// past the buffer and there is no cropping yet. The caller validates the
-// fit (this runs from Python contexts); framebuffers in groups also move
-// their destination from draw contexts with clamping (see _move_dest).
+// Compute the destination for the current position, including a containing
+// group's translation. Raises unless the whole frame fits in the target,
+// since sources write contiguous frames. move_dest() is the non-raising
+// variant used from displayio.
 static void videocore_videobuffer_compute_destination(
     videocore_videobuffer_obj_t *self, videocore_destination_t *dest) {
     const size_t bytes_per_pixel = self->source_bits_per_pixel / 8;
@@ -179,6 +146,7 @@ static void videocore_videobuffer_compute_destination(
         bufinfo.len) {
         mp_raise_ValueError(MP_ERROR_TEXT("video doesn't fit in framebuffer"));
     }
+    videocore_videobuffer_cache_fb_geometry(self, &bufinfo, fb_width, row_stride, first_pixel_offset);
 
     dest->base = (uint8_t *)bufinfo.buf + first_pixel_offset +
         shift_y * row_stride + shift_x * bytes_per_pixel;
@@ -229,6 +197,7 @@ static void videocore_videobuffer_move_dest(
     if (shift_x < 0) {
         shift_x = 0;
     }
+    videocore_videobuffer_cache_fb_geometry(self, &bufinfo, fb_width, row_stride, first_pixel_offset);
 
     videocore_destination_t dest = {
         .base = bufinfo.buf + first_pixel_offset + shift_y * row_stride + shift_x * bytes_per_pixel,
@@ -236,19 +205,14 @@ static void videocore_videobuffer_move_dest(
         .row_bytes = row_bytes,
         .height = self->source_height,
     };
-    // The result is ignored here: the source rejects a destination by
-    // returning false (e.g. a mid-row shift isn't DMA-aligned) and the
-    // stream continues where it was. on_frame points at the old destination
-    // until then, which keeps the last-known-good frame.
+    // A rejected destination leaves the stream where it was.
     if (videosource_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self)) {
         self->stream_base = dest.base;
     }
 }
 
 void common_hal_videocore_videobuffer_construct(videocore_videobuffer_obj_t *self, mp_obj_t framebuffer) {
-    // The object has a finaliser, so initialise the fields it uses before any
-    // validation can raise. Otherwise a rejected framebuffer leaves source
-    // uninitialised and the later finaliser walks a garbage pointer.
+    // Initialise what the finaliser uses before anything can raise.
     self->source = mp_const_none;
     self->stream_base = NULL;
     self->playing = false;
@@ -271,29 +235,27 @@ void common_hal_videocore_videobuffer_construct(videocore_videobuffer_obj_t *sel
     self->x = 0;
     self->y = 0;
     self->frame_ready = false;
-    self->stray_head = 0;
-    self->stray_tail = 0;
-    self->stray_overflow = false;
+    self->fb_pixels = NULL;
+    self->fb_pixels_len = 0;
+    self->fb_row_stride = 0;
+    self->fb_width = 0;
     self->in_group = false;
     self->hidden = false;
     self->stale_size = false;
     displayio_area_t empty = {};
     self->current_area = empty;
     self->ephemeral_dirty_area = empty;
+    self->vacated_area = empty;
     displayio_buffer_transform_t empty_transform = {};
     self->absolute_transform = empty_transform;
-    self->playing = false;
     // Nothing is shown until a Group attached to a display updates our
     // transform.
     self->paused = true;
 }
 
-// Start the source's hardware and capture its frame format. It is not pointed
-// at a destination yet, so it does not write frames: the caller either starts
-// streaming or leaves it paused. When paused is true the source comes up
-// paused, so no frame can slip out between starting and pausing. The source
-// may reconfigure itself (e.g. a sensor picks its mode), which fixes what
-// get_* report from here on. Runs from Python contexts (play) so it may raise.
+// Start the source's hardware and record its frame format, which is fixed
+// until stop. The source has no destination yet, so it doesn't write frames.
+// When paused is true it starts paused. May raise.
 static void videocore_videobuffer_start_source(videocore_videobuffer_obj_t *self, bool paused) {
     mp_obj_t source = self->source;
     const videosource_p_t *protocol = videosource_check(source);
@@ -331,10 +293,7 @@ static void videocore_videobuffer_start_stream(videocore_videobuffer_obj_t *self
     videocore_destination_t dest;
     videocore_videobuffer_compute_destination(self, &dest);
 
-    // Tell the source where to put its pixels. The source streams from now
-    // on; on_frame tells us when a new frame has landed. It is the
-    // displayio group tree (and this object's Python references) that keep
-    // the VideoBuffer alive; a GC'd buffer's finaliser stops the stream.
+    // The source streams from now on; on_frame reports each frame.
     if (!videosource_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self)) {
         mp_raise_ValueError(MP_ERROR_TEXT("video source rejected the destination"));
     }
@@ -344,15 +303,14 @@ static void videocore_videobuffer_start_stream(videocore_videobuffer_obj_t *self
 
 // Un-show a framebuffer target by pausing its source. The play session and
 // the source's hardware stay alive, but no frames are written to the target.
-// Best effort, like the finaliser's stop: this runs from a group operation, so
-// it must not raise.
+// Best effort: this also runs during display reset, so errors are ignored.
 static void videocore_videobuffer_pause_stream(videocore_videobuffer_obj_t *self) {
     if (self->paused || self->source == mp_const_none) {
         return; // Already paused, or nothing has been started yet.
     }
     // Drop the destination before pausing the source: the source finishes its
     // pause at the next frame boundary, so the frame being written still
-    // lands after this, and on_frame queues it as a stray to repaint over.
+    // lands after this, and on_frame adds it to vacated_area to repaint over.
     self->stream_base = NULL;
     self->paused = true;
     nlr_buf_t nlr;
@@ -389,10 +347,8 @@ static void videocore_videobuffer_resume_stream(videocore_videobuffer_obj_t *sel
 }
 
 // Start, resume or pause a framebuffer target's source to match whether it is
-// shown (on a display and not hidden). It streams only while shown; while
-// hidden the source stays active but paused, so showing it again is quick.
-// Plain buffer targets stream regardless; displayio renders them wherever they
-// are.
+// shown (on a display and not hidden). While hidden the source stays active
+// but paused, so showing it again is quick.
 static void videocore_videobuffer_update_stream(videocore_videobuffer_obj_t *self) {
     if (self->framebuffer_protocol == NULL) {
         return; // Plain buffer targets always stream.
@@ -421,11 +377,9 @@ void common_hal_videocore_videobuffer_play(videocore_videobuffer_obj_t *self, mp
     self->source = source;
     self->stale_size = false;
 
-    // A framebuffer target streams only while shown: DMA'ing into a buffer
-    // displayio isn't presenting would be meaningless. Start the source now
-    // either way, but start it paused when it isn't shown. Passing paused to
-    // play() (rather than pausing afterwards) keeps it from writing a frame
-    // in between. Plain buffer targets start streaming immediately.
+    // A framebuffer target only streams while shown. When it isn't, start the
+    // source paused rather than pausing it afterwards, so no frame slips out
+    // in between. Plain buffer targets always stream.
     const bool start_paused = self->framebuffer_protocol != NULL && self->paused;
     videocore_videobuffer_start_source(self, start_paused);
     self->playing = true;
@@ -468,9 +422,8 @@ void common_hal_videocore_videobuffer_set_position(videocore_videobuffer_obj_t *
         bits_per_pixel != self->source_bits_per_pixel) {
         mp_raise_ValueError(MP_ERROR_TEXT("video size changed since play; stop and play again"));
     }
-    // Move the destination between frames; the source picks up the change on
-    // its next frame. The result may be ignored here (the source rejects a
-    // destination by returning false; the stream continues where it was).
+    // The source picks up the new destination on its next frame. A rejected
+    // destination leaves the stream where it was.
     videocore_destination_t dest;
     videocore_videobuffer_compute_destination(self, &dest);
     if (videosource_set_destination(self->source, &dest, videocore_videobuffer_on_frame, self)) {
@@ -523,11 +476,9 @@ mp_obj_t common_hal_videocore_videobuffer_get_source(videocore_videobuffer_obj_t
     return self->source;
 }
 
-// Draw protocol implementation: a VideoBuffer holding a plain buffer gets
-// bulk copied into the display by displayio's rendering; a framebuffer
-// target's pixels are streamed into its framebuffer directly by the source,
-// so displayio's fill reads them back into the scratch buffer it composes in
-// (the refresh writes that scratch buffer back over the framebuffer).
+// Draw protocol implementation. displayio copies plain-buffer frames into the
+// display. Framebuffer-target frames are already in place; fill_area only
+// copies them into displayio's scratch buffer when other layers overlap.
 
 static mp_obj_t videocore_videobuffer_draw_protocol_self(mp_obj_t protocol_container) {
     return protocol_container;
@@ -549,14 +500,11 @@ static bool videocore_videobuffer_draw_fill_area(mp_obj_t self_in, const _displa
     const size_t overlap_width = displayio_area_width(&overlap);
 
     if (self->framebuffer_protocol != NULL) {
-        // Framebuffer target: the source streamed the pixels straight into the
-        // framebuffer, so there is nothing to copy *into* the framebuffer (the
-        // DMA did that). If the video is the only thing covering this area,
-        // claiming nothing signals the driver to skip its write-back and
-        // leave those pixels alone. Otherwise displayio composes into a
-        // scratch buffer and writes it back over the framebuffer, so read the
-        // video's pixels into the scratch (where a higher layer hasn't already
-        // drawn) and claim them so lower layers don't draw over them.
+        // The source already wrote these pixels into the framebuffer. If
+        // nothing else covers this area, claim no pixels so the display skips
+        // its write-back. Otherwise copy the video's unclaimed pixels into
+        // the scratch buffer and claim them, since the scratch buffer is
+        // written back over the framebuffer.
         const size_t bytes_per_pixel = self->source_bits_per_pixel / 8;
         const mp_int_t fb_width = FB_GETTER(get_width, 0);
         const mp_int_t row_stride = FB_GETTER(get_row_stride, fb_width * self->source_bits_per_pixel / 8);
@@ -662,11 +610,10 @@ static void videocore_videobuffer_draw_update_transform(mp_obj_t self_in, displa
         // Validate the transform: video frames are bulk copied (raw targets)
         // or DMA'd contiguously (framebuffer targets), so only translation
         // moves.
-        if (group_transform->scale != 0 &&
-            (group_transform->scale != 1 ||
-             group_transform->mirror_x || group_transform->mirror_y ||
-             group_transform->transpose_xy ||
-             group_transform->dx != 1 || group_transform->dy != 1)) {
+        if (group_transform->scale != 1 ||
+            group_transform->mirror_x || group_transform->mirror_y ||
+            group_transform->transpose_xy ||
+            group_transform->dx != 1 || group_transform->dy != 1) {
             mp_raise_ValueError(MP_ERROR_TEXT("VideoBuffer does not support transforms"));
         }
         self->absolute_transform = *group_transform;
@@ -710,9 +657,14 @@ static void videocore_videobuffer_draw_finish_refresh(mp_obj_t self_in) {
 
 static displayio_area_t *videocore_videobuffer_draw_get_refresh_areas(mp_obj_t self_in, displayio_area_t *tail) {
     videocore_videobuffer_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    // Frames that landed after the video moved or paused, possibly over the
-    // repaint of the area they landed in: repaint those areas again.
-    videocore_videobuffer_dirty_stray_frames(self);
+    // Frames that landed where the video used to be, possibly over the repaint
+    // of that area: repaint there again.
+    common_hal_mcu_disable_interrupts();
+    displayio_area_t vacated = self->vacated_area;
+    displayio_area_t empty = {};
+    self->vacated_area = empty;
+    common_hal_mcu_enable_interrupts();
+    displayio_area_union(&self->ephemeral_dirty_area, &vacated, &self->ephemeral_dirty_area);
     // Always repaint the area the video vacated, even once it is hidden or
     // stopped, so its last frame doesn't stay on the target.
     if (!displayio_area_empty(&self->ephemeral_dirty_area)) {

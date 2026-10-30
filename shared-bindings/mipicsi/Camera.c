@@ -25,28 +25,35 @@
 //|     """Receive frames from a camera sensor on a MIPI CSI-2 interface
 //|
 //|     The camera sensor is configured separately (typically over I2C) to
-//|     transmit frames. The MIPI CSI-2 receiver hardware has dedicated pins,
-//|     so no pins are configured here.
+//|     transmit frames. Use the dedicated MIPI CSI-2 receiver pins.
 //|
-//|     Pass the configured sensor to the constructor; the receiver matches
-//|     itself to the sensor's current mode when a `videocore.VideoBuffer`
-//|     plays the camera. The sensor object must provide the properties and
-//|     methods of ``circuitpython_typing.CameraSensor``: ``width``, ``height``,
-//|     ``pixel_format``, ``lane_bit_rate_mbps``, ``data_lanes`` and
-//|     ``bayer_order`` (a `BayerOrder`) properties plus ``_start()`` and
-//|     ``_stop()`` methods. Those two are internal: the camera calls them
-//|     itself as the stream starts and stops, so user code should not.
-//|     All are validated here (and again at play, so the sensor may change
-//|     its configuration freely while it isn't being played).
+//|     The sensor object must implement ``circuitpython_typing.CameraSensor``,
+//|     which has these properties:
 //|
-//|     The sensor decides the output image size, and the receiver is built
-//|     around it: a sensor cannot change its mode while frames are captured.
-//|     Sensors are started (``_start()``) when a `videocore.VideoBuffer`
-//|     starts playing the camera and stopped by ``_stop()`` when it stops
-//|     playing. While the VideoBuffer is hidden its DMA is paused, but the
-//|     sensor keeps streaming, so implementations should refuse to
-//|     reconfigure (raise) while streaming rather than change the output size
-//|     or format mid-stream, and have a new Camera made when the mode changes.
+//|     * ``width`` and ``height``: the image size in pixels
+//|     * ``pixel_format``: the `PixelFormat` the sensor transmits
+//|     * ``lane_bit_rate_mbps``: the bit rate of each data lane
+//|     * ``data_lanes``: the number of data lanes used, 1 or 2
+//|     * ``bayer_order``: the `BayerOrder` of RAW data
+//|
+//|     and these methods:
+//|
+//|     * ``_start()``: start transmitting frames
+//|     * ``_stop()``: stop transmitting frames
+//|
+//|     ``_start()`` and ``_stop()`` are internal. The camera calls them when
+//|     streaming starts and stops; user code should not call them.
+//|
+//|     The sensor's properties are validated when the Camera is created and
+//|     are validated again when `videocore.VideoBuffer.play()` is called. The
+//|     sensor may change its configuration while it is not playing.
+//|
+//|     The sensor sets the image size and format, and the receiver, such as
+//|     `videocore.VideoBuffer`, is set up to match when playing starts. The
+//|     sensor's mode should not change between ``_start()`` and ``_stop()``
+//|     calls. (The sensor class should raise an exception when it is
+//|     attempted.) To use a new mode, stop playing, change the sensor, and
+//|     play again.
 //|
 //|     Camera objects implement the internal videosource protocol, so a
 //|     `videocore.VideoBuffer` can stream their frames into a framebuffer.
@@ -70,23 +77,23 @@
 //|             is configured to match the sensor's current mode. The sensor
 //|             starts streaming when a `videocore.VideoBuffer` plays the
 //|             camera.
-//|         :param output_format: The format of the captured frames. When given and different from ``pixel_format``, the ISP converts each frame as it is captured (e.g. the sensor's RAW10 to `PixelFormat.RGB565`). Only RAW formats convert. Default: no conversion.
+//|         :param output_format: The format of the captured frames. Defaults
+//|             to the sensor's ``pixel_format``. When different, frames are
+//|             converted as they are captured, for example from RAW10 to
+//|             `PixelFormat.RGB565`. Not all conversions are supported.
 //|         """
 //|
-// Read the sensor's parameters off of the sensor object. A missing or
-// invalid property fails here rather than later; mp_load_attr raises
-// AttributeError for any property the sensor object doesn't provide. When
-// pixel_format_override is not None it replaces the sensor's reported
-// transmission format.
-static mipicsi_pixel_format_t mipicsi_camera_load_sensor_params(
+// Read and validate the sensor's parameters. mp_load_attr raises
+// AttributeError for missing ones.
+static void mipicsi_camera_load_sensor_params(
     mp_obj_t sensor,
     mipicsi_sensor_params_t *params) {
+    params->pixel_format = validate_pixel_format(mp_load_attr(sensor, MP_QSTR_pixel_format), MP_QSTR_pixel_format);
     params->width = mp_arg_validate_int_min(mp_obj_get_int(mp_load_attr(sensor, MP_QSTR_width)), 1, MP_QSTR_width);
     params->height = mp_arg_validate_int_min(mp_obj_get_int(mp_load_attr(sensor, MP_QSTR_height)), 1, MP_QSTR_height);
     params->lane_bit_rate_mbps = mp_arg_validate_int_min(mp_obj_get_int(mp_load_attr(sensor, MP_QSTR_lane_bit_rate_mbps)), 1, MP_QSTR_lane_bit_rate_mbps);
     params->data_lanes = mp_arg_validate_int_range(mp_obj_get_int(mp_load_attr(sensor, MP_QSTR_data_lanes)), 1, 2, MP_QSTR_data_lanes);
     params->bayer_order = validate_bayer_order(mp_load_attr(sensor, MP_QSTR_bayer_order), MP_QSTR_bayer_order);
-    return validate_pixel_format(mp_load_attr(sensor, MP_QSTR_pixel_format), MP_QSTR_pixel_format);
 }
 
 static mp_obj_t mipicsi_camera_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
@@ -101,13 +108,11 @@ static mp_obj_t mipicsi_camera_make_new(const mp_obj_type_t *type, size_t n_args
     MP_STATIC_ASSERT(MP_ARRAY_SIZE(allowed_args) == NUM_ARGS);
     mp_arg_parse_all_kw_array(0, n_kw, all_args + 1, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    // All of the sensor's parameters (including the transmission format) are
-    // read off of the sensor object now, so a missing or invalid property
-    // fails here rather than at play time. They are read again at play,
-    // since the sensor is free to reconfigure between streams.
+    // Validate the sensor now so mistakes show up early. play() reads the
+    // parameters again since the sensor may change between streams.
     mipicsi_sensor_params_t params;
-    mipicsi_pixel_format_t pixel_format = mipicsi_camera_load_sensor_params(sensor, &params);
-    mipicsi_pixel_format_t output_format = pixel_format;
+    mipicsi_camera_load_sensor_params(sensor, &params);
+    mipicsi_pixel_format_t output_format = params.pixel_format;
     if (args[ARG_output_format].u_obj != mp_const_none) {
         output_format = validate_pixel_format(args[ARG_output_format].u_obj, MP_QSTR_output_format);
     }
@@ -120,9 +125,7 @@ static mp_obj_t mipicsi_camera_make_new(const mp_obj_type_t *type, size_t n_args
 
     mipicsi_camera_obj_t *self = mp_obj_malloc_with_finaliser(mipicsi_camera_obj_t, &mipicsi_camera_type);
     common_hal_mipicsi_camera_construct(self, output_format);
-    // Keep the sensor alive while receiving from it. It is only started
-    // streaming when a videocore.VideoBuffer starts playing (see the
-    // videosource play step): until then nothing captures or transmits.
+    // The sensor isn't started until a VideoBuffer plays the camera.
     common_hal_mipicsi_camera_set_sensor(self, sensor);
     return MP_OBJ_FROM_PTR(self);
 }
@@ -161,20 +164,20 @@ static MP_DEFINE_CONST_DICT(mipicsi_camera_locals_dict, mipicsi_camera_locals_di
 #if CIRCUITPY_VIDEOCORE
 // Implementation of the videocore videosource protocol so a VideoBuffer can
 // tell the Camera where to put frames.
-static void mipicsi_camera_play(mp_obj_t self_in, bool paused) {
-    mipicsi_camera_obj_t *self = MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
-    // The camera always has a sensor from make_new on. deinit() clears it
-    // (the sensor stops through its own finaliser), so a missing sensor only
-    // means the camera was deinitialised.
-    if (self->sensor == mp_const_none) {
+
+static void check_for_deinit(mipicsi_camera_obj_t *self) {
+    if (common_hal_mipicsi_camera_deinited(self)) {
         raise_deinited_error();
     }
-    // Re-read the sensor's mode now: it is free to reconfigure between
-    // streams, and only a mode change while streaming is prevented (the
-    // sensor refuses it itself). The paused flag is for the receiver, not the
-    // sensor: the sensor starts streaming either way.
+}
+
+static void mipicsi_camera_play(mp_obj_t self_in, bool paused) {
+    mipicsi_camera_obj_t *self = MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
+    check_for_deinit(self);
+    // Reread the sensor's mode; it may change between streams. The sensor
+    // starts even when paused; only the receiver waits.
     mipicsi_sensor_params_t params;
-    self->pixel_format = mipicsi_camera_load_sensor_params(self->sensor, &params);
+    mipicsi_camera_load_sensor_params(common_hal_mipicsi_camera_get_sensor(self), &params);
     common_hal_mipicsi_camera_videosource_play(self, &params, paused);
 }
 
@@ -196,8 +199,6 @@ static void mipicsi_camera_resume(mp_obj_t self_in) {
 static bool mipicsi_camera_set_destination(mp_obj_t self_in, const videocore_destination_t *dest,
     videocore_on_frame_fun on_frame, void *ctx) {
     mipicsi_camera_obj_t *self = MP_OBJ_TO_PTR(mp_obj_cast_to_native_base(self_in, &mipicsi_camera_type));
-    // The protocol has no stop value on the destination: stopping is stop()'s
-    // job.
     return common_hal_mipicsi_camera_set_destination(self, dest->base, dest->stride, on_frame, ctx);
 }
 

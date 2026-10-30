@@ -17,16 +17,20 @@
 //|     pixel block transmits (top-left first, reading order)"""
 //|
 //|     BGGR: BayerOrder
-//|     """The first element is Blue, then Green, then the next row starts with Green, then Red"""
+//|     """The first element is Blue, then Green. The next row starts with
+//|     Green, then Red"""
 //|
 //|     GBRG: BayerOrder
-//|     """The first element is Green, then Blue, then the next row starts with Red, then Green"""
+//|     """The first element is Green, then Blue. The next row starts with
+//|     Red, then Green"""
 //|
 //|     GRBG: BayerOrder
-//|     """The first element is Green, then Red, then the next row starts with Blue, then Green"""
+//|     """The first element is Green, then Red. The next row starts with
+//|     Blue, then Green"""
 //|
 //|     RGGB: BayerOrder
-//|     """The first element is Red, then Green, then the next row starts with Green, then Blue"""
+//|     """The first element is Red, then Green. The next row starts with
+//|     Green, then Blue"""
 //|
 
 MAKE_ENUM_VALUE(mipicsi_bayer_order_type, bayer_order, BGGR, MIPICSI_BAYER_ORDER_BGGR);

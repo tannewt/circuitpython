@@ -19,46 +19,38 @@ void common_hal_mipicsi_camera_construct(
     mipicsi_camera_obj_t *self,
     mipicsi_pixel_format_t output_format);
 
-// Remember the sensor configured to transmit to this receiver, if any. The
-// receiver reads the sensor's mode from it at play time; the sensor stops
-// itself (its finaliser does), never the receiver.
+// Remember the sensor. Its mode is read at play time.
 void common_hal_mipicsi_camera_set_sensor(mipicsi_camera_obj_t *self, mp_obj_t sensor);
+// The sensor passed to set_sensor. Only valid while not deinited.
+mp_obj_t common_hal_mipicsi_camera_get_sensor(mipicsi_camera_obj_t *self);
 
 // Videosource protocol play step: create the receiver hardware for the
-// sensor's current mode and start the sensor streaming. When paused is true
-// the CSI controller is left stopped, so the camera is active but no frames
-// are captured until resume(). Not a user facing method: it is driven by the
-// videosource protocol (from VideoBuffer.play), so it may raise.
+// sensor's current mode (params) and start the sensor. Raises if the port
+// can't convert params->pixel_format to the output format. When paused is
+// true, no frames are captured until resume().
 void common_hal_mipicsi_camera_videosource_play(
     mipicsi_camera_obj_t *self,
     const mipicsi_sensor_params_t *params,
     bool paused);
 
-// Videosource protocol stop step: stop the stream and the sensor. Not a user
-// facing method: it is driven by the videosource protocol (from
-// VideoBuffer.stop), so it may raise.
+// Videosource protocol stop step: tear down the receiver and stop the
+// sensor. May raise.
 void common_hal_mipicsi_camera_videosource_stop(mipicsi_camera_obj_t *self);
 
-// Videosource protocol pause step: stop the CSI controller's DMA without
-// tearing down the receiver, ISP or sensor, so the camera stays active but no
-// frames are captured. Not a user facing method: it is driven by the
-// videosource protocol (when a framebuffer target is hidden).
+// Videosource protocol pause step: stop capturing frames but keep the
+// receiver, ISP and sensor running.
 void common_hal_mipicsi_camera_videosource_pause(mipicsi_camera_obj_t *self);
 
-// Videosource protocol resume step: start the CSI controller again at the most
-// recent destination after a pause. Not a user facing method: it is driven by
-// the videosource protocol (when a framebuffer target is shown again).
+// Videosource protocol resume step: capture again into the latest
+// destination. May raise.
 void common_hal_mipicsi_camera_videosource_resume(mipicsi_camera_obj_t *self);
 
 void common_hal_mipicsi_camera_deinit(mipicsi_camera_obj_t *self);
 bool common_hal_mipicsi_camera_deinited(mipicsi_camera_obj_t *self);
 
-// Stream frames directly into base row after row. base must lead to a
-// cache-line-aligned, contiguous DMA region: when base itself isn't aligned,
-// the destination is not accepted. The destination must hold the whole
-// (padded) frame back to back: the caller validates the fit, since the DMA
-// has no stride. Returns whether those conditions hold (false instead of
-// raising; the caller may ignore the result).
+// Stream frames contiguously into base. base must be cache-line aligned and
+// stride must equal the frame's row size; the caller checks the fit.
+// Returns false, rather than raising, when the destination isn't usable.
 bool common_hal_mipicsi_camera_set_destination(
     mipicsi_camera_obj_t *self,
     uint8_t *base,

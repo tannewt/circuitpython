@@ -11,9 +11,9 @@ set(COMPONENTS bt driver esptool_py freertos log main mbedtls pthread soc)
 # Peripheral drivers
 list(APPEND COMPONENTS esp_driver_dac esp_driver_gpio esp_driver_gptimer esp_driver_i2c esp_driver_i2s esp_driver_ledc esp_driver_pcnt esp_driver_rmt esp_driver_sdmmc esp_driver_spi esp_driver_touch_sens esp_driver_tsens esp_driver_uart)
 # Networking
-list(APPEND COMPONENTS esp_eth esp-tls esp_adc esp_adc_cal esp_event esp_netif esp_psram esp_security esp_wifi lwip mdns wpa_supplicant)
+list(APPEND COMPONENTS esp_eth esp-tls esp_event esp_netif esp_wifi lwip mdns wpa_supplicant)
 # Misc
-list(APPEND COMPONENTS ulp vfs esp_vfs_console esp_stdio sdmmc usb)
+list(APPEND COMPONENTS esp_adc esp_adc_cal esp_psram esp_security ulp vfs esp_vfs_console esp_stdio sdmmc usb)
 # Display and camera
 list(APPEND COMPONENTS esp-camera esp_lcd)
 

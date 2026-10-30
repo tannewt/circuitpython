@@ -13,7 +13,6 @@
 #include "bindings/espidf/__init__.h"
 #include <esp_lcd_panel_ops.h>
 #include <esp_heap_caps.h>
-#include <esp_rom_sys.h>
 #include "py/runtime.h"
 
 // Cache write-back function (should be from rom/cache.h but it's not always available)
@@ -113,10 +112,6 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
     self->framebuffer = (uint8_t *)fb;
     self->framebuffer_size = width * height * (color_depth / 8);
 
-    // The panel's reset line is not managed here, matching the other displayio
-    // display drivers: callers pulse/hold reset themselves (e.g. with
-    // digitalio) when a board needs it.
-
     // Send initialization sequence (format matches busdisplay)
     #define DELAY 0x80
     uint32_t i = 0;
@@ -201,7 +196,6 @@ void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
     if (self->backlight_inout.base.type == &digitalio_digitalinout_type) {
         common_hal_digitalio_digitalinout_deinit(&self->backlight_inout);
     }
-
 
     // Delete the DPI panel
     if (self->dpi_panel_handle != NULL) {

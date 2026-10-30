@@ -149,10 +149,9 @@ bool displayio_group_get_previous_area(displayio_group_t *self, displayio_area_t
 }
 
 static void _update_child_transforms(displayio_group_t *self) {
-    // Draw protocol layers only act on a transform when we're attached to a
-    // display. TileGrids and nested Groups also need a transform to preserve
-    // their group membership, so pass the (zeroed-out when inactive)
-    // transform to them.
+    // Draw protocol layers get NULL while inactive. TileGrids and nested
+    // Groups always get the (zeroed when inactive) transform, since it also
+    // tracks their group membership.
     #if CIRCUITPY_VECTORIO || CIRCUITPY_VIDEOCORE
     displayio_buffer_transform_t *draw_transform =
         self->active ? &self->absolute_transform : NULL;

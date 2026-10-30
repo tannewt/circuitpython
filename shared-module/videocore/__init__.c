@@ -7,11 +7,6 @@
 #include "shared-module/videocore/__init__.h"
 #include "shared-module/videocore/VideoBuffer.h"
 
-// Playback, presentation and garbage collection are tied to the displayio
-// group the VideoBuffer is in: displayio's refresh drives frame presentation
-// through the draw protocol, and the group (or a Python reference) keeps the
-// object alive; its finaliser stops the stream.
-
 const videosource_p_t *videosource_check(mp_obj_t obj) {
     return (const videosource_p_t *)mp_proto_get_or_throw(MP_QSTR_protocol_videosource, obj);
 }

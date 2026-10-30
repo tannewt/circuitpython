@@ -1756,10 +1756,6 @@ msgid "Address range not allowed"
 msgstr ""
 
 #: ports/espressif/common-hal/mipicsi/Camera.c
-msgid "pixel_format must be RAW8, RAW10 or RAW12 when output_format differs"
-msgstr ""
-
-#: ports/espressif/common-hal/mipicsi/Camera.c
 msgid "output_format must be RGB565 or RGB888"
 msgstr ""
 
