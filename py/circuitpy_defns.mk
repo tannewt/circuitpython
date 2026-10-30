@@ -104,6 +104,9 @@ endif
 ifeq ($(CIRCUITPY_AESIO),1)
 SRC_PATTERNS += aesio/%
 endif
+ifeq ($(CIRCUITPY_AIRLIFT),1)
+SRC_PATTERNS += _airlift/%
+endif
 ifeq ($(CIRCUITPY_ALARM),1)
 SRC_PATTERNS += alarm/__init__.c alarm/SleepMemory.c alarm/pin/% alarm/time/%
 endif
@@ -733,6 +736,7 @@ SRC_BINDINGS_ENUMS += \
 	util.c
 
 SRC_SHARED_MODULE_ALL = \
+	_airlift/__init__.c \
 	_bleio/Address.c \
 	_bleio/Attribute.c \
 	_bleio/ScanEntry.c \
@@ -1106,6 +1110,9 @@ endif
 # All possible sources are listed here, and are filtered by SRC_PATTERNS.
 SRC_SHARED_MODULE_INTERNAL = \
 $(filter $(SRC_PATTERNS), \
+	_airlift/network.c \
+	_airlift/socketpool.c \
+	_airlift/transport.c \
 	displayio/bus_core.c \
 	displayio/display_core.c \
 	usb/utf16le.c \
