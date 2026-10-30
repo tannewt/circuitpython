@@ -68,6 +68,7 @@ INC += \
 	-isystem esp-idf/components/esp_driver_gptimer/include \
 	-isystem esp-idf/components/esp_driver_i2c/include \
 	-isystem esp-idf/components/esp_driver_i2s/include \
+	-isystem esp-idf/components/esp_driver_jpeg/include \
 	-isystem esp-idf/components/esp_driver_ledc/include \
 	-isystem esp-idf/components/esp_driver_parlio/include \
 	-isystem esp-idf/components/esp_driver_pcnt/include \
@@ -122,6 +123,8 @@ INC += \
 	-isystem esp-idf/components/esp_hal_i2c/include \
 	-isystem esp-idf/components/esp_hal_i2s/include \
 	-isystem esp-idf/components/esp_hal_i2s/$(IDF_TARGET)/include \
+	-isystem esp-idf/components/esp_hal_jpeg/include \
+	-isystem esp-idf/components/esp_hal_jpeg/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_ledc/include \
 	-isystem esp-idf/components/esp_hal_ledc/$(IDF_TARGET)/include \
 	-isystem esp-idf/components/esp_hal_pcnt/include \
@@ -498,6 +501,9 @@ CFLAGS += \
 	-isystem esp-idf/components/esp_hw_support/ldo/include \
 	-isystem esp-idf/components/esp_driver_touch_sens/hw_ver3/include
 
+# JPEG engine DMA writes into GC blocks, so make them one 64-byte cache line.
+CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
+
 ifeq ($(CIRCUITPY_ESP32P4_REV),3)
 IDF_TARGET_ROM_FLOAT_LD = esp32p4.rom.rvfp.ld
 LDFLAGS += \
@@ -536,6 +542,9 @@ CHIP_COMPONENTS = \
 
 else ifeq ($(IDF_TARGET),esp32s31)
 CFLAGS += -isystem esp-idf/components/esp_hw_support/ldo/include
+
+# JPEG engine DMA writes into GC blocks, so make them one 64-byte cache line.
+CFLAGS += -DMICROPY_BYTES_PER_GC_BLOCK=64
 
 IDF_TARGET_ROM_FLOAT_LD = esp32s31.rom.rvfp.ld
 LDFLAGS += \
@@ -837,6 +846,11 @@ SRC_ULP := \
 	$(wildcard common-hal/espulp/*.c) \
 	$(wildcard bindings/espulp/*.c)
 SRC_C += $(SRC_ULP)
+endif
+
+ifneq ($(CIRCUITPY_JPEGIO_HW),0)
+SRC_C += common-hal/jpegio/JpegDecoder.c
+CHIP_COMPONENTS += esp_driver_jpeg esp_hal_jpeg
 endif
 
 ifneq ($(CIRCUITPY_NEOPIXEL_WRITE),0)
@@ -1273,7 +1287,7 @@ endif
 
 UF2_FAMILY_ID_esp32s2 = 0xbfdd4eee
 UF2_FAMILY_ID_esp32s3 = 0xc47e5767
-UF2_FAMILY_ID_esp32p4 = 0x540ddf62
+UF2_FAMILY_ID_esp32p4 = 0x3d308e94
 
 $(BUILD)/firmware.uf2: $(BUILD)/circuitpython-firmware.bin
 	$(STEPECHO) "Create $@"

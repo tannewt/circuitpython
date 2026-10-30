@@ -104,6 +104,9 @@ endif
 ifeq ($(CIRCUITPY_AESIO),1)
 SRC_PATTERNS += aesio/%
 endif
+ifeq ($(CIRCUITPY_AIRLIFT),1)
+SRC_PATTERNS += _airlift/%
+endif
 ifeq ($(CIRCUITPY_ALARM),1)
 SRC_PATTERNS += alarm/__init__.c alarm/SleepMemory.c alarm/pin/% alarm/time/%
 endif
@@ -115,6 +118,9 @@ SRC_PATTERNS += analogbufio/%
 endif
 ifeq ($(CIRCUITPY_ANALOGIO),1)
 SRC_PATTERNS += analogio/%
+endif
+ifeq ($(CIRCUITPY_ASYNC_SPI),1)
+SRC_PATTERNS += async_spi/%
 endif
 ifeq ($(CIRCUITPY_ATEXIT),1)
 SRC_PATTERNS += atexit/%
@@ -151,6 +157,9 @@ SRC_PATTERNS += audiomp3/%
 endif
 ifeq ($(CIRCUITPY_AUDIOSPEED),1)
 SRC_PATTERNS += audiospeed/%
+endif
+ifeq ($(CIRCUITPY_AUDIOTAP),1)
+SRC_PATTERNS += audiotap/%
 endif
 ifeq ($(CIRCUITPY_AUDIOFILEWRITER),1)
 SRC_PATTERNS += audiofilewriter/%
@@ -538,6 +547,8 @@ SRC_COMMON_HAL_ALL = \
 	analogio/AnalogIn.c \
 	analogio/AnalogOut.c \
 	analogio/__init__.c \
+	async_spi/SPI.c \
+	async_spi/__init__.c \
 	audiobusio/I2SOut.c \
 	audiobusio/PDMIn.c \
 	audiobusio/__init__.c \
@@ -549,7 +560,6 @@ SRC_COMMON_HAL_ALL = \
 	audiopwmio/__init__.c \
 	board/__init__.c \
 	busio/I2C.c \
-	busio/SPI.c \
 	busio/UART.c \
 	busio/__init__.c \
 	camera/__init__.c \
@@ -641,12 +651,6 @@ SRC_COMMON_HAL_ALL = \
 	wifi/Radio.c \
 	wifi/ScannedNetworks.c \
 	wifi/__init__.c \
-
-# The fast Display backend is the only common-hal picogame source; include it
-# only on ports that provide it (others use the portable bus.send renderer).
-ifeq ($(CIRCUITPY_PICOGAME_FAST_DISPLAY),1)
-SRC_COMMON_HAL_ALL += picogame/Display.c
-endif
 
 SRC_COMMON_HAL = $(filter $(SRC_PATTERNS), $(SRC_COMMON_HAL_ALL))
 
@@ -742,6 +746,7 @@ SRC_BINDINGS_ENUMS += \
 	util.c
 
 SRC_SHARED_MODULE_ALL = \
+	_airlift/__init__.c \
 	_bleio/Address.c \
 	_bleio/Attribute.c \
 	_bleio/ScanEntry.c \
@@ -768,6 +773,8 @@ SRC_SHARED_MODULE_ALL = \
 	audiospeed/Resampler.c \
 	audiospeed/SpeedChanger.c \
 	audiospeed/__init__.c \
+	audiotap/Tap.c \
+	audiotap/__init__.c \
 	audiodelays/Echo.c \
 	audiodelays/Chorus.c \
 	audiodelays/Flanger.c \
@@ -942,6 +949,20 @@ SRC_SHARED_MODULE_ALL += \
 	touchio/__init__.c
 endif
 
+# The strip-rendering Display backend sends through the display bus; nothing port-specific.
+ifeq ($(CIRCUITPY_PICOGAME_FAST_DISPLAY),1)
+SRC_SHARED_MODULE_ALL += picogame/Display.c
+endif
+
+# On a port with async SPI, busio.SPI is shared code on top of common-hal/async_spi.
+ifeq ($(CIRCUITPY_ASYNC_SPI),1)
+SRC_SHARED_MODULE_ALL += \
+	busio/SPI.c
+else
+SRC_COMMON_HAL_ALL += \
+	busio/SPI.c
+endif
+
 ifeq ($(CIRCUITPY_SSL_MBEDTLS),0)
 SRC_COMMON_HAL_ALL += \
 	ssl/__init__.c \
@@ -1101,6 +1122,9 @@ endif
 # All possible sources are listed here, and are filtered by SRC_PATTERNS.
 SRC_SHARED_MODULE_INTERNAL = \
 $(filter $(SRC_PATTERNS), \
+	_airlift/network.c \
+	_airlift/socketpool.c \
+	_airlift/transport.c \
 	displayio/bus_core.c \
 	displayio/display_core.c \
 	usb/utf16le.c \
