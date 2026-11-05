@@ -46,6 +46,23 @@
 
 #if CIRCUITPY_DISPLAYIO_LVGL
 
+// Tile-index debug logging goes through ESP_LOG, not mp_printf: mp_printf ends up in
+// serial_write_substring(), which writes the display terminal, which calls back into
+// common_hal_displayio_tilegrid_set_tile() -- recursion, then a crash. The IDF log console is a
+// separate sink, so it can be used from the write path and from the compose pass.
+#if CIRCUITPY_ESPIDF
+#include "esp_log.h"
+#define DISPLAYIO_TILEGRID_DEBUG(...) ESP_LOGI("TileGrid", __VA_ARGS__)
+#else
+#define DISPLAYIO_TILEGRID_DEBUG(...) ((void)0)
+#endif
+
+// Tile index 0 is the blank tile: the terminal fills itself with spaces, and every tiles[] array
+// starts zeroed. Logging those hides the glyph changes we care about.
+#define DISPLAYIO_TILEGRID_BLANK_TILE 0
+
+static void _cell_display_area(displayio_tilegrid_t *self, uint32_t x, uint32_t y, lv_area_t *area);
+
 static void _raise_unsupported(void) {
     mp_raise_NotImplementedError(MP_ERROR_TEXT("LVGL displayio backend does not support flips/transpose yet"));
 }
@@ -116,8 +133,49 @@ static uint16_t _tile_index(displayio_tilegrid_t *self, uint32_t cell_index) {
     return ((uint8_t *)self->tiles)[cell_index];
 }
 
+// A composed grid is brought up to date by the compose pass, which runs at the start of a refresh
+// (LV_EVENT_REFR_START, before LVGL reads its invalid-area list), so a change has to invalidate
+// something or LVGL never runs a refresh and the grid stays stale forever. Invalidate the area the
+// changed cell occupies on screen: that is the same rectangle the compose pass would invalidate,
+// and it keeps `display.refresh()`/auto_refresh-independent redraws honest even before the compose
+// runs. Only the first change of a burst does this -- invalidating every changed cell would
+// overflow LVGL's invalidation buffer (LV_INV_BUF_SIZE, 32 rects) and repaint the whole screen --
+// and the compose pass invalidates the union of everything it recomposed in the same pass.
+// `cell` < 0 means "not one cell", i.e. invalidate the whole grid.
+static void _wake_refresh(displayio_tilegrid_t *self, int32_t cell) {
+    if (self->lv_obj == NULL || lv_obj_get_display(self->lv_obj) == NULL) {
+        // Not attached yet: attaching marks everything dirty, so a later write wakes it.
+        return;
+    }
+    if (cell < 0 || self->lv_full_dirty || self->width_in_tiles == 0 ||
+        self->height_in_tiles == 0) {
+        DISPLAYIO_TILEGRID_DEBUG("wake %p whole obj", self);
+        lv_obj_invalidate(self->lv_obj);
+        return;
+    }
+    lv_area_t area;
+    _cell_display_area(self, (uint32_t)cell % self->width_in_tiles,
+        (uint32_t)cell / self->width_in_tiles, &area);
+    if (area.x2 < area.x1) {
+        DISPLAYIO_TILEGRID_DEBUG("wake %p whole obj (no cell area)", self);
+        lv_obj_invalidate(self->lv_obj);
+        return;
+    }
+    // The area comes back in container coordinates; LVGL invalidates in screen coordinates.
+    lv_area_t obj_coords;
+    lv_obj_get_coords(self->lv_obj, &obj_coords);
+    lv_area_move(&area, obj_coords.x1, obj_coords.y1);
+    DISPLAYIO_TILEGRID_DEBUG("wake %p cell %ld at (%ld,%ld)-(%ld,%ld)", self, (long)cell,
+        (long)area.x1, (long)area.y1, (long)area.x2, (long)area.y2);
+    lv_obj_invalidate_area(self->lv_obj, &area);
+}
+
 static void _mark_work(displayio_tilegrid_t *self) {
+    if (self->lv_work) {
+        return;
+    }
     self->lv_work = true;
+    _wake_refresh(self, -1);
 }
 
 static void _mark_all(displayio_tilegrid_t *self) {
@@ -137,11 +195,15 @@ static void _mark_cell(displayio_tilegrid_t *self, uint32_t cell) {
     }
     uint32_t *word = &self->lv_cell_dirty[cell / 32];
     uint32_t bit = 1u << (cell % 32);
+    bool was_working = self->lv_work;
     if ((*word & bit) == 0) {
         *word |= bit;
         self->lv_dirty_count++;
     }
-    _mark_work(self);
+    self->lv_work = true;
+    if (!was_working) {
+        _wake_refresh(self, (int32_t)cell);
+    }
 }
 
 static bool _cell_is_marked(displayio_tilegrid_t *self, uint32_t cell) {
@@ -275,6 +337,7 @@ static bool _bind_source(displayio_tilegrid_t *self) {
         displayio_ondiskbitmap_t *odb = MP_OBJ_TO_PTR(self->bitmap);
         cf = displayio_ondiskbitmap_lv_color_format(odb);
         if (cf == LV_COLOR_FORMAT_UNKNOWN) {
+            DISPLAYIO_TILEGRID_DEBUG("bind %p ondisk bitmap has no LVGL format", self);
             return false;
         }
         // LVGL can't transform a partially decoded image, but a composed grid draws its cells
@@ -300,6 +363,7 @@ static bool _bind_source(displayio_tilegrid_t *self) {
         // view of the displayio Palette (see displayio_lvgl_shader_palette()), so neither the
         // bitmap nor the palette is copied into the TileGrid.
         if (bitmap->data == NULL) {
+            DISPLAYIO_TILEGRID_DEBUG("bind %p bitmap has no data", self);
             return false;
         }
         dsc->header.flags |= LV_IMAGE_FLAGS_PALETTE_EXTERNAL;
@@ -309,6 +373,7 @@ static bool _bind_source(displayio_tilegrid_t *self) {
             DISPLAYIO_LVGL_USER_TILEGRID);
         dsc->palette = displayio_lvgl_shader_palette(self->pixel_shader);
         if (dsc->palette == NULL) {
+            DISPLAYIO_TILEGRID_DEBUG("bind %p palette has no LVGL view", self);
             displayio_lvgl_shader_unregister_user(self->pixel_shader, self);
             return false;
         }
@@ -318,6 +383,9 @@ static bool _bind_source(displayio_tilegrid_t *self) {
     }
     self->lv_src = dsc;
     self->lv_argb = _source_has_alpha(self, cf);
+    DISPLAYIO_TILEGRID_DEBUG("bind %p cf %d %dx%d stride %lu data %p palette %p",
+        self, (int)cf, bitmap->width, bitmap->height, (unsigned long)stride, dsc->data,
+        dsc->palette);
     return true;
 }
 
@@ -567,10 +635,21 @@ static void _layout_views(displayio_tilegrid_t *self) {
             lv_obj_set_size(img, cols[c].len * self->lv_scale, rows[r].len * self->lv_scale);
             lv_obj_clear_flag(img, LV_OBJ_FLAG_HIDDEN);
             _place(img, cols[c].dst * self->lv_scale, rows[r].dst * self->lv_scale);
+            DISPLAYIO_TILEGRID_DEBUG(
+                "views %p view %d buf %p cf %d %dx%d stride %lu data %p at (%d,%d)",
+                self, view, self->lv_buf->data, (int)cf, cols[c].len, rows[r].len,
+                (unsigned long)stride, (void *)dsc->data, (int)(cols[c].dst * self->lv_scale),
+                (int)(rows[r].dst * self->lv_scale));
             view++;
         }
     }
     self->lv_view_count = view;
+    DISPLAYIO_TILEGRID_DEBUG(
+        "views %p count %d grid %lux%lu scroll (%lu,%lu) -> (%lu,%lu) scale %u",
+        self, view, (unsigned long)grid_w, (unsigned long)grid_h,
+        (unsigned long)(self->top_left_x % self->width_in_tiles),
+        (unsigned long)(self->top_left_y % self->height_in_tiles), (unsigned long)tx,
+        (unsigned long)ty, (unsigned)self->lv_scale);
     for (uint8_t i = view; i < DISPLAYIO_LVGL_TILEGRID_VIEWS; i++) {
         if (self->lv_views[i] != NULL) {
             lv_obj_add_flag(self->lv_views[i], LV_OBJ_FLAG_HIDDEN);
@@ -660,11 +739,24 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
         return false;
     }
     if (self->lv_buf == NULL || self->lv_canvas == NULL) {
+        DISPLAYIO_TILEGRID_DEBUG("compose %p no buffer: buf %p canvas %p",
+            self, self->lv_buf, self->lv_canvas);
         return false;
     }
     bool full = self->lv_full_dirty;
     bool any = false;
     lv_area_t buf_dirty = {0, 0, -1, -1};
+    lv_area_t drawn_cell_area = {0, 0, -1, -1};
+
+    // A blank cell is a tile of palette entry 0. When that entry is the same as what clearing
+    // produces (black in an RGB565 buffer, transparent in ARGB8888), the cell needs no draw task
+    // at all -- and for a terminal most cells are blank, so this is the difference between
+    // hundreds of draw tasks per frame and a handful.
+    bool skip_blank = self->lv_src == &self->lv_src_dsc && self->lv_src->palette != NULL &&
+        LV_COLOR_FORMAT_IS_INDEXED(self->lv_src->header.cf) &&
+        (self->lv_argb ? self->lv_src->palette[0].alpha == 0 :
+            (self->lv_src->palette[0].red | self->lv_src->palette[0].green |
+                self->lv_src->palette[0].blue) == 0);
 
     // A cell is a cropped window of the atlas, not an image allowed to grow beyond it, so the
     // layer's clip area is narrowed to the cell while its draw task is created; lv_draw_add_task()
@@ -694,24 +786,34 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
 
         if (self->lv_src != NULL && self->lv_src->data != NULL) {
             uint16_t x0, y0;
-            _tile_origin(self, _tile_index(self, cell), &x0, &y0);
-            lv_draw_image_dsc_t dsc;
-            lv_draw_image_dsc_init(&dsc);
-            dsc.src = self->lv_src;
-            dsc.antialias = 0;
-            layer._clip_area = cell_area;
-            // The whole atlas is placed so that the tile's origin lands on the cell's corner;
-            // the clip above limits the draw to the cell.
-            int32_t dest_x = cell_area.x1 - (int32_t)x0;
-            int32_t dest_y = cell_area.y1 - (int32_t)y0;
-            lv_area_t coords = {
-                .x1 = dest_x,
-                .y1 = dest_y,
-                .x2 = dest_x + (int32_t)self->lv_src->header.w - 1,
-                .y2 = dest_y + (int32_t)self->lv_src->header.h - 1,
-            };
-            lv_draw_image(&layer, &dsc, &coords);
-            layer._clip_area = layer_clip;
+            uint16_t tile_index = _tile_index(self, cell);
+            bool blank = tile_index == DISPLAYIO_TILEGRID_BLANK_TILE;
+            if (!(blank && skip_blank)) {
+                _tile_origin(self, tile_index, &x0, &y0);
+                if (!blank) {
+                    DISPLAYIO_TILEGRID_DEBUG(
+                        "compose %p cell %d (%d,%d) tile %d origin (%d,%d) full %d",
+                        self, cell, cx, cy, tile_index, x0, y0, full);
+                }
+                drawn_cell_area = cell_area;
+                lv_draw_image_dsc_t dsc;
+                lv_draw_image_dsc_init(&dsc);
+                dsc.src = self->lv_src;
+                dsc.antialias = 0;
+                layer._clip_area = cell_area;
+                // The whole atlas is placed so that the tile's origin lands on the cell's corner;
+                // the clip above limits the draw to the cell.
+                int32_t dest_x = cell_area.x1 - (int32_t)x0;
+                int32_t dest_y = cell_area.y1 - (int32_t)y0;
+                lv_area_t coords = {
+                    .x1 = dest_x,
+                    .y1 = dest_y,
+                    .x2 = dest_x + (int32_t)self->lv_src->header.w - 1,
+                    .y2 = dest_y + (int32_t)self->lv_src->header.h - 1,
+                };
+                lv_draw_image(&layer, &dsc, &coords);
+                layer._clip_area = layer_clip;
+            }
         }
         _clear_cell(self, cell);
         lv_area_t cell_display;
@@ -728,11 +830,37 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
     self->lv_dirty_count = 0;
     self->lv_full_dirty = false;
 
+    if (!any) {
+        DISPLAYIO_TILEGRID_DEBUG("compose %p drew nothing: src %p srcdata %p buf %d x %d",
+            self, self->lv_src, self->lv_src == NULL ? NULL : self->lv_src->data,
+            (int)self->lv_buf->header.w, (int)self->lv_buf->header.h);
+    }
+
     lv_canvas_finish_layer(self->lv_canvas, &layer);
     if (any) {
         // The compose pass may have run in software, so write those lines out before a DMA
         // consumer (the display flush, or the PPA on the display pass) reads the buffer.
         lv_draw_buf_flush_cache(self->lv_buf, &buf_dirty);
+        // Did the draw actually put pixels in the buffer? Zero here means the compose draw wrote
+        // nothing, so the problem is upstream of the views; non-zero means the buffer has content
+        // and the display side is at fault.
+        uint32_t stride = self->lv_buf->header.stride;
+        uint32_t bpp = lv_color_format_get_size(self->lv_buf->header.cf);
+        if (drawn_cell_area.x2 < drawn_cell_area.x1) {
+            DISPLAYIO_TILEGRID_DEBUG("compose %p done, nothing drawn", self);
+            return any;
+        }
+        const uint8_t *sample = self->lv_buf->data + drawn_cell_area.y1 * stride +
+            drawn_cell_area.x1 * bpp;
+        uint32_t nonzero = 0;
+        for (int32_t y = 0; y <= drawn_cell_area.y2 - drawn_cell_area.y1; y++) {
+            for (int32_t x = 0; x < (drawn_cell_area.x2 - drawn_cell_area.x1 + 1) * (int32_t)bpp; x++) {
+                nonzero += sample[y * stride + x] != 0;
+            }
+        }
+        DISPLAYIO_TILEGRID_DEBUG("compose %p done buf %p cell (%d,%d)-(%d,%d) nonzero %lu",
+            self, self->lv_buf->data, (int)drawn_cell_area.x1, (int)drawn_cell_area.y1,
+            (int)drawn_cell_area.x2, (int)drawn_cell_area.y2, (unsigned long)nonzero);
     }
     return any;
 }
@@ -745,12 +873,21 @@ static void _refresh(displayio_tilegrid_t *self) {
     }
     if (self->lv_obj == NULL) {
         self->lv_work = false;
+        DISPLAYIO_TILEGRID_DEBUG("refresh %p unattached, dropping work", self);
         return;
     }
     lv_display_t *display = lv_obj_get_display(self->lv_obj);
     if (display == NULL) {
+        DISPLAYIO_TILEGRID_DEBUG("refresh %p no display, work stays pending", self);
         return;
     }
+    DISPLAYIO_TILEGRID_DEBUG("refresh %p direct %d buf %p canvas %p full %d views %d dirty %lu",
+        self, self->lv_direct, self->lv_buf, self->lv_canvas, self->lv_full_dirty,
+        self->lv_views_dirty, (unsigned long)self->lv_dirty_count);
+    DISPLAYIO_TILEGRID_DEBUG("refresh %p obj %dx%d at (%d,%d) scale %u hidden %d",
+        self, (int)lv_obj_get_width(self->lv_obj), (int)lv_obj_get_height(self->lv_obj),
+        (int)lv_obj_get_x(self->lv_obj), (int)lv_obj_get_y(self->lv_obj), (unsigned)self->lv_scale,
+        (int)lv_obj_has_flag(self->lv_obj, LV_OBJ_FLAG_HIDDEN));
     bool full = self->lv_full_dirty || self->lv_views_dirty;
     bool changed = false;
     lv_area_t dirty = {0, 0, -1, -1};
@@ -779,10 +916,16 @@ static void _refresh(displayio_tilegrid_t *self) {
         lv_obj_get_coords(self->lv_obj, &area);
         if (!full && dirty.x2 >= dirty.x1) {
             lv_area_move(&dirty, area.x1, area.y1);
+            DISPLAYIO_TILEGRID_DEBUG("refresh %p invalidate area (%d,%d)-(%d,%d)",
+                self, (int)dirty.x1, (int)dirty.y1, (int)dirty.x2, (int)dirty.y2);
             lv_obj_invalidate_area(self->lv_obj, &dirty);
         } else {
+            DISPLAYIO_TILEGRID_DEBUG("refresh %p invalidate whole obj at (%d,%d)-(%d,%d)",
+                self, (int)area.x1, (int)area.y1, (int)area.x2, (int)area.y2);
             lv_obj_invalidate(self->lv_obj);
         }
+    } else {
+        DISPLAYIO_TILEGRID_DEBUG("refresh %p nothing to invalidate", self);
     }
     self->lv_work = false;
     self->lv_views_dirty = false;
@@ -864,6 +1007,13 @@ static bool _rebind(displayio_tilegrid_t *self) {
     if (!_bind_source(self)) {
         return false;
     }
+    // The supervisor resizes and positions its static terminal grids directly before
+    // rebinding their bitmap. Keep the mirror geometry in sync too: resizing the canvas
+    // or its views does not resize or move their container, and LVGL clips invalidation
+    // to that container even when OVERFLOW_VISIBLE is set.
+    lv_obj_set_size(self->lv_obj, self->pixel_width * self->lv_scale,
+        self->pixel_height * self->lv_scale);
+    _set_lv_pos(self);
     _mark_all(self);
     _mark_views(self);
     return true;
@@ -1200,10 +1350,19 @@ void common_hal_displayio_tilegrid_set_tile(displayio_tilegrid_t *self, uint16_t
     }
 
     uint32_t index = y * self->width_in_tiles + x;
+    uint16_t old_tile_index;
     if (self->tiles_in_bitmap > 255) {
+        old_tile_index = ((uint16_t *)self->tiles)[index];
         ((uint16_t *)self->tiles)[index] = tile_index;
     } else {
+        old_tile_index = ((uint8_t *)self->tiles)[index];
         ((uint8_t *)self->tiles)[index] = (uint8_t)tile_index;
+    }
+    if (old_tile_index != tile_index && tile_index != DISPLAYIO_TILEGRID_BLANK_TILE) {
+        DISPLAYIO_TILEGRID_DEBUG(
+            "set_tile %p (%d,%d) tile %d -> %d cell %d mirrored %d",
+            self, x, y, old_tile_index, tile_index, index,
+            self->lv_obj != NULL && self->width_in_tiles != 0 && self->height_in_tiles != 0);
     }
     displayio_tilegrid_mark_tile_dirty(self, x, y);
 }
@@ -1217,20 +1376,35 @@ void common_hal_displayio_tilegrid_set_all_tiles(displayio_tilegrid_t *self, uin
         return;
     }
 
+    uint32_t changed = 0;
     if (self->tiles_in_bitmap > 255) {
         uint16_t *tiles16 = (uint16_t *)self->tiles;
         for (uint16_t y = 0; y < self->height_in_tiles; y++) {
             for (uint16_t x = 0; x < self->width_in_tiles; x++) {
-                tiles16[y * self->width_in_tiles + x] = tile_index;
+                uint32_t i = y * self->width_in_tiles + x;
+                if (tiles16[i] != tile_index) {
+                    changed++;
+                }
+                tiles16[i] = tile_index;
             }
         }
     } else {
         uint8_t *tiles8 = (uint8_t *)self->tiles;
         for (uint16_t y = 0; y < self->height_in_tiles; y++) {
             for (uint16_t x = 0; x < self->width_in_tiles; x++) {
-                tiles8[y * self->width_in_tiles + x] = (uint8_t)tile_index;
+                uint32_t i = y * self->width_in_tiles + x;
+                if (tiles8[i] != (uint8_t)tile_index) {
+                    changed++;
+                }
+                tiles8[i] = (uint8_t)tile_index;
             }
         }
+    }
+    if (changed > 0) {
+        DISPLAYIO_TILEGRID_DEBUG(
+            "set_all_tiles %p tile %d changed %d of %d cells mirrored %d",
+            self, tile_index, changed, self->width_in_tiles * self->height_in_tiles,
+            self->lv_obj != NULL);
     }
 
     if (self->lv_obj != NULL) {

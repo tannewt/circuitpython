@@ -109,6 +109,36 @@ void displayio_lvgl_register_display(lv_display_t *display) {
     lv_display_add_event_cb(display, refresh_start_cb, LV_EVENT_REFR_START, NULL);
 }
 
+// Whether any active display mirrored into LVGL still wants automatic repaints. The display slots
+// are the shared registry (the same ones the legacy compositor uses), so this works for both
+// display classes the compositor supports.
+bool displayio_lvgl_auto_refresh(void) {
+    for (uint8_t i = 0; i < CIRCUITPY_DISPLAY_LIMIT; i++) {
+        mp_const_obj_t display_type = displays[i].display_base.type;
+        if (display_type == NULL || display_type == &mp_type_NoneType) {
+            continue;
+        }
+        #if CIRCUITPY_BUSDISPLAY
+        if (display_type == &busdisplay_busdisplay_type) {
+            if (displays[i].display.auto_refresh) {
+                return true;
+            }
+            continue;
+        }
+        #endif
+        #if CIRCUITPY_FRAMEBUFFERIO
+        if (display_type == &framebufferio_framebufferdisplay_type) {
+            if (displays[i].framebuffer_display.auto_refresh) {
+                return true;
+            }
+            continue;
+        }
+        #endif
+    }
+    // No display yet: pumping LVGL is harmless and keeps its own timers running.
+    return true;
+}
+
 void displayio_lvgl_init(void) {
     if (cp_lvgl_inited) {
         return;

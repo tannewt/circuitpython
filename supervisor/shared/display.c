@@ -301,8 +301,11 @@ void supervisor_start_terminal(uint16_t width_px, uint16_t height_px) {
             port_free(tilegrid_tiles);
             tilegrid_tiles = NULL;
         }
+        // A TileGrid stores a tile index in one byte when the bitmap has at most 255 tiles and in
+        // two when it has more (tiles_in_bitmap, which is total_values below). The number of cells
+        // on screen says nothing about how wide an index is.
         size_t bytes_per_tile = 1;
-        if (total_tiles > 255) {
+        if (total_values > 255) {
             // Two bytes per tile.
             bytes_per_tile = 2;
         }

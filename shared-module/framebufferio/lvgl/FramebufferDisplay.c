@@ -386,13 +386,10 @@ bool common_hal_framebufferio_framebufferdisplay_get_auto_refresh(framebufferio_
 void common_hal_framebufferio_framebufferdisplay_set_auto_refresh(framebufferio_framebufferdisplay_obj_t *self,
     bool auto_refresh) {
     self->first_manual_refresh = !auto_refresh;
-    if (auto_refresh != self->auto_refresh) {
-        if (auto_refresh) {
-            supervisor_enable_tick();
-        } else {
-            supervisor_disable_tick();
-        }
-    }
+    // No supervisor_enable/disable_tick() here: under LVGL that would stop the whole supervisor
+    // background tick (filesystem, USB, BLE, port work). The port's LVGL pump asks
+    // displayio_lvgl_auto_refresh() instead, so this flag only decides whether the compositor
+    // repaints on its own.
     self->auto_refresh = auto_refresh;
 }
 

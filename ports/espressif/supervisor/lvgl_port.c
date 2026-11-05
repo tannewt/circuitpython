@@ -91,6 +91,11 @@ void espressif_lvgl_background(void) {
     if ((background_count++ & 0x7FF) == 0) {
         ESP_LOGI(lvgl_tag, "background %lu default=%p", (unsigned long)background_count, lv_display_get_default());
     }
+    // auto_refresh = False means the application drives redraws with display.refresh(). The
+    // supervisor tick keeps running either way: it pumps filesystem, USB and BLE background work.
+    if (!displayio_lvgl_auto_refresh()) {
+        return;
+    }
     lv_timer_handler();
 }
 #endif

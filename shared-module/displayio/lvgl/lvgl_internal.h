@@ -48,6 +48,12 @@ void displayio_lvgl_init(void);
 // display.
 void displayio_lvgl_register_display(lv_display_t *display);
 
+// True when the displays the compositor drives still want automatic repaints
+// (display.auto_refresh). Ports that pump LVGL from their background tick consult this, so that
+// turning auto_refresh off stops repaints without also disabling the supervisor tick -- which
+// would take filesystem, USB and BLE background work down with it.
+bool displayio_lvgl_auto_refresh(void);
+
 // Attach/detach the compositor's root group. Implemented in lvgl/Group.c. NULL detach.
 void displayio_lvgl_set_root_group(displayio_group_t *group);
 
