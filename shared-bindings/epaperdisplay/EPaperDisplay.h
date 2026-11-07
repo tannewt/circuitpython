@@ -41,8 +41,10 @@ typedef struct {
     uint32_t highlight_color2;
     const uint8_t *refresh_sequence;
     uint16_t refresh_sequence_len;
+    bool refresh_sequence_wait_for_busy;
     mp_float_t refresh_time;
     const mcu_pin_obj_t *busy_pin;
+    const mcu_pin_obj_t *busy_pin2;
     bool busy_state;
     mp_float_t seconds_per_frame;
     bool always_toggle_chip_select;
@@ -79,8 +81,10 @@ typedef struct {
         .highlight_color2 = 0x000000, \
         .refresh_sequence = NULL, \
         .refresh_sequence_len = 0, \
+        .refresh_sequence_wait_for_busy = false, \
         .refresh_time = 0.0, \
         .busy_pin = NULL, \
+        .busy_pin2 = NULL, \
         .busy_state = false, \
         .seconds_per_frame = 0.0, \
         .always_toggle_chip_select = false, \

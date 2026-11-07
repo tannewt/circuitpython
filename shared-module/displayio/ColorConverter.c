@@ -171,7 +171,9 @@ void displayio_colorconverter_compute_tricolor(const _displayio_colorspace_t *co
     int16_t hue_diff = colorspace->tricolor_hue - pixel_hue;
     if ((-10 <= hue_diff && hue_diff <= 10) || hue_diff <= -220 || hue_diff >= 220) {
         if (colorspace->grayscale) {
-            *color = 0;
+            // Some panels require highlight pixels to be absent from black RAM.
+            // Use white before EPaperDisplay applies black-plane inversion.
+            *color = colorspace->tricolor_highlight_is_white ? (1U << colorspace->depth) - 1 : 0;
         } else {
             *color = 1;
         }

@@ -18,6 +18,7 @@ typedef struct {
     displayio_display_core_t core;
     displayio_display_bus_t bus;
     digitalio_digitalinout_obj_t busy;
+    digitalio_digitalinout_obj_t busy2;
     uint32_t milliseconds_per_frame;
     const uint8_t *start_sequence;
     const uint8_t *stop_sequence;
@@ -36,6 +37,7 @@ typedef struct {
     bool refreshing;
     bool grayscale;
     bool acep;
+    bool refresh_sequence_wait_for_busy;
     bool two_byte_sequence_length;
     display_chip_select_behavior_t chip_select;
 } epaperdisplay_epaperdisplay_obj_t;

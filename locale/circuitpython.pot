@@ -4294,6 +4294,10 @@ msgstr ""
 msgid "Refresh too soon"
 msgstr ""
 
+#: shared-bindings/epaperdisplay/EPaperDisplay.c
+msgid "Display busy or bus in use"
+msgstr ""
+
 #: shared-bindings/framebufferio/FramebufferDisplay.c
 msgid "Buffer is not a bytearray."
 msgstr ""
@@ -4651,6 +4655,14 @@ msgstr ""
 
 #: shared-module/is31fl3741/FrameBuffer.c
 msgid "LED mappings must match display size"
+msgstr ""
+
+#: shared-module/itc97/ITC97Bus.c
+msgid "ITC97 BUSY did not assert after trigger"
+msgstr ""
+
+#: shared-module/itc97/ITC97Bus.c
+msgid "ITC97 booster did not become ready"
 msgstr ""
 
 #: shared-module/jpegio/JpegDecoder.c

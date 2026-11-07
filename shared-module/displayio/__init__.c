@@ -7,6 +7,9 @@
 #include <string.h>
 
 #include "shared-module/displayio/__init__.h"
+#if CIRCUITPY_ITC97
+#include "shared-bindings/itc97/ITC97Bus.h"
+#endif
 #include "shared-bindings/displayio/__init__.h"
 
 #include "shared/runtime/interrupt_char.h"
@@ -233,6 +236,10 @@ static void common_hal_displayio_release_displays_impl(bool keep_primary) {
         #if CIRCUITPY_QSPIBUS
         } else if (bus_type == &qspibus_qspibus_type) {
             common_hal_qspibus_qspibus_deinit(&display_buses[i].qspi_bus);
+        #endif
+        #if CIRCUITPY_ITC97
+        } else if (bus_type == &itc97_itc97bus_type) {
+            common_hal_itc97_itc97bus_deinit(&display_buses[i].itc97_bus);
         #endif
         }
         display_buses[i].bus_base.type = &mp_type_NoneType;

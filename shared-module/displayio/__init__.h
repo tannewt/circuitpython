@@ -10,6 +10,9 @@
 #if CIRCUITPY_AURORA_EPAPER
 #include "shared-module/aurora_epaper/aurora_framebuffer.h"
 #endif
+#if CIRCUITPY_ITC97
+#include "shared-module/itc97/ITC97Bus.h"
+#endif
 #include "shared-bindings/displayio/Group.h"
 #if CIRCUITPY_EPAPERDISPLAY
 #include "shared-bindings/epaperdisplay/EPaperDisplay.h"
@@ -83,6 +86,9 @@ typedef struct {
         #endif
         #if CIRCUITPY_AURORA_EPAPER
         aurora_epaper_framebuffer_obj_t aurora_epaper;
+        #endif
+        #if CIRCUITPY_ITC97
+        itc97_itc97bus_obj_t itc97_bus;
         #endif
         #if CIRCUITPY_MIPIDSI
         mipidsi_display_obj_t mipidsi;

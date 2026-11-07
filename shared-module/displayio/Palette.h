@@ -19,6 +19,7 @@ typedef struct {
     uint8_t grayscale_bit; // The lowest grayscale bit. Normally 8 - depth.
     bool grayscale;
     bool tricolor;
+    bool tricolor_highlight_is_white; // Highlight pixels use white in the grayscale plane.
     bool fourcolor;
     bool sixcolor; // Spectra6 e-ink screens.
     bool sevencolor; // Acep e-ink screens.

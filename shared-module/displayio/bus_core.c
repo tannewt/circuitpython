@@ -20,6 +20,9 @@
 #if CIRCUITPY_QSPIBUS
 #include "shared-bindings/qspibus/QSPIBus.h"
 #endif
+#if CIRCUITPY_ITC97
+#include "shared-bindings/itc97/ITC97Bus.h"
+#endif
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/time/__init__.h"
 #include "shared-module/displayio/__init__.h"
@@ -100,6 +103,16 @@ void displayio_display_bus_construct(displayio_display_bus_t *self,
         self->end_transaction = common_hal_qspibus_qspibus_end_transaction;
         self->flush = common_hal_qspibus_qspibus_flush;
         self->collect_ptrs = common_hal_qspibus_qspibus_collect_ptrs;
+    } else
+    #endif
+    #if CIRCUITPY_ITC97
+    if (mp_obj_is_type(bus, &itc97_itc97bus_type)) {
+        self->bus_reset = common_hal_itc97_itc97bus_reset;
+        self->bus_free = common_hal_itc97_itc97bus_bus_free;
+        self->begin_transaction = common_hal_itc97_itc97bus_begin_transaction;
+        self->send = common_hal_itc97_itc97bus_send;
+        self->end_transaction = common_hal_itc97_itc97bus_end_transaction;
+        self->collect_ptrs = common_hal_itc97_itc97bus_collect_ptrs;
     } else
     #endif
     {

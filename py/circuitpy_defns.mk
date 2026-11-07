@@ -303,6 +303,9 @@ endif
 ifeq ($(CIRCUITPY_IS31FL3741),1)
 SRC_PATTERNS += is31fl3741/%
 endif
+ifeq ($(CIRCUITPY_ITC97),1)
+SRC_PATTERNS += itc97/%
+endif
 ifeq ($(CIRCUITPY_JPEGIO),1)
 SRC_PATTERNS += jpegio/%
 endif
@@ -858,6 +861,8 @@ SRC_SHARED_MODULE_ALL = \
 	is31fl3741/IS31FL3741.c \
 	is31fl3741/FrameBuffer.c \
 	is31fl3741/__init__.c \
+	itc97/ITC97Bus.c \
+	itc97/__init__.c \
 	jpegio/__init__.c \
 	jpegio/JpegDecoder.c \
 	keypad/__init__.c \

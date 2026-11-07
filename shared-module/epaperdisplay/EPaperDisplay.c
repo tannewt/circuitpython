@@ -12,6 +12,9 @@
 #include "shared-bindings/displayio/ColorConverter.h"
 #include "shared-bindings/microcontroller/Pin.h"
 #include "shared-bindings/time/__init__.h"
+#if CIRCUITPY_ITC97
+#include "shared-bindings/itc97/ITC97Bus.h"
+#endif
 #include "shared-module/displayio/__init__.h"
 #include "supervisor/shared/display.h"
 #include "supervisor/shared/tick.h"
@@ -82,8 +85,10 @@ void common_hal_epaperdisplay_epaperdisplay_construct(epaperdisplay_epaperdispla
     self->stop_sequence_len = args->stop_sequence_len;
     self->refresh_sequence = args->refresh_sequence;
     self->refresh_sequence_len = args->refresh_sequence_len;
+    self->refresh_sequence_wait_for_busy = args->refresh_sequence_wait_for_busy;
 
     self->busy.base.type = &mp_type_NoneType;
+    self->busy2.base.type = &mp_type_NoneType;
     self->two_byte_sequence_length = args->two_byte_sequence_length;
     if (args->busy_pin != NULL) {
         self->busy.base.type = &digitalio_digitalinout_type;
@@ -92,6 +97,21 @@ void common_hal_epaperdisplay_epaperdisplay_construct(epaperdisplay_epaperdispla
         common_hal_never_reset_pin(args->busy_pin);
         #endif
     }
+    if (args->busy_pin2 != NULL) {
+        self->busy2.base.type = &digitalio_digitalinout_type;
+        common_hal_digitalio_digitalinout_construct(&self->busy2, args->busy_pin2);
+        #if CIRCUITPY_BULK_RESET
+        common_hal_never_reset_pin(args->busy_pin2);
+        #endif
+    }
+
+    #if CIRCUITPY_ITC97
+    if (mp_obj_is_type(self->bus.bus, &itc97_itc97bus_type)) {
+        common_hal_itc97_itc97bus_set_busy_pins(MP_OBJ_TO_PTR(self->bus.bus),
+            args->busy_pin != NULL ? &self->busy : NULL,
+            args->busy_pin2 != NULL ? &self->busy2 : NULL, self->busy_state);
+    }
+    #endif
 
     // Clear the color memory if it isn't in use.
     if (args->highlight_color == 0x00 && args->highlight_color2 == 0x00 && args->write_color_ram_command != NO_COMMAND) {
@@ -132,12 +152,20 @@ uint16_t common_hal_epaperdisplay_epaperdisplay_get_height(epaperdisplay_epaperd
     return displayio_display_core_get_height(&self->core);
 }
 
-static void wait_for_busy(epaperdisplay_epaperdisplay_obj_t *self) {
-    if (self->busy.base.type == &mp_type_NoneType) {
-        return;
+static bool epaperdisplay_busy_pins_active(epaperdisplay_epaperdisplay_obj_t *self) {
+    if (self->busy.base.type == &digitalio_digitalinout_type &&
+        common_hal_digitalio_digitalinout_get_value(&self->busy) == self->busy_state) {
+        return true;
     }
-    while (common_hal_digitalio_digitalinout_get_value(&self->busy) == self->busy_state &&
-           !mp_hal_is_interrupted()) {
+    if (self->busy2.base.type == &digitalio_digitalinout_type &&
+        common_hal_digitalio_digitalinout_get_value(&self->busy2) == self->busy_state) {
+        return true;
+    }
+    return false;
+}
+
+static void wait_for_busy(epaperdisplay_epaperdisplay_obj_t *self) {
+    while (epaperdisplay_busy_pins_active(self) && !mp_hal_is_interrupted()) {
         RUN_BACKGROUND_TASKS;
     }
 }
@@ -206,7 +234,14 @@ static void epaperdisplay_epaperdisplay_start_refresh(epaperdisplay_epaperdispla
 
     common_hal_time_delay_ms(self->start_up_time_ms);
 
-    send_command_sequence(self, true, self->start_sequence, self->start_sequence_len);
+    bool wait_between_commands = true;
+    #if CIRCUITPY_ITC97
+    // iTC97 BUSY is not a per-command handshake. It may stay active until the
+    // entire COG initialization and booster ramp have been sent. The bus handles
+    // readiness immediately before the trigger and BUSY assertion afterwards.
+    wait_between_commands = !mp_obj_is_type(self->bus.bus, &itc97_itc97bus_type);
+    #endif
+    send_command_sequence(self, wait_between_commands, self->start_sequence, self->start_sequence_len);
     if (mp_hal_is_interrupted()) {
         return;
     }
@@ -226,7 +261,17 @@ uint32_t common_hal_epaperdisplay_epaperdisplay_get_time_to_refresh(epaperdispla
 
 static void epaperdisplay_epaperdisplay_finish_refresh(epaperdisplay_epaperdisplay_obj_t *self) {
     // Actually refresh the display now that all pixel RAM has been updated.
-    send_command_sequence(self, false, self->refresh_sequence, self->refresh_sequence_len);
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        send_command_sequence(self, self->refresh_sequence_wait_for_busy, self->refresh_sequence, self->refresh_sequence_len);
+        nlr_pop();
+    } else {
+        // A failed trigger (for example an iTC97 BUSY timeout) must not leave
+        // display_core wedged in a refresh, preventing a subsequent retry.
+        self->core.refresh_in_progress = false;
+        self->core.full_refresh = true;
+        nlr_jump(nlr.ret_val);
+    }
 
     supervisor_enable_tick();
     self->refreshing = true;
@@ -422,8 +467,10 @@ static bool _clean_area(epaperdisplay_epaperdisplay_obj_t *self) {
 
 bool common_hal_epaperdisplay_epaperdisplay_refresh(epaperdisplay_epaperdisplay_obj_t *self) {
 
-    if (self->refreshing && self->busy.base.type == &digitalio_digitalinout_type) {
-        if (common_hal_digitalio_digitalinout_get_value(&self->busy) != self->busy_state) {
+    if (self->refreshing &&
+        (self->busy.base.type == &digitalio_digitalinout_type ||
+         self->busy2.base.type == &digitalio_digitalinout_type)) {
+        if (!epaperdisplay_busy_pins_active(self)) {
             supervisor_disable_tick();
             self->refreshing = false;
             // Run stop sequence but don't wait for busy because busy is set when sleeping.
@@ -471,9 +518,9 @@ bool common_hal_epaperdisplay_epaperdisplay_refresh(epaperdisplay_epaperdisplay_
 void epaperdisplay_epaperdisplay_background(epaperdisplay_epaperdisplay_obj_t *self) {
     if (self->refreshing) {
         bool refresh_done = false;
-        if (self->busy.base.type == &digitalio_digitalinout_type) {
-            bool busy = common_hal_digitalio_digitalinout_get_value(&self->busy);
-            refresh_done = busy != self->busy_state;
+        if (self->busy.base.type == &digitalio_digitalinout_type ||
+            self->busy2.base.type == &digitalio_digitalinout_type) {
+            refresh_done = !epaperdisplay_busy_pins_active(self);
         } else {
             refresh_done = supervisor_ticks_ms64() - self->core.last_refresh > self->refresh_time;
         }
@@ -504,11 +551,20 @@ void release_epaperdisplay(epaperdisplay_epaperdisplay_obj_t *self) {
     if (self->busy.base.type == &digitalio_digitalinout_type) {
         common_hal_digitalio_digitalinout_deinit(&self->busy);
     }
+    if (self->busy2.base.type == &digitalio_digitalinout_type) {
+        common_hal_digitalio_digitalinout_deinit(&self->busy2);
+    }
 }
 
 void epaperdisplay_epaperdisplay_reset(epaperdisplay_epaperdisplay_obj_t *self) {
     displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
     self->core.full_refresh = true;
+    // Preserve an active panel refresh so background processing can finish it,
+    // run the stop sequence, and balance its tick-enable reference. Only an
+    // interrupted RAM transfer (before the trigger) needs its core state reset.
+    if (!self->refreshing) {
+        self->core.refresh_in_progress = false;
+    }
 }
 
 void epaperdisplay_epaperdisplay_collect_ptrs(epaperdisplay_epaperdisplay_obj_t *self) {

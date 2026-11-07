@@ -59,6 +59,7 @@
 //|         refresh_display_command: Union[int, circuitpython_typing.ReadableBuffer],
 //|         refresh_time: float = 40,
 //|         busy_pin: Optional[microcontroller.Pin] = None,
+//|         busy_pin2: Optional[microcontroller.Pin] = None,
 //|         busy_state: bool = True,
 //|         seconds_per_frame: float = 180,
 //|         always_toggle_chip_select: bool = False,
@@ -103,6 +104,7 @@
 //|         :param int refresh_display_command: Command used to start a display refresh. Single int or byte-packed command sequence
 //|         :param float refresh_time: Time it takes to refresh the display before the stop_sequence should be sent. Ignored when busy_pin is provided.
 //|         :param microcontroller.Pin busy_pin: Pin used to signify the display is busy
+//|         :param microcontroller.Pin busy_pin2: Optional second busy pin
 //|         :param bool busy_state: State of the busy pin when the display is busy
 //|         :param float seconds_per_frame: Minimum number of seconds between screen refreshes
 //|         :param bool always_toggle_chip_select: When True, chip select is toggled every byte
@@ -121,9 +123,10 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
            ARG_set_column_window_command, ARG_set_row_window_command, ARG_set_current_column_command,
            ARG_set_current_row_command, ARG_write_black_ram_command, ARG_black_bits_inverted,
            ARG_write_color_ram_command, ARG_color_bits_inverted, ARG_highlight_color, ARG_highlight_color2,
-           ARG_refresh_display_command,  ARG_refresh_time, ARG_busy_pin, ARG_busy_state,
+           ARG_refresh_display_command,  ARG_refresh_time, ARG_busy_pin, ARG_busy_pin2, ARG_busy_state,
            ARG_seconds_per_frame, ARG_always_toggle_chip_select, ARG_grayscale, ARG_advanced_color_epaper, ARG_spectra6,
-           ARG_two_byte_sequence_length, ARG_start_up_time, ARG_address_little_endian };
+           ARG_two_byte_sequence_length, ARG_start_up_time, ARG_address_little_endian,
+           ARG_refresh_sequence_wait_for_busy };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_display_bus, MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_start_sequence, MP_ARG_REQUIRED | MP_ARG_OBJ },
@@ -148,6 +151,7 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
         { MP_QSTR_refresh_display_command, MP_ARG_OBJ | MP_ARG_REQUIRED },
         { MP_QSTR_refresh_time, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = MP_OBJ_NEW_SMALL_INT(40)} },
         { MP_QSTR_busy_pin, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = mp_const_none} },
+        { MP_QSTR_busy_pin2, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = mp_const_none} },
         { MP_QSTR_busy_state, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = true} },
         { MP_QSTR_seconds_per_frame, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = MP_OBJ_NEW_SMALL_INT(180)} },
         { MP_QSTR_always_toggle_chip_select, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
@@ -157,6 +161,7 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
         { MP_QSTR_two_byte_sequence_length, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
         { MP_QSTR_start_up_time, MP_ARG_OBJ | MP_ARG_KW_ONLY, {.u_obj = MP_OBJ_NEW_SMALL_INT(0)} },
         { MP_QSTR_address_little_endian, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
+        { MP_QSTR_refresh_sequence_wait_for_busy, MP_ARG_BOOL | MP_ARG_KW_ONLY, {.u_bool = false} },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
@@ -170,6 +175,7 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
 
 
     const mcu_pin_obj_t *busy_pin = validate_obj_is_free_pin_or_none(args[ARG_busy_pin].u_obj, MP_QSTR_busy_pin);
+    const mcu_pin_obj_t *busy_pin2 = validate_obj_is_free_pin_or_none(args[ARG_busy_pin2].u_obj, MP_QSTR_busy_pin2);
 
     mp_int_t rotation = args[ARG_rotation].u_int;
     if (rotation % 90 != 0) {
@@ -238,8 +244,10 @@ static mp_obj_t epaperdisplay_epaperdisplay_make_new(const mp_obj_type_t *type, 
     construct_args.highlight_color2 = highlight_color2;
     construct_args.refresh_sequence = refresh_buf;
     construct_args.refresh_sequence_len = refresh_buf_len;
+    construct_args.refresh_sequence_wait_for_busy = args[ARG_refresh_sequence_wait_for_busy].u_bool;
     construct_args.refresh_time = refresh_time;
     construct_args.busy_pin = busy_pin;
+    construct_args.busy_pin2 = busy_pin2;
     construct_args.busy_state = args[ARG_busy_state].u_bool;
     construct_args.seconds_per_frame = seconds_per_frame;
     construct_args.always_toggle_chip_select = args[ARG_always_toggle_chip_select].u_bool;
@@ -303,7 +311,10 @@ static mp_obj_t epaperdisplay_epaperdisplay_obj_refresh(mp_obj_t self_in) {
     epaperdisplay_epaperdisplay_obj_t *self = native_display(self_in);
     bool ok = common_hal_epaperdisplay_epaperdisplay_refresh(self);
     if (!ok) {
-        mp_raise_RuntimeError(MP_ERROR_TEXT("Refresh too soon"));
+        if (common_hal_epaperdisplay_epaperdisplay_get_time_to_refresh(self) > 0) {
+            mp_raise_RuntimeError(MP_ERROR_TEXT("Refresh too soon"));
+        }
+        mp_raise_RuntimeError(MP_ERROR_TEXT("Display busy or bus in use"));
     }
     return mp_const_none;
 }
