@@ -496,6 +496,15 @@ static void _set_lv_pos(displayio_tilegrid_t *self) {
         self->lv_origin_y + self->y * self->lv_scale);
 }
 
+// Scale a view from its top left corner. Moving a pivot makes LVGL lay out the whole screen, and
+// the pivot only matters once the view is scaled.
+static void _set_view_scale(lv_obj_t *img, uint16_t scale) {
+    if (scale != 1) {
+        lv_image_set_pivot(img, 0, 0);
+    }
+    lv_image_set_scale(img, (int32_t)scale * LV_SCALE_NONE);
+}
+
 // Create one view: an lv_image that shows one window of the composed buffer, scaled about its top
 // left corner like the legacy compositor's whole-pixel scaling.
 static lv_obj_t *_create_view(displayio_tilegrid_t *self, lv_obj_t *parent) {
@@ -506,9 +515,8 @@ static lv_obj_t *_create_view(displayio_tilegrid_t *self, lv_obj_t *parent) {
     lv_obj_clear_flag(img, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(img, LV_OBJ_FLAG_SCROLLABLE);
     lv_image_set_inner_align(img, LV_IMAGE_ALIGN_TOP_LEFT);
-    lv_image_set_pivot(img, 0, 0);
     lv_image_set_antialias(img, false);
-    lv_image_set_scale(img, (int32_t)self->lv_scale * LV_SCALE_NONE);
+    _set_view_scale(img, self->lv_scale);
     return img;
 }
 
@@ -626,6 +634,21 @@ static void _runs(uint32_t offset, uint32_t extent, _run_t runs[2], uint8_t *cou
     *count = 2;
 }
 
+// Create views up to `needed`. Returns false when one can't be allocated.
+static bool _ensure_views(displayio_tilegrid_t *self, uint8_t needed) {
+    for (uint8_t i = 0; i < needed; i++) {
+        if (self->lv_views[i] == NULL) {
+            self->lv_views[i] = _create_view(self, self->lv_obj);
+            if (self->lv_views[i] == NULL) {
+                // Out of memory: try again on the next refresh.
+                self->lv_views_dirty = true;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 // Point the views at the current window of the buffer, or at the source itself on the direct path.
 // Caller holds the lock.
 static void _layout_views(displayio_tilegrid_t *self) {
@@ -634,18 +657,10 @@ static void _layout_views(displayio_tilegrid_t *self) {
         return;
     }
     // Views are created on demand, so an unscrolled grid has one and the direct path has one too.
-    uint8_t needed = self->lv_direct ? 1 : DISPLAYIO_LVGL_TILEGRID_VIEWS;
-    for (uint8_t i = 0; i < needed; i++) {
-        if (self->lv_views[i] == NULL) {
-            self->lv_views[i] = _create_view(self, self->lv_obj);
-            if (self->lv_views[i] == NULL) {
-                // Out of memory: try again on the next refresh.
-                self->lv_views_dirty = true;
-                return;
-            }
-        }
-    }
     if (self->lv_direct) {
+        if (!_ensure_views(self, 1)) {
+            return;
+        }
         // The view is the source: the tile's origin in the atlas becomes a negative offset, in
         // scaled pixels, so that the tile's top left lands on the grid's top left.
         uint16_t x0, y0;
@@ -680,6 +695,9 @@ static void _layout_views(displayio_tilegrid_t *self) {
     uint8_t col_count;
     _runs(ty, grid_h, rows, &row_count);
     _runs(tx, grid_w, cols, &col_count);
+    if (!_ensure_views(self, row_count * col_count)) {
+        return;
+    }
 
     uint32_t stride = self->lv_buf->header.stride;
     lv_color_format_t cf = self->lv_buf->header.cf;
@@ -687,9 +705,6 @@ static void _layout_views(displayio_tilegrid_t *self) {
     uint8_t view = 0;
     for (uint8_t r = 0; r < row_count; r++) {
         for (uint8_t c = 0; c < col_count; c++) {
-            if (view >= DISPLAYIO_LVGL_TILEGRID_VIEWS || self->lv_views[view] == NULL) {
-                break;
-            }
             lv_image_dsc_t *dsc = &self->lv_view_dsc[view];
             lv_memzero(dsc, sizeof(*dsc));
             dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
@@ -1176,7 +1191,7 @@ void displayio_lvgl_tilegrid_update_scale(displayio_tilegrid_t *self) {
     }
     for (uint8_t i = 0; i < DISPLAYIO_LVGL_TILEGRID_VIEWS; i++) {
         if (self->lv_views[i] != NULL) {
-            lv_image_set_scale(self->lv_views[i], (int32_t)self->lv_scale * LV_SCALE_NONE);
+            _set_view_scale(self->lv_views[i], self->lv_scale);
         }
     }
     _set_lv_pos(self);
