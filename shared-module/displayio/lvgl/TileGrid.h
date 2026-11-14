@@ -87,6 +87,7 @@ typedef struct displayio_tilegrid {
     int16_t lv_src_y2;
     bool lv_src_dirty;
     struct displayio_tilegrid *lv_next;  // The compositor's list of attached TileGrids.
+    struct displayio_tilegrid *lv_bitmap_next;  // The Bitmap's list of grids drawing it.
     uint16_t lv_scale;                   // Scale inherited from the parent group.
     int32_t lv_origin_x;                 // The parent group's origin in screen pixels.
     int32_t lv_origin_y;

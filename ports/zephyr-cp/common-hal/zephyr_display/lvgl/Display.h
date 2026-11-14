@@ -10,11 +10,13 @@
 #include <zephyr/drivers/display.h>
 
 #include "py/obj.h"
+#include "lvgl.h"
 #include "shared-module/displayio/display_core.h"
 
 typedef struct {
     mp_obj_base_t base;
     displayio_display_core_t core;
+    lv_display_t *lv_display;
     const struct device *device;
     struct display_capabilities capabilities;
     enum display_pixel_format pixel_format;

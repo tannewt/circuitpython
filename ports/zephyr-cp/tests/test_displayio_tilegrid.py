@@ -285,7 +285,7 @@ def test_tilegrid_render(circuitpython):
 @pytest.mark.duration(24)
 def test_tilegrid_render_scaled_group(request, board, circuitpython):
     """A TileGrid in a scaled group is scaled by whole pixels from its corner."""
-    if board == "native_native_sim_lvgl":
+    if board.startswith("native_native_sim_lvgl"):
         # LVGL scales images about pixel centers ((w - 1) * scale wide) and resamples,
         # so it doesn't reproduce displayio's whole pixel scaling yet.
         request.applymarker(pytest.mark.xfail(reason="LVGL image scaling isn't pixel exact"))
@@ -412,7 +412,9 @@ print('done')
 
 
 @pytest.mark.circuitpy_drive({"code.py": UNSUPPORTED_CODE})
-@pytest.mark.circuitpython_board("native_native_sim_lvgl")
+@pytest.mark.parametrize(
+    "board", ["native_native_sim_lvgl", "native_native_sim_lvgl_asan"], indirect=True
+)
 @pytest.mark.duration(10)
 def test_tilegrid_unsupported(circuitpython):
     """Combinations LVGL can't draw directly raise NotImplementedError."""

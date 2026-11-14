@@ -3,6 +3,7 @@
 #if CIRCUITPY_DISPLAYIO_LVGL
 #include "lvgl.h"
 #include "esp_attr.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_task.h"
 #include "esp_timer.h"
@@ -13,7 +14,6 @@
 #include "core/lv_global.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
 #include "supervisor/background_callback.h"
-#include "supervisor/port_heap.h"
 #include "supervisor/shared/tick.h"
 
 static const char *lvgl_tag = "LVGL";
@@ -54,21 +54,76 @@ void lv_mem_remove_pool(lv_mem_pool_t pool) {
     LV_UNUSED(pool);
 }
 
+// LVGL allocates and frees small blocks (draw tasks, objects, styles) on every frame.
+// port_malloc() aligns every PSRAM allocation to MICROPY_BYTES_PER_GC_BLOCK so that heap areas,
+// and therefore the bytearrays VideoBuffers stream from, are cache-line aligned. Getting that
+// alignment through heap_caps_aligned_alloc() over-allocates and splits off a free remainder on
+// every call, which wastes ~64 bytes and shatters PSRAM when it happens millions of times. LVGL
+// aligns its own draw buffers inside the allocation (LV_DRAW_BUF_ALIGN), so give it plain
+// allocations and leave the aligned port_malloc() path to the GC and DMA buffers.
+static void *lvgl_heap_alloc(size_t size) {
+    void *ptr = NULL;
+    #ifdef CONFIG_SPIRAM
+    ptr = heap_caps_malloc(size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    #endif
+    if (ptr == NULL) {
+        ptr = heap_caps_malloc(size, MALLOC_CAP_8BIT);
+    }
+    return ptr;
+}
+
+// A NULL from lv_malloc_core is fatal in most of LVGL (the callers dereference the result), so
+// record why it happened at the moment it happens. Without this the crash is a bare store fault
+// on address 0x8 with LV_USE_ASSERT_MALLOC compiled out.
+static void lvgl_heap_log_oom(const char *what, size_t size) {
+    ESP_LOGE(lvgl_tag, "%s(%u) failed: internal %u free (%u largest), PSRAM %u free (%u largest)",
+        what, (unsigned)size,
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+}
+
 void *lv_malloc_core(size_t size) {
-    return port_malloc(size, false);
+    void *ptr = lvgl_heap_alloc(size);
+    if (ptr == NULL) {
+        lvgl_heap_log_oom("lv_malloc", size);
+    }
+    return ptr;
 }
 
 void *lv_realloc_core(void *p, size_t new_size) {
-    return port_realloc(p, new_size, false);
+    void *grown = NULL;
+    #ifdef CONFIG_SPIRAM
+    grown = heap_caps_realloc(p, new_size, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    #endif
+    if (grown == NULL) {
+        // A failed realloc leaves p alone, so trying the internal heap can't lose it.
+        grown = heap_caps_realloc(p, new_size, MALLOC_CAP_8BIT);
+    }
+    if (grown == NULL) {
+        lvgl_heap_log_oom("lv_realloc", new_size);
+    }
+    return grown;
 }
 
 void lv_free_core(void *p) {
-    port_free(p);
+    heap_caps_free(p);
 }
 
 void lv_mem_monitor_core(lv_mem_monitor_t *mon_p) {
-    // Not supported for custom allocators.
-    LV_UNUSED(mon_p);
+    // LVGL only uses this for its own logging. Report the whole port heap (internal RAM plus
+    // PSRAM) rather than pretending to track LVGL's share of it.
+    size_t total = heap_caps_get_total_size(MALLOC_CAP_8BIT);
+    size_t free_size = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    lv_memzero(mon_p, sizeof(*mon_p));
+    mon_p->total_size = total;
+    mon_p->free_size = free_size;
+    mon_p->free_biggest_size = largest;
+    mon_p->max_used = total > free_size ? total - free_size : 0;
+    mon_p->used_pct = total > 0 ? (uint8_t)((total - free_size) * 100 / total) : 0;
+    mon_p->frag_pct = free_size > 0 ? (uint8_t)(100 - largest * 100 / free_size) : 0;
 }
 
 lv_result_t lv_mem_test_core(void) {
@@ -191,9 +246,9 @@ void displayio_lvgl_port_init(void) {
     // rendering. Pin it to the CircuitPython core as well: background_callback_add() (used by the
     // BusDisplay proxy) is interrupt-safe on a single core, and sharing the core keeps it from
     // racing the CircuitPython thread's callback list. A recursive mutex (priority inheritance)
-    // keeps that from blocking the main task for long. 8 KB is enough for the PPA and software
-    // draw paths.
-    BaseType_t ok = xTaskCreatePinnedToCore(lvgl_task, "lvgl", 8192, NULL,
+    // keeps that from blocking the main task for long. 16 KB covers the draw paths plus LVGL's
+    // internal compositor state; 8 KB overflowed on complex screens.
+    BaseType_t ok = xTaskCreatePinnedToCore(lvgl_task, "lvgl", 16384, NULL,
         ESP_TASK_MAIN_PRIO + 1, &lvgl_task_handle, CONFIG_ESP_MAIN_TASK_AFFINITY);
     if (ok != pdPASS) {
         lvgl_task_handle = NULL;

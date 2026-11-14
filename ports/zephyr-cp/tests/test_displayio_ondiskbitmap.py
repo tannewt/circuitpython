@@ -206,7 +206,9 @@ def _compare(path, changed):
 _CODE_FILE = {"code.py": _CODE, **_FILES}
 
 
-@pytest.mark.circuitpython_board("native_native_sim_lvgl")
+@pytest.mark.parametrize(
+    "board", ["native_native_sim_lvgl", "native_native_sim_lvgl_asan"], indirect=True
+)
 @pytest.mark.circuitpy_drive(_CODE_FILE)
 @pytest.mark.display(capture_times_ns=[8_000_000_000, 20_000_000_000])
 @pytest.mark.duration(24)

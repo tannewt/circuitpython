@@ -837,7 +837,7 @@ msgid "soft reboot\n"
 msgstr ""
 
 #: ports/analog/common-hal/busio/SPI.c ports/analog/common-hal/busio/UART.c
-#: ports/stm/common-hal/audioio/AudioOut.c
+#: ports/cxd56/common-hal/busio/SPI.c ports/stm/common-hal/audioio/AudioOut.c
 #: shared-bindings/digitalio/DigitalInOutProtocol.c
 #: shared-module/displayio/bus_core.c shared-module/ssl/SSLContext.c
 msgid "%q init failed"
@@ -875,7 +875,7 @@ msgstr ""
 msgid "RS485"
 msgstr ""
 
-#: ports/analog/common-hal/busio/UART.c
+#: ports/analog/common-hal/busio/UART.c ports/cxd56/common-hal/busio/UART.c
 msgid "UART needs TX & RX"
 msgstr ""
 
@@ -1025,6 +1025,7 @@ msgid "Too many channels in sample"
 msgstr ""
 
 #: ports/atmel-samd/common-hal/audiobusio/I2SOut.c
+#: ports/atmel-samd/common-hal/audiobusio/PDMIn.c
 #: ports/atmel-samd/common-hal/audioio/AudioOut.c
 #: ports/raspberrypi/common-hal/audiobusio/I2SOut.c
 #: ports/raspberrypi/common-hal/audiopwmio/PWMAudioOut.c
@@ -2185,10 +2186,6 @@ msgid "Invalid %q and %q"
 msgstr ""
 
 #: ports/raspberrypi/common-hal/mdns/Server.c
-msgid "Failed to add service TXT record"
-msgstr ""
-
-#: ports/raspberrypi/common-hal/mdns/Server.c
 msgid "Out of MDNS service slots"
 msgstr ""
 
@@ -2449,6 +2446,14 @@ msgstr ""
 #: ports/stm/common-hal/sdioio/SDCard.c
 #, c-format
 msgid "SDIO GetCardInfo Error %d"
+msgstr ""
+
+#: ports/zephyr-cp/bindings/zephyr_display/Display.c
+#: shared-bindings/busdisplay/BusDisplay.c
+#: shared-bindings/epaperdisplay/EPaperDisplay.c
+#: shared-bindings/framebufferio/FramebufferDisplay.c
+#: shared-bindings/mipidsi/Display.c
+msgid "Display rotation must be in 90 degree increments"
 msgstr ""
 
 #: ports/zephyr-cp/bindings/zephyr_display/Display.c
@@ -4175,13 +4180,6 @@ msgid "No default %q bus"
 msgstr ""
 
 #: shared-bindings/busdisplay/BusDisplay.c
-#: shared-bindings/epaperdisplay/EPaperDisplay.c
-#: shared-bindings/framebufferio/FramebufferDisplay.c
-#: shared-bindings/mipidsi/Display.c
-msgid "Display rotation must be in 90 degree increments"
-msgstr ""
-
-#: shared-bindings/busdisplay/BusDisplay.c
 msgid "%q must be 1 when %q is True"
 msgstr ""
 
@@ -4344,6 +4342,10 @@ msgstr ""
 
 #: shared-bindings/is31fl3741/FrameBuffer.c
 msgid "Scale dimensions must divide by 3"
+msgstr ""
+
+#: shared-bindings/is31fl3741/FrameBuffer.c
+msgid "LED mappings must match display size"
 msgstr ""
 
 #: shared-bindings/is31fl3741/IS31FL3741.c
@@ -4654,7 +4656,7 @@ msgid "Layer does not support scaling"
 msgstr ""
 
 #: shared-module/displayio/lvgl/Group.c
-msgid "Layer must be a Group, TileGrid or vector shape"
+msgid "Layer must be a Group, TileGrid, vector shape or VideoBuffer"
 msgstr ""
 
 #: shared-module/displayio/lvgl/TileGrid.c
@@ -4667,6 +4669,13 @@ msgstr ""
 
 #: shared-module/framebufferio/lvgl/FramebufferDisplay.c
 msgid "LVGL dirty row alloc failed"
+msgstr ""
+
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
+#: shared-module/videocore/VideoBuffer.c
+#: shared-module/videocore/legacy/VideoBuffer.c
+#: shared-module/videocore/lvgl/VideoBuffer.c
+msgid "VideoBuffer can't stream into a rotated display"
 msgstr ""
 
 #: shared-module/gifio/GifWriter.c
@@ -4693,10 +4702,6 @@ msgstr ""
 
 #: shared-module/imagecapture/ParallelImageCapture.c
 msgid "This microcontroller does not support continuous capture."
-msgstr ""
-
-#: shared-module/is31fl3741/FrameBuffer.c
-msgid "LED mappings must match display size"
 msgstr ""
 
 #: shared-module/jpegio/JpegDecoder.c
@@ -4915,15 +4920,15 @@ msgid "video size changed since play; stop and play again"
 msgstr ""
 
 #: shared-module/videocore/VideoBuffer.c
-msgid "VideoBuffer can't stream into a rotated display"
+msgid "VideoBuffer is playing into a different framebuffer"
 msgstr ""
 
-#: shared-module/videocore/VideoBuffer.c
+#: shared-module/videocore/legacy/VideoBuffer.c
 msgid "VideoBuffer does not support transforms"
 msgstr ""
 
-#: shared-module/videocore/VideoBuffer.c
-msgid "VideoBuffer is playing into a different framebuffer"
+#: shared-module/videocore/lvgl/VideoBuffer.c
+msgid "video format must be 16, 24 or 32 bits per pixel"
 msgstr ""
 
 #: supervisor/shared/bluetooth/bluetooth.c

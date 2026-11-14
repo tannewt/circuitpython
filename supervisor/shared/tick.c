@@ -23,6 +23,10 @@
 #include "shared-module/displayio/__init__.h"
 #endif
 
+#if CIRCUITPY_DISPLAYIO && CIRCUITPY_DISPLAYIO_LVGL && CIRCUITPY_VIDEOCORE
+#include "shared-module/videocore/VideoBuffer.h"
+#endif
+
 #if CIRCUITPY_KEYPAD
 #include "shared-module/keypad/__init__.h"
 #endif
@@ -72,6 +76,10 @@ static void supervisor_background_tick(void *unused) {
     #if CIRCUITPY_DISPLAYIO && !CIRCUITPY_DISPLAYIO_LVGL
     // The LVGL compositor renders on an RTOS thread of its own; nothing to pump here.
     displayio_background();
+    #elif CIRCUITPY_DISPLAYIO && CIRCUITPY_DISPLAYIO_LVGL && CIRCUITPY_VIDEOCORE
+    // Video frames land in interrupt context, so repaint them here, from a
+    // normal background context, for the next LVGL render.
+    displayio_lvgl_video_background();
     #endif
 
     filesystem_background();

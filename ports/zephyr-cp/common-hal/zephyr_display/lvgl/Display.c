@@ -25,9 +25,8 @@
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
 #include "shared-bindings/displayio/__init__.h"
 
-// Single-display port. The display object is port-malloc'd in board_init and reached
-// via supervisor.runtime.display; displayio.release_displays() is a no-op (deinit the
-// display object instead).
+// Display objects live in displayio's static slot registry. Each slot owns its LVGL
+// display and buffers until release_displays(); soft reload keeps the primary slot.
 
 #if defined(CONFIG_LV_Z_RUN_LVGL_ON_WORKQUEUE)
 // The Zephyr LVGL glue creates its display during SYS_INIT from the driver's current
@@ -93,9 +92,27 @@ static void zephyr_display_lvgl_flush_565x(lv_display_t *display, const lv_area_
     lvgl_flush_cb_16bit(display, area, px_map);
 }
 
+// LVGL borrows user_data and render buffers; lv_display_delete() does not free them.
+// Keep our allocations together and release them on every delete, including failed setup.
+typedef struct {
+    struct lvgl_disp_data driver;
+    void *buf;
+    void *mono_buf;
+} circuitpython_lvgl_display_data_t;
+
+static void zephyr_display_lvgl_delete_cb(lv_event_t *event) {
+    circuitpython_lvgl_display_data_t *data = lv_event_get_user_data(event);
+    if (data->mono_buf != NULL) {
+        lvgl_set_mono_conversion_buffer(NULL, 0);
+    }
+    lv_free(data->mono_buf);
+    lv_free(data->buf);
+    lv_free(data);
+}
+
 // Recreate the default LVGL display for the (possibly newly selected) driver pixel format,
-// mirroring the glue's lvgl_init() display setup.
-static void zephyr_display_lvgl_recreate_display(zephyr_display_display_obj_t *self) {
+// mirroring the glue's lvgl_init() display setup. The caller holds the LVGL lock.
+static int zephyr_display_lvgl_recreate_display(zephyr_display_display_obj_t *self) {
     lv_display_t *old = lv_display_get_default();
     if (old != NULL) {
         lv_display_delete(old);
@@ -104,20 +121,23 @@ static void zephyr_display_lvgl_recreate_display(zephyr_display_display_obj_t *s
     lv_display_t *display = lv_display_create(self->capabilities.x_resolution,
         self->capabilities.y_resolution);
     if (display == NULL) {
-        return;
+        return -ENOMEM;
     }
 
-    struct lvgl_disp_data *data = lv_malloc(sizeof(struct lvgl_disp_data));
+    circuitpython_lvgl_display_data_t *data = lv_malloc_zeroed(sizeof(*data));
     if (data == NULL) {
-        return;
+        lv_display_delete(display);
+        return -ENOMEM;
     }
-    memset(data, 0, sizeof(*data));
-    data->display_dev = self->device;
-    display_get_capabilities(self->device, &data->cap);
-    lv_display_set_user_data(display, data);
+    lv_display_add_event_cb(display, zephyr_display_lvgl_delete_cb, LV_EVENT_DELETE, data);
+    data->driver.display_dev = self->device;
+    display_get_capabilities(self->device, &data->driver.cap);
+    lv_display_set_user_data(display, &data->driver);
 
-    if (set_lvgl_rendering_cb(display) != 0) {
-        return;
+    int result = set_lvgl_rendering_cb(display);
+    if (result != 0) {
+        lv_display_delete(display);
+        return result;
     }
 
     // Override the glue's flush choice where the legacy-compatible transfer differs.
@@ -171,20 +191,25 @@ static void zephyr_display_lvgl_recreate_display(zephyr_display_display_obj_t *s
         buf_size = 2 * buf_nbr_pixels;
     }
 
-    void *buf0 = lv_malloc(buf_size);
-    if (buf0 == NULL) {
-        return;
+    data->buf = lv_malloc(buf_size);
+    if (data->buf == NULL) {
+        lv_display_delete(display);
+        return -ENOMEM;
     }
-    lv_display_set_buffers(display, buf0, NULL, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(display, data->buf, NULL, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 
     if (mono) {
         // The glue's mono flush converts the row-packed LVGL 1bpp buffer into the
         // display's (possibly vertically tiled) layout through this buffer.
-        void *vtile_buf = lv_malloc(buf_size);
-        if (vtile_buf != NULL) {
-            lvgl_set_mono_conversion_buffer(vtile_buf, buf_size);
+        data->mono_buf = lv_malloc(buf_size);
+        if (data->mono_buf == NULL) {
+            lv_display_delete(display);
+            return -ENOMEM;
         }
+        lvgl_set_mono_conversion_buffer(data->mono_buf, buf_size);
     }
+    self->lv_display = display;
+    return 0;
 }
 
 
@@ -268,6 +293,7 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
     uint16_t rotation,
     bool auto_refresh) {
     self->auto_refresh = false;
+    self->lv_display = NULL;
 
     if (device == NULL || !device_is_ready(device)) {
         raise_zephyr_error(-ENODEV);
@@ -277,7 +303,8 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
     display_get_capabilities(self->device, &self->capabilities);
 
     // Lock for the whole LVGL setup: the workqueue may already be running timers.
-    lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     // Pick the pixel format exactly like the legacy compositor does (RGB565 preferred).
     self->pixel_format = zephyr_display_select_pixel_format(&self->capabilities);
     if (self->pixel_format != self->capabilities.current_pixel_format) {
@@ -288,7 +315,12 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
     // The LVGL display glue configured itself from the driver's original current format at
     // boot. Recreate the LVGL display so its buffers and flush callbacks match the format
     // actually selected above.
-    zephyr_display_lvgl_recreate_display(self);
+    int result = zephyr_display_lvgl_recreate_display(self);
+    if (result != 0) {
+        self->device = NULL;
+        self->base.type = &mp_type_NoneType;
+        raise_zephyr_error(result);
+    }
 
     uint16_t color_depth;
     uint8_t bytes_per_cell;
@@ -327,7 +359,7 @@ void common_hal_zephyr_display_display_construct_from_device(zephyr_display_disp
 
     displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
     displayio_lvgl_set_root_group(&circuitpython_splash);
-    lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     #if defined(CONFIG_LV_Z_RUN_LVGL_ON_WORKQUEUE)
     // Buffers and flush callbacks now match the panel; let the workqueue render.
     lvgl_timer_handler_resume();
@@ -433,10 +465,17 @@ void zephyr_display_display_background(zephyr_display_display_obj_t *self) {
 
 void release_zephyr_display(zephyr_display_display_obj_t *self) {
     common_hal_zephyr_display_display_set_auto_refresh(self, false);
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     displayio_lvgl_set_root_group(NULL);
+    if (self->lv_display != NULL) {
+        lv_display_delete(self->lv_display);
+        self->lv_display = NULL;
+    }
     release_display_core(&self->core);
     self->device = NULL;
     self->base.type = &mp_type_NoneType;
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 void zephyr_display_display_collect_ptrs(zephyr_display_display_obj_t *self) {

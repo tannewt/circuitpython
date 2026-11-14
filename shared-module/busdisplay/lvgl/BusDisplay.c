@@ -90,6 +90,37 @@ static lv_color_format_t busdisplay_lvgl_color_format(busdisplay_busdisplay_obj_
     }
 }
 
+typedef struct {
+    nlr_jump_callback_node_t node;
+    busdisplay_busdisplay_obj_t *self;
+    bool locked;
+} busdisplay_construct_cleanup_t;
+
+static void busdisplay_construct_abort(void *ctx) {
+    busdisplay_construct_cleanup_t *cleanup = ctx;
+    busdisplay_busdisplay_obj_t *self = cleanup->self;
+    if (!cleanup->locked) {
+        displayio_lvgl_lock();
+    }
+    if (self->root_group != NULL) {
+        displayio_lvgl_set_root_group(NULL);
+        self->root_group = NULL;
+    }
+    if (self->lv_display != NULL) {
+        lv_display_delete(self->lv_display);
+        self->lv_display = NULL;
+    }
+    port_free(self->lv_buf1);
+    port_free(self->lv_buf2);
+    self->lv_buf1 = NULL;
+    self->lv_buf2 = NULL;
+    self->lv_buf_size = 0;
+    busdisplay_backlight_deinit(&self->backlight);
+    self->deinited = true;
+    self->base.type = &mp_type_NoneType;
+    displayio_lvgl_unlock();
+}
+
 void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *self,
     mp_obj_t bus, uint16_t width, uint16_t height, int16_t colstart, int16_t rowstart,
     uint16_t rotation, uint16_t color_depth, bool grayscale, bool pixels_in_byte_share_row,
@@ -99,6 +130,21 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     uint16_t brightness_command, mp_float_t brightness,
     bool single_byte_bounds, bool data_as_commands, bool auto_refresh, uint16_t native_frames_per_second,
     bool backlight_on_high, bool SH1107_addressing, uint16_t backlight_pwm_frequency) {
+
+    self->lv_display = NULL;
+    self->lv_buf1 = NULL;
+    self->lv_buf2 = NULL;
+    self->lv_buf_size = 0;
+    self->root_group = NULL;
+    self->backlight.inout.base.type = &mp_type_NoneType;
+    self->auto_refresh = false;
+    busdisplay_construct_cleanup_t cleanup = { .self = self, .locked = false };
+    nlr_push_jump_callback(&cleanup.node, busdisplay_construct_abort);
+    // Packed pixels require panel-specific packing and LVGL's indexed palette
+    // header must not be sent to the panel as pixels.
+    if (color_depth < 8) {
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("Format not supported"));
+    }
 
     uint16_t ram_width = 0x100;
     uint16_t ram_height = 0x100;
@@ -129,7 +175,7 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     self->write_ram_command = write_ram_command;
     self->brightness_command = brightness_command;
     self->backlight_on_high = backlight_on_high;
-    self->auto_refresh = auto_refresh;
+    self->auto_refresh = false;
     self->first_manual_refresh = !auto_refresh;
     self->native_frames_per_second = native_frames_per_second;
     self->native_ms_per_frame = 1000 / (native_frames_per_second ? native_frames_per_second : 60);
@@ -145,11 +191,11 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     // Hold the render lock across the whole setup so the render task can't see a half-configured
     // display. The port lock is recursive.
     displayio_lvgl_lock();
+    cleanup.locked = true;
 
     // Create LVGL display
     self->lv_display = lv_display_create(width, height);
     if (self->lv_display == NULL) {
-        displayio_lvgl_unlock();
         mp_raise_RuntimeError(MP_ERROR_TEXT("LVGL display create failed"));
     }
     lv_display_set_user_data(self->lv_display, self);
@@ -174,11 +220,6 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     self->lv_buf1 = port_malloc(buf_size, false);
     self->lv_buf2 = port_malloc(buf_size, false);
     if (self->lv_buf1 == NULL || self->lv_buf2 == NULL) {
-        port_free(self->lv_buf1);
-        port_free(self->lv_buf2);
-        self->lv_buf1 = NULL;
-        self->lv_buf2 = NULL;
-        displayio_lvgl_unlock();
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL buffer alloc failed"));
     }
     self->lv_buf_size = buf_size;
@@ -198,6 +239,7 @@ void common_hal_busdisplay_busdisplay_construct(busdisplay_busdisplay_obj_t *sel
     lv_display_set_default(self->lv_display);
     displayio_lvgl_register_display(self->lv_display);
     displayio_lvgl_set_root_group(&circuitpython_splash);
+    nlr_pop_jump_callback(false);
     displayio_lvgl_unlock();
 
     // Handle rotation
@@ -245,13 +287,14 @@ mp_obj_t common_hal_busdisplay_busdisplay_get_root_group(busdisplay_busdisplay_o
 }
 mp_obj_t common_hal_busdisplay_busdisplay_set_root_group(busdisplay_busdisplay_obj_t *self, displayio_group_t *root_group) {
     self->root_group = root_group;
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     // Group can only be on one display at a time.
     if (root_group != NULL) {
         lv_display_set_default(self->lv_display);
     }
     displayio_lvgl_set_root_group(root_group);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     return mp_const_none;
 }
 mp_float_t common_hal_busdisplay_busdisplay_get_brightness(busdisplay_busdisplay_obj_t *self) {
@@ -279,13 +322,14 @@ void busdisplay_busdisplay_background(busdisplay_busdisplay_obj_t *self) {
 }
 void release_busdisplay(busdisplay_busdisplay_obj_t *self) {
     self->deinited = true;
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     displayio_lvgl_set_root_group(NULL);
     if (self->lv_display != NULL) {
         lv_display_delete(self->lv_display);
         self->lv_display = NULL;
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     // Draw buffers are allocated from the port heap, not LVGL's heap, so free them
     // explicitly after the display that referenced them is gone.
     port_free(self->lv_buf1);
@@ -294,6 +338,8 @@ void release_busdisplay(busdisplay_busdisplay_obj_t *self) {
     self->lv_buf2 = NULL;
     self->lv_buf_size = 0;
     self->root_group = NULL;
+    busdisplay_backlight_deinit(&self->backlight);
+    self->base.type = &mp_type_NoneType;
 }
 void reset_busdisplay(busdisplay_busdisplay_obj_t *self) {
     common_hal_busdisplay_busdisplay_set_auto_refresh(self, true);
@@ -302,21 +348,23 @@ void reset_busdisplay(busdisplay_busdisplay_obj_t *self) {
     supervisor_start_terminal(self->width, self->height);
     // Show the splash if it is free, otherwise nothing. Other groups are on the VM heap.
     if (!circuitpython_splash.in_group) {
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         self->root_group = &circuitpython_splash;
         displayio_lvgl_set_root_group(&circuitpython_splash);
         if (self->lv_display != NULL) {
             lv_refr_now(self->lv_display);
         }
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
     } else {
         self->root_group = NULL;
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         displayio_lvgl_set_root_group(NULL);
         if (self->lv_display != NULL) {
             lv_refr_now(self->lv_display);
         }
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
     }
 }
 void busdisplay_busdisplay_collect_ptrs(busdisplay_busdisplay_obj_t *self) {

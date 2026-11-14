@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "py/gc.h"
+#include "py/objtype.h"
 #include "py/runtime.h"
 #include "py/objlist.h"
 #include "shared-bindings/displayio/TileGrid.h"
@@ -28,6 +29,10 @@
 #include "shared-module/displayio/__init__.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
 #include "shared-module/displayio/lvgl/lvgl_protocol.h"
+
+#if CIRCUITPY_VIDEOCORE
+#include "shared-module/videocore/VideoBuffer.h"
+#endif
 
 #if CIRCUITPY_DISPLAYIO_LVGL
 
@@ -55,6 +60,20 @@ void displayio_lvgl_lock(void) {
 
 void displayio_lvgl_unlock(void) {
     displayio_lvgl_port_unlock();
+}
+
+static void _unlock_on_exception(void *ctx) {
+    (void)ctx;
+    displayio_lvgl_unlock();
+}
+
+void displayio_lvgl_lock_with_cleanup(nlr_jump_callback_node_t *cleanup) {
+    displayio_lvgl_lock();
+    nlr_push_jump_callback(cleanup, _unlock_on_exception);
+}
+
+void displayio_lvgl_unlock_with_cleanup(void) {
+    nlr_pop_jump_callback(true);
 }
 
 // Groups are mirrored as transparent, screen sized LVGL objects at the screen origin and
@@ -92,6 +111,11 @@ static void check_readonly(displayio_group_t *self) {
 // before anything is drawn. The lock is held, and LVGL doesn't render while this runs.
 static void refresh_start_cb(lv_event_t *e) {
     (void)e;
+    // Take any video frames that landed since the last background tick, so a
+    // manual display.refresh() shows them too.
+    #if CIRCUITPY_VIDEOCORE
+    displayio_lvgl_video_background();
+    #endif
     displayio_lvgl_tilegrid_refresh_all();
 }
 
@@ -267,9 +291,10 @@ void common_hal_displayio_group_set_hidden(displayio_group_t *self, bool hidden)
         return;
     }
     _propagate_hidden(self, hidden);
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     _update_lvgl_visible(self);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 void displayio_group_set_hidden_by_parent(displayio_group_t *self, bool hidden) {
@@ -282,9 +307,10 @@ void displayio_group_set_hidden_by_parent(displayio_group_t *self, bool hidden) 
         return;
     }
     _propagate_hidden(self, hidden);
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     _update_lvgl_visible(self);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 uint32_t common_hal_displayio_group_get_scale(displayio_group_t *self) {
@@ -302,7 +328,8 @@ void common_hal_displayio_group_set_scale(displayio_group_t *self, uint32_t scal
     }
     uint16_t previous_scale = self->scale;
     self->scale = scale;
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     bool accepted = _update_children(self);
     if (!accepted) {
         // A member can't be shown at this scale. Put the group back the way it was, push that
@@ -310,7 +337,7 @@ void common_hal_displayio_group_set_scale(displayio_group_t *self, uint32_t scal
         self->scale = previous_scale;
         _update_children(self);
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     if (!accepted) {
         mp_raise_ValueError(MP_ERROR_TEXT("Layer does not support scaling"));
     }
@@ -329,10 +356,11 @@ void common_hal_displayio_group_set_x(displayio_group_t *self, mp_int_t x) {
     self->lv_abs_x += (x - self->x) * self->lv_scale;
     self->x = x;
     if (self->lv_obj != NULL) {
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         // Every layer can be translated; only set_scale() can be rejected.
         (void)_update_children(self);
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
     }
 }
 
@@ -349,10 +377,11 @@ void common_hal_displayio_group_set_y(displayio_group_t *self, mp_int_t y) {
     self->lv_abs_y += (y - self->y) * self->lv_scale;
     self->y = y;
     if (self->lv_obj != NULL) {
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         // Every layer can be translated; only set_scale() can be rejected.
         (void)_update_children(self);
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
     }
 }
 
@@ -377,22 +406,27 @@ static lv_obj_t *_attach_member(displayio_group_t *self, mp_obj_t layer) {
 static void _adopt_member(displayio_group_t *self, mp_obj_t layer) {
     const lvgl_protocol_t *protocol = _layer_protocol(&layer);
     if (protocol == NULL || protocol->set_in_group == NULL) {
-        mp_raise_ValueError(MP_ERROR_TEXT("Layer must be a Group, TileGrid or vector shape"));
+        mp_raise_ValueError(MP_ERROR_TEXT("Layer must be a Group, TileGrid, vector shape or VideoBuffer"));
     }
     if (protocol->set_in_group(layer, true)) {
         mp_raise_ValueError(MP_ERROR_TEXT("Layer already in a group"));
     }
-    // Check the inherited transform before the layer joins: a layer that can't be shown at
-    // the group's current scale (a VideoBuffer, for example) is refused here instead of
-    // leaving the group with a member it can't position.
-    if (protocol->set_transform != NULL &&
-        !protocol->set_transform(layer, self->lv_abs_x, self->lv_abs_y,
-            self->lv_scale * self->scale)) {
+    // Transform/visibility updates can raise too (for example when resuming video).
+    // A rejected adoption must not leave an otherwise unused layer marked in_group.
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        if (protocol->set_transform != NULL &&
+            !protocol->set_transform(layer, self->lv_abs_x, self->lv_abs_y,
+                self->lv_scale * self->scale)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("Layer does not support scaling"));
+        }
+        if (protocol->set_hidden_by_parent != NULL) {
+            protocol->set_hidden_by_parent(layer, self->hidden || self->hidden_by_parent);
+        }
+        nlr_pop();
+    } else {
         protocol->set_in_group(layer, false);
-        mp_raise_ValueError(MP_ERROR_TEXT("Layer does not support scaling"));
-    }
-    if (protocol->set_hidden_by_parent != NULL) {
-        protocol->set_hidden_by_parent(layer, self->hidden || self->hidden_by_parent);
+        nlr_jump(nlr.ret_val);
     }
 }
 
@@ -446,26 +480,36 @@ static void _sync_members(displayio_group_t *self) {
 
 void common_hal_displayio_group_insert(displayio_group_t *self, size_t index, mp_obj_t layer) {
     check_readonly(self);
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     _adopt_member(self, layer);
-    mp_obj_list_insert(self->members, index, layer);
-
-    if (self->lv_obj != NULL) {
-        displayio_lvgl_lock();
-        _sync_members(self);
-        displayio_lvgl_unlock();
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        mp_obj_list_insert(self->members, index, layer);
+        nlr_pop();
+    } else {
+        mp_obj_t native = layer;
+        const lvgl_protocol_t *protocol = _layer_protocol(&native);
+        protocol->set_in_group(native, false);
+        nlr_jump(nlr.ret_val);
     }
+    if (self->lv_obj != NULL) {
+        _sync_members(self);
+    }
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 mp_obj_t common_hal_displayio_group_pop(displayio_group_t *self, size_t index) {
     check_readonly(self);
     mp_obj_t layer = self->members->items[index];
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     _release_member(self, layer);
     mp_obj_list_pop(self->members, index);
     if (self->lv_obj != NULL) {
         _sync_members(self);
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     return layer;
 }
 
@@ -485,18 +529,38 @@ mp_obj_t common_hal_displayio_group_get(displayio_group_t *self, size_t index) {
 
 void common_hal_displayio_group_set(displayio_group_t *self, size_t index, mp_obj_t layer) {
     check_readonly(self);
-    displayio_lvgl_lock();
-    _release_member(self, self->members->items[index]);
+    mp_obj_t previous = self->members->items[index];
+    if (previous == layer) {
+        return;
+    }
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
+    // Validate the replacement before detaching the current member. Failed assignment
+    // must leave both the Python list and its LVGL mirrors intact.
     _adopt_member(self, layer);
+    _release_member(self, previous);
     mp_obj_list_store(self->members, MP_OBJ_NEW_SMALL_INT(index), layer);
     if (self->lv_obj != NULL) {
         _sync_members(self);
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 // protocol_lvgl implementation. A Group is a member of another Group like any other layer;
 // its own position and scale are inherited, so it recomputes its origin from the parent's.
+//
+// A Python subclass of Group (PageLayout, a Tile, ...) is an mp_obj_instance_t that holds the
+// native Group in subobj[0], so every function below has to see that native object instead of
+// the instance. Resolving it here keeps the type slot on the native type.
+static mp_obj_t _group_protocol_self(mp_obj_t layer) {
+    mp_obj_t native = mp_obj_cast_to_native_base(layer, MP_OBJ_FROM_PTR(&displayio_group_type));
+    if (native == MP_OBJ_NULL) {
+        return layer;
+    }
+    mp_obj_assert_native_inited(native);
+    return native;
+}
+
 static lv_obj_t *_group_protocol_root_obj(mp_obj_t layer) {
     return ((displayio_group_t *)MP_OBJ_TO_PTR(layer))->lv_obj;
 }
@@ -536,6 +600,7 @@ static bool _group_protocol_set_in_group(mp_obj_t layer, bool in_group) {
 
 const lvgl_protocol_t displayio_lvgl_group_protocol = {
     MP_PROTO_IMPLEMENT(MP_QSTR_protocol_lvgl)
+    .protocol_self = _group_protocol_self,
     .root_obj = _group_protocol_root_obj,
     .attach = _group_protocol_attach,
     .detach = _group_protocol_detach,
@@ -588,9 +653,10 @@ void displayio_lvgl_set_root_group(displayio_group_t *group) {
         // The port never created the LVGL screen (no display); nothing to mirror.
         return;
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     if (cp_lvgl_root_group == group) {
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
         return;
     }
     if (cp_lvgl_root_group != NULL) {
@@ -611,7 +677,7 @@ void displayio_lvgl_set_root_group(displayio_group_t *group) {
     if (screen != NULL) {
         lv_obj_invalidate(screen);
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 void displayio_gc_collect(void) {
@@ -625,6 +691,10 @@ void displayio_gc_collect(void) {
     displayio_lvgl_tilegrid_gc_collect();
     // Displays live in the static slot registry, which the GC can't see.
     displayio_display_slots_gc_collect();
+    #if CIRCUITPY_VIDEOCORE
+    // So does the compositor's list of attached VideoBuffer mirrors.
+    displayio_lvgl_video_gc_collect();
+    #endif
 }
 
 #endif  // CIRCUITPY_DISPLAYIO_LVGL

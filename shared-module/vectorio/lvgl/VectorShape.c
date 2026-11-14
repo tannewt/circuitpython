@@ -147,6 +147,9 @@ static void _update_visible(vectorio_vector_shape_t *self) {
 static void _refresh_mask(vectorio_vector_shape_t *self, int32_t x1, int32_t y1, int32_t w,
     int32_t h, uint16_t scale) {
     if (self->mask == NULL || (int32_t)self->mask->header.w != w || (int32_t)self->mask->header.h != h) {
+        // The image borrows the mask. Clear its source before freeing the old buffer:
+        // if the replacement allocation fails it must draw nothing, not freed memory.
+        lv_image_set_src(self->lv_obj, NULL);
         if (self->mask != NULL) {
             lv_draw_buf_destroy(self->mask);
             self->mask = NULL;

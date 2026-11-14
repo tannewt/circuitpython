@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "py/obj.h"
+#include "py/nlr.h"
 #include "shared-module/displayio/Group.h"
 #include "shared-module/displayio/TileGrid.h"
 #include "shared-module/displayio/Bitmap.h"
@@ -47,6 +48,12 @@ void displayio_lvgl_port_frame_boundary(void);
 // Shared lock wrappers. All display-side (CP thread) LVGL calls must happen inside these.
 void displayio_lvgl_lock(void);
 void displayio_lvgl_unlock(void);
+
+// CircuitPython-thread mutations that may raise must register an unlock on exception.
+// The caller owns the stack node until unlock_with_cleanup(). Do not use these from
+// the render task, which has no active Python exception/cleanup stack.
+void displayio_lvgl_lock_with_cleanup(nlr_jump_callback_node_t *cleanup);
+void displayio_lvgl_unlock_with_cleanup(void);
 
 // Set up LVGL for displayio. Called by the port's display constructor.
 void displayio_lvgl_init(void);

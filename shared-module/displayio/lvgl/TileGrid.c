@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "py/gc.h"
+#include "py/objtype.h"
 #include "py/runtime.h"
 #include "shared-bindings/displayio/Bitmap.h"
 #include "shared-bindings/displayio/ColorConverter.h"
@@ -50,7 +51,13 @@
 // serial_write_substring(), which writes the display terminal, which calls back into
 // common_hal_displayio_tilegrid_set_tile() -- recursion, then a crash. The IDF log console is a
 // separate sink, so it can be used from the write path and from the compose pass.
-#if CIRCUITPY_ESPIDF
+//
+// Off by default: this prints several lines per grid per refresh, which buries the heap and
+// out-of-memory logging in lvgl_port.c and port.c. Flip to 1 to watch the compose pass; the
+// memory logging is independent and stays on either way.
+#define DISPLAYIO_TILEGRID_DEBUG_ENABLED 0
+
+#if DISPLAYIO_TILEGRID_DEBUG_ENABLED && CIRCUITPY_ESPIDF
 #include "esp_log.h"
 #define DISPLAYIO_TILEGRID_DEBUG(...) ESP_LOGI("TileGrid", __VA_ARGS__)
 #else
@@ -83,24 +90,58 @@ static bool _is_linked(displayio_tilegrid_t *self) {
     return false;
 }
 
+// A Bitmap keeps its own list of the attached grids drawing it. A pixel write only walks the
+// grids that can actually be affected, and an empty list means the write can skip LVGL entirely.
+// Only the CircuitPython thread mutates these lists, under the LVGL lock.
+static void _watch_bitmap(displayio_tilegrid_t *self) {
+    if (!mp_obj_is_type(self->bitmap, &displayio_bitmap_type)) {
+        return;
+    }
+    displayio_bitmap_t *bitmap = MP_OBJ_TO_PTR(self->bitmap);
+    self->lv_bitmap_next = bitmap->lv_watch_head;
+    bitmap->lv_watch_head = self;
+}
+
+static void _unwatch_bitmap(displayio_tilegrid_t *self) {
+    if (!mp_obj_is_type(self->bitmap, &displayio_bitmap_type)) {
+        return;
+    }
+    displayio_bitmap_t *bitmap = MP_OBJ_TO_PTR(self->bitmap);
+    displayio_tilegrid_t **link = &bitmap->lv_watch_head;
+    while (*link != NULL) {
+        if (*link == self) {
+            *link = self->lv_bitmap_next;
+            break;
+        }
+        link = &(*link)->lv_bitmap_next;
+    }
+    self->lv_bitmap_next = NULL;
+}
+
 static void _link_mirror(displayio_tilegrid_t *self) {
     if (_is_linked(self)) {
         return;
     }
     self->lv_next = mirror_head;
     mirror_head = self;
+    _watch_bitmap(self);
 }
 
 static void _unlink_mirror(displayio_tilegrid_t *self) {
+    bool linked = false;
     displayio_tilegrid_t **link = &mirror_head;
     while (*link != NULL) {
         if (*link == self) {
             *link = self->lv_next;
+            linked = true;
             break;
         }
         link = &(*link)->lv_next;
     }
     self->lv_next = NULL;
+    if (linked) {
+        _unwatch_bitmap(self);
+    }
 }
 
 void displayio_lvgl_tilegrid_gc_collect(void) {
@@ -545,6 +586,7 @@ static bool _ensure_buffer(displayio_tilegrid_t *self) {
         return false;
     }
     lv_draw_buf_t *old = self->lv_buf;
+    // ESP_LOGI(TAG, "creating draw buf %d x %d", w, h);
     lv_draw_buf_t *buf = lv_draw_buf_create(w, h, cf, 0);
     if (buf == NULL) {
         return false;
@@ -813,6 +855,7 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
 
         // Start from transparent (ARGB8888) or black (RGB565): lv_draw_image() writes nothing
         // where the source is transparent, which is exactly where the hole has to stay.
+        // ESP_LOGI(TAG, "clearing cell area %d,%d-%d,%d", cell_area.x1, cell_area.y1, cell_area.x2, cell_area.y2);
         lv_draw_buf_clear(self->lv_buf, &cell_area);
 
         if (self->lv_src != NULL && self->lv_src->data != NULL) {
@@ -872,15 +915,17 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
         // The compose pass may have run in software, so write those lines out before a DMA
         // consumer (the display flush, or the PPA on the display pass) reads the buffer.
         lv_draw_buf_flush_cache(self->lv_buf, &buf_dirty);
-        // Did the draw actually put pixels in the buffer? Zero here means the compose draw wrote
-        // nothing, so the problem is upstream of the views; non-zero means the buffer has content
-        // and the display side is at fault.
-        uint32_t stride = self->lv_buf->header.stride;
-        uint32_t bpp = lv_color_format_get_size(self->lv_buf->header.cf);
         if (drawn_cell_area.x2 < drawn_cell_area.x1) {
             DISPLAYIO_TILEGRID_DEBUG("compose %p done, nothing drawn", self);
             return any;
         }
+        #if DISPLAYIO_TILEGRID_DEBUG_ENABLED
+        // Did the draw actually put pixels in the buffer? Zero here means the compose draw wrote
+        // nothing, so the problem is upstream of the views; non-zero means the buffer has content
+        // and the display side is at fault. Scans the composed cell, so it only runs when the
+        // logging that uses it is compiled in.
+        uint32_t stride = self->lv_buf->header.stride;
+        uint32_t bpp = lv_color_format_get_size(self->lv_buf->header.cf);
         const uint8_t *sample = self->lv_buf->data + drawn_cell_area.y1 * stride +
             drawn_cell_area.x1 * bpp;
         uint32_t nonzero = 0;
@@ -892,6 +937,7 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
         DISPLAYIO_TILEGRID_DEBUG("compose %p done buf %p cell (%d,%d)-(%d,%d) nonzero %lu",
             self, self->lv_buf->data, (int)drawn_cell_area.x1, (int)drawn_cell_area.y1,
             (int)drawn_cell_area.x2, (int)drawn_cell_area.y2, (unsigned long)nonzero);
+        #endif
     }
     return any;
 }
@@ -928,12 +974,27 @@ static void _refresh(displayio_tilegrid_t *self) {
     if (self->lv_direct) {
         // The view is the source pixels, so a content change is a plain invalidation.
         changed = self->lv_src_dirty;
+        // Direct sources can still need a cached conversion (RGB565_SWAPPED, for
+        // example). Pixel writes must invalidate that decode just like composed sources.
+        if (changed && self->lv_src != NULL) {
+            lv_image_cache_drop(self->lv_src);
+        }
         self->lv_src_dirty = false;
         if (self->lv_views_dirty) {
             _layout_views(self);
         }
     } else {
-        _ensure_buffer(self);
+        if (!_ensure_buffer(self)) {
+            // Out of memory (or a zero-sized grid): there is nothing to compose into. Keep the
+            // pending work (lv_full_dirty/lv_dirty_count) so the next invalidation retries, but
+            // don't invalidate here. Invalidating is what makes LVGL run a refresh, and the
+            // refresh is what calls this function, so invalidating on failure spins the renderer
+            // at 100% retrying the allocation (and flooding the log) forever.
+            lv_display_enable_invalidation(display, true);
+            self->lv_work = false;
+            DISPLAYIO_TILEGRID_DEBUG("refresh %p no buffer, backing off", self);
+            return;
+        }
         _sync_source(self);
         if (self->lv_views_dirty) {
             _layout_views(self);
@@ -972,18 +1033,21 @@ void displayio_lvgl_tilegrid_refresh_all(void) {
 
 void displayio_lvgl_tilegrid_bitmap_changed(displayio_bitmap_t *bitmap, int16_t x1, int16_t y1,
     int16_t x2, int16_t y2) {
-    if (mirror_head == NULL) {
+    if (bitmap->lv_watch_head == NULL) {
         return;
     }
     displayio_lvgl_lock();
     bool gone = bitmap->data == NULL;
-    for (displayio_tilegrid_t *self = mirror_head; self != NULL; self = self->lv_next) {
-        if (self->lv_obj == NULL || MP_OBJ_TO_PTR(self->bitmap) != bitmap) {
+    for (displayio_tilegrid_t *self = bitmap->lv_watch_head; self != NULL;
+         self = self->lv_bitmap_next) {
+        if (self->lv_obj == NULL) {
             continue;
         }
         if (gone) {
-            // The Bitmap was deinited: drop the pixels it was drawing and blank the grid.
+            // A cached decoder can borrow the Bitmap's pixels too. Drop it while the
+            // storage still exists, then stop the source descriptor from exposing it.
             if (self->lv_src == &self->lv_src_dsc) {
+                lv_image_cache_drop(self->lv_src);
                 self->lv_src_dsc.data = NULL;
             }
             _mark_all(self);
@@ -1011,7 +1075,8 @@ void displayio_lvgl_tilegrid_shader_changed(displayio_tilegrid_t *self) {
     if (self->lv_obj == NULL) {
         return;
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     if (self->lv_src == &self->lv_src_dsc) {
         // The shared palette array was updated in place, so only the decoded view is stale.
         lv_image_cache_drop(self->lv_src);
@@ -1026,7 +1091,7 @@ void displayio_lvgl_tilegrid_shader_changed(displayio_tilegrid_t *self) {
         }
     }
     _mark_all(self);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 // --- Lifecycle -------------------------------------------------------------
@@ -1054,29 +1119,38 @@ void displayio_lvgl_tilegrid_attach(displayio_tilegrid_t *self, lv_obj_t *parent
     if (!self->in_group || parent == NULL) {
         return;
     }
-    displayio_lvgl_lock();
+    // ESP_LOGI(TAG, "attaching tilegrid %p to parent %p", self, parent);
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     if (self->lv_obj == NULL) {
         if (_create_objects(self, parent)) {
             _rebind(self);
             _set_lv_pos(self);
+            _link_mirror(self);
+        } else {
+            // Do not root a failed attachment forever. Discard a partially created
+            // container too; a later group sync can retry attaching it.
+            _destroy_objects(self);
         }
-        // Even a grid whose objects couldn't be created stays on the list so a later refresh can
-        // try again.
-        _link_mirror(self);
     } else if (lv_obj_get_parent(self->lv_obj) != parent) {
         lv_obj_set_parent(self->lv_obj, parent);
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 void displayio_lvgl_tilegrid_detach(displayio_tilegrid_t *self) {
-    if (self->lv_obj == NULL) {
-        return;
-    }
     displayio_lvgl_lock();
     _unbind_source(self);
     _destroy_objects(self);
     _unlink_mirror(self);
+    // This allocation is outside the Python heap, so collecting the TileGrid cannot
+    // free it. Drop it even when attachment failed before creating an LVGL object.
+    lv_free(self->lv_cell_dirty);
+    self->lv_cell_dirty = NULL;
+    self->lv_cell_words = 0;
+    self->lv_dirty_count = 0;
+    self->lv_full_dirty = true;
+    self->lv_views_dirty = true;
     self->lv_src_dirty = false;
     self->lv_work = false;
     displayio_lvgl_unlock();
@@ -1088,7 +1162,8 @@ void displayio_lvgl_tilegrid_update_scale(displayio_tilegrid_t *self) {
     if (self->lv_obj == NULL) {
         return;
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     if (mp_obj_is_type(self->bitmap, &displayio_ondiskbitmap_type) && self->lv_direct &&
         (self->lv_scale != 1) != self->lv_src_odb_full) {
         // Re-source: whether the file's rows can be streamed changed with the scale.
@@ -1106,11 +1181,24 @@ void displayio_lvgl_tilegrid_update_scale(displayio_tilegrid_t *self) {
     }
     _set_lv_pos(self);
     _mark_views(self);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 // protocol_lvgl implementation. Group owns the tree; these only translate its calls into the
 // TileGrid mirror operations above.
+//
+// A Python subclass of TileGrid (a Label, a RoundRect, ...) is an mp_obj_instance_t that holds
+// the native TileGrid in subobj[0], so every function below has to see that native object
+// instead of the instance. Resolving it here keeps the type slot on the native type.
+static mp_obj_t _tilegrid_protocol_self(mp_obj_t layer) {
+    mp_obj_t native = mp_obj_cast_to_native_base(layer, MP_OBJ_FROM_PTR(&displayio_tilegrid_type));
+    if (native == MP_OBJ_NULL) {
+        return layer;
+    }
+    mp_obj_assert_native_inited(native);
+    return native;
+}
+
 static lv_obj_t *_tilegrid_protocol_root_obj(mp_obj_t layer) {
     return ((displayio_tilegrid_t *)MP_OBJ_TO_PTR(layer))->lv_obj;
 }
@@ -1153,6 +1241,7 @@ static bool _tilegrid_protocol_set_in_group(mp_obj_t layer, bool in_group) {
 
 const lvgl_protocol_t displayio_lvgl_tilegrid_protocol = {
     MP_PROTO_IMPLEMENT(MP_QSTR_protocol_lvgl)
+    .protocol_self = _tilegrid_protocol_self,
     .root_obj = _tilegrid_protocol_root_obj,
     .attach = _tilegrid_protocol_attach,
     .detach = _tilegrid_protocol_detach,
@@ -1177,6 +1266,7 @@ void common_hal_displayio_tilegrid_construct(displayio_tilegrid_t *self, mp_obj_
     // Determine if we need uint16_t or uint8_t for tile indices
     bool use_uint16 = self->tiles_in_bitmap > 255;
 
+    // ESP_LOGI(TAG, "allocating tile grid %d x %d", width, height);
     if (use_uint16) {
         uint16_t *tiles16 = (uint16_t *)m_malloc_without_collect(total_tiles * sizeof(uint16_t));
         for (uint32_t i = 0; i < total_tiles; i++) {
@@ -1225,6 +1315,7 @@ void common_hal_displayio_tilegrid_construct(displayio_tilegrid_t *self, mp_obj_
     self->lv_argb = false;
     self->lv_view_count = 0;
     self->lv_next = NULL;
+    self->lv_bitmap_next = NULL;
     self->lv_scale = 1;
     self->lv_origin_x = 0;
     self->lv_origin_y = 0;
@@ -1317,12 +1408,13 @@ void common_hal_displayio_tilegrid_set_pixel_shader(displayio_tilegrid_t *self, 
         self->pixel_shader = pixel_shader;
         return;
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     // Give up the old shader's source while the descriptor still belongs to it.
     _unbind_source(self);
     self->pixel_shader = pixel_shader;
     _rebind(self);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 mp_obj_t common_hal_displayio_tilegrid_get_bitmap(displayio_tilegrid_t *self) {
@@ -1335,12 +1427,20 @@ void common_hal_displayio_tilegrid_set_bitmap(displayio_tilegrid_t *self, mp_obj
         self->bitmap = bitmap;
         return;
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
+    bool linked = _is_linked(self);
     // Release the old bitmap's source before the reference to it is replaced.
     _unbind_source(self);
+    if (linked) {
+        _unwatch_bitmap(self);
+    }
     self->bitmap = bitmap;
     _rebind(self);
-    displayio_lvgl_unlock();
+    if (linked) {
+        _watch_bitmap(self);
+    }
+    displayio_lvgl_unlock_with_cleanup();
 }
 
 uint16_t common_hal_displayio_tilegrid_get_width(displayio_tilegrid_t *self) {

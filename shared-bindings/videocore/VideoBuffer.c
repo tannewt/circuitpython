@@ -23,18 +23,29 @@
 //|     Add a VideoBuffer to a `displayio.Group` to show it on a display. A
 //|     framebuffer target only streams while it is shown.
 //|
+//|     Displayio composites the video with the other layers in its Group. On
+//|     displays that use the LVGL compositor (for example ESP32-P4), LVGL
+//|     samples the target buffer directly, so no copy is made per frame and
+//|     widgets can be drawn over a live framebuffer target. On the original
+//|     scanline compositor a plain buffer is copied into the display instead,
+//|     and its pixel format must match the display exactly.
+//|
 //|     Implementations may restrict size and position. For example, on
 //|     ESP32-P4 a framebuffer target must be full width because the DMA can't
 //|     skip between rows without an intermediate buffer. Setting an
 //|     unsupported position directly raises an error, but moving a containing
 //|     Group may give garbled output instead.
 //|
-//|     Assigning a Group that contains a framebuffer target as a rotated
-//|     display's ``root_group`` raises `ValueError`.
+//|     A framebuffer target is only shown on the display that wraps that
+//|     framebuffer, and only while that display is unrotated. Assigning a
+//|     Group that contains one as a rotated display's ``root_group`` raises
+//|     `ValueError`.
 //|
 //|     When the target is a plain buffer, frames are written compactly (row
 //|     stride equals ``width * bits_per_pixel / 8``) and can be read from
-//|     Python at any time, for example to process or save camera pixels.
+//|     Python at any time, for example to process or save camera pixels. With
+//|     LVGL the buffer may be 16, 24 or 32 bits per pixel; the scanline
+//|     compositor only supports 16-bit pixels.
 //|
 //|     See the `videocore` module overview for complete examples.
 //|     """
@@ -81,7 +92,8 @@ static mp_obj_t videocore_videobuffer_make_new(const mp_obj_type_t *type, size_t
 //|         raised if the video can't be played directly into the framebuffer.
 //|
 //|         When the target is a plain buffer, it must be large enough for a
-//|         whole frame.
+//|         whole frame. The LVGL compositor samples the buffer, so it must be
+//|         16, 24 or 32 bits per pixel there.
 //|
 //|         :param ~circuitpython_typing.VideoSource source: The video source to
 //|             play, such as `mipicsi.Camera` or `videogif.GifDecoder`
@@ -231,5 +243,5 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
     make_new, videocore_videobuffer_make_new,
     locals_dict, &videocore_videobuffer_locals_dict,
-    protocol, &videocore_videobuffer_draw_protocol
+    protocol, VIDEOCORE_VIDEOBUFFER_PROTOCOL
     );

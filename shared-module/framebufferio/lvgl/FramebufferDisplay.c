@@ -17,6 +17,9 @@
 #include "supervisor/shared/tick.h"
 
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
+#if CIRCUITPY_VIDEOCORE
+#include "shared-module/videocore/VideoBuffer.h"
+#endif
 #include "supervisor/port_heap.h"
 
 #if CIRCUITPY_ESPIDF
@@ -215,6 +218,42 @@ static void framebufferio_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *are
 }
 
 
+typedef struct {
+    nlr_jump_callback_node_t node;
+    framebufferio_framebufferdisplay_obj_t *self;
+    bool locked;
+} framebufferdisplay_construct_cleanup_t;
+
+static void framebufferdisplay_construct_abort(void *ctx) {
+    framebufferdisplay_construct_cleanup_t *cleanup = ctx;
+    framebufferio_framebufferdisplay_obj_t *self = cleanup->self;
+    if (!cleanup->locked) {
+        displayio_lvgl_lock();
+    }
+    self->auto_refresh = false;
+    if (self->lv_paced) {
+        self->framebuffer_protocol->set_frame_callback(self->framebuffer, NULL, NULL);
+        self->lv_paced = false;
+    }
+    if (self->core.current_group != NULL) {
+        displayio_lvgl_set_root_group(NULL);
+        release_display_core(&self->core);
+        self->core.current_group = NULL;
+    }
+    if (self->lv_display != NULL) {
+        lv_display_delete(self->lv_display);
+        self->lv_display = NULL;
+    }
+    framebufferio_lvgl_free_partial_buf(self);
+    port_free(self->lv_dirty_row_bitmask);
+    self->lv_dirty_row_bitmask = NULL;
+    self->lv_dirty_row_bitmask_size = 0;
+    // A failed display constructor does not take ownership of the framebuffer.
+    self->framebuffer = mp_const_none;
+    self->base.type = &mp_type_NoneType;
+    displayio_lvgl_unlock();
+}
+
 void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebufferdisplay_obj_t *self,
     mp_obj_t framebuffer,
     uint16_t rotation,
@@ -222,7 +261,8 @@ void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebu
     // Turn off auto-refresh as we init.
     self->auto_refresh = false;
     self->framebuffer = framebuffer;
-    self->framebuffer_protocol = mp_proto_get_or_throw(MP_QSTR_protocol_framebuffer, framebuffer);
+    self->framebuffer_protocol = NULL;
+    self->core.current_group = NULL;
     self->lv_display = NULL;
     self->lv_color_format = LV_COLOR_FORMAT_UNKNOWN;
     self->lv_buf = NULL;
@@ -231,8 +271,16 @@ void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebu
     self->lv_dirty_row_bitmask_size = 0;
     self->lv_direct = false;
     self->lv_paced = false;
+    framebufferdisplay_construct_cleanup_t cleanup = { .self = self, .locked = false };
+    nlr_push_jump_callback(&cleanup.node, framebufferdisplay_construct_abort);
+    self->framebuffer_protocol = mp_proto_get_or_throw(MP_QSTR_protocol_framebuffer, framebuffer);
 
     uint16_t depth = fb_getter_default(get_color_depth, 16);
+    // The flush path copies whole pixels. Packed sub-byte framebuffers need a
+    // separate bit-addressed transfer path; accepting them would overrun rows.
+    if (depth < 8) {
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("Format not supported"));
+    }
     displayio_display_core_construct(
         &self->core,
         self->framebuffer_protocol->get_width(self->framebuffer),
@@ -267,10 +315,10 @@ void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebu
     // the default before it has buffers and a flush callback. The port lock is recursive, so the
     // displayio_lvgl_* helpers below may take it again.
     displayio_lvgl_lock();
+    cleanup.locked = true;
 
     self->lv_display = lv_display_create(self->core.width, self->core.height);
     if (self->lv_display == NULL) {
-        displayio_lvgl_unlock();
         mp_raise_RuntimeError(MP_ERROR_TEXT("LVGL display create failed"));
     }
     lv_display_set_user_data(self->lv_display, self);
@@ -292,13 +340,11 @@ void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebu
     self->lv_dirty_row_bitmask_size = (max_dimension + 7) / 8;
     self->lv_dirty_row_bitmask = port_malloc(self->lv_dirty_row_bitmask_size, false);
     if (self->lv_dirty_row_bitmask == NULL) {
-        displayio_lvgl_unlock();
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL dirty row alloc failed"));
     }
     memset(self->lv_dirty_row_bitmask, 0, self->lv_dirty_row_bitmask_size);
     displayio_lvgl_init();
     if (!framebufferio_lvgl_configure_buffers(self)) {
-        displayio_lvgl_unlock();
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL buffer alloc failed"));
     }
     #if CIRCUITPY_ESPIDF
@@ -315,6 +361,7 @@ void common_hal_framebufferio_framebufferdisplay_construct(framebufferio_framebu
     // initialization.
     displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
     displayio_lvgl_set_root_group(&circuitpython_splash);
+    nlr_pop_jump_callback(false);
     displayio_lvgl_unlock();
     common_hal_framebufferio_framebufferdisplay_set_auto_refresh(self, auto_refresh);
 }
@@ -349,6 +396,14 @@ mp_obj_t common_hal_framebufferio_framebufferdisplay_get_framebuffer(framebuffer
 
 
 void common_hal_framebufferio_framebufferdisplay_set_rotation(framebufferio_framebufferdisplay_obj_t *self, int rotation) {
+    #if CIRCUITPY_VIDEOCORE
+    // A framebuffer-target VideoBuffer writes into the framebuffer's physical
+    // memory, so it can't follow LVGL's whole-scene rotation.
+    if (self->lv_display != NULL &&
+        !displayio_lvgl_video_can_rotate(self->lv_display, (lv_display_rotation_t)(rotation / 90))) {
+        mp_raise_ValueError(MP_ERROR_TEXT("VideoBuffer can't stream into a rotated display"));
+    }
+    #endif
     bool transposed = (self->core.rotation == 90 || self->core.rotation == 270);
     bool will_transposed = (rotation == 90 || rotation == 270);
     if (transposed != will_transposed) {
@@ -358,17 +413,18 @@ void common_hal_framebufferio_framebufferdisplay_set_rotation(framebufferio_fram
     }
     displayio_display_core_set_rotation(&self->core, rotation);
     if (self->lv_display != NULL) {
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         lv_display_set_rotation(self->lv_display, (lv_display_rotation_t)(rotation / 90));
         if (!framebufferio_lvgl_configure_buffers(self)) {
-            displayio_lvgl_unlock();
+            displayio_lvgl_unlock_with_cleanup();
             mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("LVGL buffer alloc failed"));
         }
         lv_display_set_default(self->lv_display);
         if (self->core.current_group != NULL) {
             displayio_lvgl_set_root_group(self->core.current_group);
         }
-        displayio_lvgl_unlock();
+        displayio_lvgl_unlock_with_cleanup();
     }
 }
 
@@ -440,14 +496,15 @@ void release_framebufferdisplay(framebufferio_framebufferdisplay_obj_t *self) {
     }
     // Hold the lock across detaching the tree and deleting the display so the render task can't
     // be in the middle of a flush when its buffers go away.
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     self->lv_paced = false;
     displayio_lvgl_set_root_group(NULL);
     if (self->lv_display != NULL) {
         lv_display_delete(self->lv_display);
         self->lv_display = NULL;
     }
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     framebufferio_lvgl_free_partial_buf(self);
     if (self->lv_dirty_row_bitmask != NULL) {
         port_free(self->lv_dirty_row_bitmask);
@@ -469,20 +526,19 @@ void framebufferio_framebufferdisplay_reset(framebufferio_framebufferdisplay_obj
     if (fb_type != NULL && fb_type != &mp_type_NoneType) {
         common_hal_framebufferio_framebufferdisplay_set_auto_refresh(self, true);
         displayio_display_core_set_root_group(&self->core, &circuitpython_splash);
-        displayio_lvgl_lock();
+        nlr_jump_callback_node_t cleanup;
+        displayio_lvgl_lock_with_cleanup(&cleanup);
         if (self->lv_display != NULL) {
             lv_display_set_default(self->lv_display);
         }
         displayio_lvgl_set_root_group(&circuitpython_splash);
-        displayio_lvgl_unlock();
         // Render the terminal now. The REPL starts next, and the display may not get another
         // background tick before its first writes; make sure the framebuffer already holds the
         // splash rather than whatever the user's code left on screen.
         if (self->lv_display != NULL) {
-            displayio_lvgl_lock();
             lv_refr_now(self->lv_display);
-            displayio_lvgl_unlock();
         }
+        displayio_lvgl_unlock_with_cleanup();
     } else {
         release_framebufferdisplay(self);
     }
@@ -500,9 +556,10 @@ mp_obj_t common_hal_framebufferio_framebufferdisplay_set_root_group(framebufferi
     if (!ok) {
         mp_raise_ValueError(MP_ERROR_TEXT("Group already used"));
     }
-    displayio_lvgl_lock();
+    nlr_jump_callback_node_t cleanup;
+    displayio_lvgl_lock_with_cleanup(&cleanup);
     lv_display_set_default(self->lv_display);
     displayio_lvgl_set_root_group(root_group);
-    displayio_lvgl_unlock();
+    displayio_lvgl_unlock_with_cleanup();
     return mp_const_none;
 }

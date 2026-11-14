@@ -32,9 +32,11 @@ typedef struct _lvgl_protocol_t {
     MP_PROTOCOL_HEAD // MP_QSTR_protocol_lvgl
 
     // The object the rest of the calls are made on, or the layer itself when the protocol is
-    // implemented on the layer. vectorio's shapes are the reason this exists: the
+    // implemented on the layer. This must resolve two things: vectorio's shapes (the
     // Python-visible Rectangle, Circle or Polygon owns the wrapper that holds the shape's
-    // compositor state, so it forwards to that wrapper. May be NULL.
+    // compositor state, so it forwards to that wrapper) and Python subclasses of a layer (a
+    // PageLayout, Tile or Label is an mp_obj_instance_t whose native base is in subobj[0]).
+    // May be NULL.
     mp_obj_t (*protocol_self)(mp_obj_t self);
 
     // The layer's root lv_obj, or NULL before attach(). Group uses it for z-order and

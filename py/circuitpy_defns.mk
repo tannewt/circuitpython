@@ -954,6 +954,7 @@ SRC_SHARED_MODULE_INTERNAL += \
 	displayio/legacy/__init__.c \
 	framebufferio/lvgl/FramebufferDisplay.c \
 	vectorio/lvgl/VectorShape.c \
+	videocore/lvgl/VideoBuffer.c \
 
 else
 SRC_SHARED_MODULE_INTERNAL += \
@@ -968,6 +969,7 @@ SRC_SHARED_MODULE_INTERNAL += \
 	displayio/legacy/TileGrid.c \
 	framebufferio/legacy/FramebufferDisplay.c \
 	vectorio/legacy/VectorShape.c \
+	videocore/legacy/VideoBuffer.c \
 
 endif
 

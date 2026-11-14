@@ -546,11 +546,11 @@ async def build_circuitpython():  # noqa: C901
         # These display-side modules render through the scanline compositor and do not
         # work with the LVGL one. Exclude them so LVGL builds don't link legacy rendering
         # machinery. BusDisplay, FramebufferDisplay, FourWire and I2CDisplayBus have LVGL
-        # implementations and stay enabled.
+        # implementations and stay enabled. bitmaptools and jpegio stay enabled because
+        # bitmaptools now writes through the Bitmap dirty API and jpegio decodes through
+        # bitmaptools.blit.
         legacy_display_modules = [
-            "bitmaptools",
             "epaperdisplay",
-            "jpegio",
             "sharpdisplay",
             "tilepalettemapper",
         ]
@@ -779,6 +779,16 @@ async def build_circuitpython():  # noqa: C901
                         s
                         for s in shared_module_sources
                         if s.parent.parent != backend_root or s.parent.name == backend_dir
+                    ]
+                if module.name == "videocore":
+                    # The video source/target state is shared; only the VideoBuffer's
+                    # compositor mirror is backend specific.
+                    backend_dir = "lvgl" if lvgl_enabled else "legacy"
+                    backend_root = top / "shared-module" / "videocore"
+                    shared_module_sources = [
+                        s
+                        for s in shared_module_sources
+                        if s.parent == backend_root or s.parent.name == backend_dir
                     ]
                 hal_source.extend(shared_module_sources)
             # The USB HID report descriptors are shared with the TinyUSB ports and

@@ -332,12 +332,6 @@ CFLAGS += -DCIRCUITPY_DOTCLOCKFRAMEBUFFER=$(CIRCUITPY_DOTCLOCKFRAMEBUFFER)
 # bitmapfilter, bitmaptools, and framebufferio rely on displayio and are not on small boards
 CIRCUITPY_BITMAPFILTER ?= $(call enable-if-all,$(CIRCUITPY_FULL_BUILD) $(CIRCUITPY_DISPLAYIO))
 CIRCUITPY_BITMAPTOOLS ?= $(call enable-if-all,$(CIRCUITPY_FULL_BUILD) $(CIRCUITPY_DISPLAYIO))
-# bitmaptools still writes through the legacy Bitmap dirty-area API, and jpegio decodes
-# through bitmaptools.
-ifeq ($(CIRCUITPY_DISPLAYIO_LVGL),1)
-CIRCUITPY_BITMAPTOOLS = 0
-CIRCUITPY_JPEGIO = 0
-endif
 CIRCUITPY_FRAMEBUFFERIO ?= $(call enable-if-all,$(CIRCUITPY_FULL_BUILD) $(CIRCUITPY_DISPLAYIO))
 CIRCUITPY_VECTORIO ?= $(CIRCUITPY_DISPLAYIO)
 CFLAGS += -DCIRCUITPY_BITMAPFILTER=$(CIRCUITPY_BITMAPFILTER)

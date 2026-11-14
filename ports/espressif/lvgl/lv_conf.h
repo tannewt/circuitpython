@@ -34,10 +34,17 @@
 
 /* displayio hands indexed bitmaps to LVGL as I1/I2/I4/I8 images. Decode them fully
  * (instead of line by line) so they can be scaled, and cache the decoded image so it is
- * only decoded again when the bitmap or palette changes. The PSRAM backed port heap has
- * plenty of room. An image that doesn't fit in the cache isn't drawn. */
+ * only decoded again when the bitmap or palette changes. An image that doesn't fit in the
+ * cache isn't drawn. */
 #define LV_BIN_DECODER_RAM_LOAD 1
-#define LV_CACHE_DEF_SIZE (16 * 1024 * 1024)
+
+/* The image cache only evicts against its own size limit, and the decoded image is allocated
+ * before the cache is consulted. A limit anywhere near the 16 MB of PSRAM therefore lets one
+ * decode exhaust the heap before anything is evicted, and the next small allocation (a draw
+ * task) fails. With LV_USE_ASSERT_MALLOC off that failure is a NULL dereference, not an error
+ * message. Keep the limit far below PSRAM: it has to fit the largest single decode (a 720p
+ * ARGB8888 image is 3.7 MB) with room left for the display buffers and the VM heap. */
+#define LV_CACHE_DEF_SIZE (4 * 1024 * 1024)
 
 /* A TileGrid composes a changed cell at a time under one batched invalidation, and scroll
  * invalidates one object, so a handful of pending areas is plenty. */
