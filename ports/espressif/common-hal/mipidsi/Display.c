@@ -34,6 +34,16 @@ static void clear_panel_handles(mipidsi_display_obj_t *self) {
     }
 }
 
+// The vsync ISR reads the frame callback and its data as a pair, so they change together.
+static portMUX_TYPE frame_cb_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static void set_frame_cb(mipidsi_display_obj_t *self, framebuffer_frame_callback_t cb, void *data) {
+    portENTER_CRITICAL(&frame_cb_lock);
+    self->frame_cb = cb;
+    self->frame_cb_data = data;
+    portEXIT_CRITICAL(&frame_cb_lock);
+}
+
 // The DPI driver requires this callback to live in IRAM. It runs in interrupt context, so it only
 // forwards to the framebuffer's frame callback (which hands off to the LVGL port) and returns.
 static bool IRAM_ATTR mipidsi_display_vsync_cb(esp_lcd_panel_handle_t panel,
@@ -41,8 +51,12 @@ static bool IRAM_ATTR mipidsi_display_vsync_cb(esp_lcd_panel_handle_t panel,
     (void)panel;
     (void)edata;
     mipidsi_display_obj_t *self = user_ctx;
-    if (self->frame_cb != NULL) {
-        self->frame_cb(self->frame_cb_data);
+    portENTER_CRITICAL_ISR(&frame_cb_lock);
+    framebuffer_frame_callback_t cb = self->frame_cb;
+    void *data = self->frame_cb_data;
+    portEXIT_CRITICAL_ISR(&frame_cb_lock);
+    if (cb != NULL) {
+        cb(data);
     }
     return false;
 }
@@ -241,8 +255,7 @@ void common_hal_mipidsi_display_deinit(mipidsi_display_obj_t *self) {
     }
 
     // Stop the vsync ISR from reaching a display that is going away before the panel is deleted.
-    self->frame_cb = NULL;
-    self->frame_cb_data = NULL;
+    set_frame_cb(self, NULL, NULL);
 
     // Cleanup backlight
     #if (CIRCUITPY_PWMIO)
@@ -277,8 +290,7 @@ void common_hal_mipidsi_display_refresh(mipidsi_display_obj_t *self) {
 
 void common_hal_mipidsi_display_set_frame_callback(mipidsi_display_obj_t *self,
     framebuffer_frame_callback_t cb, void *data) {
-    self->frame_cb = cb;
-    self->frame_cb_data = data;
+    set_frame_cb(self, cb, data);
 }
 
 void common_hal_mipidsi_display_refresh_rows(mipidsi_display_obj_t *self, const uint8_t *dirty_row_bitmap) {
