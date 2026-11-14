@@ -803,6 +803,10 @@ static void _cell_display_area(displayio_tilegrid_t *self, uint32_t x, uint32_t 
     area->y2 = area->y1 + self->tile_height * self->lv_scale - 1;
 }
 
+// The most cells a compose pass queues before drawing them. LVGL walks the whole task list to add
+// or dispatch each task, so drawing a long queue at once takes time with the square of its length.
+#define DISPLAYIO_LVGL_COMPOSE_BATCH 64
+
 // Compose every cell that changed into the buffer. Returns false when nothing was drawn so the
 // caller can skip the invalidation. `dirty` comes back as the union of the composed cells, in
 // container coordinates.
@@ -837,6 +841,7 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
     lv_layer_t layer;
     lv_canvas_init_layer(self->lv_canvas, &layer);
     lv_area_t layer_clip = layer._clip_area;
+    uint32_t queued = 0;
 
     uint32_t cells = _cell_count(self);
     uint32_t tiles_w = self->width_in_tiles;
@@ -887,6 +892,12 @@ static bool _compose(displayio_tilegrid_t *self, lv_area_t *dirty) {
                 };
                 lv_draw_image(&layer, &dsc, &coords);
                 layer._clip_area = layer_clip;
+                queued++;
+                if (queued == DISPLAYIO_LVGL_COMPOSE_BATCH) {
+                    lv_canvas_finish_layer(self->lv_canvas, &layer);
+                    lv_canvas_init_layer(self->lv_canvas, &layer);
+                    queued = 0;
+                }
             }
         }
         _clear_cell(self, cell);
