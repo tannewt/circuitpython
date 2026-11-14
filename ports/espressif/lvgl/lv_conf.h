@@ -27,6 +27,8 @@
  * images. PPA works on cache lines, so draw buffers must be 64-byte aligned. */
 #define LV_USE_PPA 1
 #define LV_USE_PPA_IMG 1
+/* Leave regular PSRAM arbitration gaps for the DSI framebuffer scanout DMA. */
+#define LV_PPA_BURST_LENGTH 64
 /* LVGL 9.6 checks this before defining it, which trips -Wundef. */
 #define LV_PPA_NONBLOCKING_OPS 0
 #define LV_DRAW_BUF_ALIGN 64

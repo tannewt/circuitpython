@@ -14,6 +14,7 @@
 #include "core/lv_global.h"
 #include "shared-module/displayio/lvgl/lvgl_internal.h"
 #include "supervisor/background_callback.h"
+#include "supervisor/shared/safe_mode.h"
 #include "supervisor/shared/tick.h"
 
 static const char *lvgl_tag = "LVGL";
@@ -73,15 +74,15 @@ static void *lvgl_heap_alloc(size_t size) {
 }
 
 // A NULL from lv_malloc_core is fatal in most of LVGL (the callers dereference the result), so
-// record why it happened at the moment it happens. Without this the crash is a bare store fault
-// on address 0x8 with LV_USE_ASSERT_MALLOC compiled out.
-static void lvgl_heap_log_oom(const char *what, size_t size) {
+// record why it happened and reset into safe mode before LVGL can dereference it.
+static MP_NORETURN void lvgl_heap_log_oom(const char *what, size_t size) {
     ESP_LOGE(lvgl_tag, "%s(%u) failed: internal %u free (%u largest), PSRAM %u free (%u largest)",
         what, (unsigned)size,
         (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
         (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+    reset_into_safe_mode(SAFE_MODE_LVGL_OUT_OF_MEMORY);
 }
 
 void *lv_malloc_core(size_t size) {

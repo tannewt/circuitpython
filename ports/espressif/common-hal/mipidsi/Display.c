@@ -14,6 +14,7 @@
 #include <math.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_heap_caps.h>
+#include "hal/axi_icm_ll.h"
 #include "py/runtime.h"
 
 // Cache write-back function (should be from rom/cache.h but it's not always available)
@@ -132,6 +133,12 @@ void common_hal_mipidsi_display_construct(mipidsi_display_obj_t *self,
         clear_panel_handles(self);
         CHECK_ESP_RESULT(ret);
     }
+
+    // Scanout continuously reads the framebuffer from PSRAM through DW-GDMA.
+    // Give those reads the highest AXI-ICM QoS priority so CPU, cache and PPA
+    // traffic cannot starve the DSI bridge FIFO. DSI does not write to PSRAM.
+    axi_icm_ll_set_dw_gdma_qos_arbiter_prio(0, 0, 15);
+    axi_icm_ll_set_dw_gdma_qos_arbiter_prio(1, 0, 15);
 
     // The DPI divider is an integer, so record the clock it really produces.
     float pixel_clock_mhz = 0;

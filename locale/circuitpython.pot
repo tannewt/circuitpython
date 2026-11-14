@@ -966,6 +966,7 @@ msgstr ""
 #: ports/nordic/common-hal/pulseio/PulseIn.c
 #: ports/nordic/peripherals/nrf/timers.c
 #: ports/raspberrypi/common-hal/audiopwmio/PWMAudioOut.c
+#: ports/stm/common-hal/pulseio/PulseOut.c
 msgid "All timers in use"
 msgstr ""
 
@@ -1213,7 +1214,10 @@ msgstr ""
 
 #: ports/cxd56/common-hal/camera/Camera.c
 #: ports/espressif/common-hal/jpegio/JpegDecoder.c
-#: shared-module/audiocore/WaveFile.c shared-module/displayio/lvgl/TileGrid.c
+#: shared-module/audiocore/WaveFile.c
+#: shared-module/busdisplay/lvgl/BusDisplay.c
+#: shared-module/displayio/lvgl/TileGrid.c
+#: shared-module/framebufferio/lvgl/FramebufferDisplay.c
 msgid "Format not supported"
 msgstr ""
 
@@ -1935,7 +1939,8 @@ msgid "Must provide MISO or MOSI pin"
 msgstr ""
 
 #: ports/mimxrt10xx/common-hal/busio/SPI.c
-#: ports/mimxrt10xx/common-hal/busio/UART.c ports/stm/common-hal/busio/I2C.c
+#: ports/mimxrt10xx/common-hal/busio/UART.c
+#: ports/mimxrt10xx/common-hal/canio/CAN.c ports/stm/common-hal/busio/I2C.c
 #: ports/stm/common-hal/busio/SPI.c ports/stm/common-hal/busio/UART.c
 #: ports/stm/common-hal/canio/CAN.c ports/stm/common-hal/sdioio/SDCard.c
 #: shared-bindings/emmcio/EMMC.c
@@ -5015,6 +5020,10 @@ msgstr ""
 
 #: supervisor/shared/safe_mode.c
 msgid "Interrupt error."
+msgstr ""
+
+#: supervisor/shared/safe_mode.c
+msgid "LVGL ran out of memory."
 msgstr ""
 
 #: supervisor/shared/safe_mode.c
