@@ -1035,7 +1035,6 @@ static void _refresh(displayio_tilegrid_t *self) {
         DISPLAYIO_TILEGRID_DEBUG("refresh %p nothing to invalidate", self);
     }
     self->lv_work = false;
-    self->lv_views_dirty = false;
 }
 
 void displayio_lvgl_tilegrid_refresh_all(void) {
